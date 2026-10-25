@@ -20,4 +20,17 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Run simulation tests
-        run: dotnet test tests/Eleven.Simulation.Tests/Eleven.Simulation.Tests.csproj --configuration Release
+        run: >
+          dotnet test tests/Eleven.Simulation.Tests/Eleven.Simulation.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=results.trx"
+          --results-directory TestResults
+
+      # A green run with zero discovered tests would look like success; fail it instead.
+      - name: Check that tests ran
+        run: |
+          counters=$(grep -o '<Counters [^>]*>' TestResults/results.trx)
+          total=$(echo "$counters" | grep -o 'total="[0-9]*"' | grep -o '[0-9]\+')
+          passed=$(echo "$counters" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]\+')
+          echo "::notice title=Simulation tests::${passed:-0} of ${total:-0} passed"
+          test "${total:-0}" -gt 0
