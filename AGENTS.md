@@ -16,6 +16,8 @@ Project startup. The engine and platform are undecided until **ADR-0001**; Unity
 | `src/Eleven.Simulation/` | The engine-free football simulation |
 | `tests/` | .NET tests for the simulation |
 
+Current `main` is the source of truth. Issues, comments, mockups and earlier discussions explain intent and history but don't override the repository's current state.
+
 ## Architectural invariants
 
 Full wording and enforcement are in [ADR-0000](docs/adr/0000-baseline-brief-v0.3.md). In short:
@@ -38,24 +40,54 @@ Full wording and enforcement are in [ADR-0000](docs/adr/0000-baseline-brief-v0.3
 
 An invariant is superseded only by an ADR that sets out the evidence and migration consequences, approved by Erik.
 
-## Decision rights
+## Roles and decision rights
 
-- **Erik** owns product decisions and player experience, and approves invariant changes.
-- **Opus** (lead developer) owns implementation and routine architecture within the invariants.
-- **SOL** shapes product, design, acceptance criteria and evaluation.
-- **Codex** reviews implementation against the issue, the invariants and the tests. Codex is a reviewer, not a competing architect.
+- **Erik** owns product decisions, player experience, design and accessibility interpretation, final acceptance, and approves invariant changes.
+- **Opus** is the sole implementation developer and owns implementation and routine architecture within the invariants: code changes, fixes, refactors, implementation branches and PRs.
+- **SOL** shapes product, design, acceptance criteria, issue writing and triage, and evaluation. SOL doesn't implement code, create implementation branches or PRs, or merge unless Erik asks.
+- **Codex** independently reviews implementation against the issue, the invariants and the tests. Codex reviews rather than rewrites: findings go back to Opus unless Erik asks Codex to make a fix. Codex is a reviewer, not a competing architect.
 
 ## Working rules
 
-- **Issues first.** Every change starts from an issue with acceptance criteria, written before implementation. If they are missing or unclear, ask; don't invent product decisions.
-- **One issue, one branch, one PR.** The PR links the issue and CI must be green.
-- **Review.** Codex reviews every PR and marks each finding *blocking* (breaks an invariant, an acceptance criterion, a test, or a lens's blocking criteria) or *non-blocking*. Only blocking findings send a PR back.
-- **Lenses.** The issue names any lenses (see `docs/lenses/`). A review lens is applied by an agent that didn't author the work, once per PR; re-checks cover blocking findings only.
-- **Tests.** Rules are tested first, and a new test must first fail on an assertion, not on an error. Prefer properties that always hold over exact-position examples.
-- **Baselines.** Updates to golden data, recorded curves or hash baselines are separate commits with a stated reason. Feel-related baselines need Erik's sign-off.
-- **Feel.** Agents build knobs; Erik turns them. Never change tuned feel values on your own judgement.
+- **Issues first.** Every change starts from an issue with acceptance criteria, written before implementation. If they're missing or unclear, ask; don't invent product decisions.
+- **One issue, one branch, one PR.** Keep each PR small enough to implement, review and validate without exhausting usage in one pass; split the work or ask Erik when it grows disproportionately.
+- **Don't broaden scope.** Prefer minimal, local changes and read only the files relevant to the task. Add CI, dependencies, refactors or documentation only when the issue calls for them. If the work exposes a product or design question the brief and established patterns don't settle, surface it to Erik.
+- **Settle what's settled.** When an established ELEVEN rule or pattern already answers a question, apply it and report it. Bring Erik only genuine product decisions, not implementation or detail choices.
+- **Name the state.** When a spec phrase touches a mechanic with more than one state or timer, the issue or PR says which one it means before implementation.
+- **One problem, one issue.** A distinct problem found mid-work gets its own focused issue rather than reopening a large one.
+- **Validate small.** Run the smallest relevant validation. Maximum two attempts for a failing check, then report. Stop once the requested behaviour is implemented and verified.
+- **Report concisely:** changed files, exact checks run, unresolved issues.
+- **Mockups show intent.** Names, lengths and counts in them may be worst-case placeholders; ask which parts are literal when unsure. Mockups aren't required: without one, make a common-sense implementation from established ELEVEN patterns, the design system and recognised best practice. A mockup never overrides system consistency, responsive behaviour, accessibility or sound engineering.
+
+## Review and merge
+
+- **Codex reviews every PR** and marks each finding:
+  - **blocker** — unsafe to merge or release; breaks an invariant, an acceptance criterion, a test, or a lens's blocking criteria.
+  - **should-fix** — a genuine defect or material risk that normally returns to Opus before merge.
+  - **nit** — optional; never blocks.
+- **Lenses.** The issue names any lenses (see `docs/lenses/`). A review lens is applied by an agent that didn't author the work, once per PR; re-checks cover blockers and should-fixes only.
+- **Merging.** Opus may merge a Codex-reviewed, green, noncontroversial PR. Erik's approval is needed for unresolved review findings, product or design decisions that materially change the brief, scope expansion, and anything touching an invariant. Squash-merge.
+- **Device verification.** Device-facing work isn't finished until Erik (or the reporter) confirms it on a device, not when it merges.
+- **Process changes are announced.** When a change alters how others work — release steps, sources of truth, ownership — say so in its PR and in the owning issue.
+- **Notes live with their issue.** Use the owning issue and PR for implementation notes and device follow-up, never an unrelated umbrella issue.
+- **Review the whole.** After a substantial batch of work, review current `main` as one product, focusing on interactions between recently changed systems, and record findings in an issue or PR.
+
+## Tests and baselines
+
+- Rules are tested first, and a new test must first fail on an assertion, not on an error. Prefer properties that always hold over exact-position examples.
+- Updates to golden data, recorded curves or hash baselines are separate commits with a stated reason. Feel-related baselines need Erik's sign-off.
+- **Feel:** agents build knobs; Erik turns them. Never change tuned feel values on your own judgement.
+
+## Standing rules
+
+- **Trade-off order** (proposed, awaiting Erik's confirmation): 1. architectural invariants and correctness, 2. feel — responsiveness, latency and smooth frames, 3. accessibility of everything around the match, 4. product and UI coherence, 5. regression risk.
+- **Accessibility is a constraint, not a feature,** for everything around the match: menus, settings, text, colour, remapping, motion and feedback. Sweeps include non-text contrast for control states and focus indicators (WCAG 1.4.11), not only text contrast.
+- **Performance and smooth frames come before richer sound or visuals.**
+- **Colours come from semantic design tokens, never hard-coded.**
+- **Pause means stop.** Anything that runs during a match stops on pause, leave and background, and the simulation never advances while paused.
 - **The repo is the shared memory.** Decisions live in ADRs and issues. A decision that exists only in a chat hasn't been made.
 - **Engine state is code.** No undocumented manual editor state. If a change truly needs an editor's interface, the PR says what and why.
+- **Every build shows its build id.** Once ELEVEN has releases, every release-affecting merge increments the build in that same merge.
 
 ## Simulation code rules
 
@@ -67,6 +99,4 @@ Until ADR-0002 defines the maths model:
 - No static mutable state. State is plain data with ids, not object references.
 - Transcendental maths (`sin`, `cos`, `atan2`, `exp`, `pow`) goes through the simulation's own maths entry point, never `System.Math` or `MathF` directly.
 
-## Carried over from TURN
-
-Not done yet. Before this section is filled, review `turn/AGENTS.md` in webb for rules added after incidents or repeated mistakes, and copy the ones that apply here.
+Rules under *Roles and decision rights*, *Working rules*, *Review and merge* and *Standing rules* are adapted from TURN's AGENTS.md (25 Oct 2026): the ones added after real incidents or repeated mistakes that still apply to ELEVEN.

@@ -22,8 +22,8 @@
 - It supersedes an invariant without evidence or without migration consequences.
 - A key claim rests on an assumption that the spike or a test could cheaply measure but didn't.
 
-Everything else is non-blocking.
+Findings that meet these criteria are blockers; everything else is a should-fix or a nit.
 
 ## Output
 
-A PR review comment headed `Lens: Adversarial architecture`, one finding per line, each marked blocking or non-blocking, ending with the single strongest argument against the decision.
+A PR review comment headed `Lens: Adversarial architecture`, one finding per line, each marked blocker, should-fix or nit, ending with the single strongest argument against the decision.

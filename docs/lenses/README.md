@@ -5,9 +5,9 @@ A lens is a written review perspective applied only when an issue calls for it. 
 ## Rules
 
 - **The issue names the lenses.** Default is none beyond Codex review; at most two per issue unless Erik asks for more.
-- **One pass per lens per PR.** A re-check covers blocking findings only.
-- **Findings go in a PR review comment** headed `Lens: <name>`, each marked *blocking* or *non-blocking*.
-- **Blocking is narrow:** only when a finding breaks an invariant, an acceptance criterion, a test, or the lens's written blocking criteria.
+- **One pass per lens per PR.** A re-check covers blockers and should-fixes only.
+- **Findings go in a PR review comment** headed `Lens: <name>`, each marked *blocker*, *should-fix* or *nit* (defined in AGENTS.md).
+- **Blockers are narrow:** a finding is a blocker only when it breaks an invariant, an acceptance criterion, a test, or the lens's written blocking criteria.
 - **Owners decide.** Erik decides product, Opus implementation, SOL acceptance criteria. Conflicting findings go to the owner once; no lens reviews another lens.
 - **Durable outcomes move:** decisions into ADRs, follow-up work into issues, recurring findings into the lens file or AGENTS.md.
 - **Lenses earn their place.** Add one when the same kind of problem slips through twice; retire one that goes unused.
