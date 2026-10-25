@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless .NET harness (INV-11): writes the scenario's hash logs and measures tick cost.
+    Measurement lives here, outside the simulation, so Stopwatch never enters simulation code.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Eleven.Simulation/Eleven.Simulation.csproj" />
+    <ProjectReference Include="../Eleven.Simulation.Harness/Eleven.Simulation.Harness.csproj" />
+  </ItemGroup>
+
+</Project>

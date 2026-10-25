@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The scripted spike experiment: scenario, runner and hash log. Engine-free and
+    netstandard2.1 like the simulation, so the Unity host (#3) can run the same experiment.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Eleven.Simulation.Harness</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Eleven.Simulation/Eleven.Simulation.csproj" />
+    <ProjectReference Include="../Eleven.Simulation.Analyzers/Eleven.Simulation.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

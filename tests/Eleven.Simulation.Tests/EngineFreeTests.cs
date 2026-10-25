@@ -5,15 +5,17 @@ using Xunit;
 namespace Eleven.Simulation.Tests
 {
     /// <summary>
-    /// INV-2: the simulation depends on no engine. This fails as soon as the simulation
+    /// INV-2: the simulation and its scenario harness depend on no engine. This fails as soon as the simulation
     /// assembly references a Unity assembly, whoever adds it.
     /// </summary>
     public class EngineFreeTests
     {
-        [Fact]
-        public void Simulation_assembly_references_no_engine_assemblies()
+        [Theory]
+        [InlineData(typeof(SimulationInfo))]
+        [InlineData(typeof(Harness.SpikeScenario))]
+        public void Simulation_assemblies_reference_no_engine_assemblies(Type typeInAssembly)
         {
-            var engineReferences = typeof(SimulationInfo).Assembly
+            var engineReferences = typeInAssembly.Assembly
                 .GetReferencedAssemblies()
                 .Select(reference => reference.Name ?? string.Empty)
                 .Where(name => name.StartsWith("UnityEngine", StringComparison.Ordinal)

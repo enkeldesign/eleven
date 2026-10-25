@@ -14,6 +14,8 @@ Project startup. The engine and platform are undecided until **ADR-0001**; Unity
 | `docs/adr/` | Decisions. When an accepted ADR and the brief disagree, the newer accepted ADR wins |
 | `docs/lenses/` | Review perspectives and when to apply them |
 | `src/Eleven.Simulation/` | The engine-free football simulation |
+| `src/Eleven.Simulation.Harness/`, `src/Eleven.Simulation.Cli/` | Scripted scenarios and the headless harness (hash logs, tick cost) |
+| `docs/simulation/` | The simulation's determinism contract: ticks, commands, encoding, hashes, maths |
 | `tests/` | .NET tests for the simulation |
 
 Current `main` is the source of truth. Issues, comments, mockups and earlier discussions explain intent and history but don't override the repository's current state.
