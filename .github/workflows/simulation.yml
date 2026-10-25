@@ -1,0 +1,23 @@
+name: Simulation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test engine-free simulation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run simulation tests
+        run: dotnet test tests/Eleven.Simulation.Tests/Eleven.Simulation.Tests.csproj --configuration Release
