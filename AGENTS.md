@@ -80,7 +80,7 @@ An invariant is superseded only by an ADR that sets out the evidence and migrati
 
 ## Standing rules
 
-- **Trade-off order** (proposed, awaiting Erik's confirmation): 1. architectural invariants and correctness, 2. feel — responsiveness, latency and smooth frames, 3. accessibility of everything around the match, 4. product and UI coherence, 5. regression risk.
+- **Trade-off order:** 1. architectural invariants and correctness, 2. feel — responsiveness, latency and smooth frames, 3. accessibility of everything around the match, 4. product and UI coherence, 5. regression risk.
 - **Accessibility is a constraint, not a feature,** for everything around the match: menus, settings, text, colour, remapping, motion and feedback. Sweeps include non-text contrast for control states and focus indicators (WCAG 1.4.11), not only text contrast.
 - **Performance and smooth frames come before richer sound or visuals.**
 - **Colours come from semantic design tokens, never hard-coded.**
