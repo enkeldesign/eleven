@@ -1,0 +1,23 @@
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+
+# Unity (the Unity project will live in /unity, added in issue 2)
+/unity/[Ll]ibrary/
+/unity/[Tt]emp/
+/unity/[Oo]bj/
+/unity/[Bb]uild/
+/unity/[Bb]uilds/
+/unity/[Ll]ogs/
+/unity/[Uu]ser[Ss]ettings/
+/unity/[Mm]emoryCaptures/
+/unity/*.csproj
+/unity/*.sln
+
+# OS and editors
+.DS_Store
+.vs/
+.idea/
+.vscode/
