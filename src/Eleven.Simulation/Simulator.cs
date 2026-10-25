@@ -137,10 +137,12 @@ namespace Eleven.Simulation
 
         private Command Normalise(Command c)
         {
-            double lengthSquared = c.Move.LengthSquared;
-            if (lengthSquared <= 1) return c;
-            double length = _math.Sqrt(lengthSquared);
-            return new Command(c.ControllerId, c.Tick, c.Move * (1 / length), c.Kick);
+            if (c.Move.LengthSquared <= 1) return c;
+
+            // Scale by the largest component first, so a huge finite move can't overflow when squared.
+            double largest = Math.Max(Math.Abs(c.Move.X), Math.Abs(c.Move.Y));
+            Vec2 scaled = c.Move * (1 / largest);
+            return new Command(c.ControllerId, c.Tick, scaled * (1 / _math.Sqrt(scaled.LengthSquared)), c.Kick);
         }
 
         private Command? FindAccepted(int controllerId)

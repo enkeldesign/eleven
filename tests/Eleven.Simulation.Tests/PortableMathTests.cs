@@ -82,6 +82,21 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void Atan2_keeps_the_sign_of_zero_like_system_math()
+        {
+            double negativeZero = BitConverter.Int64BitsToDouble(long.MinValue);
+            foreach (double x in new[] { -1.0, 1.0, -1e-300, 1e300 })
+            {
+                foreach (double y in new[] { negativeZero, 0.0 })
+                {
+                    double portable = Portable.Atan2(y, x), system = Math.Atan2(y, x);
+                    Assert.True(Math.Abs(portable - system) <= Atan2Bound, $"atan2({y}, {x}): {portable} vs {system}");
+                    Assert.Equal(BitConverter.DoubleToInt64Bits(system) < 0, BitConverter.DoubleToInt64Bits(portable) < 0);
+                }
+            }
+        }
+
+        [Fact]
         public void Sqrt_matches_system_math_from_subnormal_to_huge()
         {
             double worst = 0;

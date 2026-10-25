@@ -99,5 +99,17 @@ namespace Eleven.Simulation.Tests
             Vec2 v = diagonal.PeekState().Dots[0].Velocity;
             Assert.Equal(config.DotMaxSpeed, Math.Sqrt(v.LengthSquared), 9);
         }
+
+        [Fact]
+        public void Huge_finite_move_vectors_are_clamped_without_overflow()
+        {
+            var full = Simulator();
+            var huge = Simulator();
+            var events = Step(huge, Move(0, 1e200, -1e200));
+            Step(full, Move(0, 1, -1));
+
+            Assert.Empty(events);
+            Assert.Equal(full.StateHash(), huge.StateHash());
+        }
     }
 }

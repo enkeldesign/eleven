@@ -72,7 +72,9 @@ namespace Eleven.Simulation.Maths
             if (shifted) angle += PiOver4;
             if (swapped) angle = PiOver2 - angle;
             if (x < 0) angle = Pi - angle;
-            return y < 0 ? -angle : angle;
+
+            // The sign bit, not y < 0: atan2(−0, −1) is −π.
+            return BitConverter.DoubleToInt64Bits(y) < 0 ? -angle : angle;
         }
 
         public double Sqrt(double x)
