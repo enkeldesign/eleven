@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The engine-free football simulation (INV-2).
+    netstandard2.1 and C# 9 keep this source compatible with Unity as well as plain .NET.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Eleven.Simulation</RootNamespace>
+    <AssemblyName>Eleven.Simulation</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
