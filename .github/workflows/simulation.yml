@@ -19,6 +19,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Building runs the banned-API analyzer on the simulation and harness; a violation fails here.
       - name: Run simulation tests
         run: >
           dotnet test tests/Eleven.Simulation.Tests/Eleven.Simulation.Tests.csproj
@@ -34,3 +35,24 @@ jobs:
           passed=$(echo "$counters" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]\+')
           echo "::notice title=Simulation tests::${passed:-0} of ${total:-0} passed"
           test "${total:-0}" -gt 0
+
+      - name: Build headless harness
+        run: dotnet build src/Eleven.Simulation.Cli/Eleven.Simulation.Cli.csproj --configuration Release
+
+      - name: Write per-tick hash logs
+        run: |
+          dotnet src/Eleven.Simulation.Cli/bin/Release/net10.0/Eleven.Simulation.Cli.dll hashlog hashlogs | tee hashlog-summary.txt
+          echo "::notice title=Hash log digests::$(paste -sd ';' hashlog-summary.txt | sed 's| -> [^;]*||g')"
+
+      - name: Publish hash logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: hashlogs
+          path: hashlogs/
+          if-no-files-found: error
+
+      # Evidence only: there is no pass/fail budget for tick cost.
+      - name: Measure tick cost
+        run: |
+          dotnet src/Eleven.Simulation.Cli/bin/Release/net10.0/Eleven.Simulation.Cli.dll bench 30 | tee bench.txt
+          echo "::notice title=Tick cost::$(paste -sd ';' bench.txt)"
