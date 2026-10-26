@@ -234,6 +234,12 @@ try {
 }
 
 const failed = results.checks.filter((c) => !c.ok);
+if (failed.length) {
+  // Context for diagnosis without the uploaded console log.
+  const presses = logs.filter((l) => l.startsWith('ELEVEN press')).slice(-8);
+  const traces = logs.filter((l) => l.startsWith('ELEVEN trace')).slice(-3);
+  annotate('notice', 'Smoke context', `layouts: ${(results.notes.layouts || []).join(' / ')}\npresses: ${presses.join(' | ') || 'none'}\ntraces: ${traces.join(' | ')}`);
+}
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 annotate(
   'notice',

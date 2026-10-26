@@ -44,6 +44,8 @@ namespace Eleven.Host
         private GUIStyle _textStyle;
         private GUIStyle _buttonStyle;
         private int _styledForHeight;
+        private int _framesSinceTrace;
+        private double _lastTraceTime;
 
         private void Awake()
         {
@@ -56,6 +58,7 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
+            if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
             _lastTime = Time.realtimeSinceStartupAsDouble;
@@ -69,6 +72,8 @@ namespace Eleven.Host
             }
         }
 
+        private void OnDestroy() => _input?.Dispose();
+
         private void OnApplicationPause(bool paused)
         {
             _paused = paused;
@@ -78,6 +83,7 @@ namespace Eleven.Host
 
         private void Update()
         {
+            _framesSinceTrace++;
             UpdateLayout(force: false);
             _input.Sample(_layout);
 
@@ -123,8 +129,12 @@ namespace Eleven.Host
             foreach (SimEvent e in _events) Log($"ELEVEN event {e}");
             if (_simulator.Tick % TraceEveryTicks == 0)
             {
+                double now = Time.realtimeSinceStartupAsDouble;
+                double fps = _framesSinceTrace / Math.Max(1e-6, now - _lastTraceTime);
+                _framesSinceTrace = 0;
+                _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} hash={_simulator.StateHash():x16}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16}"));
             }
         }
 

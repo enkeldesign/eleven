@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Eleven.Simulation;
 using UnityEngine;
@@ -17,14 +18,21 @@ namespace Eleven.Host
     ///
     /// Touchscreen first; the mouse stands in for a single finger on desktop browsers, and is
     /// ignored once any touch has been seen so a browser's emulated mouse events don't double up.
+    ///
+    /// Presses are taken from Input System events as they arrive, not by polling once a frame, so
+    /// a tap that goes down and up between two frames still counts. That matters at low frame
+    /// rates: in a software-rendered browser, polling missed every short tap. Held pointers (the
+    /// stick's finger) are polled each frame.
     /// </summary>
-    internal sealed class TouchAdapter
+    internal sealed class TouchAdapter : IDisposable
     {
         private const int MousePointer = -1;
         private const int NoPointer = int.MinValue;
 
         private readonly int _controllerId;
         private readonly List<Pointer> _pointers = new List<Pointer>(11);
+        private readonly List<Pointer> _presses = new List<Pointer>(4);
+        private readonly InputAction _pressAction;
         private int _stickPointer = NoPointer;
         private bool _kickRequested;
         private bool _touchSeen;
@@ -32,7 +40,18 @@ namespace Eleven.Host
         public TouchAdapter(int controllerId)
         {
             _controllerId = controllerId;
+
+            // Pass-through reports every value change of every bound control separately, so two
+            // fingers pressing in the same frame are two presses.
+            _pressAction = new InputAction("Pointer presses", InputActionType.PassThrough);
+            _pressAction.AddBinding("<Touchscreen>/touch*/press");
+            _pressAction.AddBinding("<Mouse>/leftButton");
+            _pressAction.performed += OnPress;
+            _pressAction.Enable();
         }
+
+        /// <summary>Raised once per press when it is sampled: where it landed and what it hit.</summary>
+        public event Action<string> PressLogged;
 
         /// <summary>Move vector, length at most 1; +x right, +y up the screen.</summary>
         public Vector2 Stick { get; private set; }
@@ -56,20 +75,51 @@ namespace Eleven.Host
             foreach (Pointer p in _pointers)
             {
                 if (layout.InKick(p.Position)) KickHeld = true;
-                if (!p.Began) continue;
-
-                if (layout.InKick(p.Position)) _kickRequested = true;
-                else if (layout.RunButton.Contains(p.Position)) RunTapped = true;
-                else if (layout.MathsButton.Contains(p.Position)) MathsTapped = true;
-                else if (layout.ResetButton.Contains(p.Position)) ResetTapped = true;
-                else if (_stickPointer == NoPointer && layout.StickZone.Contains(p.Position))
-                {
-                    _stickPointer = p.Id;
-                    StickOrigin = p.Position;
-                }
             }
 
+            foreach (Pointer press in _presses)
+            {
+                Vector2 at = ToHud(press.Position, layout.ScreenHeight);
+                string target;
+                if (layout.InKick(at)) { _kickRequested = true; target = "kick"; }
+                else if (layout.RunButton.Contains(at)) { RunTapped = true; target = "run"; }
+                else if (layout.MathsButton.Contains(at)) { MathsTapped = true; target = "maths"; }
+                else if (layout.ResetButton.Contains(at)) { ResetTapped = true; target = "reset"; }
+                else if (_stickPointer == NoPointer && layout.StickZone.Contains(at))
+                {
+                    _stickPointer = press.Id;
+                    StickOrigin = at;
+                    StickKnob = at;
+                    target = "stick";
+                }
+                else target = "none";
+
+                PressLogged?.Invoke(FormattableString.Invariant($"pointer={press.Id} at={at.x:F0},{at.y:F0} target={target}"));
+            }
+
+            _presses.Clear();
             UpdateStick(layout.StickRadius);
+        }
+
+        public void Dispose()
+        {
+            _pressAction.performed -= OnPress;
+            _pressAction.Dispose();
+        }
+
+        private void OnPress(InputAction.CallbackContext context)
+        {
+            if (context.ReadValue<float>() < 0.5f) return;
+
+            if (context.control.parent is TouchControl touch)
+            {
+                _touchSeen = true;
+                _presses.Add(new Pointer(touch.touchId.ReadValue(), touch.position.ReadValue()));
+            }
+            else if (context.control.device is Mouse mouse && !_touchSeen)
+            {
+                _presses.Add(new Pointer(MousePointer, mouse.position.ReadValue()));
+            }
         }
 
         /// <summary>
@@ -123,14 +173,14 @@ namespace Eleven.Host
                 {
                     if (!touch.press.isPressed) continue;
                     _touchSeen = true;
-                    _pointers.Add(new Pointer(touch.touchId.ReadValue(), ToHud(touch.position.ReadValue(), screenHeight), touch.press.wasPressedThisFrame));
+                    _pointers.Add(new Pointer(touch.touchId.ReadValue(), ToHud(touch.position.ReadValue(), screenHeight)));
                 }
             }
 
             Mouse mouse = Mouse.current;
             if (!_touchSeen && mouse != null && mouse.leftButton.isPressed)
             {
-                _pointers.Add(new Pointer(MousePointer, ToHud(mouse.position.ReadValue(), screenHeight), mouse.leftButton.wasPressedThisFrame));
+                _pointers.Add(new Pointer(MousePointer, ToHud(mouse.position.ReadValue(), screenHeight)));
             }
         }
 
@@ -141,13 +191,11 @@ namespace Eleven.Host
         {
             public readonly int Id;
             public readonly Vector2 Position;
-            public readonly bool Began;
 
-            public Pointer(int id, Vector2 position, bool began)
+            public Pointer(int id, Vector2 position)
             {
                 Id = id;
                 Position = position;
-                Began = began;
             }
         }
     }
