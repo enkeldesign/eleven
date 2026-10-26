@@ -1,0 +1,16 @@
+{
+    "name": "Eleven.Simulation.Harness",
+    "rootNamespace": "Eleven.Simulation.Harness",
+    "references": [
+        "Eleven.Simulation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

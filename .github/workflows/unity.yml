@@ -1,0 +1,127 @@
+name: Unity host
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Web player
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Unity WebGL editor image is about 7 GB compressed.
+      - name: Free disk space for the Unity image
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+          df -h /
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: unity-library-${{ hashFiles('unity/Packages/manifest.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-${{ hashFiles('unity/Assets/**', 'src/Eleven.Simulation/**', 'src/Eleven.Simulation.Harness/**') }}
+          restore-keys: |
+            unity-library-${{ hashFiles('unity/Packages/manifest.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-
+
+      - name: Start the clock
+        run: echo "UNITY_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      # -ignorecompilererrors lets the build script run and report compile errors itself:
+      # job logs aren't readable from agent sessions, annotations are.
+      - name: Build with GameCI
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          targetPlatform: WebGL
+          buildMethod: Eleven.Host.Editor.BuildScript.BuildWeb
+          versioning: None
+          customParameters: >-
+            -ignorecompilererrors
+            -elevenBuildNumber ${{ github.run_number }}
+            -elevenCommit ${{ github.event.pull_request.head.sha || github.sha }}
+            -elevenReport /github/workspace/unity-build-report.txt
+
+      - name: Report the build
+        if: always()
+        run: |
+          escape() { sed -e 's/%/%25/g' | tr -d '\r'; }
+          seconds=$(( $(date +%s) - UNITY_STARTED ))
+          if [ ! -f unity-build-report.txt ]; then
+            echo "::error title=Unity build::No build report: Unity stopped before the build script ran (licence activation, package resolution or editor compilation). GameCI step took ${seconds} s."
+            exit 0
+          fi
+          grep '^error: ' unity-build-report.txt | head -10 | while IFS= read -r line; do
+            echo "::error title=Unity::$(printf '%s' "${line#error: }" | cut -c1-2000 | escape)"
+          done
+          summary=$(grep -v '^error: ' unity-build-report.txt | paste -sd ';' | escape)
+          player=$(dirname "$(find build unity/build -name index.html 2>/dev/null | head -1)")
+          if [ -d "$player" ]; then
+            bytes=$(du -sb "$player" | cut -f1)
+            files=$(find "$player" -type f -printf '%f=%s ' | escape)
+            echo "::notice title=Unity build::${summary}; GameCI step ${seconds} s; player ${bytes} bytes on disk: ${files}"
+          else
+            echo "::error title=Unity build::${summary}; GameCI step ${seconds} s; no index.html under build/ or unity/build/"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-player
+          path: |
+            build/WebGL
+            unity/build/WebGL
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke test in Chromium
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-player
+          path: web-player
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Write the .NET hash logs to compare against
+        run: dotnet run --project src/Eleven.Simulation.Cli --configuration Release -- hashlog dotnet-hashlogs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright and Chromium
+        working-directory: unity/ci
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Run the smoke test
+        run: |
+          player=$(dirname "$(find web-player -name index.html | head -1)")
+          node unity/ci/smoke.mjs "$player" dotnet-hashlogs smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test
+          path: smoke/

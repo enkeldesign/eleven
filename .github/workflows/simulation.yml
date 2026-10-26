@@ -41,7 +41,7 @@ jobs:
 
       - name: Write per-tick hash logs
         run: |
-          dotnet src/Eleven.Simulation.Cli/bin/Release/net10.0/Eleven.Simulation.Cli.dll hashlog hashlogs | tee hashlog-summary.txt
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll hashlog hashlogs | tee hashlog-summary.txt
           echo "::notice title=Hash log digests::$(paste -sd ';' hashlog-summary.txt | sed 's| -> [^;]*||g')"
 
       - name: Publish hash logs
@@ -54,5 +54,5 @@ jobs:
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |
-          dotnet src/Eleven.Simulation.Cli/bin/Release/net10.0/Eleven.Simulation.Cli.dll bench 30 | tee bench.txt
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll bench 30 | tee bench.txt
           echo "::notice title=Tick cost::$(paste -sd ';' bench.txt)"

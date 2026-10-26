@@ -1,0 +1,7 @@
+{
+  "name": "com.enkeldesign.eleven.simulation.harness",
+  "version": "0.1.0",
+  "displayName": "ELEVEN Simulation Harness",
+  "description": "The scripted spike scenario, runner and hash log, shared by the .NET harness and the Unity host.",
+  "unity": "6000.3"
+}
