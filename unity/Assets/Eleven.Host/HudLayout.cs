@@ -35,9 +35,11 @@ namespace Eleven.Host
             RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
             MathsButton = new Rect(RunButton.x, RunButton.yMax + Padding * 0.5f, RunButton.width, 0.9f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
-            Result = new Rect(safe.xMin + Padding, MathsButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, 1.5f * Unit);
+            // Beside the buttons, not across the middle of the screen where the camera keeps the play.
+            Result = new Rect(safe.xMin + Padding, ResetButton.yMax + Padding * 0.5f, MathsButton.x - safe.xMin - 2 * Padding, 1.2f * Unit);
 
-            StickZone = new Rect(safe.xMin, Result.yMax, safe.width * 0.5f, safe.yMax - Result.yMax);
+            float belowHud = Mathf.Max(Result.yMax, MathsButton.yMax);
+            StickZone = new Rect(safe.xMin, belowHud, safe.width * 0.5f, safe.yMax - belowHud);
             StickRadius = 1.4f * Unit;
             StickRest = new Vector2(StickZone.xMin + Padding + 2f * Unit, StickZone.yMax - Padding - 2f * Unit);
 

@@ -131,12 +131,25 @@ try {
     annotate(same ? 'notice' : 'warning', 'Scenario digest vs .NET', message);
   }
 
-  // Controls, positioned from the host's own layout line.
-  const layout = await waitForLog(/ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) maths=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/, 5_000);
-  check('layout reported', !!layout, layout ? layout.match[0] : 'no layout line');
-  if (!layout) throw new Error('no layout');
-  const n = layout.match.slice(1).map(Number);
+  // Controls, positioned from the host's own layout line. The host logs a new line whenever the
+  // screen size changes, and the canvas can still be resizing just after boot, so wait for the
+  // size to match the canvas and use the latest line.
+  const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) maths=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
   const canvas = page.locator('#unity-canvas');
+  let layout = null;
+  let backing = null;
+  for (let i = 0; i < 50; i++) {
+    backing = await canvas.evaluate((c) => [c.width, c.height]);
+    layout = lastLog(layoutPattern);
+    if (layout && Number(layout[1]) === backing[0] && Number(layout[2]) === backing[1]) break;
+    await sleep(200);
+  }
+  const layouts = logs.filter((l) => layoutPattern.test(l)).map((l) => l.replace('ELEVEN layout ', ''));
+  results.notes.layouts = layouts;
+  check('layout matches the canvas', !!layout && Number(layout[1]) === backing[0] && Number(layout[2]) === backing[1],
+    `canvas ${backing?.join('x')}; layouts logged: ${layouts.join(' / ') || 'none'}`);
+  if (!layout) throw new Error('no layout');
+  const n = layout.slice(1).map(Number);
   const box = await canvas.boundingBox();
   const sx = box.width / n[0];
   const sy = box.height / n[1];
