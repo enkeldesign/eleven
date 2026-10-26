@@ -9,10 +9,18 @@ namespace Eleven.Host
     /// </summary>
     internal readonly struct HudLayout
     {
+        /// <summary>Lines the result panel holds: three per maths backend.</summary>
+        public const int ResultLines = 6;
+
+        /// <summary>Widest result line, e.g. "digest 0123456789abcdef".</summary>
+        public const int ResultLineCharacters = 23;
+
         public readonly int ScreenWidth;
         public readonly int ScreenHeight;
         public readonly float Unit;
         public readonly float Padding;
+        public readonly int FontSize;
+        public readonly float LineHeight;
         public readonly Rect BuildLabel;
         public readonly Rect ResetButton;
         public readonly Rect RunButton;
@@ -30,13 +38,21 @@ namespace Eleven.Host
             ScreenHeight = height;
             Unit = Mathf.Min(safe.width, safe.height) / 9f;
             Padding = Unit * 0.3f;
+            FontSize = Mathf.Max(12, Mathf.RoundToInt(Unit * 0.36f));
+            LineHeight = FontSize * 1.3f;
 
             BuildLabel = new Rect(safe.xMin + Padding, safe.yMin + Padding, safe.width - 2 * Padding, 0.7f * Unit);
             RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
             MathsButton = new Rect(RunButton.x, RunButton.yMax + Padding * 0.5f, RunButton.width, 0.9f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
-            // Beside the buttons, not across the middle of the screen where the camera keeps the play.
-            Result = new Rect(safe.xMin + Padding, ResetButton.yMax + Padding * 0.5f, MathsButton.x - safe.xMin - 2 * Padding, 1.2f * Unit);
+            // Sized for its fixed lines. Beside the buttons when there is room (landscape), else below
+            // them (portrait); never across the middle of the screen, where the camera keeps the play.
+            float resultWidth = ResultLineCharacters * 0.62f * FontSize + 2 * Padding;
+            float resultHeight = ResultLines * LineHeight + Padding;
+            float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
+            Result = besideButtons >= resultWidth
+                ? new Rect(safe.xMin + Padding, RunButton.y, besideButtons, resultHeight)
+                : new Rect(safe.xMin + Padding, MathsButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
 
             float belowHud = Mathf.Max(Result.yMax, MathsButton.yMax);
             StickZone = new Rect(safe.xMin, belowHud, safe.width * 0.5f, safe.yMax - belowHud);

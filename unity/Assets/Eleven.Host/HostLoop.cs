@@ -24,13 +24,17 @@ namespace Eleven.Host
         private const double MaxFrameSeconds = 0.25;
         private const int MaxStepsPerFrame = 8;
         private const int TraceEveryTicks = 60;
+        private const int ReplayCheckEveryTicks = 300;
+        private static readonly MathBackend[] Backends = { MathBackend.SystemMath, MathBackend.Portable };
 
         private readonly List<Command> _commands = new List<Command>(1);
         private readonly List<SimEvent> _events = new List<SimEvent>();
-        private readonly Dictionary<MathBackend, string> _scenarioResults = new Dictionary<MathBackend, string>();
+        private readonly Dictionary<MathBackend, string[]> _scenarioResults = new Dictionary<MathBackend, string[]>();
+        private readonly List<string> _resultLines = new List<string>(HudLayout.ResultLines);
 
         private SimConfig _config;
         private Simulator _simulator;
+        private CommandRecording _recording;
         private PitchView _view;
         private TouchAdapter _input;
         private HudLayout _layout;
@@ -43,6 +47,8 @@ namespace Eleven.Host
         private Vector3 _previousBall;
         private GUIStyle _textStyle;
         private GUIStyle _buttonStyle;
+        private GUIStyle _resultStyle;
+        private bool _resultFitChecked;
         private int _styledForHeight;
         private int _framesSinceTrace;
         private double _lastTraceTime;
@@ -56,6 +62,7 @@ namespace Eleven.Host
 
             _config = SpikeScenario.Config(MathBackend.Portable);
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _recording = CommandRecording.StartFrom(_simulator);
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
@@ -122,6 +129,7 @@ namespace Eleven.Host
             _commands.Clear();
             _commands.Add(_input.CommandFor(_simulator.Tick));
             _events.Clear();
+            _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
             _simulator.Step(_commands, _events);
 
             if (!_trace) return;
@@ -136,6 +144,16 @@ namespace Eleven.Host
                 SimState s = _simulator.PeekState();
                 Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16}"));
             }
+
+            if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
+        }
+
+        /// <summary>Trace mode: replays the session's recording headlessly and compares it with the live state.</summary>
+        private void CheckReplay()
+        {
+            Simulator replay = _recording.Replay(_config);
+            bool match = replay.Tick == _simulator.Tick && replay.StateHash() == _simulator.StateHash();
+            Log($"ELEVEN recording from={_recording.StartTick} steps={_recording.StepCount} bytes={_recording.Encode().Length} replay={(match ? "match" : "MISMATCH")}");
         }
 
         private void RememberPrevious()
@@ -148,6 +166,7 @@ namespace Eleven.Host
         private void ResetMatch()
         {
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _recording = CommandRecording.StartFrom(_simulator);
             _input.Clear();
             RememberPrevious();
             Log($"ELEVEN reset maths={_config.MathBackend}");
@@ -159,6 +178,7 @@ namespace Eleven.Host
             MathBackend next = _config.MathBackend == MathBackend.Portable ? MathBackend.SystemMath : MathBackend.Portable;
             _config = SpikeScenario.Config(next);
             _simulator = new Simulator(_config, _simulator.CopyState());
+            _recording = CommandRecording.StartFrom(_simulator);
             Log($"ELEVEN maths={next} config={_config.Hash:x16}");
         }
 
@@ -171,8 +191,19 @@ namespace Eleven.Host
 
             ulong final = run.TickHashes[run.TickHashes.Count - 1];
             ulong digest = run.SequenceDigest();
-            _scenarioResults[backend] = FormattableString.Invariant(
-                $"{backend}: digest {digest:x16}  final {final:x16}  ({run.TickHashes.Count} hashes, {milliseconds:F0} ms)");
+            _scenarioResults[backend] = new[]
+            {
+                FormattableString.Invariant($"{backend}, {milliseconds:F0} ms"),
+                $"digest {digest:x16}",
+                $"final  {final:x16}",
+            };
+            _resultLines.Clear();
+            foreach (MathBackend b in Backends)
+            {
+                if (_scenarioResults.TryGetValue(b, out string[] lines)) _resultLines.AddRange(lines);
+            }
+
+            _resultFitChecked = false;
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} maths={backend} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
@@ -196,12 +227,7 @@ namespace Eleven.Host
             Button(_layout.RunButton, "Run scenario");
             Button(_layout.MathsButton, $"Maths: {_config.MathBackend}");
 
-            if (_scenarioResults.Count > 0)
-            {
-                Panel(_layout.Result);
-                string text = string.Join("\n", _scenarioResults.Values);
-                GUI.Label(_layout.Result, text, _textStyle);
-            }
+            if (_resultLines.Count > 0) DrawResult();
 
             Vector2 stickCentre = _input.StickActive ? _input.StickOrigin : _layout.StickRest;
             Vector2 knob = _input.StickActive ? _input.StickKnob : _layout.StickRest;
@@ -214,11 +240,31 @@ namespace Eleven.Host
             GUI.Label(kickLabel, "KICK", _buttonStyle);
         }
 
+        private void DrawResult()
+        {
+            Rect panel = _layout.Result;
+            Panel(panel);
+            float pad = _layout.Padding;
+            float widest = 0;
+            for (int i = 0; i < _resultLines.Count; i++)
+            {
+                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.LineHeight, panel.width - 2 * pad, _layout.LineHeight);
+                GUI.Label(line, _resultLines[i], _resultStyle);
+                widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
+            }
+
+            if (_resultFitChecked) return;
+            _resultFitChecked = true;
+            float needed = _resultLines.Count * _layout.LineHeight + pad;
+            bool fits = widest <= panel.width - 2 * pad && needed <= panel.height && panel.yMax <= _layout.ScreenHeight;
+            Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));
+        }
+
         private void EnsureStyles()
         {
             if (_textStyle != null && _styledForHeight == _layout.ScreenHeight) return;
 
-            int fontSize = Mathf.Max(12, Mathf.RoundToInt(_layout.Unit * 0.36f));
+            int fontSize = _layout.FontSize;
             _textStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = fontSize,
@@ -229,6 +275,8 @@ namespace Eleven.Host
             _textStyle.normal.textColor = HostPalette.HudText;
 
             _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            _resultStyle = new GUIStyle(_textStyle) { wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
+            _resultFitChecked = false;
             _styledForHeight = _layout.ScreenHeight;
         }
 
