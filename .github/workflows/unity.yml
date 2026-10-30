@@ -230,8 +230,12 @@ jobs:
           case "$pushed" in *[!0-9]*) pushed=$(date -d "$pushed" +%s) ;; esac
           seconds=$(( $(date +%s) - pushed ))
           echo "seconds=$seconds" >> "$GITHUB_OUTPUT"
+          # Only a link that works is a push-to-link sample; loop-metrics.sh reads these notices.
+          if [ "$code" != "200" ]; then
+            echo "::error title=Playable link::${url} still returns HTTP ${code} ${seconds} s after the push"
+            exit 1
+          fi
           echo "::notice title=Playable link::${url} (HTTP ${code}); push to link ${seconds} s; player ${{ steps.site.outputs.bytes }} bytes"
-          test "$code" = "200"
 
       - name: Post the link on the PR
         if: github.event_name == 'pull_request'

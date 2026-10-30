@@ -5,7 +5,7 @@
 #
 # One line per "Unity host" workflow run on the branch: when it started, whether the build
 # succeeded, how long the build job took, and push to link as reported by the deploy job's
-# annotation. Then medians and the build success rate. Needs gh, authenticated.
+# annotation, counted only when the link answered HTTP 200. Then medians and the build success rate. Needs gh, authenticated.
 set -euo pipefail
 
 branch=${1:?usage: loop-metrics.sh <branch> [owner/repo]}
@@ -38,7 +38,7 @@ while read -r id created head; do
   if [ -n "$deploy" ]; then
     deploy_id=${deploy##*|}
     link=$(gh api "repos/$repo/check-runs/$deploy_id/annotations" \
-      --jq '.[] | select(.title == "Playable link") | .message' | grep -o 'push to link [0-9]*' | grep -o '[0-9]*$' || echo -)
+      --jq '.[] | select(.title == "Playable link") | .message' | grep '(HTTP 200)' | grep -o 'push to link [0-9]*' | grep -o '[0-9]*$' || echo -)
     [ "$link" != "-" ] && links+=("$link")
   fi
   printf '%-12s %-20s %-8s %-8s %10s %14s\n' "$id" "$created" "$head" "$conclusion" "$seconds" "$link"
