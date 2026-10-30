@@ -125,3 +125,129 @@ jobs:
         with:
           name: smoke-test
           path: smoke/
+
+  # Publishes the player to GitHub Pages: main at the site root, each PR under pr/<number>/.
+  # Pages serves one artifact per deployment, so the whole site lives on the orphan branch
+  # `site` (one commit, force-pushed) and every deploy uploads all of it. Previews of closed
+  # PRs are pruned on each deploy.
+  deploy:
+    name: Deploy playable link
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.link.outputs.url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-player
+          path: web-player
+
+      - name: Assemble the site
+        id: site
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 --branch site "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site \
+            || { git init --quiet site; git -C site checkout --quiet --orphan site; }
+          rm -rf site/.git/shallow
+          player=$(dirname "$(find web-player -name index.html | head -1)")
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            target="pr/${{ github.event.pull_request.number }}"
+          else
+            target="."
+          fi
+
+          if [ "$target" = "." ]; then
+            # Replace the root build, keeping the previews.
+            find site -mindepth 1 -maxdepth 1 ! -name .git ! -name pr -exec rm -rf {} +
+          else
+            rm -rf "site/$target"
+          fi
+          mkdir -p "site/$target"
+          cp -R "$player"/. "site/$target/"
+          touch site/.nojekyll
+
+          # Prune previews of PRs that are no longer open.
+          open=$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --jq '.[].number')
+          for dir in site/pr/*/; do
+            [ -d "$dir" ] || continue
+            n=$(basename "$dir")
+            echo "$open" | grep -qx "$n" || rm -rf "$dir"
+          done
+
+          echo "path=$target" >> "$GITHUB_OUTPUT"
+          echo "bytes=$(du -sb "site/$target" | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Store the site on the site branch
+        run: |
+          set -euo pipefail
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --quiet --orphan next
+          git add -A
+          git commit --quiet -m "Site for ${GITHUB_SHA::7} (${{ github.event_name }})"
+          git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" next:site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@v4
+
+      - name: Check the link and measure push to link
+        id: link
+        run: |
+          set -euo pipefail
+          base="${{ steps.pages.outputs.page_url }}"
+          path="${{ steps.site.outputs.path }}"
+          url="${base%/}/"; [ "$path" = "." ] || url="${url}${path}/"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+          # Pages can take a moment to serve a new deployment.
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${url}index.html" || true)
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          created=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)
+          seconds=$(( $(date +%s) - $(date -d "$created" +%s) ))
+          echo "seconds=$seconds" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Playable link::${url} (HTTP ${code}); push to link ${seconds} s; player ${{ steps.site.outputs.bytes }} bytes"
+          test "$code" = "200"
+
+      - name: Post the link on the PR
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          marker='<!-- eleven-playable-link -->'
+          head='${{ github.event.pull_request.head.sha }}'
+          minutes=$(awk "BEGIN { printf \"%.1f\", ${{ steps.link.outputs.seconds }} / 60 }")
+          body="${marker}
+          **Playable link:** ${{ steps.link.outputs.url }}
+
+          Build ${{ github.run_number }}+${head::7} · push to link ${minutes} min · $(( ${{ steps.site.outputs.bytes }} / 1024 )) KiB
+
+          _Updated by the Unity host workflow on every push._"
+          body=$(printf '%s\n' "$body" | sed 's/^          //')
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments?per_page=100" \
+            --jq "[.[] | select(.body | startswith(\"${marker}\"))][0].id // empty")
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" > /dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments" -f body="$body" > /dev/null
+          fi
