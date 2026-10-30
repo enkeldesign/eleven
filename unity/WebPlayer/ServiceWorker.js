@@ -5,7 +5,7 @@
 // file names that are the same in every build, so a device keeps running the first build it saw.
 // This one goes to the network first, revalidating so a new deploy is seen at once (unchanged
 // files cost a 304), and falls back to its cache only when the network fails. Each build has its
-// own cache; once it takes over it deletes older ones for the same scope.
+// own cache; once it takes over it deletes older ones for the same link.
 
 const build = "%BUILD_ID%";
 const files = [/* FILES */];
@@ -14,8 +14,18 @@ const scope = self.registration.scope;
 const prefix = `eleven ${scope} `;
 const cacheName = prefix + build;
 
-// The PWA template's caches, named "<company>-<product>-<version>".
+// The PWA template's caches, named "<company>-<product>-<version>". Cache names are shared by the
+// whole origin, so one belongs to this link only if every file in it does.
 const templatePrefix = "Enkel Design-ELEVEN-";
+
+// Previews under pr/<number>/ have workers of their own.
+const inScope = (url) => url.startsWith(scope) && !url.startsWith(`${scope}pr/`);
+
+async function isTemplateCacheOfThisLink(name) {
+  if (!name.startsWith(templatePrefix)) return false;
+  const requests = await (await caches.open(name)).keys();
+  return requests.length > 0 && requests.every((request) => inScope(request.url));
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
@@ -28,7 +38,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const name of await caches.keys()) {
-      if (name !== cacheName && (name.startsWith(prefix) || name.startsWith(templatePrefix))) {
+      if (name !== cacheName && (name.startsWith(prefix) || await isTemplateCacheOfThisLink(name))) {
         await caches.delete(name);
       }
     }
@@ -38,8 +48,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  // Previews under pr/<number>/ have workers of their own.
-  if (request.method !== "GET" || !request.url.startsWith(scope) || request.url.startsWith(`${scope}pr/`)) return;
+  if (request.method !== "GET" || !inScope(request.url)) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
