@@ -64,9 +64,8 @@ namespace Eleven.Host
                 : new Rect(safe.xMin + Padding, MathsButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
 
             float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, MathsButton.yMax) + Padding * 0.5f;
-            StickZone = new Rect(safe.xMin, belowHud, safe.width * 0.5f, safe.yMax - belowHud);
             StickRadius = 1.4f * Unit;
-            StickRest = new Vector2(StickZone.xMin + Padding + 2f * Unit, StickZone.yMax - Padding - 2f * Unit);
+            StickRest = new Vector2(safe.xMin + Padding + 2f * Unit, safe.yMax - Padding - 2f * Unit);
 
             KickRadius = 1.3f * Unit;
             KickCentre = new Vector2(safe.xMax - Padding - 1.8f * Unit, safe.yMax - Padding - 1.8f * Unit);
@@ -79,8 +78,15 @@ namespace Eleven.Host
             float columnLeft = StickRest.x + StickRadius + Padding;
             float columnRight = KickCentre.x - KickRadius - Padding;
             var column = new Rect(columnLeft, belowHud, columnRight - columnLeft, safe.yMax - belowHud);
-            PlayArea = Area(band) >= Area(column) ? band : column;
+            bool useBand = Area(band) >= Area(column);
+            PlayArea = useBand ? band : column;
             if (PlayArea.width <= 0 || PlayArea.height <= 0) PlayArea = safe;
+
+            // The floating stick may start anywhere in its zone, so the zone is kept out of the
+            // play area: below the band, or left of the column.
+            StickZone = useBand
+                ? new Rect(safe.xMin, PlayArea.yMax, safe.width * 0.5f, safe.yMax - PlayArea.yMax)
+                : new Rect(safe.xMin, belowHud, PlayArea.xMin - safe.xMin, safe.yMax - belowHud);
         }
 
         /// <param name="safeArea">Unity's <c>Screen.safeArea</c>, whose origin is the bottom left.</param>
@@ -91,10 +97,13 @@ namespace Eleven.Host
             return new HudLayout(width, height, safe, resultLines);
         }
 
-        /// <summary>Where to draw a disc of <paramref name="radius"/> centred as near <paramref name="centre"/> as fits on screen.</summary>
-        public Vector2 KeepOnScreen(Vector2 centre, float radius) => new Vector2(
-            Mathf.Clamp(centre.x, radius, Mathf.Max(radius, ScreenWidth - radius)),
-            Mathf.Clamp(centre.y, radius, Mathf.Max(radius, ScreenHeight - radius)));
+        /// <summary>
+        /// Where to draw the stick's base of <paramref name="radius"/>: as near <paramref name="centre"/>
+        /// as fits inside the stick zone, so it never covers the play area or leaves the screen.
+        /// </summary>
+        public Vector2 KeepInStickZone(Vector2 centre, float radius) => new Vector2(
+            Mathf.Clamp(centre.x, StickZone.xMin + radius, Mathf.Max(StickZone.xMin + radius, StickZone.xMax - radius)),
+            Mathf.Clamp(centre.y, StickZone.yMin + radius, Mathf.Max(StickZone.yMin + radius, StickZone.yMax - radius)));
 
         public bool InKick(Vector2 point) => (point - KickCentre).sqrMagnitude <= KickRadius * KickRadius;
 

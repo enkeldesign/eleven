@@ -233,9 +233,9 @@ namespace Eleven.Host
             if (_resultLines.Count > 0) DrawResult();
 
             // The stick's vector is measured from where the thumb landed; its base is drawn as near
-            // there as fits on screen, with the knob offset the same way.
+            // there as fits in the stick zone, with the knob offset the same way.
             Vector2 origin = _input.StickActive ? _input.StickOrigin : _layout.StickRest;
-            Vector2 stickCentre = _layout.KeepOnScreen(origin, _layout.StickRadius * 1.06f + 2f);
+            Vector2 stickCentre = _layout.KeepInStickZone(origin, _layout.StickRadius * 1.06f + 2f);
             Vector2 knob = stickCentre + (_input.StickActive ? _input.StickKnob - _input.StickOrigin : Vector2.zero);
             Disc(stickCentre, _layout.StickRadius, HostPalette.ControlIdle);
             Disc(knob, _layout.StickRadius * 0.45f, HostPalette.ControlActive);
