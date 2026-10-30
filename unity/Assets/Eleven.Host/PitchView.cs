@@ -13,7 +13,7 @@ namespace Eleven.Host
     internal sealed class PitchView
     {
         // Presentation constants, not simulation config.
-        private const float MinHalfExtent = 9f;
+        private const float MinHalfExtent = 7f;
         private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
@@ -28,6 +28,7 @@ namespace Eleven.Host
         private readonly Transform _ball;
         private readonly Transform _ballShadow;
         private readonly float _ballDiameter;
+        private Vector3 _ballShown;
 
         public PitchView(SimConfig config, Transform root)
         {
@@ -65,7 +66,8 @@ namespace Eleven.Host
         public Texture2D Disc { get; }
 
         /// <param name="ball">x, y on the pitch and z, the height of the ball's centre.</param>
-        public void Render(Vector2 dot, Vector3 ball)
+        /// <param name="layout">The HUD, whose <see cref="HudLayout.PlayArea"/> the play is framed in.</param>
+        public void Render(Vector2 dot, Vector3 ball, in HudLayout layout)
         {
             _dot.localPosition = new Vector3(dot.x, dot.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
@@ -75,25 +77,43 @@ namespace Eleven.Host
             _ball.localPosition = new Vector3(ball.x, ball.y + height * HeightLift, 0);
             _ball.localScale = Vector3.one * (_ballDiameter * (1 + height * HeightGrowth));
 
-            Frame(dot, new Vector2(ball.x, ball.y + height * HeightLift));
+            _ballShown = _ball.localPosition;
+            Frame(dot, new Vector2(_ballShown.x, _ballShown.y), layout);
         }
 
+        /// <summary>For the smoke test: whether the dot and the drawn ball are inside the play area.</summary>
+        public string Visibility(in HudLayout layout) =>
+            $"dot:{(InPlay(_dot.localPosition, layout) ? "in" : "out")},ball:{(InPlay(_ballShown, layout) ? "in" : "out")}";
+
         /// <summary>
-        /// Centres the camera between the dot and the ball and zooms out just enough to keep both
-        /// in view with a margin, for whatever aspect ratio the screen has. The shorter screen axis
-        /// always shows at least <see cref="MinHalfExtent"/> metres either side of the centre.
+        /// Frames the dot and the ball inside the HUD's play area: centred between them, zoomed
+        /// out just enough to keep both in view with a margin. The play area's shorter side always
+        /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre. The camera
+        /// still renders the whole screen; it is shifted so the play lands in the uncovered part.
         /// </summary>
-        private void Frame(Vector2 dot, Vector2 ball)
+        private void Frame(Vector2 dot, Vector2 ball, in HudLayout layout)
         {
-            float aspect = Mathf.Max(0.1f, _camera.aspect);
+            Rect play = layout.PlayArea;
             Vector2 centre = Vector2.Lerp(dot, ball, 0.5f);
             Vector2 halfSpan = new Vector2(Mathf.Abs(ball.x - dot.x), Mathf.Abs(ball.y - dot.y)) * 0.5f;
 
-            float shorterAxis = aspect >= 1 ? MinHalfExtent : MinHalfExtent / aspect;
-            float fitHeight = halfSpan.y + FramingMargin;
-            float fitWidth = (halfSpan.x + FramingMargin) / aspect;
-            _camera.orthographicSize = Mathf.Max(shorterAxis, Mathf.Max(fitHeight, fitWidth));
-            _camera.transform.position = new Vector3(centre.x, centre.y, -10);
+            // Pixels per metre: the closest zoom allowed, reduced until both fit.
+            float pixelsPerMetre = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
+            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.width * 0.5f / (halfSpan.x + FramingMargin));
+            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / (halfSpan.y + FramingMargin));
+            _camera.orthographicSize = layout.ScreenHeight * 0.5f / pixelsPerMetre;
+
+            // Shift so the pitch point `centre` appears at the play area's centre. HUD y grows
+            // downwards, the pitch's upwards.
+            Vector2 offset = play.center - new Vector2(layout.ScreenWidth * 0.5f, layout.ScreenHeight * 0.5f);
+            Vector2 cameraAt = centre - new Vector2(offset.x, -offset.y) / pixelsPerMetre;
+            _camera.transform.position = new Vector3(cameraAt.x, cameraAt.y, -10);
+        }
+
+        private bool InPlay(Vector3 world, in HudLayout layout)
+        {
+            Vector3 screen = _camera.WorldToScreenPoint(world);
+            return layout.PlayArea.Contains(new Vector2(screen.x, layout.ScreenHeight - screen.y));
         }
 
         private static void Line(Transform root, Sprite square, string name, Vector2 centre, Vector2 size)

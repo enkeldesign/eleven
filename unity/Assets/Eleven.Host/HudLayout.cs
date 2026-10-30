@@ -4,13 +4,16 @@ namespace Eleven.Host
 {
     /// <summary>
     /// Where the on-screen controls are, in screen pixels with the origin at the top left (the
-    /// IMGUI convention). Derived from the screen size and safe area only, so the CI smoke test
-    /// can be told the same positions through the log.
+    /// IMGUI convention). Derived from the screen size, safe area and number of result lines only,
+    /// so the CI smoke test can be told the same positions through the log.
+    ///
+    /// <see cref="PlayArea"/> is the part of the screen no HUD element covers; the camera frames the
+    /// play inside it.
     /// </summary>
     internal readonly struct HudLayout
     {
-        /// <summary>Lines the result panel holds: three per maths backend.</summary>
-        public const int ResultLines = 6;
+        /// <summary>Most lines the result panel holds: three per maths backend.</summary>
+        public const int MaxResultLines = 6;
 
         /// <summary>Widest result line, e.g. "digest 0123456789abcdef".</summary>
         public const int ResultLineCharacters = 23;
@@ -31,8 +34,12 @@ namespace Eleven.Host
         public readonly float StickRadius;
         public readonly Vector2 KickCentre;
         public readonly float KickRadius;
+        public readonly Rect PlayArea;
 
-        private HudLayout(int width, int height, Rect safe)
+        /// <summary>Lines the result panel was laid out for.</summary>
+        public readonly int ResultLines;
+
+        private HudLayout(int width, int height, Rect safe, int resultLines)
         {
             ScreenWidth = width;
             ScreenHeight = height;
@@ -45,36 +52,57 @@ namespace Eleven.Host
             RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
             MathsButton = new Rect(RunButton.x, RunButton.yMax + Padding * 0.5f, RunButton.width, 0.9f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
-            // Sized for its fixed lines. Beside the buttons when there is room (landscape), else below
-            // them (portrait); never across the middle of the screen, where the camera keeps the play.
+            // Sized for the lines it shows, and empty until a scenario has run. Beside the buttons
+            // when there is room (landscape), else below them (portrait).
+            int lines = Mathf.Clamp(resultLines, 0, MaxResultLines);
+            ResultLines = lines;
             float resultWidth = ResultLineCharacters * 0.62f * FontSize + 2 * Padding;
-            float resultHeight = ResultLines * LineHeight + Padding;
+            float resultHeight = lines == 0 ? 0 : lines * LineHeight + Padding;
             float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
             Result = besideButtons >= resultWidth
                 ? new Rect(safe.xMin + Padding, RunButton.y, besideButtons, resultHeight)
                 : new Rect(safe.xMin + Padding, MathsButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
 
-            float belowHud = Mathf.Max(Result.yMax, MathsButton.yMax);
+            float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, MathsButton.yMax) + Padding * 0.5f;
             StickZone = new Rect(safe.xMin, belowHud, safe.width * 0.5f, safe.yMax - belowHud);
             StickRadius = 1.4f * Unit;
             StickRest = new Vector2(StickZone.xMin + Padding + 2f * Unit, StickZone.yMax - Padding - 2f * Unit);
 
             KickRadius = 1.3f * Unit;
             KickCentre = new Vector2(safe.xMax - Padding - 1.8f * Unit, safe.yMax - Padding - 1.8f * Unit);
+
+            // Two candidates for the uncovered play area: the full-width band between the top HUD
+            // and the controls (suits portrait), or the column between the stick and the kick
+            // button running to the bottom (suits landscape). The larger one wins.
+            float controlsTop = Mathf.Min(KickCentre.y - KickRadius, StickRest.y - StickRadius) - Padding;
+            var band = new Rect(safe.xMin, belowHud, safe.width, controlsTop - belowHud);
+            float columnLeft = StickRest.x + StickRadius + Padding;
+            float columnRight = KickCentre.x - KickRadius - Padding;
+            var column = new Rect(columnLeft, belowHud, columnRight - columnLeft, safe.yMax - belowHud);
+            PlayArea = Area(band) >= Area(column) ? band : column;
+            if (PlayArea.width <= 0 || PlayArea.height <= 0) PlayArea = safe;
         }
 
         /// <param name="safeArea">Unity's <c>Screen.safeArea</c>, whose origin is the bottom left.</param>
-        public static HudLayout For(int width, int height, Rect safeArea)
+        /// <param name="resultLines">Lines the result panel shows now.</param>
+        public static HudLayout For(int width, int height, Rect safeArea, int resultLines)
         {
             var safe = new Rect(safeArea.x, height - safeArea.yMax, safeArea.width, safeArea.height);
-            return new HudLayout(width, height, safe);
+            return new HudLayout(width, height, safe, resultLines);
         }
+
+        /// <summary>Where to draw a disc of <paramref name="radius"/> centred as near <paramref name="centre"/> as fits on screen.</summary>
+        public Vector2 KeepOnScreen(Vector2 centre, float radius) => new Vector2(
+            Mathf.Clamp(centre.x, radius, Mathf.Max(radius, ScreenWidth - radius)),
+            Mathf.Clamp(centre.y, radius, Mathf.Max(radius, ScreenHeight - radius)));
 
         public bool InKick(Vector2 point) => (point - KickCentre).sqrMagnitude <= KickRadius * KickRadius;
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} maths={Point(MathsButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} maths={Point(MathsButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0}");
+
+        private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 
         private static string Point(Vector2 p) => System.FormattableString.Invariant($"{p.x:F0},{p.y:F0}");
     }
