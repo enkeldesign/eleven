@@ -188,7 +188,7 @@ jobs:
           done
 
           echo "path=$target" >> "$GITHUB_OUTPUT"
-          echo "bytes=$(du -sb "site/$target" | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "bytes=$(du -sb "$player" | cut -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Store the site on the site branch
         run: |
