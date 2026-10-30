@@ -13,7 +13,8 @@ namespace Eleven.Host
     internal sealed class PitchView
     {
         // Presentation constants, not simulation config.
-        private const float CameraHalfHeight = 9f;
+        private const float MinHalfExtent = 9f;
+        private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
         private const float DotDiameter = 0.9f;
@@ -39,7 +40,7 @@ namespace Eleven.Host
             cameraObject.transform.SetParent(root, false);
             _camera = cameraObject.AddComponent<Camera>();
             _camera.orthographic = true;
-            _camera.orthographicSize = CameraHalfHeight;
+            _camera.orthographicSize = MinHalfExtent;
             _camera.clearFlags = CameraClearFlags.SolidColor;
             _camera.backgroundColor = HostPalette.Pitch;
             _camera.nearClipPlane = 0.1f;
@@ -74,8 +75,25 @@ namespace Eleven.Host
             _ball.localPosition = new Vector3(ball.x, ball.y + height * HeightLift, 0);
             _ball.localScale = Vector3.one * (_ballDiameter * (1 + height * HeightGrowth));
 
-            Vector2 focus = Vector2.Lerp(dot, new Vector2(ball.x, ball.y), 0.5f);
-            _camera.transform.position = new Vector3(focus.x, focus.y, -10);
+            Frame(dot, new Vector2(ball.x, ball.y + height * HeightLift));
+        }
+
+        /// <summary>
+        /// Centres the camera between the dot and the ball and zooms out just enough to keep both
+        /// in view with a margin, for whatever aspect ratio the screen has. The shorter screen axis
+        /// always shows at least <see cref="MinHalfExtent"/> metres either side of the centre.
+        /// </summary>
+        private void Frame(Vector2 dot, Vector2 ball)
+        {
+            float aspect = Mathf.Max(0.1f, _camera.aspect);
+            Vector2 centre = Vector2.Lerp(dot, ball, 0.5f);
+            Vector2 halfSpan = new Vector2(Mathf.Abs(ball.x - dot.x), Mathf.Abs(ball.y - dot.y)) * 0.5f;
+
+            float shorterAxis = aspect >= 1 ? MinHalfExtent : MinHalfExtent / aspect;
+            float fitHeight = halfSpan.y + FramingMargin;
+            float fitWidth = (halfSpan.x + FramingMargin) / aspect;
+            _camera.orthographicSize = Mathf.Max(shorterAxis, Mathf.Max(fitHeight, fitWidth));
+            _camera.transform.position = new Vector3(centre.x, centre.y, -10);
         }
 
         private static void Line(Transform root, Sprite square, string name, Vector2 centre, Vector2 size)

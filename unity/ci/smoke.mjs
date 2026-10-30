@@ -187,7 +187,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }
 
     // Stick: drag right from the stick's rest position and hold; the dot should move along +x.
-    const before = lastLog(tracePattern);
+    // Trace lines come once a simulated second, so wait for a fresh one on each side of the drag.
+    const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     const origin = at(n[10], n[11]);
     const reach = n[12] * sx;
     if (useTouch) await touch('touchStart', origin);
@@ -205,8 +206,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     await page.screenshot({ path: path.join(outDir, `${name}-playing.png`) });
     if (useTouch) await touch('touchEnd');
     else await page.mouse.up();
-    await sleep(1200);
-    const after = lastLog(tracePattern);
+    const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     notes.stickMovedMetres = before && after ? Number(after[2]) - Number(before[2]) : NaN;
     check('stick moves the dot', notes.stickMovedMetres > 3, before && after ? `dot x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
