@@ -54,6 +54,7 @@ namespace Eleven.Host.Editor
 
                 BuildReport build = BuildPipeline.BuildPlayer(options);
                 BuildSummary summary = build.summary;
+                if (summary.result == BuildResult.Succeeded) WriteServiceWorker(summary.outputPath, buildId);
                 succeeded = summary.result == BuildResult.Succeeded;
 
                 report.Insert(0, FormattableString.Invariant($"result: {summary.result}\nbuild: {buildId}\nunity: {Application.unityVersion}\nseconds: {summary.totalTime.TotalSeconds:F0}\nbytes: {summary.totalSize}\noutput: {summary.outputPath}\n"));
@@ -78,6 +79,25 @@ namespace Eleven.Host.Editor
             }
 
             if (!succeeded) EditorApplication.Exit(1);
+        }
+
+        /// <summary>
+        /// Replaces the PWA template's service worker with ELEVEN's (<c>unity/WebPlayer/ServiceWorker.js</c>),
+        /// which serves new deploys at once and falls back to its cache only offline. It precaches
+        /// every file of the player.
+        /// </summary>
+        private static void WriteServiceWorker(string player, string buildId)
+        {
+            string source = File.ReadAllText(Path.Combine(Application.dataPath, "..", "WebPlayer", "ServiceWorker.js"));
+            string root = Path.GetFullPath(player);
+            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
+                .Where(file => file != "ServiceWorker.js")
+                .OrderBy(file => file, StringComparer.Ordinal)
+                .ToArray();
+            string list = string.Join(", ", files.Select(file => $"\"{file}\""));
+            File.WriteAllText(Path.Combine(root, "ServiceWorker.js"),
+                source.Replace("%BUILD_ID%", buildId).Replace("/* FILES */", list));
         }
 
         private static string BuildId(string number, string commit) =>
