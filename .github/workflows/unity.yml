@@ -224,8 +224,11 @@ jobs:
             [ "$code" = "200" ] && break
             sleep 10
           done
-          created=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)
-          seconds=$(( $(date +%s) - $(date -d "$created" +%s) ))
+          # Push time: when the PR's head was last updated, or when main was pushed. A re-run
+          # still counts from the push, since that is what someone waiting for the link sees.
+          pushed='${{ github.event.pull_request.updated_at || github.event.repository.pushed_at }}'
+          case "$pushed" in *[!0-9]*) pushed=$(date -d "$pushed" +%s) ;; esac
+          seconds=$(( $(date +%s) - pushed ))
           echo "seconds=$seconds" >> "$GITHUB_OUTPUT"
           echo "::notice title=Playable link::${url} (HTTP ${code}); push to link ${seconds} s; player ${{ steps.site.outputs.bytes }} bytes"
           test "$code" = "200"

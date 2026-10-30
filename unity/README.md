@@ -34,3 +34,36 @@ Unity -batchmode -quit -projectPath unity -buildTarget WebGL \
 ```
 
 `ProjectSetup.Apply` sets every player setting the build depends on, including Input System–only input handling, before each build. Settings files Unity generates are not committed.
+
+## One-time setup: Unity licence for CI
+
+GameCI activates Unity in CI from three repository secrets. They only need setting once, or again if the licence or the Unity account changes.
+
+1. Install Unity Hub on any computer and sign in with the Unity account the project uses. A Personal licence is enough.
+2. In Unity Hub, open **Preferences → Licences**, then **Add → Get a free personal licence**. Hub writes a licence file, `Unity_lic.ulf`:
+   - macOS: `/Library/Application Support/Unity/Unity_lic.ulf`
+   - Windows: `C:\ProgramData\Unity\Unity_lic.ulf`
+   - Linux: `~/.local/share/unity3d/Unity/Unity_lic.ulf`
+3. In the GitHub repository, open **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `UNITY_LICENSE`: the entire contents of `Unity_lic.ulf`
+   - `UNITY_EMAIL`: the Unity account's email address
+   - `UNITY_PASSWORD`: the Unity account's password
+4. Push any commit. The **Unity host / Build Web player** check should pass. Its annotation reports the Unity version and build time.
+
+A licence failure shows as the annotation "No build report: Unity stopped before the build script ran".
+
+## Playable links (GitHub Pages)
+
+The **Deploy playable link** job publishes every build:
+- `main`: <https://enkeldesign.github.io/eleven/>
+- each PR: `https://enkeldesign.github.io/eleven/pr/<number>/`
+
+The link is posted as a PR comment, which is kept up to date on every push.
+
+The whole site lives on the orphan `site` branch (one commit, force-pushed), because each Pages deployment replaces the entire site. Previews of closed PRs are removed on the next deploy.
+
+Repository settings this needs, all set once:
+- **Settings → Pages → Source:** GitHub Actions.
+- **Settings → Environments → github-pages → Deployment branches and tags:** No restriction. PR runs deploy from `refs/pull/<n>/merge`, which no branch pattern matches.
+
+Builds use Unity's PWA template, so a link can be added to a phone's home screen. Files are Gzip-compressed with Unity's JavaScript decompression fallback, because Pages can't send `Content-Encoding` headers for them.
