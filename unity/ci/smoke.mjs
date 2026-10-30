@@ -15,6 +15,7 @@
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
 //   - rendering: the screenshot contains the pitch, line, dot and ball colours
+//   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
 // server stopped the player still boots from the cache.
 // Results go to stdout as GitHub annotations and to <output dir> with screenshots and console logs.
@@ -81,6 +82,8 @@ function serve(root, deploy = { number: 1 }) {
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
+    '.svg': 'image/svg+xml',
+    '.webmanifest': 'application/manifest+json',
     '.ico': 'image/x-icon',
   };
   const server = http.createServer((req, res) => {
@@ -140,6 +143,22 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
     check('reports its load time', loadMs > 0 && loadMs < 240_000, Number.isFinite(loadMs) ? `${loadMs} ms from navigation start` : 'no loadMs on the ready line');
+
+    if (name === 'desktop') {
+      const icons = await page.evaluate(async () => {
+        const urls = [document.querySelector('link[rel="apple-touch-icon"]')?.href];
+        const manifest = document.querySelector('link[rel="manifest"]')?.href;
+        const list = manifest ? (await (await fetch(manifest)).json()).icons ?? [] : [];
+        for (const icon of list) urls.push(new URL(icon.src, manifest).href);
+        const results = [];
+        for (const url of urls) {
+          const ok = !!url && /\/icons\/eleven/.test(url) && (await fetch(url)).ok;
+          results.push(`${url ? url.split('/').pop() : 'missing'}:${ok ? 'ok' : 'FAILED'}`);
+        }
+        return results;
+      });
+      check('ELEVEN icons load', icons.length >= 4 && icons.every((i) => i.endsWith(':ok')), icons.join(' '));
+    }
 
     // Autorun: the scenario inside the build, both backends, against .NET.
     if (url.includes('autorun')) {

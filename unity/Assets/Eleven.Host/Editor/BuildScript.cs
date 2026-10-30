@@ -54,7 +54,11 @@ namespace Eleven.Host.Editor
 
                 BuildReport build = BuildPipeline.BuildPlayer(options);
                 BuildSummary summary = build.summary;
-                if (summary.result == BuildResult.Succeeded) WriteServiceWorker(summary.outputPath, buildId);
+                if (summary.result == BuildResult.Succeeded)
+                {
+                    InstallIcons(summary.outputPath);
+                    WriteServiceWorker(summary.outputPath, buildId);
+                }
                 succeeded = summary.result == BuildResult.Succeeded;
 
                 report.Insert(0, FormattableString.Invariant($"result: {summary.result}\nbuild: {buildId}\nunity: {Application.unityVersion}\nseconds: {summary.totalTime.TotalSeconds:F0}\nbytes: {summary.totalSize}\noutput: {summary.outputPath}\n"));
@@ -79,6 +83,32 @@ namespace Eleven.Host.Editor
             }
 
             if (!succeeded) EditorApplication.Exit(1);
+        }
+
+        /// <summary>
+        /// Replaces the PWA template's Unity icons with ELEVEN's (<c>unity/WebPlayer/icons</c>): the
+        /// home-screen icon, the manifest's icons and the favicon.
+        /// </summary>
+        private static void InstallIcons(string player)
+        {
+            string webPlayer = Path.Combine(Application.dataPath, "..", "WebPlayer");
+            string root = Path.GetFullPath(player);
+            Directory.CreateDirectory(Path.Combine(root, "icons"));
+            foreach (string icon in Directory.GetFiles(Path.Combine(webPlayer, "icons")).Where(file => file.EndsWith(".png") || file.EndsWith(".svg")))
+            {
+                File.Copy(icon, Path.Combine(root, "icons", Path.GetFileName(icon)), overwrite: true);
+            }
+
+            File.Copy(Path.Combine(webPlayer, "manifest.webmanifest"), Path.Combine(root, "manifest.webmanifest"), overwrite: true);
+
+            string index = Path.Combine(root, "index.html");
+            string html = File.ReadAllText(index);
+            const string templateIcon = "<link rel=\"shortcut icon\" href=\"TemplateData/favicon.ico\">";
+            if (!html.Contains(templateIcon)) throw new InvalidOperationException($"index.html has no {templateIcon} to replace.");
+            File.WriteAllText(index, html.Replace(templateIcon,
+                "<link rel=\"icon\" type=\"image/svg+xml\" href=\"icons/eleven.svg\">\n" +
+                "    <link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"icons/eleven-32.png\">\n" +
+                "    <link rel=\"apple-touch-icon\" href=\"icons/eleven-180.png\">"));
         }
 
         /// <summary>
