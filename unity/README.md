@@ -11,6 +11,7 @@ A thin Unity 6 host around the engine-free simulation, for the engine spike ([#3
 | `Assets/Eleven.Host/` | The host: fixed-step loop, touch adapter, view and HUD (`Eleven.Host.asmdef`) |
 | `Assets/Eleven.Host/Editor/` | Batch-mode build script and project settings as code (`Eleven.Host.Editor.asmdef`) |
 | `WebPlayer/ServiceWorker.js` | The player's service worker, written over the PWA template's by the build script |
+| `WebPlayer/icons/`, `WebPlayer/manifest.webmanifest` | The ELEVEN icon (`eleven.svg`, Erik's source) and the PNGs rendered from it by `icons/render.mjs`, with the web app manifest that lists them. The build script installs them over the template's Unity icons |
 | `ci/smoke.mjs` | Headless Chromium smoke test run by CI against the Web build |
 
 The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.asmdef`) sets `noEngineReferences`, so Unity refuses any engine reference in it (INV-2). Unity writes `.meta` files into `src/` when it imports those packages. They are git-ignored, because nothing refers to them by GUID.
