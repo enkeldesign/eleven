@@ -49,7 +49,7 @@ namespace Eleven.Host
         private GUIStyle _buttonStyle;
         private GUIStyle _resultStyle;
         private bool _resultFitChecked;
-        private int _styledForHeight;
+        private Vector2Int _styledFor;
         private int _framesSinceTrace;
         private double _lastTraceTime;
 
@@ -235,7 +235,7 @@ namespace Eleven.Host
             // The stick's vector is measured from where the thumb landed; its base is drawn as near
             // there as fits in the stick zone, with the knob offset the same way.
             Vector2 origin = _input.StickActive ? _input.StickOrigin : _layout.StickRest;
-            Vector2 stickCentre = _layout.KeepInStickZone(origin, _layout.StickRadius * 1.06f + 2f);
+            Vector2 stickCentre = _layout.KeepInStickZone(origin);
             Vector2 knob = stickCentre + (_input.StickActive ? _input.StickKnob - _input.StickOrigin : Vector2.zero);
             Disc(stickCentre, _layout.StickRadius, HostPalette.ControlIdle);
             Disc(knob, _layout.StickRadius * 0.45f, HostPalette.ControlActive);
@@ -252,24 +252,30 @@ namespace Eleven.Host
             Panel(panel);
             float pad = _layout.Padding;
             float widest = 0;
+            // Two columns put each backend's three lines side by side.
+            int columns = _layout.ResultColumns;
+            int rows = columns == 2 ? HudLayout.MaxResultLines / 2 : _resultLines.Count;
+            float columnWidth = (panel.width - 2 * pad) / columns;
             for (int i = 0; i < _resultLines.Count; i++)
             {
-                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.LineHeight, panel.width - 2 * pad, _layout.LineHeight);
+                int column = i / rows, row = i % rows;
+                var line = new Rect(panel.x + pad + column * columnWidth, panel.y + pad * 0.5f + row * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
                 GUI.Label(line, _resultLines[i], _resultStyle);
                 widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
             }
 
             if (_resultFitChecked) return;
             _resultFitChecked = true;
-            float needed = _resultLines.Count * _layout.LineHeight + pad;
-            bool fits = widest <= panel.width - 2 * pad && needed <= panel.height && panel.yMax <= _layout.ScreenHeight
+            float needed = Mathf.Min(rows, _resultLines.Count) * _layout.ResultLineHeight + pad;
+            bool fits = widest <= columnWidth && needed <= panel.height + 0.01f && panel.yMax <= _layout.ScreenHeight
                 && !panel.Overlaps(_layout.PlayArea);
             Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));
         }
 
         private void EnsureStyles()
         {
-            if (_textStyle != null && _styledForHeight == _layout.ScreenHeight) return;
+            var screen = new Vector2Int(_layout.ScreenWidth, _layout.ScreenHeight);
+            if (_textStyle != null && _styledFor == screen) return;
 
             int fontSize = _layout.FontSize;
             _textStyle = new GUIStyle(GUI.skin.label)
@@ -282,9 +288,9 @@ namespace Eleven.Host
             _textStyle.normal.textColor = HostPalette.HudText;
 
             _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _resultStyle = new GUIStyle(_textStyle) { wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
+            _resultStyle = new GUIStyle(_textStyle) { fontSize = _layout.ResultFontSize, wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
             _resultFitChecked = false;
-            _styledForHeight = _layout.ScreenHeight;
+            _styledFor = screen;
         }
 
         private void Button(Rect rect, string label)
