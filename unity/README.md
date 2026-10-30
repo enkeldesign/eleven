@@ -20,7 +20,7 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
 - `HostBootstrap` creates the host after the (empty) scene loads. Camera, pitch, dot and ball are built at runtime from generated textures.
 - `HostLoop` accumulates real time and spends it in whole simulation ticks, interpolating between the last two ticks for drawing. A frame longer than 0.25 s (backgrounded tab, pause, stall) is dropped, not caught up, so the simulation never advances for unseen time. At most 8 ticks run per frame.
 - `TouchAdapter` reads touches (and the mouse, as one finger on desktop) through the Input System. It produces owned commands for controller 1: a floating stick in the left half and a kick button bottom right.
-- On screen: the build id (CI run number and commit), **Reset**, **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash), and **Maths** (switches between the `Portable` and `SystemMath` backends).
+- On screen: the build id (CI run number and commit) with the page's load time and dropped frames over the last minute of play (for the device session, #5), **Reset**, **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash), and **Maths** (switches between the `Portable` and `SystemMath` backends).
 - URL options for testing: `?autorun` runs the scenario with both backends at start; `?trace` logs state every 60 ticks and every event.
 
 ## Building

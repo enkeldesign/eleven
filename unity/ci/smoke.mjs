@@ -7,11 +7,12 @@
 //   phone   - iPhone-sized portrait viewport with touch events (the template's mobile path)
 // Each pass boots the player, reads the host's log lines from the browser console and drives the
 // on-screen controls through Unity's Input System:
-//   - boot: the host reports ready, with its build id
+//   - boot: the host reports ready, with its build id and the page's load time
 //   - autorun (desktop): the issue 1 scenario's digests in WebGL, compared with the .NET hash logs
 //   - Maths and Run scenario: each tap is acknowledged, and the result panel fits its text
 //   - stick: dragging it moves the dot (from the host's trace lines), and the camera keeps the
 //     dot and ball inside the area the HUD leaves free
+//   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
 //   - rendering: the screenshot contains the pitch, line, dot and ball colours
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -135,6 +136,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('boot', !!ready, ready ? `host ready in ${notes.bootSeconds.toFixed(1)} s, build ${ready.match[1]}` : 'no "ELEVEN host ready" within 240 s');
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
+    // The page's own load time, which the build shows on screen for the device session (#5).
+    const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
+    notes.loadSeconds = loadMs / 1000;
+    check('reports its load time', loadMs > 0 && loadMs < 240_000, Number.isFinite(loadMs) ? `${loadMs} ms from navigation start` : 'no loadMs on the ready line');
 
     // Autorun: the scenario inside the build, both backends, against .NET.
     if (url.includes('autorun')) {
@@ -226,6 +231,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const view = after?.input.match(/view=dot:(\w+),ball:(\w+)/);
     check('dot and ball stay clear of the HUD', !!view && view[1] === 'in' && view[2] === 'in',
       view ? view[0] : 'no view report in the trace line');
+    const pacing = after?.input.match(/dropped=(\d+) frames=(\d+) interval=([\d.]+)/);
+    notes.dropped = pacing ? `${pacing[1]}/${pacing[2]}` : 'none';
+    check('counts dropped frames', !!pacing && Number(pacing[2]) > 0,
+      pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
     check('stick moves the dot', notes.stickMovedMetres > 3, before && after ? `dot x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
     // Kick button: a tap must be taken without errors (whether it connects depends on position).
@@ -347,7 +356,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

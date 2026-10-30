@@ -18,12 +18,16 @@ namespace Eleven.Host
         /// <summary>Widest result line, e.g. "digest 0123456789abcdef".</summary>
         public const int ResultLineCharacters = 23;
 
+        /// <summary>Widest build line, e.g. "ELEVEN 123+0123abc · load 12.3 s · 123 dropped in 60 s".</summary>
+        public const int BuildLineCharacters = 54;
+
         public readonly int ScreenWidth;
         public readonly int ScreenHeight;
         public readonly float Unit;
         public readonly float Padding;
         public readonly int FontSize;
         public readonly float LineHeight;
+        public readonly int BuildFontSize;
         public readonly int ResultFontSize;
         public readonly float ResultLineHeight;
 
@@ -54,6 +58,7 @@ namespace Eleven.Host
             LineHeight = FontSize * 1.3f;
 
             BuildLabel = new Rect(safe.xMin + Padding, safe.yMin + Padding, safe.width - 2 * Padding, 0.7f * Unit);
+            BuildFontSize = Mathf.Max(12, Mathf.Min(FontSize, FontToFit(BuildLabel.width - 16, BuildLineCharacters)));
             RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
             MathsButton = new Rect(RunButton.x, RunButton.yMax + Padding * 0.5f, RunButton.width, 0.9f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
@@ -65,8 +70,8 @@ namespace Eleven.Host
             ResultLines = lines;
             int smallest = Mathf.Max(12, Mathf.CeilToInt(FontSize * 0.6f));
             float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
-            int fontBeside = FontToFit(besideButtons - 2 * Padding);
-            int fontTwoColumns = FontToFit((safe.width - 4 * Padding) * 0.5f - Padding);
+            int fontBeside = FontToFit(besideButtons - 2 * Padding, ResultLineCharacters);
+            int fontTwoColumns = FontToFit((safe.width - 4 * Padding) * 0.5f - Padding, ResultLineCharacters);
             bool beside = fontBeside >= smallest;
             ResultColumns = !beside && fontTwoColumns >= smallest ? 2 : 1;
             ResultFontSize = beside ? Mathf.Min(FontSize, fontBeside)
@@ -145,8 +150,8 @@ namespace Eleven.Host
         public string Describe() =>
             System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} maths={Point(MathsButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0}");
 
-        // The largest font whose widest result line fits in this width.
-        private static int FontToFit(float width) => Mathf.FloorToInt(width / (ResultLineCharacters * 0.62f));
+        // The largest font at which a line of this many characters fits in this width.
+        private static int FontToFit(float width, int characters) => Mathf.FloorToInt(width / (characters * 0.62f));
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 

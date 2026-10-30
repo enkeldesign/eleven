@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using Eleven.Simulation.Maths;
@@ -31,6 +32,7 @@ namespace Eleven.Host
         private readonly List<SimEvent> _events = new List<SimEvent>();
         private readonly Dictionary<MathBackend, string[]> _scenarioResults = new Dictionary<MathBackend, string[]>();
         private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
+        private readonly FramePacing _pacing = new FramePacing();
 
         private SimConfig _config;
         private Simulator _simulator;
@@ -39,6 +41,7 @@ namespace Eleven.Host
         private TouchAdapter _input;
         private HudLayout _layout;
         private string _buildId;
+        private double _loadSeconds;
         private bool _trace;
         private bool _paused;
         private double _lastTime;
@@ -46,6 +49,7 @@ namespace Eleven.Host
         private Vector2 _previousDot;
         private Vector3 _previousBall;
         private GUIStyle _textStyle;
+        private GUIStyle _buildStyle;
         private GUIStyle _buttonStyle;
         private GUIStyle _resultStyle;
         private bool _resultFitChecked;
@@ -69,8 +73,9 @@ namespace Eleven.Host
             RememberPrevious();
             UpdateLayout(force: true);
             _lastTime = Time.realtimeSinceStartupAsDouble;
+            _loadSeconds = PageSeconds();
 
-            Log($"ELEVEN host ready build={_buildId} maths={_config.MathBackend} tickRate={_config.TickRate} config={_config.Hash:x16}");
+            Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} maths={_config.MathBackend} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
 
             if (url.Contains("autorun"))
             {
@@ -85,6 +90,7 @@ namespace Eleven.Host
         {
             _paused = paused;
             _accumulator = 0;
+            _pacing.Clear();
             _lastTime = Time.realtimeSinceStartupAsDouble;
         }
 
@@ -103,7 +109,11 @@ namespace Eleven.Host
             _lastTime = now;
 
             if (_paused || frame > MaxFrameSeconds) _accumulator = 0;
-            else _accumulator += frame;
+            else
+            {
+                _accumulator += frame;
+                _pacing.Record(now, frame);
+            }
 
             double tick = _config.TickSeconds;
             int steps = 0;
@@ -143,7 +153,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -224,7 +234,7 @@ namespace Eleven.Host
             EnsureStyles();
 
             Panel(_layout.BuildLabel);
-            GUI.Label(_layout.BuildLabel, $"ELEVEN build {_buildId}", _textStyle);
+            GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
 
             Button(_layout.ResetButton, "Reset");
             Button(_layout.RunButton, "Run scenario");
@@ -287,6 +297,7 @@ namespace Eleven.Host
             };
             _textStyle.normal.textColor = HostPalette.HudText;
 
+            _buildStyle = new GUIStyle(_textStyle) { fontSize = _layout.BuildFontSize, wordWrap = false, clipping = TextClipping.Clip };
             _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
             _resultStyle = new GUIStyle(_textStyle) { fontSize = _layout.ResultFontSize, wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
             _resultFitChecked = false;
@@ -318,6 +329,23 @@ namespace Eleven.Host
             GUI.DrawTexture(new Rect(centre.x - radius, centre.y - radius, radius * 2, radius * 2), _view.Disc);
             GUI.color = Color.white;
         }
+
+        /// <summary>
+        /// The build id, then the two numbers the device session reads off the screen (#5): how
+        /// long the page took to load, and dropped frames over the last minute of play.
+        /// </summary>
+        private string BuildLine() => FormattableString.Invariant(
+            $"ELEVEN {_buildId} · load {_loadSeconds:F1} s · {_pacing.Dropped} dropped in {_pacing.CoveredSeconds:F0} s");
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern double ElevenPageMilliseconds();
+
+        // From navigation start, so a cold load includes the download and the engine's start-up.
+        private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
+#else
+        private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
+#endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);
 
