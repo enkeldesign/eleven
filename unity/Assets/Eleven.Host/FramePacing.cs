@@ -7,16 +7,20 @@ namespace Eleven.Host
     /// Counts dropped frames over the last minute, for the device session's frame-pacing
     /// measurement (#5).
     ///
-    /// The display's frame interval is taken as the median frame time in the window, so the
-    /// counter needs no knowledge of the display's refresh rate. A frame that took more than
-    /// 1.5 intervals stands for the frames that should have been shown in its place: one that took
-    /// three intervals dropped two. Frames the host discards as pauses (backgrounded, stalled) are
-    /// not recorded at all.
+    /// The display's frame interval is the shortest frame time the device sustains: the 5th
+    /// percentile of the window, remembered as a running minimum, and never longer than 1/60 s,
+    /// the slowest refresh rate ELEVEN targets. So 60 Hz and 120 Hz displays both work, and a
+    /// sustained slowdown can't redefine "on time" and hide the frames it drops. A frame that took
+    /// more than 1.5 intervals stands for the frames that should have been shown in its place: one
+    /// that took three intervals dropped two. Frames the host discards as pauses (backgrounded,
+    /// stalled) are not recorded at all.
     /// </summary>
     internal sealed class FramePacing
     {
         public const double WindowSeconds = 60;
         private const double ReportEverySeconds = 0.5;
+        private const double SlowestDisplayInterval = 1.0 / 60;
+        private const int CalibrationFrames = 20;
 
         private readonly Queue<(double At, double Seconds)> _frames = new Queue<(double, double)>();
         private double[] _sorted = new double[1024];
@@ -28,8 +32,8 @@ namespace Eleven.Host
         /// <summary>Frames that should have been shown but weren't, in the window.</summary>
         public int Dropped { get; private set; }
 
-        /// <summary>The median frame time in the window, taken as the display's frame interval.</summary>
-        public double IntervalSeconds { get; private set; }
+        /// <summary>The display's frame interval, as calibrated so far.</summary>
+        public double IntervalSeconds { get; private set; } = SlowestDisplayInterval;
 
         /// <summary>Seconds of play the window covers: up to <see cref="WindowSeconds"/>.</summary>
         public double CoveredSeconds { get; private set; }
@@ -43,12 +47,12 @@ namespace Eleven.Host
             if (now - _reportedAt >= ReportEverySeconds) Report(now);
         }
 
-        /// <summary>Starts a new window, e.g. after a pause.</summary>
+        /// <summary>Starts a new window, e.g. after a pause. The display's interval is kept.</summary>
         public void Clear()
         {
             _frames.Clear();
             Frames = Dropped = 0;
-            IntervalSeconds = CoveredSeconds = 0;
+            CoveredSeconds = 0;
             _reportedAt = double.NegativeInfinity;
         }
 
@@ -66,19 +70,17 @@ namespace Eleven.Host
             }
 
             Array.Sort(_sorted, 0, count);
-            double interval = count == 0 ? 0 : _sorted[count / 2];
+            if (count >= CalibrationFrames) IntervalSeconds = Math.Min(IntervalSeconds, _sorted[count / 20]);
+
+            double interval = IntervalSeconds;
             int dropped = 0;
-            if (interval > 0)
+            for (int j = count - 1; j >= 0 && _sorted[j] > 1.5 * interval; j--)
             {
-                for (int j = count - 1; j >= 0 && _sorted[j] > 1.5 * interval; j--)
-                {
-                    dropped += (int)Math.Round(_sorted[j] / interval) - 1;
-                }
+                dropped += (int)Math.Round(_sorted[j] / interval) - 1;
             }
 
             Frames = count;
             Dropped = dropped;
-            IntervalSeconds = interval;
             CoveredSeconds = Math.Min(WindowSeconds, covered);
         }
     }
