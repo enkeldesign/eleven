@@ -10,7 +10,8 @@
 //   - boot: the host reports ready, with its build id
 //   - autorun (desktop): the issue 1 scenario's digests in WebGL, compared with the .NET hash logs
 //   - Maths and Run scenario: each tap is acknowledged, and the result panel fits its text
-//   - stick: dragging it moves the dot (from the host's trace lines)
+//   - stick: dragging it moves the dot (from the host's trace lines), and the camera keeps the
+//     dot and ball inside the area the HUD leaves free
 //   - recording: the host's command recording replays to the live state
 //   - rendering: the screenshot contains the pitch, line, dot and ball colours
 // Results go to stdout as GitHub annotations and to <output dir> with screenshots and console logs.
@@ -208,6 +209,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     else await page.mouse.up();
     const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     notes.stickMovedMetres = before && after ? Number(after[2]) - Number(before[2]) : NaN;
+    const view = after?.input.match(/view=dot:(\w+),ball:(\w+)/);
+    check('dot and ball stay clear of the HUD', !!view && view[1] === 'in' && view[2] === 'in',
+      view ? view[0] : 'no view report in the trace line');
     check('stick moves the dot', notes.stickMovedMetres > 3, before && after ? `dot x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
     // Kick button: a tap must be taken without errors (whether it connects depends on position).

@@ -30,7 +30,7 @@ namespace Eleven.Host
         private readonly List<Command> _commands = new List<Command>(1);
         private readonly List<SimEvent> _events = new List<SimEvent>();
         private readonly Dictionary<MathBackend, string[]> _scenarioResults = new Dictionary<MathBackend, string[]>();
-        private readonly List<string> _resultLines = new List<string>(HudLayout.ResultLines);
+        private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
 
         private SimConfig _config;
         private Simulator _simulator;
@@ -49,7 +49,7 @@ namespace Eleven.Host
         private GUIStyle _buttonStyle;
         private GUIStyle _resultStyle;
         private bool _resultFitChecked;
-        private int _styledForHeight;
+        private Vector2Int _styledFor;
         private int _framesSinceTrace;
         private double _lastTraceTime;
 
@@ -120,7 +120,8 @@ namespace Eleven.Host
             SimState state = _simulator.PeekState();
             _view.Render(
                 Vector2.Lerp(_previousDot, ToVector(state.Dots[0].Position), alpha),
-                Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha));
+                Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
+                _layout);
         }
 
         private void StepOnce()
@@ -142,7 +143,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -204,14 +205,16 @@ namespace Eleven.Host
             }
 
             _resultFitChecked = false;
+            UpdateLayout(force: false);
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} maths={backend} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
         private void UpdateLayout(bool force)
         {
-            if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height) return;
+            if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
+                && _layout.ResultLines == _resultLines.Count) return;
 
-            _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea);
+            _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
@@ -229,8 +232,11 @@ namespace Eleven.Host
 
             if (_resultLines.Count > 0) DrawResult();
 
-            Vector2 stickCentre = _input.StickActive ? _input.StickOrigin : _layout.StickRest;
-            Vector2 knob = _input.StickActive ? _input.StickKnob : _layout.StickRest;
+            // The stick's vector is measured from where the thumb landed; its base is drawn as near
+            // there as fits in the stick zone, with the knob offset the same way.
+            Vector2 origin = _input.StickActive ? _input.StickOrigin : _layout.StickRest;
+            Vector2 stickCentre = _layout.KeepInStickZone(origin);
+            Vector2 knob = stickCentre + (_input.StickActive ? _input.StickKnob - _input.StickOrigin : Vector2.zero);
             Disc(stickCentre, _layout.StickRadius, HostPalette.ControlIdle);
             Disc(knob, _layout.StickRadius * 0.45f, HostPalette.ControlActive);
 
@@ -246,23 +252,30 @@ namespace Eleven.Host
             Panel(panel);
             float pad = _layout.Padding;
             float widest = 0;
+            // Two columns put each backend's three lines side by side.
+            int columns = _layout.ResultColumns;
+            int rows = columns == 2 ? HudLayout.MaxResultLines / 2 : _resultLines.Count;
+            float columnWidth = (panel.width - 2 * pad) / columns;
             for (int i = 0; i < _resultLines.Count; i++)
             {
-                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.LineHeight, panel.width - 2 * pad, _layout.LineHeight);
+                int column = i / rows, row = i % rows;
+                var line = new Rect(panel.x + pad + column * columnWidth, panel.y + pad * 0.5f + row * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
                 GUI.Label(line, _resultLines[i], _resultStyle);
                 widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
             }
 
             if (_resultFitChecked) return;
             _resultFitChecked = true;
-            float needed = _resultLines.Count * _layout.LineHeight + pad;
-            bool fits = widest <= panel.width - 2 * pad && needed <= panel.height && panel.yMax <= _layout.ScreenHeight;
+            float needed = Mathf.Min(rows, _resultLines.Count) * _layout.ResultLineHeight + pad;
+            bool fits = widest <= columnWidth && needed <= panel.height + 0.01f && panel.yMax <= _layout.ScreenHeight
+                && !panel.Overlaps(_layout.PlayArea);
             Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));
         }
 
         private void EnsureStyles()
         {
-            if (_textStyle != null && _styledForHeight == _layout.ScreenHeight) return;
+            var screen = new Vector2Int(_layout.ScreenWidth, _layout.ScreenHeight);
+            if (_textStyle != null && _styledFor == screen) return;
 
             int fontSize = _layout.FontSize;
             _textStyle = new GUIStyle(GUI.skin.label)
@@ -275,9 +288,9 @@ namespace Eleven.Host
             _textStyle.normal.textColor = HostPalette.HudText;
 
             _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _resultStyle = new GUIStyle(_textStyle) { wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
+            _resultStyle = new GUIStyle(_textStyle) { fontSize = _layout.ResultFontSize, wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
             _resultFitChecked = false;
-            _styledForHeight = _layout.ScreenHeight;
+            _styledFor = screen;
         }
 
         private void Button(Rect rect, string label)
