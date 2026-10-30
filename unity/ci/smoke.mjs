@@ -14,6 +14,8 @@
 //     dot and ball inside the area the HUD leaves free
 //   - recording: the host's command recording replays to the live state
 //   - rendering: the screenshot contains the pitch, line, dot and ball colours
+// A third pass checks the service worker: a second deploy is served on reload, and with the
+// server stopped the player still boots from the cache.
 // Results go to stdout as GitHub annotations and to <output dir> with screenshots and console logs.
 // A digest mismatch is a warning, not a failure: cross-runtime determinism is #5's question.
 
@@ -56,7 +58,21 @@ function expectedDigests() {
   return digests;
 }
 
-function serve(root) {
+async function waitFor(logs, pattern, timeoutMs, from = 0) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    for (let i = from; i < logs.length; i++) {
+      const m = pattern.exec(logs[i]);
+      if (m) return { match: m, index: i };
+    }
+    if (Date.now() > deadline) return null;
+    await sleep(100);
+  }
+}
+
+// deploy.number above 1 stands for a later deploy of the same player: index.html carries a
+// marker with the number and ServiceWorker.js changes, as it does between real builds.
+function serve(root, deploy = { number: 1 }) {
   const types = {
     '.html': 'text/html',
     '.js': 'application/javascript',
@@ -75,6 +91,14 @@ function serve(root) {
       return;
     }
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
+    const name = path.basename(file);
+    if (deploy.number > 1 && (name === 'index.html' || name === 'ServiceWorker.js')) {
+      const text = fs.readFileSync(file, 'utf8');
+      res.end(name === 'index.html'
+        ? text.replace('<head>', `<head><meta name="eleven-deploy" content="${deploy.number}">`)
+        : `${text}\n// deploy ${deploy.number}\n`);
+      return;
+    }
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
@@ -87,17 +111,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${what}: ${detail}`);
   };
   const notes = (results.notes[name] = {});
-  const waitForLog = async (pattern, timeoutMs, from = 0) => {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      for (let i = from; i < logs.length; i++) {
-        const m = pattern.exec(logs[i]);
-        if (m) return { match: m, index: i };
-      }
-      if (Date.now() > deadline) return null;
-      await sleep(100);
-    }
-  };
+  const waitForLog = (pattern, timeoutMs, from = 0) => waitFor(logs, pattern, timeoutMs, from);
   const lastLog = (pattern) => {
     for (let i = logs.length - 1; i >= 0; i--) {
       const m = pattern.exec(logs[i]);
@@ -263,6 +277,57 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
   }
 }
 
+// The service worker, with a server of its own that can stand in for a new deploy or go away.
+async function runServiceWorkerPass(browser, root) {
+  const name = 'service worker';
+  const logs = [];
+  const check = (what, ok, detail) => {
+    results.checks.push({ name: `${name}: ${what}`, ok, detail });
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${what}: ${detail}`);
+  };
+  const deploy = { number: 1 };
+  const server = await serve(root, deploy);
+  const context = await browser.newContext({ viewport: { width: 960, height: 600 } });
+  const page = await context.newPage();
+  page.on('console', (m) => logs.push(m.text()));
+  page.on('pageerror', (e) => logs.push(`pageerror ${e.message}`));
+  const ready = /ELEVEN host ready build=(\S+)/;
+  const load = async (go) => {
+    const from = logs.length;
+    await go();
+    return waitFor(logs, ready, 120_000, from);
+  };
+
+  try {
+    const first = await load(() => page.goto(`http://127.0.0.1:${server.address().port}/index.html?trace=1`));
+    if (!first) throw new Error('player did not boot');
+    // Once the worker is active, a second visit is under its control; then a new deploy.
+    const active = await page.evaluate(() => Promise.race([
+      navigator.serviceWorker.ready.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 60_000)),
+    ]));
+    if (!active) throw new Error('no active service worker within 60 s');
+    await load(() => page.reload());
+    const controlled = await page.evaluate(() => !!navigator.serviceWorker.controller);
+    check('controls the page', controlled, controlled ? 'second visit controlled by the service worker' : 'no controller on the second visit');
+    deploy.number = 2;
+    const after = await load(() => page.reload());
+    const marker = await page.evaluate(() => document.querySelector('meta[name="eleven-deploy"]')?.content ?? 'none');
+    check('serves a new deploy on reload', !!after && marker === '2', `deploy marker after reload: ${marker}`);
+
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    const offline = await load(() => page.reload());
+    check('boots offline from its cache', !!offline, offline ? `host ready, build ${offline.match[1]}` : 'no "ELEVEN host ready" with the server stopped');
+  } catch (e) {
+    check('ran to completion', false, e.message);
+  } finally {
+    fs.writeFileSync(path.join(outDir, 'service-worker-console.log'), logs.join('\n'));
+    await context.close();
+    if (server.listening) server.close();
+  }
+}
+
 const server = await serve(path.resolve(playerDir));
 const base = `http://127.0.0.1:${server.address().port}/index.html`;
 const browser = await chromium.launch({
@@ -272,6 +337,7 @@ try {
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', { viewport: { width: 1280, height: 800 } }, false);
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
+  await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();
   server.close();

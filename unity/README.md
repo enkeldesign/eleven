@@ -10,6 +10,7 @@ A thin Unity 6 host around the engine-free simulation, for the engine spike ([#3
 | `Packages/manifest.json` | Packages. The simulation and its harness are local packages pointing at `../../src/Eleven.Simulation` and `../../src/Eleven.Simulation.Harness`, the same source files the .NET build compiles |
 | `Assets/Eleven.Host/` | The host: fixed-step loop, touch adapter, view and HUD (`Eleven.Host.asmdef`) |
 | `Assets/Eleven.Host/Editor/` | Batch-mode build script and project settings as code (`Eleven.Host.Editor.asmdef`) |
+| `WebPlayer/ServiceWorker.js` | The player's service worker, written over the PWA template's by the build script |
 | `ci/smoke.mjs` | Headless Chromium smoke test run by CI against the Web build |
 
 The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.asmdef`) sets `noEngineReferences`, so Unity refuses any engine reference in it (INV-2). Unity writes `.meta` files into `src/` when it imports those packages. They are git-ignored, because nothing refers to them by GUID.
@@ -67,3 +68,10 @@ Repository settings this needs, all set once:
 - **Settings → Environments → github-pages → Deployment branches and tags:** No restriction. PR runs deploy from `refs/pull/<n>/merge`, which no branch pattern matches.
 
 Builds use Unity's PWA template, so a link can be added to a phone's home screen. Files are Gzip-compressed with Unity's JavaScript decompression fallback, because Pages can't send `Content-Encoding` headers for them.
+
+The template's service worker answers from its cache first and never drops old caches. Unity's file names are the same in every build, so a phone kept running the first build it saw ([#15](https://github.com/enkeldesign/eleven/issues/15)). The build script replaces it with `WebPlayer/ServiceWorker.js`:
+
+- It goes to the network first, revalidating, so a reload shows the latest deploy.
+- It falls back to its cache only offline.
+- Each build gets its own cache per link, and older ones are deleted when it takes over.
+- A phone still on the template's worker picks up the new one on its first reload and shows the latest build from the second.
