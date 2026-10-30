@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "com.enkeldesign.eleven.simulation": "file:../../src/Eleven.Simulation",
+    "com.enkeldesign.eleven.simulation.harness": "file:../../src/Eleven.Simulation.Harness",
+    "com.unity.inputsystem": "1.20.0",
+    "com.unity.modules.imgui": "1.0.0"
+  }
+}

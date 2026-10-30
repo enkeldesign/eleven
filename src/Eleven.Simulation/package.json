@@ -1,0 +1,7 @@
+{
+  "name": "com.enkeldesign.eleven.simulation",
+  "version": "0.1.0",
+  "displayName": "ELEVEN Simulation",
+  "description": "The engine-free football simulation. The same source files build in plain .NET (Eleven.Simulation.csproj) and in Unity (Eleven.Simulation.asmdef).",
+  "unity": "6000.3"
+}

@@ -1,3 +1,5 @@
+// Unity compiles this file with nullable annotations off; the .NET build has them on.
+#nullable enable
 using System;
 
 namespace Eleven.Simulation

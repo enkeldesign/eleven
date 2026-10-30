@@ -15,6 +15,7 @@ Project startup. The engine and platform are undecided until **ADR-0001**; Unity
 | `docs/lenses/` | Review perspectives and when to apply them |
 | `src/Eleven.Simulation/` | The engine-free football simulation |
 | `src/Eleven.Simulation.Harness/`, `src/Eleven.Simulation.Cli/` | Scripted scenarios and the headless harness (hash logs, tick cost) |
+| `unity/` | The Unity 6 spike host and its build script; see `unity/README.md` |
 | `docs/simulation/` | The simulation's determinism contract: ticks, commands, encoding, hashes, maths |
 | `tests/` | .NET tests for the simulation |
 

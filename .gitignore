@@ -1,10 +1,19 @@
 # .NET
 bin/
 obj/
+/artifacts/
 *.user
 TestResults/
 
-# Unity (the Unity project will live in /unity, added in issue 2)
+# Unity
+# Unity writes .meta files into the shared simulation packages; nothing references them by GUID.
+/src/**/*.meta
+# Created by the batch-mode build script on every build.
+/unity/Assets/Generated/
+/unity/Assets/Generated.meta
+# Copied in by GameCI's builder.
+/unity/Assets/Editor/
+/unity/Assets/Editor.meta
 /unity/[Ll]ibrary/
 /unity/[Tt]emp/
 /unity/[Oo]bj/
@@ -21,3 +30,6 @@ TestResults/
 .vs/
 .idea/
 .vscode/
+
+# Smoke-test tooling installed by CI
+/unity/ci/node_modules/

@@ -3,5 +3,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
+    <!--
+      Build output goes to /artifacts, not bin/ and obj/ beside the sources: src/Eleven.Simulation
+      and src/Eleven.Simulation.Harness are also Unity packages, and Unity would import anything
+      left in them.
+    -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
 </Project>

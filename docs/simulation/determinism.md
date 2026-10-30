@@ -16,6 +16,7 @@ The rules the engine-free simulation follows so that the same code, config, seed
 | `src/Eleven.Simulation.Harness` | netstandard2.1, C# 9 | Scripted scenario, runner, hash log. Reusable by the Unity host ([#3](https://github.com/enkeldesign/eleven/issues/3)). Analyzer applied |
 | `src/Eleven.Simulation.Analyzers` | netstandard2.0 | The banned-API Roslyn analyzer (Microsoft.CodeAnalysis 3.8, for Unity compatibility) |
 | `src/Eleven.Simulation.Cli` | net10.0 | Headless harness: writes hash logs, measures tick cost. The only place `Stopwatch` is used |
+| `unity/` | Unity 6000.3 | The spike host. Compiles the simulation and harness from the same sources as local packages; `noEngineReferences` on the simulation's assembly definition ([unity/README.md](../../unity/README.md)) |
 
 ## Ticks
 

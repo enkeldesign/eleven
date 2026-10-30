@@ -19,8 +19,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// The build that produced this simulation: the assembly's informational version, which the
-        /// .NET SDK suffixes with the source commit. Hosts that don't stamp it (for example Unity,
-        /// until #3 adds a build id) report "unknown".
+        /// .NET SDK suffixes with the source commit. Unity doesn't stamp it, so Unity builds report
+        /// "unknown"; the Unity host shows its own build id.
         /// </summary>
         public static string BuildId { get; } =
             typeof(SimulationInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
