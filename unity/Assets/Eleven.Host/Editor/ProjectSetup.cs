@@ -23,10 +23,14 @@ namespace Eleven.Host.Editor
             PlayerSettings.bundleVersion = buildId;
             PlayerSettings.runInBackground = false;
 
-            // Gzip with a JavaScript fallback runs from any static file server, compressed
-            // headers or not. Hosting and its headers are #4's concern.
+            // Gzip with a JavaScript fallback: GitHub Pages can't send Content-Encoding headers
+            // for Unity's pre-compressed files, so the loader decompresses them itself.
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
             PlayerSettings.WebGL.decompressionFallback = true;
+
+            // Unity's PWA template adds a web app manifest and a service worker, so the build can
+            // be installed to the home screen and tested offline (#5).
+            PlayerSettings.WebGL.template = "APPLICATION:PWA";
 
             SetActiveInputHandler(InputSystemOnly);
             AssetDatabase.SaveAssets();
