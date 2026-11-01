@@ -61,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 4`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, and version 4 added the kick's wind-up and aftertouch and moved its direction error to the player). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md) and [kick.md](kick.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 5`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, and version 5 added bounce spin retention). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md) and [kick.md](kick.md).
 
 ## Canonical encoding
 

@@ -64,6 +64,7 @@ namespace Eleven.Simulation
             new TunableParameter("ballRadius", "m", 0.05, 0.5),
             new TunableParameter("bounceRestitution", "fraction", 0, 1, 0.5, 0.75),
             new TunableParameter("bounceTangentialRetention", "fraction", 0, 1, 0.45, 0.85),
+            new TunableParameter("bounceSpinRetention", "fraction", 0, 1, 0.15, 0.35),
             new TunableParameter("settleSpeed", "m/s", 0, 5),
             new TunableParameter("rollingFriction", "fraction of g", 0, 2, 0.05, 0.3),
             new TunableParameter("stopSpeed", "m/s", 0, 2),
@@ -86,6 +87,7 @@ namespace Eleven.Simulation
             "ballRadius" => BallRadius,
             "bounceRestitution" => BounceRestitution,
             "bounceTangentialRetention" => BounceTangentialRetention,
+            "bounceSpinRetention" => BounceSpinRetention,
             "settleSpeed" => SettleSpeed,
             "rollingFriction" => RollingFriction,
             "stopSpeed" => StopSpeed,
@@ -111,6 +113,7 @@ namespace Eleven.Simulation
         {
             double gravity = Gravity, ballRadius = BallRadius, bounceRestitution = BounceRestitution;
             double bounceTangentialRetention = BounceTangentialRetention, settleSpeed = SettleSpeed;
+            double bounceSpinRetention = BounceSpinRetention;
             double rollingFriction = RollingFriction, stopSpeed = StopSpeed, magnusCoefficient = MagnusCoefficient;
             double airSpinDecay = AirSpinDecay, groundSpinDecay = GroundSpinDecay;
             double kickSpeed = KickSpeed, kickLoft = KickLoft, kickSideSpin = KickSideSpin;
@@ -125,6 +128,7 @@ namespace Eleven.Simulation
                     case "ballRadius": ballRadius = o.Value; break;
                     case "bounceRestitution": bounceRestitution = o.Value; break;
                     case "bounceTangentialRetention": bounceTangentialRetention = o.Value; break;
+                    case "bounceSpinRetention": bounceSpinRetention = o.Value; break;
                     case "settleSpeed": settleSpeed = o.Value; break;
                     case "rollingFriction": rollingFriction = o.Value; break;
                     case "stopSpeed": stopSpeed = o.Value; break;
@@ -148,6 +152,7 @@ namespace Eleven.Simulation
                 ballRadius: ballRadius,
                 bounceRestitution: bounceRestitution,
                 bounceTangentialRetention: bounceTangentialRetention,
+                bounceSpinRetention: bounceSpinRetention,
                 settleSpeed: settleSpeed,
                 rollingFriction: rollingFriction,
                 stopSpeed: stopSpeed,

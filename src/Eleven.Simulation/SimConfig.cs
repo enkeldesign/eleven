@@ -12,14 +12,15 @@ namespace Eleven.Simulation
     /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model. Version 3 moved
     /// player movement out to each player's <see cref="PlayerCapabilities"/> (#36). Version 4 added
     /// the manual kick's wind-up and aftertouch, made <see cref="KickLoft"/> and <see cref="KickSideSpin"/>
-    /// maxima, and moved the kick's direction error to the player (#37).
+    /// maxima, and moved the kick's direction error to the player (#37). Version 5 added
+    /// <see cref="BounceSpinRetention"/> (#40).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 4;
+        public const int FormatVersion = 5;
 
         public SimConfig(
             int tickRate = 60,
@@ -27,6 +28,7 @@ namespace Eleven.Simulation
             double ballRadius = 0.11,
             double bounceRestitution = 0.55,
             double bounceTangentialRetention = 0.8,
+            double bounceSpinRetention = 0.25,
             double settleSpeed = 0.3,
             double rollingFriction = 0.08,
             double stopSpeed = 0.05,
@@ -53,6 +55,7 @@ namespace Eleven.Simulation
             BallRadius = ballRadius;
             BounceRestitution = bounceRestitution;
             BounceTangentialRetention = bounceTangentialRetention;
+            BounceSpinRetention = bounceSpinRetention;
             SettleSpeed = settleSpeed;
             RollingFriction = rollingFriction;
             StopSpeed = stopSpeed;
@@ -98,6 +101,13 @@ namespace Eleven.Simulation
 
         /// <summary>Fraction of horizontal speed kept at a bounce.</summary>
         public double BounceTangentialRetention { get; }
+
+        /// <summary>
+        /// Fraction of the ball's spin kept at each ground bounce (#40), so the curve of repeated hops
+        /// dies within a few bounces. It shortens the life of physical spin; the aftertouch window,
+        /// which gates the player's shaping input, is separate.
+        /// </summary>
+        public double BounceSpinRetention { get; }
 
         /// <summary>m/s. A bounce returning less upward speed than this leaves the ball rolling.</summary>
         public double SettleSpeed { get; }
@@ -184,6 +194,7 @@ namespace Eleven.Simulation
             w.WriteDouble(BallRadius, nameof(BallRadius));
             w.WriteDouble(BounceRestitution, nameof(BounceRestitution));
             w.WriteDouble(BounceTangentialRetention, nameof(BounceTangentialRetention));
+            w.WriteDouble(BounceSpinRetention, nameof(BounceSpinRetention));
             w.WriteDouble(SettleSpeed, nameof(SettleSpeed));
             w.WriteDouble(RollingFriction, nameof(RollingFriction));
             w.WriteDouble(StopSpeed, nameof(StopSpeed));
