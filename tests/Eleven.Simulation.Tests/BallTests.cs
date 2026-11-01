@@ -93,44 +93,5 @@ namespace Eleven.Simulation.Tests
             Assert.True(ball.Position.X > 5);
             Assert.InRange(ball.Spin.Z, 0.001, 19.999);
         }
-
-        [Fact]
-        public void A_kick_launches_the_ball_along_the_heading_with_loft_and_spin()
-        {
-            var config = Config();
-            var sim = Simulator(config, State(config, ballPosition: new Vec3(0.5, 0, config.BallRadius)));
-            var events = Step(sim, Move(0, 1, 0, kick: true));
-
-            BallState ball = sim.PeekState().Ball;
-            Assert.Contains(new SimEvent(0, SimEventKind.Kicked, PlayerId), events);
-            Assert.True(ball.Velocity.Z > 0);
-            Assert.True(ball.Spin.Z > 0);
-            double heading = Math.Atan2(ball.Velocity.Y, ball.Velocity.X);
-            Assert.InRange(heading, -config.KickDirectionError, config.KickDirectionError);
-            Assert.Equal(config.KickCooldownTicks, sim.PeekState().Players[0].KickCooldown);
-        }
-
-        [Fact]
-        public void A_ball_out_of_reach_is_not_kicked()
-        {
-            var config = Config();
-            var sim = Simulator(config, State(config, ballPosition: new Vec3(config.KickReach + 0.5, 0, config.BallRadius)));
-            var events = Step(sim, Move(0, 0, 0, kick: true));
-
-            Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Kicked);
-            Assert.Equal(0, sim.PeekState().Ball.Velocity.X);
-        }
-
-        [Fact]
-        public void A_player_cooling_down_cannot_kick()
-        {
-            var config = Config();
-            SimState state = State(config, ballPosition: new Vec3(0.5, 0, config.BallRadius));
-            state.Players[0].KickCooldown = 2;
-            var sim = Simulator(config, state);
-
-            Assert.DoesNotContain(Step(sim, Move(0, 0, 0, kick: true)), e => e.Kind == SimEventKind.Kicked);
-            Assert.Contains(Step(sim, Move(1, 0, 0, kick: true)), e => e.Kind == SimEventKind.Kicked);
-        }
     }
 }

@@ -21,25 +21,25 @@ The rules the engine-free simulation follows so that the same code, config, seed
 
 `tick-v1`: state N is the state after N steps. Step N applies the commands whose tick is N and turns state N into state N+1. Hash N is the hash of state N, so a 60-second run at 60 Hz has 3601 hashes, ticks 0 to 3600.
 
-Inside a step: resolve commands → count down kick cooldowns, move players, update headings → apply kicks → integrate the ball → check the goal line → advance the tick.
+Inside a step: resolve commands → count down kick cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → integrate the ball → check the goal line → advance the tick. The kick's timers are described in [kick.md](kick.md).
 
 The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`.
 
 ## Commands
 
-A command is `(controller id, tick, move vector, kick)`, recorded before any assistance (INV-10).
+A command is `(controller id, tick, move vector, kick intent or none, aftertouch vector)`, recorded before any assistance (INV-10). A kick intent is a direction, a strength and a loft ([kick.md](kick.md)).
 
 - A command controls the player whose `OwnerControllerId` equals its controller id. Ownership is part of state. A command for a controller that owns no player is rejected as `Unowned`.
 - A command applies only at its own tick. Passed to a step after its tick, it is `Stale`; before, `Early`.
 - Two or more commands for the same controller at the same tick are all rejected as `Duplicate`. Resolving them in submission order would make the result depend on the order an adapter happened to use.
-- A non-finite move vector is `Invalid`. A move vector longer than 1 is scaled to length 1.
+- A non-finite value anywhere (move, aftertouch, or any part of the kick intent) is `Invalid`. A move or aftertouch vector longer than 1 is scaled to length 1, and a kick's strength and loft are clamped to 0–1.
 - Accepted commands are applied in ascending controller id. Submission order never matters.
-- A player with no accepted command in a tick gets a neutral command: no move, no kick.
+- A player with no accepted command in a tick gets a neutral command: no move, no kick, no aftertouch.
 - Every rejection emits a `CommandRejected` event naming the controller and the reason.
 
 ## Events
 
-`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller). They're the simulation's internal events, not the match-result contract (INV-14).
+`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach). They're the simulation's internal events, not the match-result contract (INV-14).
 
 **Goal-line crossing** is geometry only. The ball is beyond the line when it is wholly past it: `x − radius > GoalLineX`. `BallState.BeyondGoalLine` records whether that held after the previous step. The event fires only on the step where it goes from false to true, so a ball resting beyond the line emits one event, not one per tick. A ball that comes back behind the line clears the flag and can cross again.
 
@@ -57,11 +57,11 @@ uniform = (h >> 11) × 2⁻⁵³        // in [0, 1)
 
 `mix` is the SplitMix64 finaliser: `z = (z ^ z>>30) × 0xBF58476D1CE4E5B9; z = (z ^ z>>27) × 0x94D049BB133111EB; z ^ z>>31`, on unsigned 64-bit integers with wrap-around. `stream` and `entity` are 32-bit, `draw` is the draw's index within that stream, entity and tick, starting at 0.
 
-No generator state survives a draw, so an extra draw in one stream can't shift another stream's values. Streams in use: `KickDirection = 1`, `KickSpin = 2`. The seed is part of state.
+No generator state survives a draw, so an extra draw in one stream can't shift another stream's values. Streams in use: `KickDirection = 1`, the kicker's execution error. `KickSpin = 2` is reserved: the spike's random kick sidespin, no longer drawn since #37, and not reused. The seed is part of state.
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 3`; version 2 dropped the maths backend, and version 3 moved player movement out to each player's capabilities). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 4`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, and version 4 added the kick's wind-up and aftertouch and moved its direction error to the player). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md) and [kick.md](kick.md).
 
 ## Canonical encoding
 
@@ -72,7 +72,7 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 - Booleans: one byte, 0 or 1.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, capabilities (max speed, acceleration), position, velocity, heading, kick cooldown).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, capabilities (max speed, acceleration, kick power, kick error), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength and loft, aftertouch ticks, aftertouch direction).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.
@@ -84,9 +84,23 @@ All future-affecting state is in `SimState`; anything else that affects the next
 
 ## Snapshots
 
-Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, and version 3 added player capabilities), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
+Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, version 3 added player capabilities, and version 4 added kick capabilities and the kick's wind-up and aftertouch phases), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
 
-Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
+Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`, which refuses kick state the config couldn't have produced (a wind-up, window or cooldown longer than the config's). The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
+
+## Command recordings
+
+A `CommandRecording` (harness) is a session's owned commands exactly as they were passed to the simulation, before any assistance (INV-10), with the snapshot the session started from. Replaying it reproduces the session tick for tick under the same build and config, and `Replay` can report every tick's hash.
+
+Encoding, canonical:
+1. Magic `ELRC`, format version (int32, now 2), snapshot length (int32) and bytes, step count (int32).
+2. Then, per step, a command count (int32), and per command:
+   - controller id (int32) and tick (int64);
+   - move x and y;
+   - whether there is a kick intent (bool), and if so its direction x and y, strength and loft;
+   - aftertouch x and y.
+
+Every double is its raw IEEE-754 bits (uint64), so even invalid input replays as it was. Version 2 replaced version 1's kick flag with the kick intent and added aftertouch (#37). Recordings are version-specific and may expire (INV-7).
 
 ## Hash logs
 

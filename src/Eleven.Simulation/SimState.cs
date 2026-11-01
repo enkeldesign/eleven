@@ -54,10 +54,18 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.OwnerControllerId);
                 w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
                 w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
+                w.WriteDouble(player.Capabilities.KickPower, "Player.Capabilities.KickPower");
+                w.WriteDouble(player.Capabilities.KickError, "Player.Capabilities.KickError");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
                 w.WriteInt32(player.KickCooldown);
+                w.WriteInt32(player.WindUpTicks);
+                w.WriteDouble(player.WindUpDirection, "Player.WindUpDirection");
+                w.WriteDouble(player.WindUpStrength, "Player.WindUpStrength");
+                w.WriteDouble(player.WindUpLoft, "Player.WindUpLoft");
+                w.WriteInt32(player.AftertouchTicks);
+                w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
             }
         }
 
@@ -88,11 +96,19 @@ namespace Eleven.Simulation
                     {
                         MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
                         Acceleration = r.ReadDouble("Player.Capabilities.Acceleration"),
+                        KickPower = r.ReadDouble("Player.Capabilities.KickPower"),
+                        KickError = r.ReadDouble("Player.Capabilities.KickError"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
                     Heading = r.ReadDouble("Player.Heading"),
                     KickCooldown = r.ReadInt32(),
+                    WindUpTicks = r.ReadInt32(),
+                    WindUpDirection = r.ReadDouble("Player.WindUpDirection"),
+                    WindUpStrength = r.ReadDouble("Player.WindUpStrength"),
+                    WindUpLoft = r.ReadDouble("Player.WindUpLoft"),
+                    AftertouchTicks = r.ReadInt32(),
+                    AftertouchDirection = r.ReadDouble("Player.AftertouchDirection"),
                 };
             }
 
@@ -137,7 +153,11 @@ namespace Eleven.Simulation
         /// <summary>m/s.</summary>
         public Vec3 Velocity;
 
-        /// <summary>Angular velocity, rad/s. Kicks give sidespin about +z.</summary>
+        /// <summary>
+        /// Angular velocity, rad/s. A kick launches the ball without spin; sideways aftertouch adds
+        /// sidespin about +z (#37). Physical state: it keeps decaying, and curving the ball in flight,
+        /// after the aftertouch window closes.
+        /// </summary>
         public Vec3 Spin;
 
         /// <summary>
@@ -163,13 +183,42 @@ namespace Eleven.Simulation
         /// <summary>m/s.</summary>
         public Vec2 Velocity;
 
-        /// <summary>rad, direction of travel; kept when the player stops. Kicks go this way.</summary>
+        /// <summary>
+        /// rad, direction of travel; kept when the player stops. A kick intent with no direction goes this way.
+        /// </summary>
         public double Heading;
 
         /// <summary>
-        /// Kick cooldown: ticks left before this player can kick again. Set to the configured cooldown
-        /// by a kick, decreased by one at the start of each later step.
+        /// Kick cooldown: ticks left before this player can start another kick. Set to the configured
+        /// cooldown when a kick connects, decreased by one at the start of each later step. It runs
+        /// alongside the aftertouch window, not after it.
         /// </summary>
         public int KickCooldown;
+
+        /// <summary>
+        /// Kick wind-up (#37): steps left until the kick connects, counting the step that connects;
+        /// 0 when not winding up. An accepted intent starts it at the configured wind-up, and the step
+        /// that brings it to 0 makes contact, or misses if the ball is out of reach.
+        /// </summary>
+        public int WindUpTicks;
+
+        /// <summary>rad. The intended line, fixed when the intent arrived and never retargeted.</summary>
+        public double WindUpDirection;
+
+        /// <summary>0–1. The intent's strength, kept through the wind-up.</summary>
+        public double WindUpStrength;
+
+        /// <summary>0–1. The intent's loft, kept through the wind-up.</summary>
+        public double WindUpLoft;
+
+        /// <summary>
+        /// Aftertouch input window (#37): steps left in which this player's aftertouch input shapes
+        /// the ball they last kicked; 0 when closed. Opened at the configured length when a kick
+        /// connects, closed when anyone's kick connects. It gates input only, not the ball's spin.
+        /// </summary>
+        public int AftertouchTicks;
+
+        /// <summary>rad. The intended line of the kick being shaped: aftertouch is measured against it.</summary>
+        public double AftertouchDirection;
     }
 }

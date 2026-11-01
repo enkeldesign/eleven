@@ -18,9 +18,9 @@ The starting model follows from that:
 
 - **No air drag.** Gravity, bounce, rolling friction and spin-induced curve only. Drag returns only if playable evidence shows a concrete problem the model can't solve cleanly, and then through a focused issue.
 - **Launch is three independent quantities:** speed, loft (elevation) and spin.
-  - A kick sets the ball's velocity and spin directly.
-  - Magnus curve acts on whatever spin the ball carries in flight, and only in flight: a rolling ball keeps its line (#33).
-  - So later control work can implement researched pass, shot and aftertouch candidates (changing spin or adding a nudge after the kick) through commands, without rewriting the ball physics.
+  - A kick sets the ball's velocity directly and launches it without spin; aftertouch then turns it, adds sidespin or lifts it during a short window ([kick.md](kick.md), #37).
+  - Magnus curve acts on whatever spin the ball carries in flight, and only in flight: a rolling ball keeps its line (#33). Spin outlives the aftertouch window.
+  - So control work implements researched pass, shot and aftertouch candidates through commands, without rewriting the ball physics.
 
 ## Integration
 
@@ -57,7 +57,7 @@ Every default lies inside its starting range.
 | Name | Unit | Valid | Starting | Default |
 | --- | --- | --- | --- | --- |
 | `kickSpeed` (maximum kick strength) | m/s | 0–60 | 15–32 | 18 |
-| `kickLoft` | rad | 0–1.5 | 0–1.05 (0–60°) | 0.45 (25.8°) |
+| `kickLoft` (maximum loft) | rad | 0–1.5 | 0–1.05 (0–60°) | 1.05 (60.2°) |
 | `kickSideSpin` (maximum sidespin) | rad/s | 0–100 | 0–40 | 12 |
 | `magnusCoefficient` (curve strength) | 1/rad | 0–0.05 | 0.004–0.008 | 0.006 |
 | `bounceRestitution` | fraction | 0–1 | 0.5–0.75 | 0.55 |
@@ -77,7 +77,8 @@ Every default lies inside its starting range.
   - Lab peak ball speeds are 25–26 m/s ([UNE](https://rune.une.edu.au/web/handle/1959.11/15855)).
   - Powerful men's shots exceed 30 m/s.
   - The retro lineage rewards decisive shots, so the range reaches the top. The spike's 18 m/s sits at the soft end, below an average elite shot.
-- **`kickLoft`, 0–60°:** the full span the research names, from passes along the ground and low drives to lobs and chips.
+- **`kickLoft`, 0–60°:** the full span the research names, from passes along the ground and low drives to lobs and chips. Since #37 it is the maximum: a kick's loft (0–1) is a fraction of it, so the reference sits at the top of the span.
+- **The kick's own knobs** (`kickWindUpSeconds`, `aftertouchSeconds`, `aftertouchBend`, `aftertouchLift`) and the kicker's capabilities are in [kick.md](kick.md). Since #37, `kickSpeed` is the hardest kick, reached by a player with full kick power, and `kickSideSpin` is the sidespin that full sideways aftertouch gives.
 - **`kickSideSpin` × `magnusCoefficient`, curve:** curve strength is their product, so the two ranges are set together.
   - Their upper ends give about 6 m/s² sideways at 20 m/s, about 4–5 m of bend in flight on a 25 m cross.
   - That spans real bending free kicks, where the research uses about 600 rpm ≈ 63 rad/s of sidespin ([Craig, 2006](https://hal-amu.archives-ouvertes.fr/hal-01635484/file/Craig%20-%20Die%20Naturwissenschaften%20-%202006.pdf)), up to SWOS-like exaggerated bending.
@@ -114,7 +115,7 @@ Every default lies inside its starting range.
 
 **The rest of the suite:**
 - **The grid** (`kind=grid`): speed 8/12/16/20/25/30 m/s × loft 0/5/10/20/30/45° × sidespin 0/10/20 rad/s.
-- **The config's own kick** (`config-kick`): at its largest sidespin.
+- **The config's own kick** (`config-kick`): its hardest kick at its maximum loft and largest sidespin.
 - **Drops** from 0.5, 1, 2, 5 and 10 m.
 
 Every launch starts on the ground along +x, with no players on the pitch, and runs until rest or for 120 s.

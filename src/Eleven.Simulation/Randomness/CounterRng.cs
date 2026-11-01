@@ -6,7 +6,10 @@ namespace Eleven.Simulation.Randomness
     /// </summary>
     public enum RandomStream
     {
+        /// <summary>A kick's execution error, within ± the kicker's <see cref="PlayerCapabilities.KickError"/>.</summary>
         KickDirection = 1,
+
+        /// <summary>Reserved: the spike's random kick sidespin, no longer drawn since #37. Not reused.</summary>
         KickSpin = 2,
     }
 

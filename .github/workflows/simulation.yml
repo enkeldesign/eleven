@@ -77,6 +77,19 @@ jobs:
           path: movement-curves/
           if-no-files-found: error
 
+      # Technical reference kicks: launches across strength and loft, aftertouch across its starting window (#37).
+      - name: Characterise kicks
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll kicks kick-curves | tee kicks.txt
+          echo "::notice title=Kick curves::$(sed 's| -> .*||' kicks.txt)"
+
+      - name: Publish kick curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: kick-curves
+          path: kick-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

@@ -102,7 +102,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Curves_trace_back_to_the_build_config_and_capabilities_that_made_them()
         {
-            PlayerCapabilities profile = new PlayerCapabilities { MaxSpeed = 8.123456789, Acceleration = 17.25 };
+            PlayerCapabilities profile = new PlayerCapabilities { MaxSpeed = 8.123456789, Acceleration = 17.25, KickPower = 0.875, KickError = 0.0125 };
             List<MovementCurve> curves = MovementCurves.Characterise(Config, profile);
 
             var csv = new StringWriter();

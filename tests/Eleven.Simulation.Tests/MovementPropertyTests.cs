@@ -55,6 +55,9 @@ namespace Eleven.Simulation.Tests
 
         private static SimConfig Config { get; } = new SimConfig();
 
+        // Kicks start wind-ups, which miss: the ball is out of reach.
+        private static readonly KickIntent AnyKick = KickIntent.AlongHeading(1, 0.5);
+
         private static double Draw(Random random, TunableParameter p) => p.Min + random.NextDouble() * (p.Max - p.Min);
 
         // One to three players with their own capabilities, starting anywhere from rest to full speed.
@@ -72,6 +75,8 @@ namespace Eleven.Simulation.Tests
                     {
                         MaxSpeed = Draw(random, PlayerCapabilities.Parameters[0]),
                         Acceleration = Draw(random, PlayerCapabilities.Parameters[1]),
+                        KickPower = Draw(random, PlayerCapabilities.Parameters[2]),
+                        KickError = Draw(random, PlayerCapabilities.Parameters[3]),
                     };
                     double direction = random.NextDouble() * 2 * Math.PI;
                     double speed = random.NextDouble() < 0.3 ? 0 : random.NextDouble() * capabilities.MaxSpeed;
@@ -126,14 +131,14 @@ namespace Eleven.Simulation.Tests
                     Random random = controller == keep ? own : others;
                     if (random.Next(20) == 0) sticks[i] = Stick(random);
                     if (random.Next(10) == 0) continue; // no command: neutral
-                    commands.Add(new Command(controller, t, sticks[i], random.Next(4) == 0));
-                    if (random.Next(60) == 0) commands.Add(new Command(controller, t, Stick(random), false)); // duplicate: both rejected
+                    commands.Add(new Command(controller, t, sticks[i], random.Next(4) == 0 ? AnyKick : (KickIntent?)null));
+                    if (random.Next(60) == 0) commands.Add(new Command(controller, t, Stick(random))); // duplicate: both rejected
                 }
 
-                if (others.Next(8) == 0) commands.Add(new Command(Unowned, t, Stick(others), true));
-                if (others.Next(15) == 0) commands.Add(new Command(players[0].OwnerControllerId, t - 1, Stick(others), false)); // stale
-                if (others.Next(15) == 0) commands.Add(new Command(players[players.Length - 1].OwnerControllerId, t + 1, Stick(others), false)); // early
-                if (others.Next(15) == 0) commands.Add(new Command(players[0].OwnerControllerId, t, new Vec2(double.NaN, 0), true)); // non-finite
+                if (others.Next(8) == 0) commands.Add(new Command(Unowned, t, Stick(others), AnyKick));
+                if (others.Next(15) == 0) commands.Add(new Command(players[0].OwnerControllerId, t - 1, Stick(others))); // stale
+                if (others.Next(15) == 0) commands.Add(new Command(players[players.Length - 1].OwnerControllerId, t + 1, Stick(others))); // early
+                if (others.Next(15) == 0) commands.Add(new Command(players[0].OwnerControllerId, t, new Vec2(double.NaN, 0), AnyKick)); // non-finite
                 steps.Add(commands.ToArray());
             }
 
@@ -179,6 +184,7 @@ namespace Eleven.Simulation.Tests
 
         private static string? CapabilitiesUnchanged(PlayerState before, PlayerState after) =>
             Same(before.Capabilities.MaxSpeed, after.Capabilities.MaxSpeed) && Same(before.Capabilities.Acceleration, after.Capabilities.Acceleration)
+            && Same(before.Capabilities.KickPower, after.Capabilities.KickPower) && Same(before.Capabilities.KickError, after.Capabilities.KickError)
                 ? null
                 : $"capabilities {before.Capabilities.MaxSpeed}/{before.Capabilities.Acceleration} -> {after.Capabilities.MaxSpeed}/{after.Capabilities.Acceleration}";
 
@@ -315,9 +321,13 @@ namespace Eleven.Simulation.Tests
 
         private static bool SamePlayer(PlayerState a, PlayerState b) =>
             a.Id == b.Id && a.OwnerControllerId == b.OwnerControllerId && a.KickCooldown == b.KickCooldown
+            && a.WindUpTicks == b.WindUpTicks && Same(a.WindUpDirection, b.WindUpDirection)
+            && Same(a.WindUpStrength, b.WindUpStrength) && Same(a.WindUpLoft, b.WindUpLoft)
+            && a.AftertouchTicks == b.AftertouchTicks && Same(a.AftertouchDirection, b.AftertouchDirection)
             && Same(a.Position.X, b.Position.X) && Same(a.Position.Y, b.Position.Y)
             && Same(a.Velocity.X, b.Velocity.X) && Same(a.Velocity.Y, b.Velocity.Y) && Same(a.Heading, b.Heading)
-            && Same(a.Capabilities.MaxSpeed, b.Capabilities.MaxSpeed) && Same(a.Capabilities.Acceleration, b.Capabilities.Acceleration);
+            && Same(a.Capabilities.MaxSpeed, b.Capabilities.MaxSpeed) && Same(a.Capabilities.Acceleration, b.Capabilities.Acceleration)
+            && Same(a.Capabilities.KickPower, b.Capabilities.KickPower) && Same(a.Capabilities.KickError, b.Capabilities.KickError);
 
         [Fact]
         public void Only_a_players_owner_controls_them() => Assert.Null(OwnedControlViolation());
