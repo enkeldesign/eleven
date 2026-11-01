@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Eleven.Host
 {
     /// <summary>
-    /// Draws the pitch, the dot and the ball as simple shapes, top-down. Built entirely at
+    /// Draws the pitch, the player and the ball as simple shapes, top-down. Built entirely at
     /// runtime: no scene objects, prefabs or imported art. Pitch x runs right, y up the screen.
     ///
     /// Presentation only: it reads interpolated positions and never feeds anything back into the
@@ -17,14 +17,14 @@ namespace Eleven.Host
         private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
-        private const float DotDiameter = 1.8f;
+        private const float PlayerDiameter = 1.8f;
         private const float BallExaggeration = 3f;
         private const float HeightLift = 0.5f;
         private const float HeightGrowth = 0.08f;
 
         private readonly SimConfig _config;
         private readonly Camera _camera;
-        private readonly Transform _dot;
+        private readonly Transform _player;
         private readonly Transform _ball;
         private readonly Transform _ballShadow;
         private readonly float _ballDiameter;
@@ -58,7 +58,7 @@ namespace Eleven.Host
 
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
             _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 2, _ballDiameter);
-            _dot = Shape(root, disc, "Dot", HostPalette.Dot, 3, DotDiameter);
+            _player = Shape(root, disc, "Player", HostPalette.Player, 3, PlayerDiameter);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 4, _ballDiameter);
         }
 
@@ -67,9 +67,9 @@ namespace Eleven.Host
 
         /// <param name="ball">x, y on the pitch and z, the height of the ball's centre.</param>
         /// <param name="layout">The HUD, whose <see cref="HudLayout.PlayArea"/> the play is framed in.</param>
-        public void Render(Vector2 dot, Vector3 ball, in HudLayout layout)
+        public void Render(Vector2 player, Vector3 ball, in HudLayout layout)
         {
-            _dot.localPosition = new Vector3(dot.x, dot.y, 0);
+            _player.localPosition = new Vector3(player.x, player.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
 
             // Height is shown by lifting the ball up the screen and growing it slightly.
@@ -78,24 +78,24 @@ namespace Eleven.Host
             _ball.localScale = Vector3.one * (_ballDiameter * (1 + height * HeightGrowth));
 
             _ballShown = _ball.localPosition;
-            Frame(dot, new Vector2(_ballShown.x, _ballShown.y), layout);
+            Frame(player, new Vector2(_ballShown.x, _ballShown.y), layout);
         }
 
-        /// <summary>For the smoke test: whether the dot and the drawn ball are inside the play area.</summary>
+        /// <summary>For the smoke test: whether the player and the drawn ball are inside the play area.</summary>
         public string Visibility(in HudLayout layout) =>
-            $"dot:{(InPlay(_dot.localPosition, layout) ? "in" : "out")},ball:{(InPlay(_ballShown, layout) ? "in" : "out")}";
+            $"player:{(InPlay(_player.localPosition, layout) ? "in" : "out")},ball:{(InPlay(_ballShown, layout) ? "in" : "out")}";
 
         /// <summary>
-        /// Frames the dot and the ball inside the HUD's play area: centred between them, zoomed
+        /// Frames the player and the ball inside the HUD's play area: centred between them, zoomed
         /// out just enough to keep both in view with a margin. The play area's shorter side always
         /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre. The camera
         /// still renders the whole screen; it is shifted so the play lands in the uncovered part.
         /// </summary>
-        private void Frame(Vector2 dot, Vector2 ball, in HudLayout layout)
+        private void Frame(Vector2 player, Vector2 ball, in HudLayout layout)
         {
             Rect play = layout.PlayArea;
-            Vector2 centre = Vector2.Lerp(dot, ball, 0.5f);
-            Vector2 halfSpan = new Vector2(Mathf.Abs(ball.x - dot.x), Mathf.Abs(ball.y - dot.y)) * 0.5f;
+            Vector2 centre = Vector2.Lerp(player, ball, 0.5f);
+            Vector2 halfSpan = new Vector2(Mathf.Abs(ball.x - player.x), Mathf.Abs(ball.y - player.y)) * 0.5f;
 
             // Pixels per metre: the closest zoom allowed, reduced until both fit.
             float pixelsPerMetre = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;

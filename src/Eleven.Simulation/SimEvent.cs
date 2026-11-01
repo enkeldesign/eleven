@@ -7,7 +7,7 @@ namespace Eleven.Simulation
     /// <summary>Kinds of event a step can emit. Numeric values are stable.</summary>
     public enum SimEventKind
     {
-        /// <summary>Subject: the dot that kicked.</summary>
+        /// <summary>Subject: the player that kicked.</summary>
         Kicked = 1,
 
         /// <summary>Subject: the ball. Emitted when an airborne ball hits the ground.</summary>

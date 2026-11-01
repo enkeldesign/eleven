@@ -50,12 +50,22 @@ namespace Eleven.Simulation.Harness
             _steps.Add(copy);
         }
 
-        /// <summary>Restores the start snapshot into a fresh simulator and replays every recorded step.</summary>
-        public Simulator Replay(SimConfig config, List<SimEvent>? events = null)
+        /// <summary>
+        /// Restores the start snapshot into a fresh simulator and replays every recorded step.
+        /// <paramref name="tickHashes"/>, if given, receives the state hash at the start and after
+        /// every step, for comparing a replay with its session tick by tick.
+        /// </summary>
+        public Simulator Replay(SimConfig config, List<SimEvent>? events = null, List<ulong>? tickHashes = null)
         {
             Simulator simulator = Snapshot.Restore(StartSnapshot, config);
             events ??= new List<SimEvent>();
-            foreach (Command[] step in _steps) simulator.Step(step, events);
+            tickHashes?.Add(simulator.StateHash());
+            foreach (Command[] step in _steps)
+            {
+                simulator.Step(step, events);
+                tickHashes?.Add(simulator.StateHash());
+            }
+
             return simulator;
         }
 

@@ -11,10 +11,13 @@ using Eleven.Simulation.Harness;
 /// <summary>
 /// eleven-sim hashlog &lt;dir&gt;  write the scenario's per-tick hash log
 /// eleven-sim bench [runs]      measure mean simulation-step cost per tick
-/// eleven-sim trace             print the ball and dot every 10 ticks (for scripting the scenario)
+/// eleven-sim trace             print the ball and player every 10 ticks (for scripting the scenario)
 /// eleven-sim curves &lt;dir&gt; [name=value ...]
 ///                              characterise the ball under the default config with any tunables
 ///                              overridden (#24), e.g. curves out rollingFriction=0.15 kickSpeed=28
+/// eleven-sim movement &lt;dir&gt; [name=value ...]
+///                              characterise player movement for a capability profile (the reference
+///                              by default) and the starting-range grid (#36), e.g. movement out maxSpeed=9
 /// </summary>
 internal static class Program
 {
@@ -32,8 +35,10 @@ internal static class Program
                 return Trace();
             case "curves" when args.Length >= 2:
                 return Curves(args[1], args.Skip(2));
+            case "movement" when args.Length >= 2:
+                return Movement(args[1], args.Skip(2));
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...]");
                 return 2;
         }
     }
@@ -131,7 +136,7 @@ internal static class Program
         }
     }
 
-    private static int Curves(string directory, IEnumerable<string> settings)
+    private static List<KeyValuePair<string, double>>? ParseSettings(IEnumerable<string> settings)
     {
         var overrides = new List<KeyValuePair<string, double>>();
         foreach (string setting in settings)
@@ -140,11 +145,19 @@ internal static class Program
             if (eq <= 0 || !double.TryParse(setting.Substring(eq + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
             {
                 Console.Error.WriteLine($"not a name=value setting: {setting}");
-                return 2;
+                return null;
             }
 
             overrides.Add(new KeyValuePair<string, double>(setting.Substring(0, eq), value));
         }
+
+        return overrides;
+    }
+
+    private static int Curves(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
 
         SimConfig config = new SimConfig().With(overrides);
         List<BallCurve> curves = BallCurves.Characterise(config);
@@ -163,17 +176,42 @@ internal static class Program
         return 0;
     }
 
+    private static int Movement(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
+
+        PlayerCapabilities profile = PlayerCapabilities.Reference;
+        foreach (KeyValuePair<string, double> o in overrides) profile = profile.With(o.Key, o.Value);
+
+        var config = new SimConfig();
+        List<MovementCurve> curves = MovementCurves.Characterise(config, profile);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "movement-curves.csv")))
+        {
+            MovementCurves.WriteCsv(csv, config, curves);
+        }
+
+        using (var summary = new StreamWriter(Path.Combine(directory, "movement-curves.txt")))
+        {
+            MovementCurves.WriteSummary(summary, config, profile, curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {MovementCurves.KeyNumbers(curves)} -> {directory}");
+        return 0;
+    }
+
     private static int Trace()
     {
         ScenarioRunner.Run(SpikeScenario.Config(), state =>
         {
             if (state.Tick % 10 != 0) return;
             BallState b = state.Ball;
-            DotState d = state.Dots[0];
+            PlayerState d = state.Players[0];
             Console.WriteLine(
                 $"{state.Tick,5} ball ({b.Position.X,7:F2} {b.Position.Y,6:F2} {b.Position.Z,5:F2}) " +
                 $"v ({b.Velocity.X,6:F2} {b.Velocity.Y,6:F2} {b.Velocity.Z,6:F2}) spin {b.Spin.Z,5:F2} " +
-                $"dot ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown}");
+                $"player ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown}");
         }).Events.ForEach(e => Console.WriteLine($"event {e}"));
         return 0;
     }

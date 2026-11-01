@@ -8,7 +8,7 @@ namespace Eleven.Simulation.Harness
     ///
     /// <code>
     /// # eleven-hashlog v2
-    /// # scenario: spike-1/v1
+    /// # scenario: spike-1/v2
     /// # build: …
     /// # state-schema: 2
     /// # tick-convention: …

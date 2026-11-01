@@ -5,8 +5,8 @@ namespace Eleven.Simulation.Harness
 {
     /// <summary>
     /// The scripted 60-second spike scenario: fixed seed, fixed initial state, fixed command
-    /// sequence. The dot runs onto a resting ball and kicks it towards the goal line; the ball
-    /// flies, curves, bounces, crosses the line and rolls to a stop. The dot runs past it, turns
+    /// sequence. The player runs onto a resting ball and kicks it towards the goal line; the ball
+    /// flies, curves, bounces, crosses the line and rolls to a stop. The player runs past it, turns
     /// and kicks it back, so the ball recrosses the line in the other direction and stops.
     ///
     /// The script was written against these placeholder physics values; if they change, the
@@ -19,10 +19,10 @@ namespace Eleven.Simulation.Harness
     public static class SpikeScenario
     {
         public const string Id = "spike-1";
-        public const int Version = 1;
+        public const int Version = 2;
         public const ulong Seed = 0x0E1E7E2026UL;
         public const int ControllerId = 1;
-        public const int DotId = 1;
+        public const int PlayerId = 1;
         public const int BallId = 100;
         public const int DurationSeconds = 60;
 
@@ -41,9 +41,9 @@ namespace Eleven.Simulation.Harness
                 Id = BallId,
                 Position = new Vec3(20, 1, config.BallRadius),
             },
-            Dots = new[]
+            Players = new[]
             {
-                new DotState { Id = DotId, OwnerControllerId = ControllerId, Position = new Vec2(10, 0) },
+                new PlayerState { Id = PlayerId, OwnerControllerId = ControllerId, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(10, 0) },
             },
         };
 

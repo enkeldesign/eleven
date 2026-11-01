@@ -21,9 +21,9 @@ namespace Eleven.Simulation.Tests
             ScenarioRun run = ScenarioRunner.Run(config, s => trace.Add(s.Clone()));
             Assert.Equal(SpikeScenario.DurationTicks(config) + 1, trace.Count);
 
-            // Player movement: the dot travels well away from its start and turns around.
-            Assert.True(trace.Max(s => s.Dots[0].Position.X) - trace[0].Dots[0].Position.X > 50);
-            Assert.Contains(trace, s => Math.Abs(s.Dots[0].Heading) > 3);
+            // Player movement: the player travels well away from its start and turns around.
+            Assert.True(trace.Max(s => s.Players[0].Position.X) - trace[0].Players[0].Position.X > 50);
+            Assert.Contains(trace, s => Math.Abs(s.Players[0].Heading) > 3);
 
             // Kicks, both of them.
             SimEvent[] kicks = run.Events.Where(e => e.Kind == SimEventKind.Kicked).ToArray();
@@ -60,8 +60,8 @@ namespace Eleven.Simulation.Tests
             Assert.Single(run.Events, e => e.Kind == SimEventKind.GoalLineCrossed);
             Assert.True(run.FinalState.Ball.Position.X < config.GoalLineX);
 
-            // Seeded randomness: the kick's direction error moves the ball off the dot's heading.
-            double headingAtKick = trace[(int)kicks[0].Tick + 1].Dots[0].Heading;
+            // Seeded randomness: the kick's direction error moves the ball off the player's heading.
+            double headingAtKick = trace[(int)kicks[0].Tick + 1].Players[0].Heading;
             double launchDirection = Math.Atan2(launched.Ball.Velocity.Y, launched.Ball.Velocity.X);
             Assert.NotEqual(headingAtKick, launchDirection);
 
@@ -98,7 +98,7 @@ namespace Eleven.Simulation.Tests
             SimConfig config = SpikeScenario.Config();
             ScenarioRun uninterrupted = ScenarioRunner.Run(config);
 
-            // Mid-run, ball in the air, ball rolling beyond the line, dot kicking back, ball at rest.
+            // Mid-run, ball in the air, ball rolling beyond the line, player kicking back, ball at rest.
             foreach (long at in new long[] { 1, 150, 400, 885, 2000 })
             {
                 var original = new Simulator(config, SpikeScenario.InitialState(config));

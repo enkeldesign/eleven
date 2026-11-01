@@ -6,8 +6,8 @@ namespace Eleven.Simulation
     ///
     /// Rules, applied by <see cref="Simulator.Step"/>:
     /// <list type="bullet">
-    /// <item>A command applies to the dot whose <see cref="DotState.OwnerControllerId"/> equals its
-    /// <see cref="ControllerId"/>. With no such dot it is rejected as <see cref="CommandRejection.Unowned"/>.</item>
+    /// <item>A command applies to the player whose <see cref="PlayerState.OwnerControllerId"/> equals its
+    /// <see cref="ControllerId"/>. With no such player it is rejected as <see cref="CommandRejection.Unowned"/>.</item>
     /// <item>A command applies only at its <see cref="Tick"/>. Passed to a step after its tick it is
     /// rejected as <see cref="CommandRejection.Stale"/>; before its tick, as <see cref="CommandRejection.Early"/>.</item>
     /// <item>More than one command for the same controller at the same tick is a recording error:
@@ -16,7 +16,7 @@ namespace Eleven.Simulation
     /// <item>A non-finite move vector is rejected as <see cref="CommandRejection.Invalid"/>; a move
     /// vector longer than 1 is scaled to length 1.</item>
     /// <item>Accepted commands apply in ascending controller id, whatever order they were passed in.</item>
-    /// <item>A dot with no accepted command this tick behaves as if given a neutral command
+    /// <item>A player with no accepted command this tick behaves as if given a neutral command
     /// (no move, no kick).</item>
     /// </list>
     /// Every rejection emits a <see cref="SimEventKind.CommandRejected"/> event.
