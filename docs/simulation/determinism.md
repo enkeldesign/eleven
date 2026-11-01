@@ -1,12 +1,11 @@
 # Simulation determinism contract (spike)
 
-The rules the engine-free simulation follows so that the same code, config, seed and commands give the same per-tick hashes. Written for issue [#2](https://github.com/enkeldesign/eleven/issues/2). It covers the spike skeleton, not ELEVEN's final maths model (ADR-0002, [#8](https://github.com/enkeldesign/eleven/issues/8)) or cross-runtime acceptance of INV-4 ([#5](https://github.com/enkeldesign/eleven/issues/5)).
+The rules the engine-free simulation follows so that the same code, config, seed and commands give the same per-tick hashes. Written for issue [#2](https://github.com/enkeldesign/eleven/issues/2). The maths model is [ADR-0002](../adr/0002-simulation-maths-model.md): one implementation, `Portable`, in every build. The cross-runtime evidence behind it is on [#5](https://github.com/enkeldesign/eleven/issues/5).
 
 ## What must match
 
-- **Within one maths backend:** same code, config (so same backend), seed and commands give identical hashes on every tick, and identical events. Run-twice and snapshot/restore tests check exactly this.
-- **Between backends:** nothing is required. `SystemMath` and `Portable` may hash differently. The test suite only checks that they stay within rounding of each other, as evidence that the portable backend isn't broken.
-- **Between runtimes:** compare like with like. The same backend and config on two runtimes, comparing the complete per-tick hash sequence rather than only the final state.
+- **Within one runtime:** same code, config, seed and commands give identical hashes on every tick, and identical events. Run-twice and snapshot/restore tests check exactly this.
+- **Between runtimes:** the same, required (INV-4, ADR-0002). Runtimes are compared on the complete per-tick hash sequence, through its digest, not only the final state. CI fails a build whose WebGL digest for the scenario differs from .NET's.
 
 ## Projects
 
@@ -62,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 1`). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The maths backend is a config field, so it is part of the hash. The default physics values are placeholders that exercise the code, not tuned feel.
+`SimConfig` is immutable and versioned (`FormatVersion = 2`; version 2 dropped the maths backend). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel.
 
 ## Canonical encoding
 
@@ -85,19 +84,19 @@ All future-affecting state is in `SimState`; anything else that affects the next
 
 ## Snapshots
 
-Magic `ELSN`, state schema version (int32), build id (string), tick convention (string), config hash (uint64), maths backend (int32), seed (uint64), tick (int64), then the canonical state.
+Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
 
-Restoring checks the schema version, tick convention, config hash and backend, then builds a fresh `Simulator`. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
+Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
 
 ## Hash logs
 
-`eleven-sim hashlog <dir>` writes one log per backend. The header records the scenario name and version, build, state schema, tick convention, config hash, maths backend and seed. Then come `<tick> <hash>` lines for every tick, then `# digest: …`. The format is text with LF line endings, so logs from different runtimes diff directly. CI publishes them as the `hashlogs` artifact.
+`eleven-sim hashlog <dir>` writes the scenario's log (`eleven-hashlog v2`). The header records the scenario name and version, build, state schema, tick convention, config hash and seed. Then come `<tick> <hash>` lines for every tick, then `# digest: …`. The format is text with LF line endings, so logs from different runtimes diff directly. CI publishes them as the `hashlogs` artifact.
 
 ## Maths boundary
 
-`sin`, `cos`, `atan2` and `sqrt` go through `SimMath`, the only entry point. Simulation code never calls `System.Math` or `MathF` for anything but exact helpers (`Abs`, `Min`, `Max`, `Floor`, `Ceiling`, `Round`, `Truncate`, `Sign`, `Clamp`, `CopySign` and the constants). `SystemMathBackend` is the one type allowed to call the rest.
+`sin`, `cos`, `atan2` and `sqrt` go through `SimMath`, the only entry point, backed by `PortableMath`. Simulation code never calls `System.Math` or `MathF` for anything but exact helpers (`Abs`, `Min`, `Max`, `Floor`, `Ceiling`, `Round`, `Truncate`, `Sign`, `Clamp`, `CopySign` and the constants).
 
-`SimMath` checks domains itself, so both backends fail identically. An out-of-domain argument throws, because a NaN would enter state silently.
+`SimMath` checks domains in front of the implementation. An out-of-domain argument throws, because a NaN would enter state silently.
 
 | Function | Supported domain | `Portable` method | Asserted bound vs System.Math | Measured worst |
 | --- | --- | --- | --- | --- |
@@ -107,17 +106,17 @@ Restoring checks the schema version, tick convention, config hash and backend, t
 
 The truncation errors of the series are below 5e-17 for sin, 3e-18 for cos and 1e-19 for atan, so the measured errors are rounding in the evaluation. The bounds leave a factor of 2 to 4 over the measured worst case. Measurements: 4 million arguments per function on .NET 10, x64.
 
-`Portable` uses only IEEE-754 basic operations (+, −, ×, ÷), `Math.Round`, `Math.Abs` and bit casts, which every conforming runtime computes identically. One caveat for [#5](https://github.com/enkeldesign/eleven/issues/5): a native compiler that contracts `a × b + c` into a fused multiply-add changes rounding. RyuJIT doesn't contract. IL2CPP's C++ compiler settings need checking.
+`Portable` uses only IEEE-754 basic operations (+, −, ×, ÷), `Math.Round`, `Math.Abs` and bit casts, which every conforming runtime computes identically. One caveat for native builds: a compiler that contracts `a × b + c` into a fused multiply-add changes rounding. RyuJIT doesn't contract, and WebAssembly has no implicit fused multiply-add. IL2CPP's C++ compiler settings need checking when the native lane ([#6](https://github.com/enkeldesign/eleven/issues/6)) lands (ADR-0002).
 
 ## Banned APIs
 
 The `BannedApiAnalyzer` runs as a compile-time analyzer on the simulation and harness projects, so CI fails on any violation:
 
 - **ELEVEN001:** `System.Random`; `DateTime.Now`, `UtcNow` and `Today`; `DateTimeOffset.Now` and `UtcNow`; `Stopwatch`; `Environment.TickCount` and `TickCount64`; anything in `System.Threading` and its sub-namespaces (threads, tasks, timers, locks).
-- **ELEVEN002:** any other `System.Math` or `MathF` member outside `Eleven.Simulation.Maths.SystemMathBackend`.
+- **ELEVEN002:** any other `System.Math` or `MathF` member, anywhere in simulation code.
 
-`BannedApiAnalyzerTests` runs it against a fixture that must be caught on every marked line, and one that must pass: System.Math inside the backend and exact helpers anywhere. A third test shows the exception doesn't extend to other types.
+`BannedApiAnalyzerTests` runs it against a fixture that must be caught on every marked line, and one that must pass (exact helpers anywhere). A third test shows that no type is exempt, not even one named like the removed System.Math backend.
 
 ## Tick cost
 
-Measured by `eleven-sim bench` in Release: both backends warmed up for 20 full runs, then 30 timed runs each, alternating. Only `Simulator.Step` is timed, with commands prepared beforehand. State hashing is timed separately. CI reports the result as a check annotation. It is evidence, not a budget.
+Measured by `eleven-sim bench` in Release: 20 warm-up runs of the scenario, then 30 timed runs. Only `Simulator.Step` is timed, with commands prepared beforehand. State hashing is timed separately. CI reports the result as a check annotation. It is evidence, not a budget.

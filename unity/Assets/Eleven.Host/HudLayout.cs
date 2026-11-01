@@ -12,8 +12,8 @@ namespace Eleven.Host
     /// </summary>
     internal readonly struct HudLayout
     {
-        /// <summary>Most lines the result panel holds: three per maths backend.</summary>
-        public const int MaxResultLines = 6;
+        /// <summary>Most lines the result panel holds: the scenario's time, digest and final hash.</summary>
+        public const int MaxResultLines = 3;
 
         /// <summary>Widest result line, e.g. "digest 0123456789abcdef".</summary>
         public const int ResultLineCharacters = 23;
@@ -31,12 +31,9 @@ namespace Eleven.Host
         public readonly int ResultFontSize;
         public readonly float ResultLineHeight;
 
-        /// <summary>1, or 2 when the panel sits below the buttons with room for one backend per column.</summary>
-        public readonly int ResultColumns;
         public readonly Rect BuildLabel;
         public readonly Rect ResetButton;
         public readonly Rect RunButton;
-        public readonly Rect MathsButton;
         public readonly Rect Result;
         public readonly Rect StickZone;
         public readonly Vector2 StickRest;
@@ -60,31 +57,25 @@ namespace Eleven.Host
             BuildLabel = new Rect(safe.xMin + Padding, safe.yMin + Padding, safe.width - 2 * Padding, 0.7f * Unit);
             BuildFontSize = Mathf.Max(12, Mathf.Min(FontSize, FontToFit(BuildLabel.width - 16, BuildLineCharacters)));
             RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
-            MathsButton = new Rect(RunButton.x, RunButton.yMax + Padding * 0.5f, RunButton.width, 0.9f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
-            // Sized for the lines it shows, and empty until a scenario has run. In order of
-            // preference: beside the buttons (landscape); below them in two columns, one backend
-            // each; below them in one column. Either of the first two may shrink the text, to no
-            // less than 60 % of the HUD font, to fit.
+            // Sized for the lines it shows, and empty until a scenario has run: beside the buttons
+            // where it fits (landscape), with its text shrunk to no less than 60 % of the HUD font;
+            // otherwise below them, across the screen.
             int lines = Mathf.Clamp(resultLines, 0, MaxResultLines);
             ResultLines = lines;
             int smallest = Mathf.Max(12, Mathf.CeilToInt(FontSize * 0.6f));
             float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
             int fontBeside = FontToFit(besideButtons - 2 * Padding, ResultLineCharacters);
-            int fontTwoColumns = FontToFit((safe.width - 4 * Padding) * 0.5f - Padding, ResultLineCharacters);
+            int fontBelow = FontToFit(safe.width - 4 * Padding, ResultLineCharacters);
             bool beside = fontBeside >= smallest;
-            ResultColumns = !beside && fontTwoColumns >= smallest ? 2 : 1;
-            ResultFontSize = beside ? Mathf.Min(FontSize, fontBeside)
-                : ResultColumns == 2 ? Mathf.Min(FontSize, fontTwoColumns)
-                : FontSize;
+            ResultFontSize = Mathf.Max(12, Mathf.Min(FontSize, beside ? fontBeside : fontBelow));
             ResultLineHeight = ResultFontSize * 1.3f;
-            int rows = ResultColumns == 2 ? Mathf.Min(lines, MaxResultLines / 2) : lines;
-            float resultHeight = lines == 0 ? 0 : rows * ResultLineHeight + Padding;
+            float resultHeight = lines == 0 ? 0 : lines * ResultLineHeight + Padding;
             Result = beside
                 ? new Rect(safe.xMin + Padding, RunButton.y, besideButtons, resultHeight)
-                : new Rect(safe.xMin + Padding, MathsButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
+                : new Rect(safe.xMin + Padding, RunButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
 
-            float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, MathsButton.yMax) + Padding * 0.5f;
+            float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, RunButton.yMax) + Padding * 0.5f;
             StickRadius = 1.4f * Unit;
             StickRest = new Vector2(safe.xMin + Padding + 2f * Unit, safe.yMax - Padding - 2f * Unit);
 
@@ -148,7 +139,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} maths={Point(MathsButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0}");
 
         // The largest font at which a line of this many characters fits in this width.
         private static int FontToFit(float width, int characters) => Mathf.FloorToInt(width / (characters * 0.62f));

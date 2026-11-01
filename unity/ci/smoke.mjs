@@ -8,8 +8,9 @@
 // Each pass boots the player, reads the host's log lines from the browser console and drives the
 // on-screen controls through Unity's Input System:
 //   - boot: the host reports ready, with its build id and the page's load time
-//   - autorun (desktop): the issue 1 scenario's digests in WebGL, compared with the .NET hash logs
-//   - Maths and Run scenario: each tap is acknowledged, and the result panel fits its text
+//   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
+//     (ADR-0002: cross-runtime determinism is a gate)
+//   - Run scenario: the tap is acknowledged, and the result panel fits its text
 //   - stick: dragging it moves the dot (from the host's trace lines), and the camera keeps the
 //     dot and ball inside the area the HUD leaves free
 //   - pacing: the trace lines carry the dropped-frame counter
@@ -19,7 +20,6 @@
 // A third pass checks the service worker: a second deploy is served on reload, and with the
 // server stopped the player still boots from the cache.
 // Results go to stdout as GitHub annotations and to <output dir> with screenshots and console logs.
-// A digest mismatch is a warning, not a failure: cross-runtime determinism is #5's question.
 
 import { chromium, devices } from 'playwright';
 import fs from 'node:fs';
@@ -41,7 +41,7 @@ const colours = {
   ball: [0xf7, 0xe2, 0x6b],
 };
 
-const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) maths=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
+const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) dot=(-?[\d.]+),(-?[\d.]+)/;
 
 const results = { checks: [], notes: {} };
@@ -49,15 +49,12 @@ const annotate = (level, title, message) =>
   console.log(`::${level} title=${title}::${String(message).replace(/%/g, '%25').replace(/\r?\n/g, '%0A')}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function expectedDigests() {
-  const digests = {};
-  for (const file of fs.readdirSync(hashlogDir)) {
-    const text = fs.readFileSync(path.join(hashlogDir, file), 'utf8');
-    const maths = /^# maths: (\w+)$/m.exec(text);
-    const digest = /^# digest: ([0-9a-f]{16})$/m.exec(text);
-    if (maths && digest) digests[maths[1]] = digest[1];
-  }
-  return digests;
+// The scenario's digest from the .NET hash log (one log per scenario).
+function expectedDigest() {
+  const digests = fs.readdirSync(hashlogDir)
+    .map((file) => /^# digest: ([0-9a-f]{16})$/m.exec(fs.readFileSync(path.join(hashlogDir, file), 'utf8'))?.[1])
+    .filter(Boolean);
+  return digests.length === 1 ? digests[0] : null;
 }
 
 async function waitFor(logs, pattern, timeoutMs, from = 0) {
@@ -134,7 +131,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // Boot.
     const started = Date.now();
     await page.goto(url);
-    const ready = await waitForLog(/ELEVEN host ready build=(\S+) maths=(\w+)/, 240_000);
+    const ready = await waitForLog(/ELEVEN host ready build=(\S+)/, 240_000);
     notes.bootSeconds = (Date.now() - started) / 1000;
     check('boot', !!ready, ready ? `host ready in ${notes.bootSeconds.toFixed(1)} s, build ${ready.match[1]}` : 'no "ELEVEN host ready" within 240 s');
     if (!ready) throw new Error('player did not boot');
@@ -160,18 +157,15 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       check('ELEVEN icons load', icons.length >= 4 && icons.every((i) => i.endsWith(':ok')), icons.join(' '));
     }
 
-    // Autorun: the scenario inside the build, both backends, against .NET.
+    // Autorun: the scenario inside the build against .NET. A different digest fails the run.
     if (url.includes('autorun')) {
-      const expected = expectedDigests();
-      for (const maths of ['SystemMath', 'Portable']) {
-        const line = await waitForLog(new RegExp(`ELEVEN scenario name=\\S+ maths=${maths} digest=([0-9a-f]{16}) final=([0-9a-f]{16}) hashes=(\\d+) events=(\\d+) config=\\w+ ms=(\\d+)`), 60_000);
-        check(`scenario ${maths} runs in the build`, !!line, line ? `${line.match[3]} hashes in ${line.match[5]} ms` : 'no scenario line');
-        if (!line) continue;
-        const digest = line.match[1];
-        notes[`digest${maths}`] = digest;
-        const same = expected[maths] === digest;
-        annotate(same ? 'notice' : 'warning', 'Scenario digest vs .NET',
-          `${maths}: WebGL (Chromium) ${digest}, .NET ${expected[maths] ?? 'missing'} — ${same ? 'identical' : 'DIFFERENT'}`);
+      const expected = expectedDigest();
+      const line = await waitForLog(/ELEVEN scenario name=\S+ digest=([0-9a-f]{16}) final=([0-9a-f]{16}) hashes=(\d+) events=(\d+) config=\w+ ms=(\d+)/, 60_000);
+      check('scenario runs in the build', !!line, line ? `${line.match[3]} hashes in ${line.match[5]} ms` : 'no scenario line');
+      if (line) {
+        notes.digest = line.match[1];
+        check('scenario digest equals .NET\'s', expected !== null && notes.digest === expected,
+          `WebGL (Chromium) ${notes.digest}, .NET ${expected ?? 'missing or ambiguous'}`);
       }
     }
 
@@ -211,25 +205,18 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(150);
     };
 
-    for (const maths of ['SystemMath', 'Portable']) {
-      let from = logs.length;
-      await tap(at(n[4], n[5]));
-      const switched = await waitForLog(new RegExp(`ELEVEN maths=${maths} `), 8_000, from);
-      check(`Maths button switches to ${maths}`, !!switched, switched ? switched.match[0].trim() : 'no acknowledgement');
-
-      from = logs.length;
-      await tap(at(n[2], n[3]));
-      const ran = await waitForLog(new RegExp(`ELEVEN scenario name=\\S+ maths=${maths} digest=([0-9a-f]{16})`), 20_000, from);
-      check(`Run scenario button with ${maths}`, !!ran, ran ? `digest ${ran.match[1]}` : 'no scenario line after tap');
-      const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, from);
-      check(`result panel fits its text (${maths})`, !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
-    }
+    const fromRun = logs.length;
+    await tap(at(n[2], n[3]));
+    const ran = await waitForLog(/ELEVEN scenario name=\S+ digest=([0-9a-f]{16})/, 20_000, fromRun);
+    check('Run scenario button', !!ran, ran ? `digest ${ran.match[1]}` : 'no scenario line after tap');
+    const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
+    check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
     // Stick: drag right from the stick's rest position and hold; the dot should move along +x.
     // Trace lines come once a simulated second, so wait for a fresh one on each side of the drag.
     const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
-    const origin = at(n[10], n[11]);
-    const reach = n[12] * sx;
+    const origin = at(n[8], n[9]);
+    const reach = n[10] * sx;
     if (useTouch) await touch('touchStart', origin);
     else {
       await page.mouse.move(origin.x, origin.y);
@@ -258,7 +245,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
     // Kick button: a tap must be taken without errors (whether it connects depends on position).
     const fromKick = logs.length;
-    await tap(at(n[8], n[9]));
+    await tap(at(n[6], n[7]));
     await sleep(500);
     const kickErrors = logs.slice(fromKick).filter((l) => /error|exception/i.test(l));
     check('kick button tap', kickErrors.length === 0, kickErrors.length ? kickErrors.join(' | ') : 'no errors');
@@ -377,5 +364,5 @@ for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
   .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
-annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; ${summary}`);
+annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);
