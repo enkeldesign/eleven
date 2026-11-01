@@ -58,8 +58,8 @@ An invariant is superseded only by an ADR that sets out the evidence and migrati
 
 - **Issues first.** Every change starts from an issue with acceptance criteria, written before implementation. If they're missing or unclear, ask; don't invent product decisions.
 - **One issue, one branch, one PR.** Keep each PR small enough to implement, review and validate without exhausting usage in one pass; split the work or ask Erik when it grows disproportionately.
-- **Don't broaden scope.** Prefer minimal, local changes and read only the files relevant to the task. Add CI, dependencies, refactors or documentation only when the issue calls for them. If the work exposes a product or design question the brief and established patterns don't settle, surface it to Erik.
-- **Settle what's settled.** When an established ELEVEN rule or pattern already answers a question, apply it and report it. Bring Erik only genuine product decisions, not implementation or detail choices.
+- **Don't broaden scope.** Prefer minimal, local changes and read only the files relevant to the task. Add CI, dependencies, refactors or documentation only when the issue calls for them. If the work exposes a product or design question that the brief, established patterns and football-game research don't settle, surface it to Erik.
+- **Settle what's settled.** When an established ELEVEN rule or pattern already answers a question, apply it and report it. When established football-game research gives a strong starting answer (see *Research first*), that answer is the starting point too. Bring Erik only genuine product decisions, not implementation, detail choices or questions the research answers.
 - **Name the state.** When a spec phrase touches a mechanic with more than one state or timer, the issue or PR says which one it means before implementation.
 - **One problem, one issue.** A distinct problem found mid-work gets its own focused issue rather than reopening a large one.
 - **Validate small.** Run the smallest relevant validation. Maximum two attempts for a failing check, then report. Stop once the requested behaviour is implemented and verified.
@@ -83,11 +83,23 @@ An invariant is superseded only by an ADR that sets out the evidence and migrati
 
 - Rules are tested first, and a new test must first fail on an assertion, not on an error. Prefer properties that always hold over exact-position examples.
 - Updates to golden data, recorded curves or hash baselines are separate commits with a stated reason. Feel-related baselines need Erik's sign-off.
-- **Feel:** agents build knobs; Erik turns them. Never change tuned feel values on your own judgement.
+- **Feel:**
+  1. Research sets the starting model, defaults and plausible ranges.
+  2. Agents build the knobs, presets, measurements and test benches.
+  3. Erik plays credible candidates, then chooses or tunes.
+
+  Untuned values are technical references, not approved feel. Never change tuned feel values on your own judgement. "Erik turns the knobs" doesn't mean asking him to invent defaults or answer football-design or physics questions from first principles.
 
 ## Standing rules
 
 - **Trade-off order:** 1. architectural invariants and correctness, 2. feel — responsiveness, latency and smooth frames, 3. accessibility of everything around the match, 4. product and UI coherence, 5. regression risk.
+- **Research first.** Decades of successful football games, especially SWOS / Sensible Soccer, Kick Off and modern descendants such as Super Soccer Champs, supply hypotheses, defaults, candidate mechanics and plausible ranges. They come before any question to Erik, whose part is genuine unresolved product choices.
+- **Feel over realism.** Real football and simulation give direction, constraints and plausible relationships. Feel decides how closely ELEVEN follows reality in each case. Realism alone never justifies a mechanic or a value: prefer football credibility, responsiveness, readability, skill expression and fun over physical fidelity. The simulation gives coherent, reproducible behaviour and starting points, not final feel.
+- **Assistance comes from the footballer.**
+  - Input expresses intent. The controlled player's attributes shape perception, judgement and execution; there is no universal UI helper.
+  - Assisted actions may draw on attributes, context and AI reasoning. Manual actions keep the player's intent rather than secretly redirecting it.
+  - Attribute effects are perceptible, and deterministic under the simulation rules.
+- **Small controls, deep expression.** Prefer few controls with expressive behaviour. Test candidate control models rather than assuming conventional PASS/SHOOT buttons. Learn from retro football's interaction patterns while keeping ELEVEN's identity.
 - **Accessibility is a constraint, not a feature,** for everything around the match: menus, settings, text, colour, remapping, motion and feedback. Sweeps include non-text contrast for control states and focus indicators (WCAG 1.4.11), not only text contrast.
 - **Performance and smooth frames come before richer sound or visuals.**
 - **Colours come from semantic design tokens, never hard-coded.**
@@ -106,4 +118,4 @@ Per ADR-0001 and ADR-0002:
 - No static mutable state. State is plain data with ids, not object references.
 - Transcendental maths (`sin`, `cos`, `atan2`, `exp`, `pow`) goes through the simulation's own maths entry point, never `System.Math` or `MathF` directly.
 
-Rules under *Roles and decision rights*, *Working rules*, *Review and merge* and *Standing rules* are adapted from TURN's AGENTS.md (25 Oct 2026): the ones added after real incidents or repeated mistakes that still apply to ELEVEN.
+Rules under *Roles and decision rights*, *Working rules*, *Review and merge* and *Standing rules* are adapted from TURN's AGENTS.md (25 Oct 2026): the ones added after real incidents or repeated mistakes that still apply to ELEVEN. Four standing rules are ELEVEN's own, from Slice 1's start (#32): *Research first*, *Feel over realism*, *Assistance comes from the footballer* and *Small controls, deep expression*. So is the *Feel* rule's research-first wording.
