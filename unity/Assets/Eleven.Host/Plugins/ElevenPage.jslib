@@ -11,13 +11,21 @@ mergeInto(LibraryManager.library, {
   // shares or downloads the last capture. A press asks for an optional note with the browser's own
   // prompt (while it is open no frames run, so the simulation does not advance), then leaves the
   // note for the host to collect on its next frame. Everything stays on the device: no network.
-  ElevenFeltWrongInstall: function () {
+  // Colours are the host's semantic tokens (HostPalette), passed in as CSS colours.
+  ElevenFeltWrongInstall: function (textPointer, panelPointer, borderPointer, focusPointer) {
     if (document.getElementById('eleven-felt-wrong')) return;
+    var text = UTF8ToString(textPointer), panel = UTF8ToString(panelPointer);
+    var border = UTF8ToString(borderPointer), focus = UTF8ToString(focusPointer);
+
+    // A visible keyboard focus ring of at least 3:1 (WCAG 1.4.11), whatever the browser's default.
+    var sheet = document.createElement('style');
+    sheet.textContent = '#eleven-felt-wrong:focus-visible,#eleven-save-capture:focus-visible{outline:3px solid ' + focus + ';outline-offset:2px;}';
+    document.head.appendChild(sheet);
 
     var style =
       'position:fixed;z-index:10;box-sizing:border-box;min-width:44px;min-height:44px;margin:0;' +
-      'padding:4px 6px;border:2px solid #f2f2f2;border-radius:8px;background:rgba(20,28,22,0.82);' +
-      'color:#f2f2f2;font:700 13px/1.15 system-ui,-apple-system,sans-serif;letter-spacing:0.04em;' +
+      'padding:4px 6px;border:2px solid ' + border + ';border-radius:8px;background:' + panel + ';' +
+      'color:' + text + ';font:700 13px/1.15 system-ui,-apple-system,sans-serif;letter-spacing:0.04em;' +
       'text-align:center;touch-action:manipulation;-webkit-user-select:none;user-select:none;';
 
     var felt = document.createElement('button');
@@ -40,7 +48,7 @@ mergeInto(LibraryManager.library, {
     status.setAttribute('aria-live', 'polite');
     status.style.cssText =
       'position:fixed;z-index:10;left:50%;top:8px;transform:translateX(-50%);max-width:90vw;padding:6px 10px;' +
-      'border:2px solid #f2f2f2;border-radius:8px;background:rgba(20,28,22,0.9);color:#f2f2f2;' +
+      'border:2px solid ' + border + ';border-radius:8px;background:' + panel + ';color:' + text + ';' +
       'font:600 14px/1.3 system-ui,-apple-system,sans-serif;opacity:0;pointer-events:none;';
     // Always rendered, so screen readers announce its changes; idle it is empty and transparent.
 

@@ -68,7 +68,8 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
-            FeltWrongInstall();
+            FeltWrongInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel),
+                HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
@@ -355,7 +356,7 @@ namespace Eleven.Host
         private static extern double ElevenPageMilliseconds();
 
         [DllImport("__Internal")]
-        private static extern void ElevenFeltWrongInstall();
+        private static extern void ElevenFeltWrongInstall(string text, string panel, string border, string focus);
 
         [DllImport("__Internal")]
         private static extern void ElevenFeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
@@ -369,7 +370,8 @@ namespace Eleven.Host
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
-        private static void FeltWrongInstall() => ElevenFeltWrongInstall();
+        private static void FeltWrongInstall(string text, string panel, string border, string focus) =>
+            ElevenFeltWrongInstall(text, panel, border, focus);
 
         private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
             ElevenFeltWrongPlace(x, y, width, height, screenWidth, screenHeight);
@@ -381,7 +383,7 @@ namespace Eleven.Host
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
         // Outside the web build there is no page: no button, and captures go to persistent data.
-        private static void FeltWrongInstall() { }
+        private static void FeltWrongInstall(string text, string panel, string border, string focus) { }
 
         private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
 
