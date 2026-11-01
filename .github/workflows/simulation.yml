@@ -90,6 +90,19 @@ jobs:
           path: kick-curves/
           if-no-files-found: error
 
+      # Technical reference quick passes: the practice drills under contrasting passer profiles (#38).
+      - name: Measure quick passes
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll passes pass-curves | tee passes.txt
+          echo "::notice title=Pass curves::$(sed 's| -> .*||' passes.txt)"
+
+      - name: Publish pass curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: pass-curves
+          path: pass-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

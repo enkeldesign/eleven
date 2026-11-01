@@ -16,9 +16,11 @@ namespace Eleven.Simulation
     /// <item>A non-finite value anywhere (move, aftertouch, or any part of the kick intent) is
     /// rejected as <see cref="CommandRejection.Invalid"/>. A move or aftertouch vector longer than 1 is
     /// scaled to length 1, and a kick's strength and loft are clamped to [0, 1].</item>
+    /// <item>A manual <see cref="Kick"/> takes precedence over <see cref="QuickPass"/> in the same command:
+    /// assistance never overrides or redirects a manual kick.</item>
     /// <item>Accepted commands apply in ascending controller id, whatever order they were passed in.</item>
     /// <item>A player with no accepted command this tick behaves as if given a neutral command
-    /// (no move, no kick, no aftertouch).</item>
+    /// (no move, no kick, no quick pass, no aftertouch).</item>
     /// </list>
     /// Every rejection emits a <see cref="SimEventKind.CommandRejected"/> event.
     /// </summary>
@@ -38,13 +40,21 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly Vec2 Aftertouch;
 
-        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default)
+        /// <summary>
+        /// An assisted quick pass (#38): the footballer picks the receiver, the line and the weight
+        /// inside the simulation, after this command has been recorded (INV-10). Ignored when
+        /// <see cref="Kick"/> is set.
+        /// </summary>
+        public readonly bool QuickPass;
+
+        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false)
         {
             ControllerId = controllerId;
             Tick = tick;
             Move = move;
             Kick = kick;
             Aftertouch = aftertouch;
+            QuickPass = quickPass;
         }
     }
 

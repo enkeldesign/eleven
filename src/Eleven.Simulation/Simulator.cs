@@ -14,7 +14,8 @@ namespace Eleven.Simulation
     /// 1. resolve commands for this tick,
     /// 2. count down kick cooldowns, move players and update their headings,
     /// 3. aftertouch: each open window shapes the ball by its owner's input, then counts down,
-    /// 4. kicks: accept intents into wind-ups, count wind-ups down, and connect or miss those that end,
+    /// 4. kicks: accept intents (a manual kick, or a quick pass the footballer resolves) into wind-ups,
+    ///    count wind-ups down, and connect or miss those that end,
     /// 5. integrate the ball,
     /// 6. check the goal line,
     /// 7. advance the tick.
@@ -154,7 +155,7 @@ namespace Eleven.Simulation
                 kick = new KickIntent(k.Direction, Clamp01(k.Strength), Clamp01(k.Loft));
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch));
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)
@@ -247,21 +248,187 @@ namespace Eleven.Simulation
         private void StepKick(int index, Command? command, long tick, List<SimEvent> events)
         {
             ref PlayerState player = ref _state.Players[index];
-            if (command.HasValue && command.Value.Kick.HasValue && player.WindUpTicks == 0 && player.KickCooldown == 0)
+            bool ready = player.WindUpTicks == 0 && player.KickCooldown == 0;
+            if (command.HasValue && ready && command.Value.Kick.HasValue)
             {
+                // A manual kick, which also wins over a quick pass in the same command.
                 KickIntent intent = command.Value.Kick.Value;
                 Vec2 d = intent.Direction;
-
-                // One more than the wind-up, because this step counts it down too.
-                player.WindUpTicks = Config.KickWindUpTicks + 1;
-                player.WindUpDirection = d.X == 0 && d.Y == 0 ? player.Heading : SimMath.Atan2(d.Y, d.X);
-                player.WindUpStrength = intent.Strength;
-                player.WindUpLoft = intent.Loft;
+                StartWindUp(ref player, d.X == 0 && d.Y == 0 ? player.Heading : SimMath.Atan2(d.Y, d.X), intent.Strength, intent.Loft, 0);
+            }
+            else if (command.HasValue && ready && command.Value.QuickPass)
+            {
+                ResolveQuickPass(index);
+                events.Add(new SimEvent(tick, SimEventKind.QuickPassResolved, player.Id, other: player.WindUpTarget));
             }
 
             if (player.WindUpTicks == 0) return;
             player.WindUpTicks--;
             if (player.WindUpTicks == 0) Connect(index, tick, events);
+        }
+
+        private void StartWindUp(ref PlayerState player, double line, double strength, double loft, int target)
+        {
+            // One more than the wind-up, because this step counts it down too.
+            player.WindUpTicks = Config.KickWindUpTicks + 1;
+            player.WindUpDirection = line;
+            player.WindUpStrength = strength;
+            player.WindUpLoft = loft;
+            player.WindUpTarget = target;
+        }
+
+        // ---- The quick pass (#38) -------------------------------------------------------------------
+
+        // How far ahead the quick pass looks for where it can meet a receiver.
+        private const double PassHorizonSeconds = 8;
+
+        /// <summary>
+        /// The footballer resolves a quick pass, inside the simulation and after the command was
+        /// recorded (INV-10). Perception picks the candidates, anticipation reads their runs, and the
+        /// pass becomes an ordinary ground kick into the same wind-up as a manual kick, so the
+        /// passer's execution error applies too. docs/simulation/pass.md has the rule.
+        /// </summary>
+        private void ResolveQuickPass(int index)
+        {
+            ref PlayerState passer = ref _state.Players[index];
+            Vec2 origin = _state.Ball.Position.Horizontal;
+            double cos = SimMath.Cos(passer.Heading), sin = SimMath.Sin(passer.Heading);
+            double hardest = passer.Capabilities.KickPower * Config.KickSpeed;
+
+            // The choice is made on what the passer sees now: ahead costs the distance, to the side
+            // (1 + w/2) times it, straight back (1 + w) times. Prediction then aims the pass. Choosing
+            // on predicted points would charge a runner for running away, the opposite of preferring
+            // receivers ahead and advancing (#26).
+            int target = 0;
+            double best = double.PositiveInfinity;
+            for (int j = 0; j < _state.Players.Length; j++)
+            {
+                PlayerState other = _state.Players[j];
+                if (!IsPassCandidate(passer, other, cos, sin)) continue;
+
+                Vec2 to = other.Position - origin;
+                double distance = SimMath.Sqrt(to.LengthSquared);
+                double forward = distance > 0 ? (cos * to.X + sin * to.Y) / distance : 1;
+                double cost = distance * (1 + Config.PassBackWeight * (1 - forward) / 2);
+                if (cost < best)
+                {
+                    best = cost;
+                    target = j;
+                }
+            }
+
+            // Aim into the chosen receiver's run, or, with no candidate, a free pass along the heading.
+            bool chosen = best < double.PositiveInfinity;
+            Vec2 read = chosen ? _state.Players[target].Velocity * passer.Capabilities.PassAnticipation : Vec2.Zero;
+            Vec2 aim = chosen
+                ? ReceivePoint(_state.Players[target].Position, read, origin, hardest)
+                : origin + new Vec2(cos, sin) * Config.PassFreeDistance;
+            int targetId = chosen ? _state.Players[target].Id : 0;
+
+            Vec2 line = aim - origin;
+            double length = SimMath.Sqrt(line.LengthSquared);
+            double speed = PassSpeed(length, RunAlong(read, line, length));
+            StartWindUp(ref passer,
+                length > 0 ? SimMath.Atan2(line.Y, line.X) : passer.Heading,
+                hardest > 0 ? Clamp01(speed / hardest) : 1,
+                0,
+                targetId);
+        }
+
+        /// <summary>
+        /// The documented candidate set: a teammate other than the passer, within passMaxRange of
+        /// them and within ± their passVision of their heading.
+        /// </summary>
+        private bool IsPassCandidate(PlayerState passer, PlayerState other, double cos, double sin)
+        {
+            if (other.Id == passer.Id || other.TeamId != passer.TeamId) return false;
+            Vec2 to = other.Position - passer.Position;
+            double distance = SimMath.Sqrt(to.LengthSquared);
+            if (distance == 0 || distance > Config.PassMaxRange) return false;
+            double off = Math.Abs(SimMath.Atan2(cos * to.Y - sin * to.X, cos * to.X + sin * to.Y));
+            return off <= passer.Capabilities.PassVision;
+        }
+
+        /// <summary>
+        /// The ground pass that arrives at <paramref name="run"/> + passArrivalSpeed after
+        /// <paramref name="distance"/>, under constant rolling friction: faster than the receiver's
+        /// run along the pass by passArrivalSpeed, so a runner can take it in stride and a standing
+        /// receiver gets passArrivalSpeed.
+        /// </summary>
+        private double PassSpeed(double distance, double run)
+        {
+            double arrival = Config.PassArrivalSpeed + run;
+            return SimMath.Sqrt(arrival * arrival + 2 * Config.RollingFriction * Config.Gravity * distance);
+        }
+
+        // m/s. How fast a run read as `read` goes along the pass `line` of `length`; never negative.
+        private static double RunAlong(Vec2 read, Vec2 line, double length) =>
+            length > 0 ? Math.Max(0, (read.X * line.X + read.Y * line.Y) / length) : 0;
+
+        /// <summary>
+        /// Where the passer expects to meet the receiver: their position plus the run the passer
+        /// reads (anticipation × velocity), at the first ball step after contact by which a pass
+        /// weighted for that point can get there. Whether a step is reachable can switch back, for a
+        /// runner coming past the ball with a weak kick, so the search scans forward in strides of a
+        /// tenth of a second for the first reachable one and bisects inside that stride. With no
+        /// reachable step within the horizon the pass goes where the receiver is. It rolls the ball
+        /// with the simulation's own integration (INV-13).
+        /// </summary>
+        private Vec2 ReceivePoint(Vec2 position, Vec2 read, Vec2 origin, double hardest)
+        {
+            double dt = Config.TickSeconds;
+            int windUp = Config.KickWindUpTicks;
+            int horizon = (int)(PassHorizonSeconds * Config.TickRate);
+
+            // After ball step j the receiver has moved windUp + j - 1 steps on from now.
+            Vec2 At(int steps) => position + read * ((windUp + steps - 1) * dt);
+
+            bool Reaches(int steps)
+            {
+                Vec2 to = At(steps) - origin;
+                double distance = SimMath.Sqrt(to.LengthSquared);
+                return Rolls(Math.Min(PassSpeed(distance, RunAlong(read, to, distance)), hardest), distance, steps);
+            }
+
+            if (Reaches(1)) return At(1);
+            int stride = Math.Max(1, Config.TickRate / 10);
+            for (int lo = 1; lo < horizon; lo += stride)
+            {
+                int hi = Math.Min(lo + stride, horizon);
+                if (!Reaches(hi)) continue;
+
+                // Unreachable at lo, reachable at hi: bisect for the step between.
+                while (hi - lo > 1)
+                {
+                    int mid = lo + (hi - lo) / 2;
+                    if (Reaches(mid)) hi = mid;
+                    else lo = mid;
+                }
+
+                return At(hi);
+            }
+
+            return position;
+        }
+
+        // Whether a ground pass launched at `speed` rolls `distance` within `steps` ball steps.
+        private bool Rolls(double speed, double distance, int steps)
+        {
+            if (distance <= 0) return true;
+            var ball = new BallState
+            {
+                Position = new Vec3(0, 0, Config.BallRadius),
+                Velocity = new Vec3(speed, 0, 0),
+            };
+
+            for (int i = 0; i < steps; i++)
+            {
+                IntegrateBall(ref ball, Config, Config.TickSeconds);
+                if (ball.Position.Horizontal.LengthSquared >= distance * distance) return true;
+                if (ball.Velocity.X == 0) return false;
+            }
+
+            return false;
         }
 
         private void Connect(int index, long tick, List<SimEvent> events)
@@ -270,6 +437,7 @@ namespace Eleven.Simulation
             ref BallState ball = ref _state.Ball;
             double line = player.WindUpDirection, strength = player.WindUpStrength, loft = player.WindUpLoft;
             player.WindUpDirection = player.WindUpStrength = player.WindUpLoft = 0;
+            player.WindUpTarget = 0;
 
             Vec2 offset = ball.Position.Horizontal - player.Position;
             if (ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
@@ -297,32 +465,41 @@ namespace Eleven.Simulation
 
         private void StepBall(long tick, double dt, List<SimEvent> events)
         {
-            ref BallState ball = ref _state.Ball;
-            double radius = Config.BallRadius;
+            if (IntegrateBall(ref _state.Ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, _state.Ball.Id));
+        }
+
+        /// <summary>
+        /// One step of the ball model. Static so that predictions run the simulation's own physics
+        /// (INV-13): the quick pass weighs and leads its passes with it. Returns whether the ball bounced.
+        /// </summary>
+        private static bool IntegrateBall(ref BallState ball, SimConfig config, double dt)
+        {
+            double radius = config.BallRadius;
             bool airborne = ball.Position.Z > radius || ball.Velocity.Z > 0;
 
             if (airborne)
             {
                 // Spin curves the ball in flight only (#33): once rolling, it keeps its line.
-                Vec3 magnus = Vec3.Cross(ball.Spin, ball.Velocity) * Config.MagnusCoefficient;
-                ball.Velocity += (magnus + new Vec3(0, 0, -Config.Gravity)) * dt;
+                Vec3 magnus = Vec3.Cross(ball.Spin, ball.Velocity) * config.MagnusCoefficient;
+                ball.Velocity += (magnus + new Vec3(0, 0, -config.Gravity)) * dt;
                 ball.Position += ball.Velocity * dt;
 
+                bool bounced = false;
                 if (ball.Position.Z <= radius && ball.Velocity.Z < 0)
                 {
-                    double up = -ball.Velocity.Z * Config.BounceRestitution;
-                    if (up < Config.SettleSpeed) up = 0;
-                    double keep = Config.BounceTangentialRetention;
+                    double up = -ball.Velocity.Z * config.BounceRestitution;
+                    if (up < config.SettleSpeed) up = 0;
+                    double keep = config.BounceTangentialRetention;
                     ball.Velocity = new Vec3(ball.Velocity.X * keep, ball.Velocity.Y * keep, up);
                     ball.Position = new Vec3(ball.Position.X, ball.Position.Y, radius);
 
                     // Ground contact removes most of the spin (#40), so repeated hops stop curving.
-                    ball.Spin *= Config.BounceSpinRetention;
-                    events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
+                    ball.Spin *= config.BounceSpinRetention;
+                    bounced = true;
                 }
 
-                ball.Spin *= Decay(Config.AirSpinDecay, dt);
-                return;
+                ball.Spin *= Decay(config.AirSpinDecay, dt);
+                return bounced;
             }
 
             // Rolling: friction against the direction of travel. Spin keeps decaying but no longer
@@ -332,13 +509,14 @@ namespace Eleven.Simulation
             if (speedSquared > 0)
             {
                 double speed = SimMath.Sqrt(speedSquared);
-                double slowed = speed - Config.RollingFriction * Config.Gravity * dt;
-                velocity = slowed <= Config.StopSpeed ? Vec2.Zero : velocity * (slowed / speed);
+                double slowed = speed - config.RollingFriction * config.Gravity * dt;
+                velocity = slowed <= config.StopSpeed ? Vec2.Zero : velocity * (slowed / speed);
             }
 
             ball.Velocity = new Vec3(velocity.X, velocity.Y, 0);
             ball.Position = new Vec3(ball.Position.X + velocity.X * dt, ball.Position.Y + velocity.Y * dt, radius);
-            ball.Spin *= Decay(Config.GroundSpinDecay, dt);
+            ball.Spin *= Decay(config.GroundSpinDecay, dt);
+            return false;
         }
 
         private void CheckGoalLine(long tick, List<SimEvent> events)
@@ -372,6 +550,9 @@ namespace Eleven.Simulation
                     throw new ArgumentException("Players must be in strictly ascending id order.", nameof(state));
                 }
 
+                // 0 means "no pass target" (#38), so ids are positive.
+                if (p.Id <= 0) throw new ArgumentException($"Player ids must be positive; got {p.Id}.", nameof(state));
+
                 string owner = $"Player {p.Id}";
                 p.Capabilities.CheckRanges(owner);
 
@@ -382,6 +563,21 @@ namespace Eleven.Simulation
                 if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
                 {
                     throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");
+                }
+
+                // A pass target exists only during a wind-up, and is a teammate.
+                if (p.WindUpTarget != 0)
+                {
+                    bool teammate = false;
+                    foreach (PlayerState other in state.Players)
+                    {
+                        if (other.Id == p.WindUpTarget && other.Id != p.Id && other.TeamId == p.TeamId) teammate = true;
+                    }
+
+                    if (p.WindUpTicks == 0 || !teammate)
+                    {
+                        throw new ArgumentException($"{owner}: pass target {p.WindUpTarget} must be a teammate, during a wind-up.", nameof(state));
+                    }
                 }
             }
 

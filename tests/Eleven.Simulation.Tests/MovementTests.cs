@@ -156,10 +156,11 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Starting_ranges_lie_within_the_valid_ranges_and_hold_the_reference_profile()
         {
-            Assert.Equal(new[] { "maxSpeed", "acceleration", "kickPower", "kickError" }, PlayerCapabilities.Parameters.Select(p => p.Name));
+            Assert.Equal(new[] { "maxSpeed", "acceleration", "kickPower", "kickError", "passVision", "passAnticipation" }, PlayerCapabilities.Parameters.Select(p => p.Name));
             foreach (TunableParameter p in PlayerCapabilities.Parameters.Skip(2))
             {
-                // #26 gives no research range for kick power or error: technical references only (#37).
+                // #26 gives no research range for kick power, kick error (#37) or the pass's
+                // perception (#38): technical references only.
                 Assert.Null(p.StartMin);
                 Assert.Null(p.StartMax);
                 Assert.InRange(PlayerCapabilities.Reference.Get(p.Name), p.Min, p.Max);

@@ -52,10 +52,13 @@ namespace Eleven.Simulation
             {
                 w.WriteInt32(player.Id);
                 w.WriteInt32(player.OwnerControllerId);
+                w.WriteInt32(player.TeamId);
                 w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
                 w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
                 w.WriteDouble(player.Capabilities.KickPower, "Player.Capabilities.KickPower");
                 w.WriteDouble(player.Capabilities.KickError, "Player.Capabilities.KickError");
+                w.WriteDouble(player.Capabilities.PassVision, "Player.Capabilities.PassVision");
+                w.WriteDouble(player.Capabilities.PassAnticipation, "Player.Capabilities.PassAnticipation");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -64,6 +67,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.WindUpDirection, "Player.WindUpDirection");
                 w.WriteDouble(player.WindUpStrength, "Player.WindUpStrength");
                 w.WriteDouble(player.WindUpLoft, "Player.WindUpLoft");
+                w.WriteInt32(player.WindUpTarget);
                 w.WriteInt32(player.AftertouchTicks);
                 w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
             }
@@ -92,12 +96,15 @@ namespace Eleven.Simulation
                 {
                     Id = r.ReadInt32(),
                     OwnerControllerId = r.ReadInt32(),
+                    TeamId = r.ReadInt32(),
                     Capabilities = new PlayerCapabilities
                     {
                         MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
                         Acceleration = r.ReadDouble("Player.Capabilities.Acceleration"),
                         KickPower = r.ReadDouble("Player.Capabilities.KickPower"),
                         KickError = r.ReadDouble("Player.Capabilities.KickError"),
+                        PassVision = r.ReadDouble("Player.Capabilities.PassVision"),
+                        PassAnticipation = r.ReadDouble("Player.Capabilities.PassAnticipation"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -107,6 +114,7 @@ namespace Eleven.Simulation
                     WindUpDirection = r.ReadDouble("Player.WindUpDirection"),
                     WindUpStrength = r.ReadDouble("Player.WindUpStrength"),
                     WindUpLoft = r.ReadDouble("Player.WindUpLoft"),
+                    WindUpTarget = r.ReadInt32(),
                     AftertouchTicks = r.ReadInt32(),
                     AftertouchDirection = r.ReadDouble("Player.AftertouchDirection"),
                 };
@@ -174,6 +182,9 @@ namespace Eleven.Simulation
         /// <summary>The controller whose commands move this player (INV-10).</summary>
         public int OwnerControllerId;
 
+        /// <summary>The player's team. Teammates share it; a quick pass only ever goes to a teammate (#38).</summary>
+        public int TeamId;
+
         /// <summary>What this footballer can do. Read by the simulation, never changed by it.</summary>
         public PlayerCapabilities Capabilities;
 
@@ -210,6 +221,13 @@ namespace Eleven.Simulation
 
         /// <summary>0–1. The intent's loft, kept through the wind-up.</summary>
         public double WindUpLoft;
+
+        /// <summary>
+        /// The id of the teammate a quick pass is meant for (#38), kept through the wind-up so
+        /// presentation can show the receiver; 0 for a manual kick, a free pass or no wind-up.
+        /// Player ids are positive.
+        /// </summary>
+        public int WindUpTarget;
 
         /// <summary>
         /// Aftertouch input window (#37): steps left in which this player's aftertouch input shapes

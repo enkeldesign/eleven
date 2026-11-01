@@ -71,13 +71,8 @@ namespace Eleven.Simulation.Tests
                 var players = new PlayerState[count];
                 for (int i = 0; i < count; i++)
                 {
-                    var capabilities = new PlayerCapabilities
-                    {
-                        MaxSpeed = Draw(random, PlayerCapabilities.Parameters[0]),
-                        Acceleration = Draw(random, PlayerCapabilities.Parameters[1]),
-                        KickPower = Draw(random, PlayerCapabilities.Parameters[2]),
-                        KickError = Draw(random, PlayerCapabilities.Parameters[3]),
-                    };
+                    var capabilities = new PlayerCapabilities();
+                    foreach (TunableParameter p in PlayerCapabilities.Parameters) capabilities = capabilities.With(p.Name, Draw(random, p));
                     double direction = random.NextDouble() * 2 * Math.PI;
                     double speed = random.NextDouble() < 0.3 ? 0 : random.NextDouble() * capabilities.MaxSpeed;
                     players[i] = new PlayerState
@@ -183,8 +178,7 @@ namespace Eleven.Simulation.Tests
         }
 
         private static string? CapabilitiesUnchanged(PlayerState before, PlayerState after) =>
-            Same(before.Capabilities.MaxSpeed, after.Capabilities.MaxSpeed) && Same(before.Capabilities.Acceleration, after.Capabilities.Acceleration)
-            && Same(before.Capabilities.KickPower, after.Capabilities.KickPower) && Same(before.Capabilities.KickError, after.Capabilities.KickError)
+            PlayerCapabilities.Parameters.All(p => Same(before.Capabilities.Get(p.Name), after.Capabilities.Get(p.Name)))
                 ? null
                 : $"capabilities {before.Capabilities.MaxSpeed}/{before.Capabilities.Acceleration} -> {after.Capabilities.MaxSpeed}/{after.Capabilities.Acceleration}";
 
@@ -324,10 +318,11 @@ namespace Eleven.Simulation.Tests
             && a.WindUpTicks == b.WindUpTicks && Same(a.WindUpDirection, b.WindUpDirection)
             && Same(a.WindUpStrength, b.WindUpStrength) && Same(a.WindUpLoft, b.WindUpLoft)
             && a.AftertouchTicks == b.AftertouchTicks && Same(a.AftertouchDirection, b.AftertouchDirection)
+            && a.TeamId == b.TeamId && a.WindUpTarget == b.WindUpTarget
             && Same(a.Position.X, b.Position.X) && Same(a.Position.Y, b.Position.Y)
             && Same(a.Velocity.X, b.Velocity.X) && Same(a.Velocity.Y, b.Velocity.Y) && Same(a.Heading, b.Heading)
             && Same(a.Capabilities.MaxSpeed, b.Capabilities.MaxSpeed) && Same(a.Capabilities.Acceleration, b.Capabilities.Acceleration)
-            && Same(a.Capabilities.KickPower, b.Capabilities.KickPower) && Same(a.Capabilities.KickError, b.Capabilities.KickError);
+            && PlayerCapabilities.Parameters.All(p => Same(a.Capabilities.Get(p.Name), b.Capabilities.Get(p.Name)));
 
         [Fact]
         public void Only_a_players_owner_controls_them() => Assert.Null(OwnedControlViolation());

@@ -13,14 +13,14 @@ namespace Eleven.Simulation
     /// player movement out to each player's <see cref="PlayerCapabilities"/> (#36). Version 4 added
     /// the manual kick's wind-up and aftertouch, made <see cref="KickLoft"/> and <see cref="KickSideSpin"/>
     /// maxima, and moved the kick's direction error to the player (#37). Version 5 added
-    /// <see cref="BounceSpinRetention"/> (#40).
+    /// <see cref="BounceSpinRetention"/> (#40). Version 6 added the quick pass's range and weight (#38).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 5;
+        public const int FormatVersion = 6;
 
         public SimConfig(
             int tickRate = 60,
@@ -44,6 +44,10 @@ namespace Eleven.Simulation
             double aftertouchSeconds = 0.2,
             double aftertouchBend = 0.1,
             double aftertouchLift = 2.0,
+            double passMaxRange = 30,
+            double passArrivalSpeed = 4,
+            double passBackWeight = 2,
+            double passFreeDistance = 10,
             int kickCooldownTicks = 30,
             double goalLineX = 52.5)
         {
@@ -71,6 +75,10 @@ namespace Eleven.Simulation
             AftertouchSeconds = aftertouchSeconds;
             AftertouchBend = aftertouchBend;
             AftertouchLift = aftertouchLift;
+            PassMaxRange = passMaxRange;
+            PassArrivalSpeed = passArrivalSpeed;
+            PassBackWeight = passBackWeight;
+            PassFreeDistance = passFreeDistance;
             KickCooldownTicks = kickCooldownTicks;
             GoalLineX = goalLineX;
 
@@ -169,6 +177,25 @@ namespace Eleven.Simulation
         /// </summary>
         public double AftertouchLift { get; }
 
+        /// <summary>m. The furthest teammate a quick pass considers (#38).</summary>
+        public double PassMaxRange { get; }
+
+        /// <summary>
+        /// m/s. How much faster than the receiver's run along it a quick pass is weighted to arrive,
+        /// at the predicted receive point: a standing receiver gets this speed, a runner the speed of
+        /// their run plus this, so they can take it in stride.
+        /// </summary>
+        public double PassArrivalSpeed { get; }
+
+        /// <summary>
+        /// How much a quick pass's choice prefers receivers ahead: a receiver straight behind costs
+        /// (1 + this) times their distance, one to the side (1 + this / 2) times, one ahead just the distance.
+        /// </summary>
+        public double PassBackWeight { get; }
+
+        /// <summary>m. How far a quick pass with no candidate is weighted to run along the heading.</summary>
+        public double PassFreeDistance { get; }
+
         /// <summary><see cref="KickWindUpSeconds"/> in whole steps, nearest.</summary>
         public int KickWindUpTicks { get; }
 
@@ -210,6 +237,10 @@ namespace Eleven.Simulation
             w.WriteDouble(AftertouchSeconds, nameof(AftertouchSeconds));
             w.WriteDouble(AftertouchBend, nameof(AftertouchBend));
             w.WriteDouble(AftertouchLift, nameof(AftertouchLift));
+            w.WriteDouble(PassMaxRange, nameof(PassMaxRange));
+            w.WriteDouble(PassArrivalSpeed, nameof(PassArrivalSpeed));
+            w.WriteDouble(PassBackWeight, nameof(PassBackWeight));
+            w.WriteDouble(PassFreeDistance, nameof(PassFreeDistance));
             w.WriteInt32(KickCooldownTicks);
             w.WriteDouble(GoalLineX, nameof(GoalLineX));
             return w.ToArray();
