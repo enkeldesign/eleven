@@ -21,6 +21,10 @@ using Eleven.Simulation.Harness;
 /// eleven-sim kicks &lt;dir&gt; [name=value ...]
 ///                              characterise the manual kick and aftertouch (#37) under the default config
 ///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
+/// eleven-sim replay &lt;capture.elfc&gt; replay a "this felt wrong" capture (#44) and compare every tick; exit 1 on any mismatch
+/// eleven-sim capture &lt;file&gt; [seconds]
+///                              capture the last 10 s of the scripted spike session at `seconds` (default 20),
+///                              through the host's FeelRecorder: the committed fixture
 /// eleven-sim passes &lt;dir&gt; [name=value ...]
 ///                              measure the quick pass (#38) in the practice drills under the reference profile
 ///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1
@@ -47,8 +51,12 @@ internal static class Program
                 return Kicks(args[1], args.Skip(2));
             case "passes" when args.Length >= 2:
                 return Passes(args[1], args.Skip(2));
+            case "replay" when args.Length == 2:
+                return Replay(args[1]);
+            case "capture" when args.Length >= 2:
+                return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | replay <capture> | capture <file> [seconds]");
                 return 2;
         }
     }
@@ -266,6 +274,59 @@ internal static class Program
         }
 
         Console.WriteLine($"config {config.Hash:x16}, {KickCurves.KeyNumbers(config, curves)} -> {directory}");
+        return 0;
+    }
+
+    private static int Replay(string path)
+    {
+        FeelCapture capture;
+        try
+        {
+            capture = FeelCapture.Decode(File.ReadAllBytes(path));
+        }
+        catch (FormatException e)
+        {
+            Console.Error.WriteLine($"{path}: {e.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"capture: host {capture.HostBuild}, simulation {capture.SimulationBuild}, preset {capture.ActivePreset}, control {capture.ControlCandidate}");
+        Console.WriteLine($"window: ticks {capture.StartTick}..{capture.StartTick + capture.StepCount}, seed {capture.Seed:x16}, config {capture.ConfigHash:x16}");
+        if (capture.Note.Length > 0) Console.WriteLine($"note: {capture.Note}");
+
+        FeelReplay replay = capture.Replay();
+        if (!replay.Matches)
+        {
+            Console.Error.WriteLine($"{path}: {replay.Problem}");
+            return 1;
+        }
+
+        Console.WriteLine($"replayed exactly: {replay.TicksCompared} tick hashes and {capture.Events.Count} events match");
+        return 0;
+    }
+
+    private static int Capture(string path, double seconds)
+    {
+        SimConfig config = SpikeScenario.Config();
+        var sim = new Simulator(config, SpikeScenario.InitialState(config));
+        var recorder = new FeelRecorder();
+        recorder.Start(sim);
+        var commands = new List<Command>();
+        var events = new List<SimEvent>();
+        long end = (long)(seconds * config.TickRate);
+        while (sim.Tick < end)
+        {
+            commands.Clear();
+            SpikeScenario.CommandsFor(sim.Tick, commands);
+            int first = events.Count;
+            sim.Step(commands, events);
+            recorder.Record(sim, commands, events, first);
+        }
+
+        FeelCapture capture = recorder.Capture(sim, $"eleven-sim {SpikeScenario.Name}", "technical-reference", "none",
+            $"scripted fixture: the last {FeelRecorder.WindowSeconds:0} s of {SpikeScenario.Name} at {seconds:0.##} s");
+        File.WriteAllBytes(path, capture.Encode());
+        Console.WriteLine($"ticks {capture.StartTick}..{capture.StartTick + capture.StepCount}, {capture.Events.Count} events -> {path}");
         return 0;
     }
 
