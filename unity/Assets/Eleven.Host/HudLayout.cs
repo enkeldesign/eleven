@@ -32,6 +32,12 @@ namespace Eleven.Host
         public readonly float ResultLineHeight;
 
         public readonly Rect BuildLabel;
+
+        /// <summary>
+        /// Where the page lays its TEST BENCH button (#45): in the top row, left of Reset, away from
+        /// the thumbs. The page keeps it at least 44 × 44 pt.
+        /// </summary>
+        public readonly Rect BenchButton;
         public readonly Rect ResetButton;
         public readonly Rect RunButton;
         public readonly Rect Result;
@@ -63,15 +69,17 @@ namespace Eleven.Host
 
             BuildLabel = new Rect(safe.xMin + Padding, safe.yMin + Padding, safe.width - 2 * Padding, 0.7f * Unit);
             BuildFontSize = Mathf.Max(12, Mathf.Min(FontSize, FontToFit(BuildLabel.width - 16, BuildLineCharacters)));
-            RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
+            RunButton = new Rect(safe.xMax - Padding - 3.4f * Unit, BuildLabel.yMax + Padding * 0.5f, 3.4f * Unit, 1.1f * Unit);
             ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
+            float benchWidth = Mathf.Max(0, Mathf.Min(2.6f * Unit, ResetButton.x - Padding - (safe.xMin + Padding)));
+            BenchButton = new Rect(ResetButton.x - Padding - benchWidth, RunButton.y, benchWidth, RunButton.height);
             // Sized for the lines it shows, and empty until a scenario has run: beside the buttons
             // where it fits (landscape), with its text shrunk to no less than 60 % of the HUD font;
             // otherwise below them, across the screen.
             int lines = Mathf.Clamp(resultLines, 0, MaxResultLines);
             ResultLines = lines;
             int smallest = Mathf.Max(12, Mathf.CeilToInt(FontSize * 0.6f));
-            float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
+            float besideButtons = BenchButton.x - safe.xMin - 2 * Padding;
             int fontBeside = FontToFit(besideButtons - 2 * Padding, ResultLineCharacters);
             int fontBelow = FontToFit(safe.width - 4 * Padding, ResultLineCharacters);
             bool beside = fontBeside >= smallest;
@@ -163,7 +171,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0} feltWrong={FeltWrongButton.x:F0},{FeltWrongButton.y:F0},{FeltWrongButton.width:F0},{FeltWrongButton.height:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0} feltWrong={FeltWrongButton.x:F0},{FeltWrongButton.y:F0},{FeltWrongButton.width:F0},{FeltWrongButton.height:F0} bench={BenchButton.x:F0},{BenchButton.y:F0},{BenchButton.width:F0},{BenchButton.height:F0}");
 
         // The largest font at which a line of this many characters fits in this width.
         private static int FontToFit(float width, int characters) => Mathf.FloorToInt(width / (characters * 0.62f));

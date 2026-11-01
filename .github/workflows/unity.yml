@@ -102,8 +102,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Also the hashes .NET gives the test bench candidate the smoke test applies (#45).
       - name: Write the .NET hash logs to compare against
-        run: dotnet run --project src/Eleven.Simulation.Cli --configuration Release -- hashlog dotnet-hashlogs
+        run: |
+          dotnet run --project src/Eleven.Simulation.Cli --configuration Release -- hashlog dotnet-hashlogs
+          dotnet run --project src/Eleven.Simulation.Cli --configuration Release --no-build -- candidate kickSpeed=18.5 maxSpeed=8.5 > dotnet-hashlogs/bench-candidate.txt
 
       - uses: actions/setup-node@v4
         with:

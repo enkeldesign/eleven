@@ -34,6 +34,10 @@ namespace Eleven.Host
         // The last ten seconds, for THIS FELT WRONG (#44). It only reads the simulator.
         private readonly FeelRecorder _feel = new FeelRecorder();
 
+        // The feel test bench's applied values (#45). The config and the practice start come from
+        // them; APPLY / RETRY replaces them whole and starts a fresh run.
+        private BenchCandidate _bench = BenchCandidate.Reference;
+
         private SimConfig _config;
         private Simulator _simulator;
         private CommandRecording _recording;
@@ -64,13 +68,16 @@ namespace Eleven.Host
             string url = Application.absoluteURL ?? "";
             _trace = url.Contains("trace");
 
-            _config = SpikeScenario.Config();
-            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _config = _bench.Config;
+            _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             AllowPageKeyboard();
             FeltWrongInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel),
                 HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
+            BenchInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel), HostPalette.Css(HostPalette.BenchSheet),
+                HostPalette.Css(HostPalette.BenchField), HostPalette.Css(HostPalette.FocusRing), HostPalette.Css(HostPalette.BenchChanged),
+                _bench.Describe(), _bench.PresetName);
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
@@ -80,6 +87,7 @@ namespace Eleven.Host
             _loadSeconds = PageSeconds();
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
+            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
 
             if (url.Contains("autorun")) RunScenario();
         }
@@ -106,6 +114,10 @@ namespace Eleven.Host
             // Before this frame's steps, so the window ends where the press was.
             string feltWrong = TakeFeltWrong();
             if (feltWrong != null) CaptureFeltWrong(feltWrong);
+
+            // Before this frame's steps, so the fresh run starts on this frame.
+            string apply = TakeBenchApply();
+            if (apply != null) ApplyBench(apply);
 
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
@@ -180,7 +192,7 @@ namespace Eleven.Host
 
         private void ResetMatch()
         {
-            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             _input.Clear();
@@ -195,7 +207,7 @@ namespace Eleven.Host
         /// </summary>
         private void CaptureFeltWrong(string note)
         {
-            FeelCapture capture = _feel.Capture(_simulator, _buildId, "technical-reference", "none", note);
+            FeelCapture capture = _feel.Capture(_simulator, _buildId, _bench.PresetName, "none", note);
             byte[] bytes = capture.Encode();
             double seconds = capture.StepCount * _config.TickSeconds;
             string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{_simulator.Tick}.elfc");
@@ -205,6 +217,36 @@ namespace Eleven.Host
             string line = FormattableString.Invariant(
                 $"ELEVEN capture ticks={capture.StartTick}..{capture.StartTick + capture.StepCount} steps={capture.StepCount} bytes={bytes.Length} name={name}");
             Log(_trace ? $"{line} base64={Convert.ToBase64String(bytes)}" : line);
+        }
+
+        /// <summary>
+        /// APPLY / RETRY (#45): the page's candidate, every value as its bits. Refused whole with the
+        /// reason if any value is invalid; otherwise it becomes the applied values, a new immutable
+        /// config, and a fresh run from the standard practice start. Nothing here touches the running
+        /// simulation: it is replaced.
+        /// </summary>
+        private void ApplyBench(string values)
+        {
+            double started = Time.realtimeSinceStartupAsDouble;
+            if (!BenchCandidate.TryParse(values, out BenchCandidate candidate, out string problem))
+            {
+                BenchRefused(problem);
+                Log($"ELEVEN bench refused {problem}");
+                return;
+            }
+
+            int changes = candidate.ChangesFrom(_bench);
+            _bench = candidate;
+            _config = candidate.Config;
+            _view.Use(_config);
+            ResetMatch();
+            _accumulator = 0;
+            double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+
+            string config = _config.Hash.ToString("x16");
+            BenchApplied(_bench.Describe(), _bench.PresetName, config, changes, milliseconds);
+            Log(FormattableString.Invariant(
+                $"ELEVEN bench applied changes={changes} preset={_bench.PresetName} config={config} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
         }
 
         private static string SafeName(string s)
@@ -245,6 +287,8 @@ namespace Eleven.Host
             _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
             Rect felt = _layout.FeltWrongButton;
             FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
+            Rect bench = _layout.BenchButton;
+            BenchPlace(bench.x, bench.y, bench.width, bench.height, _layout.ScreenWidth, _layout.ScreenHeight);
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
@@ -368,6 +412,21 @@ namespace Eleven.Host
         [DllImport("__Internal")]
         private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
+        [DllImport("__Internal")]
+        private static extern void ElevenBenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset);
+
+        [DllImport("__Internal")]
+        private static extern void ElevenBenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
+
+        [DllImport("__Internal")]
+        private static extern string ElevenTakeBenchApply();
+
+        [DllImport("__Internal")]
+        private static extern void ElevenBenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds);
+
+        [DllImport("__Internal")]
+        private static extern void ElevenBenchRefused(string problem);
+
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
@@ -385,6 +444,19 @@ namespace Eleven.Host
         private static string TakeFeltWrong() => ElevenTakeFeltWrong();
 
         private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
+
+        private static void BenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset) =>
+            ElevenBenchInstall(text, panel, sheet, field, focus, changed, knobs, preset);
+
+        private static void BenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
+            ElevenBenchPlace(x, y, width, height, screenWidth, screenHeight);
+
+        private static string TakeBenchApply() => ElevenTakeBenchApply();
+
+        private static void BenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds) =>
+            ElevenBenchApplied(knobs, preset, config, changes, hostMilliseconds);
+
+        private static void BenchRefused(string problem) => ElevenBenchRefused(problem);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
@@ -399,6 +471,17 @@ namespace Eleven.Host
 
         private static void KeepCapture(byte[] bytes, string name, string summary) =>
             System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, name), bytes);
+
+        // Outside the web build there is no page, so no bench: the reference values run.
+        private static void BenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset) { }
+
+        private static void BenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
+
+        private static string TakeBenchApply() => null;
+
+        private static void BenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds) { }
+
+        private static void BenchRefused(string problem) { }
 #endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);

@@ -17,7 +17,13 @@
 //   - recording: the host's command recording replays to the live state
 //   - THIS FELT WRONG (#44): a labelled page button of at least 44 x 44 px; a press asks for a note,
 //     captures the last 10 s without stopping play, keeps it in localStorage and offers SAVE CAPTURE.
-//     The capture is written to <output dir>/capture-<pass>.elfc for CI to replay with .NET
+//     The capture is written to <output dir>/capture-<pass>.elfc for CI to replay with .NET.
+//     Desktop also reaches it with Tab and Enter, and after a reload still exports the kept capture
+//   - FEEL / TEST BENCH (#45): a labelled page button opens a panel of every knob the host
+//     describes, with controls of at least 44 x 44 px; opening and closing it leaves the run alone;
+//     an out-of-range value can't be applied; APPLY / RETRY starts a fresh run whose config and
+//     practice start hash as .NET's <hash log dir>/bench-candidate.txt says; the time from the press
+//     to the fresh run is reported; a capture under the candidate goes to capture-<pass>-bench.elfc
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -310,6 +316,73 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       check('Enter on felt-wrong captures', !!keyed, keyed ? keyed.match[0].replace('ELEVEN ', '') : 'no capture line after Enter');
     }
 
+    // FEEL / TEST BENCH (#45): a labelled page button opens a panel of every knob; opening and
+    // closing it leaves the run alone; an out-of-range value can't be applied; APPLY / RETRY starts a
+    // fresh run whose config and practice start hash as .NET says that candidate's do.
+    const press = (locator) => (useTouch ? locator.tap() : locator.click());
+    const benchOpen = page.getByRole('button', { name: /test bench/i });
+    const benchBox = await benchOpen.boundingBox().catch(() => null);
+    check('test bench is a labelled button of at least 44 x 44 px', !!benchBox && benchBox.width >= 44 && benchBox.height >= 44,
+      benchBox ? `${benchBox.width.toFixed(0)} x ${benchBox.height.toFixed(0)} px at ${benchBox.x.toFixed(0)},${benchBox.y.toFixed(0)}` : 'no button named "test bench"');
+    const knobsLine = lastLog(/ELEVEN bench knobs=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/);
+    const fromOpen = logs.length;
+    const tickBeforeOpen = Number(lastLog(tracePattern)?.[1] ?? -1);
+    await press(benchOpen);
+    const dialog = page.getByRole('dialog', { name: /test bench/i });
+    const rows = await page.locator('#eleven-bench [role=group]').count();
+    check('the bench lists every knob the host describes', await dialog.isVisible() && !!knobsLine && rows === Number(knobsLine[1]) && rows > 0,
+      `${rows} knobs shown, host describes ${knobsLine?.[1] ?? 'none'}`);
+    const small = await page.evaluate(() => [...document.querySelectorAll('#eleven-bench button, #eleven-bench input')]
+      .map((e) => ({ name: e.getAttribute('aria-label') || e.textContent, type: e.type, r: e.getBoundingClientRect() }))
+      .filter((e) => e.r.height < 44 || (e.type !== 'range' && e.r.width < 44))
+      .map((e) => `${e.name} ${e.r.width.toFixed(0)}x${e.r.height.toFixed(0)}`));
+    check('bench controls are at least 44 x 44 px', small.length === 0, small.length ? small.slice(0, 4).join(', ') : 'all');
+
+    const benchStatus = page.locator('#eleven-bench-status');
+    const benchApply = page.locator('#eleven-bench-apply');
+    const maxSpeed = page.getByRole('textbox', { name: 'Max speed, m/s' });
+    await maxSpeed.fill('20');
+    const refusedText = await page.locator('#eleven-knob-maxSpeed-state').textContent().catch(() => '');
+    check('an out-of-range value cannot be applied, and says why', await benchApply.isDisabled() && /Out of range/.test(refusedText),
+      `${refusedText} | ${await benchStatus.textContent()}`);
+    await maxSpeed.fill(useTouch ? '8,5' : '8.5'); // the phone pass types a decimal comma
+    await press(page.getByRole('button', { name: 'Increase Kick speed by 0.5' }));
+    const pendingText = await benchStatus.textContent();
+    check('edits make a pending candidate, shown in words', /^2 pending changes/.test(pendingText) && !(await benchApply.isDisabled()), pendingText);
+    await press(page.locator('#eleven-bench-close'));
+    await waitForLog(tracePattern, 3_000, logs.length);
+    const whileOpen = logs.slice(fromOpen).filter((l) => /^ELEVEN (reset|bench applied|press )/.test(l));
+    const tickAfterClose = Number(lastLog(tracePattern)?.[1] ?? -1);
+    check('opening and closing the bench leaves the run alone', whileOpen.length === 0 && tickAfterClose > tickBeforeOpen,
+      `${whileOpen.length ? whileOpen.slice(0, 3).join(' | ') : 'no reset, apply or game input'}; trace tick ${tickBeforeOpen} → ${tickAfterClose}`);
+
+    await press(benchOpen);
+    const fromApply = logs.length;
+    const tickBeforeApply = Number(lastLog(tracePattern)?.[1] ?? -1);
+    await press(benchApply);
+    const applied = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16}) hostMs=([\d.]+)/, 5_000, fromApply);
+    const pageApplied = await waitForLog(/ELEVEN bench page applied pageMs=([\d.]+|none) hostMs=([\d.]+)/, 5_000, fromApply);
+    const expectedFile = path.join(hashlogDir, 'bench-candidate.txt');
+    const expected = fs.existsSync(expectedFile) ? /config ([0-9a-f]{16})\s+practice start ([0-9a-f]{16})/.exec(fs.readFileSync(expectedFile, 'utf8')) : null;
+    check('APPLY / RETRY starts a fresh run with the candidate, hashed as in .NET',
+      !!applied && applied.match[1] === '2' && applied.match[2] === 'unsaved' && !!expected
+        && applied.match[3] === expected[1] && applied.match[4] === expected[2] && applied.match[3] !== knobsLine?.[3],
+      applied ? `${applied.match[0].replace('ELEVEN ', '')}; .NET: ${expected ? `config ${expected[1]} start ${expected[2]}` : 'no bench-candidate.txt'}` : 'no "bench applied" line');
+    if (pageApplied) notes.benchApplyMs = `page ${pageApplied.match[1]} ms, host ${pageApplied.match[2]} ms`;
+    const afterApply = applied ? (await waitForLog(tracePattern, 5_000, applied.index + 1))?.match ?? null : null;
+    const announcedApply = await page.locator('#eleven-capture-status').textContent().catch(() => '');
+    check('the fresh run starts over, the panel closes and the result is announced',
+      !!afterApply && Number(afterApply[1]) < tickBeforeApply && !(await dialog.isVisible()) && /^Applied 2 changes, fresh run in \d+ ms/.test(announcedApply ?? ''),
+      `trace tick ${tickBeforeApply} → ${afterApply?.[1]}; ${announcedApply}`);
+
+    // A capture under the candidate replays exactly under .NET in CI too.
+    const fromBenchCapture = logs.length;
+    page.once('dialog', (d) => d.accept(`smoke ${name} bench`));
+    await press(felt);
+    const benchCaptured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)(?: base64=(\S+))?/, 10_000, fromBenchCapture);
+    check('felt-wrong captures under the candidate', !!benchCaptured?.match[6], benchCaptured ? benchCaptured.match[0].slice(0, 120) : 'no capture line');
+    if (benchCaptured?.match[6]) fs.writeFileSync(path.join(outDir, `capture-${name}-bench.elfc`), Buffer.from(benchCaptured.match[6], 'base64'));
+
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
     const png = await canvas.screenshot({ path: path.join(outDir, `${name}-canvas.png`) });
     notes.pixels = await page.evaluate(async ({ data, colours }) => {
@@ -433,7 +506,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, bench apply ${n.benchApplyMs ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);
