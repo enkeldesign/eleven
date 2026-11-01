@@ -103,6 +103,8 @@ These are settled for now and become ADRs in the repository. The platform is del
 
 ## Engine: the Unity 6 hypothesis
 
+> **Decided, 1 Nov 2026.** The engine spike confirmed the hypothesis. [ADR-0001](../adr/0001-engine-and-platform.md) chooses Unity 6 hosting the engine-free C# simulation, with the PWA Web build as the channel and native iOS later. [ADR-0002](../adr/0002-simulation-maths-model.md) chooses the `Portable` maths model. Where this section and those ADRs differ, the ADRs win. The text below is the reasoning as it stood before the spike.
+
 Unity 6 survives scrutiny on paper, so it is the right hypothesis to test. Its real risk is the iteration loop — build times, CI licensing and Editor dependence — not determinism or performance. The spike therefore tests the loop first.
 
 The primary hypothesis is Unity 6 with C#, URP, the Input System and Platform Toolkit where useful. Unreal is too heavy for this game.

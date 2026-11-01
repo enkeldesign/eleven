@@ -1,6 +1,6 @@
 # ADR-0002: Simulation maths model
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-01
 - **Deciders:** Opus proposes; Erik approves (issue #8 groups it with ADR-0001)
 - **Supersedes / superseded by:** —
@@ -84,4 +84,4 @@ The simulation uses the **`Portable`** maths backend: our own transcendental fun
 
 ## Approval
 
-Pending: Erik.
+Approved by Erik on 1 Nov 2026, together with ADR-0001 (PR #20).

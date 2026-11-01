@@ -1,6 +1,6 @@
 # ADR-0001: Engine and platform
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-01
 - **Deciders:** Opus recommends; Erik approves (an engine and platform decision changes the product)
 - **Supersedes / superseded by:** —
@@ -17,7 +17,7 @@ As the brief points out, this is largely a language decision: **a C# simulation 
 | --- | --- | --- | --- |
 | K1 | Push to playable link over 20 min median, or any manual Editor step | **Median 367 s (6.1 min)** over 13 pushes, range 256–514 s. No Editor step: settings, scene, service worker and icons all come from code at build time | #4, `unity/ci/loop-metrics.sh` |
 | K2 | CI can't build reliably with our licence | **20 of 20** Unity build jobs succeeded, 26 Oct–1 Nov. Licence activation from repository secrets never failed. Three runs went red in our own smoke test, and five were cancelled by newer pushes; neither is a build failure | #4, Actions history |
-| K3 | Web build unreliable on iPhone or iPad, over 10 s to load, or more than a frame slower than TURN LAB | **Not fully assessed.** iPhone 16 in Safari: cold load 1.1–2.1 s, 0 dropped frames in 60 s of play, and it cold-launches and plays offline from the home screen. Touch was judged "at least as responsive" as TURN by Erik by feel, not measured against the 17 ms threshold with the specified 240 fps video. **The iPad is untested.** See *Open before acceptance* | #5 |
+| K3 | Web build unreliable on iPhone or iPad, over 10 s to load, or more than a frame slower than TURN LAB | **Accepted by Erik on the iPhone evidence.** iPhone 16 in Safari: cold load 1.1–2.1 s, 0 dropped frames in 60 s of play, and it cold-launches and plays offline from the home screen. Touch was judged "at least as responsive" as TURN by feel; the 240 fps measurement was not made. The iPad is untested. Erik accepted K3 on this evidence (see *Settled at acceptance*) | #5 |
 | K4 | Hashes diverge and neither own trig nor fixed point fixes it at acceptable cost | **Own trig fixes it:** `Portable` maths is identical on .NET x64, WebGL in Chromium and WebGL in Safari on iOS, at about 2.5 µs a tick on the phone. See ADR-0002 | #3, #5, ADR-0002 |
 | K5 | Opus can't make and verify a visible change without the Editor | **Passed.** Erik's unannounced change, "make the player twice as big and green", was made through code and verified by CI in **9 minutes, one round trip, with nothing needing the Editor**. The smoke test confirmed the new colour and a fourfold pixel area | #7, PR #21 |
 
@@ -65,7 +65,7 @@ Unity passing its kill criteria shows it is viable, not that it is better. The b
 
 **What Unity costs today, measured:**
 
-- **A slower loop:** push to playable link takes 6.1 minutes (median). TURN's loop is the baseline, still to be stated (see *Open before acceptance*).
+- **A slower loop, on paper:** push to playable link takes 6.1 minutes (median). Erik judges it the same as TURN LAB's in practice (see *Settled at acceptance*).
 - **A larger download:** about 6.5 MiB compressed. It loaded in 1.1–2.1 s on the iPhone.
 - **Editor-free discipline:** every setting, scene and asset pipeline must be code.
 - **Licensing exposure:** Unity's terms have changed abruptly before.
@@ -88,14 +88,16 @@ Unity passing its kill criteria shows it is viable, not that it is better. The b
 - The price is acceptable if a 6-minute loop doesn't feel materially slower to Erik than TURN's in daily use.
 - That judgement is Erik's. He has used both loops during the spike.
 
-## Open before acceptance
+## Settled at acceptance
 
-These are Erik's to settle. The approval records which way each went.
+The proposal left two questions to Erik. He answered on 1 Nov 2026:
 
-1. **K3 evidence.** Either:
-   - measure the iPad (cold load ×3, 70 s of play) and touch latency with the 240 fps video method on #5; or
-   - accept K3 on the iPhone measurements and Erik's side-by-side assessment.
-2. **The loop trade.** Is a median 6.1-minute push-to-link materially slower than TURN LAB's in practice? The answer needs TURN's typical push-to-link time, which agents can't read from TURN's repository.
+1. **K3 evidence.**
+   - Erik accepted K3 on the iPhone measurements and his side-by-side assessment.
+   - The iPad and the 240 fps latency measurement are not required for this decision. They stay optional rows on #5.
+2. **The loop trade.**
+   - Erik judges ELEVEN's median 6.1-minute push-to-link to feel the same as TURN LAB's in practice. No TURN number was recorded.
+   - The loop is therefore not materially slower, and the trade in *Why Unity rather than TypeScript* stands.
 
 ## Consequences
 
@@ -135,4 +137,4 @@ These are Erik's to settle. The approval records which way each went.
 
 ## Approval
 
-Pending: Erik.
+Approved by Erik on 1 Nov 2026, with the answers recorded in *Settled at acceptance*. The adversarial architecture lens was applied by Codex on PR #20. Its blocker, on K3, was settled by Erik's decision above; its should-fix, on Unity versus TypeScript, was answered in this ADR.
