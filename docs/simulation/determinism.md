@@ -61,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 2`; version 2 dropped the maths backend). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 3`; version 2 dropped the maths backend, and version 3 moved player movement out to each player's capabilities). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md).
 
 ## Canonical encoding
 
@@ -72,7 +72,7 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 - Booleans: one byte, 0 or 1.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, position, velocity, heading, kick cooldown).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, capabilities (max speed, acceleration), position, velocity, heading, kick cooldown).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.
@@ -84,7 +84,7 @@ All future-affecting state is in `SimState`; anything else that affects the next
 
 ## Snapshots
 
-Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
+Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, and version 3 added player capabilities), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
 
 Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
 
