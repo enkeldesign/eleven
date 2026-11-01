@@ -9,9 +9,10 @@ namespace Eleven.Simulation
         /// Version of the state schema. Bumped whenever the snapshot layout changes (INV-7).
         /// Version 2 dropped the maths backend from the header (ADR-0002). Version 3 added each
         /// player's capabilities (#36). Version 4 added kick capabilities and the kick's wind-up and
-        /// aftertouch phases (#37).
+        /// aftertouch phases (#37). Version 5 added each player's team, pass capabilities and quick-pass
+        /// target (#38).
         /// </summary>
-        public const int StateSchemaVersion = 4;
+        public const int StateSchemaVersion = 5;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

@@ -110,6 +110,7 @@ namespace Eleven.Simulation.Tests
                     {
                         Id = i + 1,
                         OwnerControllerId = 11 + i,
+                        TeamId = random.Next(2),
                         Capabilities = capabilities,
                         Position = new Vec2(ball.X + distance * Math.Cos(around), ball.Y + distance * Math.Sin(around)),
                         Heading = random.NextDouble() * 2 * Math.PI - Math.PI,
@@ -182,7 +183,8 @@ namespace Eleven.Simulation.Tests
                     }
 
                     KickIntent? kick = random.Next(5) == 0 ? AnyIntent(random) : (KickIntent?)null;
-                    commands.Add(new Command(p.OwnerControllerId, t, move, kick, aftertouch[i]));
+                    bool quickPass = random.Next(4) == 0;
+                    commands.Add(new Command(p.OwnerControllerId, t, move, kick, aftertouch[i], quickPass));
                     if (random.Next(80) == 0) commands.Add(new Command(p.OwnerControllerId, t, move, AnyIntent(random))); // duplicate: both rejected
                 }
 
@@ -211,7 +213,7 @@ namespace Eleven.Simulation.Tests
                 if (replaceAftertouch(s, run.Steps[s]))
                 {
                     // Non-finite aftertouch stays: replacing it would turn a rejected command into a valid one.
-                    commands = commands.Select(c => Finite(c.Aftertouch) ? new Command(c.ControllerId, c.Tick, c.Move, c.Kick, AnyVector(random, 1.5)) : c).ToArray();
+                    commands = commands.Select(c => Finite(c.Aftertouch) ? new Command(c.ControllerId, c.Tick, c.Move, c.Kick, AnyVector(random, 1.5), c.QuickPass) : c).ToArray();
                 }
 
                 steps.Add(Step(sim, commands));
@@ -300,6 +302,11 @@ namespace Eleven.Simulation.Tests
             Assert.Contains(steps, x => x.o.Before.Players.Zip(x.o.After.Players, (b, a) => (b, a))
                 .Any(p => p.b.AftertouchTicks > 1 && p.a.AftertouchTicks == 0 && !x.o.Kicked(p.a.Id)));
 
+            // Quick passes to a teammate, free quick passes along the heading, and manual kicks that override a quick pass.
+            Assert.Contains(steps, x => x.Config.KickWindUpTicks > 0 && x.o.After.Players.Any(p => p.WindUpTarget != 0));
+            Assert.Contains(steps, x => QuickPassStarts(x.Config, x.o).Any(p => p.WindUpTarget == 0));
+            Assert.Contains(steps, x => x.o.Commands.Any(c => c.QuickPass && c.Kick.HasValue));
+
             // Intents along the heading, and strength and loft beyond 0–1.
             Assert.Contains(steps, x => x.o.Commands.Any(c => c.Kick.HasValue && c.Kick.Value.Direction.LengthSquared == 0));
             Assert.Contains(steps, x => x.o.Commands.Any(c => c.Kick.HasValue && (c.Kick.Value.Strength > 1 || c.Kick.Value.Loft < 0)));
@@ -317,8 +324,9 @@ namespace Eleven.Simulation.Tests
         private static double Line(KickIntent intent, PlayerState after) =>
             intent.Direction.X == 0 && intent.Direction.Y == 0 ? after.Heading : SimMath.Atan2(intent.Direction.Y, intent.Direction.X);
 
-        // An intent accepted while the player is ready starts a kick, and the kick stores the intent as
-        // given: its own line (or the heading), and strength and loft only clamped.
+        // An intent (manual or quick pass) accepted while the player is ready starts a kick, and a
+        // manual kick stores its intent as given: its own line (or the heading), strength and loft
+        // only clamped, and no pass target, even when the same command also asked for a quick pass.
         private static string? IntentStoredAsGiven(SimConfig config, Observed o)
         {
             int windUp = config.KickWindUpTicks;
@@ -327,10 +335,11 @@ namespace Eleven.Simulation.Tests
                 PlayerState before = o.Before.Players[i], after = o.After.Players[i];
                 Command? command = Accepted(o, after.OwnerControllerId);
                 bool ready = before.WindUpTicks == 0 && before.KickCooldown <= 1;
-                bool intended = command.HasValue && command.Value.Kick.HasValue && ready;
+                bool intended = command.HasValue && (command.Value.Kick.HasValue || command.Value.QuickPass) && ready;
                 bool started = windUp > 0 ? before.WindUpTicks == 0 && after.WindUpTicks == windUp : o.Contact(after.Id);
                 if (intended != started) return $"player {after.Id}: intent {(intended ? "accepted" : "absent")} but kick {(started ? "started" : "not started")}";
-                if (!started) continue;
+                if (!started || !command!.Value.Kick.HasValue) continue;
+                if (after.WindUpTarget != 0) return $"player {after.Id}: a manual kick got pass target {after.WindUpTarget}";
 
                 KickIntent intent = command!.Value.Kick!.Value;
                 double line = Line(intent, after);
@@ -386,6 +395,76 @@ namespace Eleven.Simulation.Tests
 
             return null;
         }
+
+        // The players whose wind-up started this step from a quick pass alone (#38).
+        private static IEnumerable<PlayerState> QuickPassStarts(SimConfig config, Observed o)
+        {
+            if (config.KickWindUpTicks == 0) yield break;
+            for (int i = 0; i < o.After.Players.Length; i++)
+            {
+                PlayerState before = o.Before.Players[i], after = o.After.Players[i];
+                Command? command = Accepted(o, after.OwnerControllerId);
+                if (command.HasValue && command.Value.QuickPass && !command.Value.Kick.HasValue
+                    && before.WindUpTicks == 0 && after.WindUpTicks == config.KickWindUpTicks)
+                {
+                    yield return after;
+                }
+            }
+        }
+
+        // The documented candidate set (docs/simulation/pass.md): a teammate other than the passer,
+        // within passMaxRange of them and within ± their passVision of their heading, as they stand
+        // when the kicks are resolved.
+        private static bool Candidate(SimConfig config, PlayerState passer, PlayerState other)
+        {
+            if (other.Id == passer.Id || other.TeamId != passer.TeamId) return false;
+            Vec2 to = other.Position - passer.Position;
+            double distance = SimMath.Sqrt(to.LengthSquared);
+            if (distance == 0 || distance > config.PassMaxRange) return false;
+            double cos = SimMath.Cos(passer.Heading), sin = SimMath.Sin(passer.Heading);
+            double off = Math.Abs(SimMath.Atan2(cos * to.Y - sin * to.X, cos * to.X + sin * to.Y));
+            return off <= passer.Capabilities.PassVision;
+        }
+
+        // A quick pass goes to a documented candidate or, with none, runs free; it is a ground pass.
+        private static string? AssistedPassStaysInTheCandidateSet(SimConfig config, Observed o)
+        {
+            foreach (PlayerState passer in QuickPassStarts(config, o))
+            {
+                if (passer.WindUpLoft != 0) return $"player {passer.Id}: quick pass lofted {passer.WindUpLoft}";
+                if (passer.WindUpTarget == 0)
+                {
+                    if (o.After.Players.Any(p => Candidate(config, passer, p))) return $"player {passer.Id}: free pass with a candidate in view";
+                    continue;
+                }
+
+                PlayerState? target = o.After.Players.FirstOrDefault(p => p.Id == passer.WindUpTarget);
+                if (target == null || target.Value.Id != passer.WindUpTarget || !Candidate(config, passer, target.Value))
+                {
+                    return $"player {passer.Id}: passed to {passer.WindUpTarget}, outside the candidate set";
+                }
+            }
+
+            return null;
+        }
+
+        [Fact]
+        public void A_quick_pass_only_ever_picks_a_documented_candidate() => Holds(AssistedPassStaysInTheCandidateSet);
+
+        // The mutant hands every quick pass to someone else: an opponent, someone out of view, or
+        // themselves, whichever comes first.
+        [Fact]
+        public void The_candidate_check_catches_a_pass_to_someone_outside_the_set() =>
+            CatchesMutant(AssistedPassStaysInTheCandidateSet, (config, o) => WithAfter(o, s =>
+            {
+                for (int i = 0; i < s.Players.Length; i++)
+                {
+                    if (!QuickPassStarts(config, o).Any(p => p.Id == s.Players[i].Id)) continue;
+                    PlayerState passer = s.Players[i];
+                    PlayerState? outsider = s.Players.Where(p => !Candidate(config, passer, p)).Cast<PlayerState?>().FirstOrDefault();
+                    if (outsider.HasValue) s.Players[i].WindUpTarget = outsider.Value.Id;
+                }
+            }));
 
         [Fact]
         public void A_kick_stores_its_intent_as_given() => Holds(IntentStoredAsGiven);

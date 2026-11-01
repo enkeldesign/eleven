@@ -45,7 +45,7 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The ball- and kick-feel surface (#24, #37): the supported way for tools, presets and the later
+    /// The ball-, kick- and pass-feel surface (#24, #37, #38): the supported way for tools, presets and the later
     /// tuning panel to read and vary config. Values change only by building a new config with <see cref="With(string, double)"/>,
     /// so every variant is validated and hashed like any other config.
     /// </summary>
@@ -78,6 +78,10 @@ namespace Eleven.Simulation
             new TunableParameter("aftertouchSeconds", "s", 0, 1, 0.15, 0.30),
             new TunableParameter("aftertouchBend", "rad", 0, 0.5),
             new TunableParameter("aftertouchLift", "m/s", 0, 10),
+            new TunableParameter("passMaxRange", "m", 5, 60),
+            new TunableParameter("passArrivalSpeed", "m/s", 0, 15),
+            new TunableParameter("passBackWeight", "factor", 0, 10),
+            new TunableParameter("passFreeDistance", "m", 1, 40),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -101,6 +105,10 @@ namespace Eleven.Simulation
             "aftertouchSeconds" => AftertouchSeconds,
             "aftertouchBend" => AftertouchBend,
             "aftertouchLift" => AftertouchLift,
+            "passMaxRange" => PassMaxRange,
+            "passArrivalSpeed" => PassArrivalSpeed,
+            "passBackWeight" => PassBackWeight,
+            "passFreeDistance" => PassFreeDistance,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -119,6 +127,8 @@ namespace Eleven.Simulation
             double kickSpeed = KickSpeed, kickLoft = KickLoft, kickSideSpin = KickSideSpin;
             double kickWindUpSeconds = KickWindUpSeconds, aftertouchSeconds = AftertouchSeconds;
             double aftertouchBend = AftertouchBend, aftertouchLift = AftertouchLift;
+            double passMaxRange = PassMaxRange, passArrivalSpeed = PassArrivalSpeed;
+            double passBackWeight = PassBackWeight, passFreeDistance = PassFreeDistance;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -142,6 +152,10 @@ namespace Eleven.Simulation
                     case "aftertouchSeconds": aftertouchSeconds = o.Value; break;
                     case "aftertouchBend": aftertouchBend = o.Value; break;
                     case "aftertouchLift": aftertouchLift = o.Value; break;
+                    case "passMaxRange": passMaxRange = o.Value; break;
+                    case "passArrivalSpeed": passArrivalSpeed = o.Value; break;
+                    case "passBackWeight": passBackWeight = o.Value; break;
+                    case "passFreeDistance": passFreeDistance = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -168,6 +182,10 @@ namespace Eleven.Simulation
                 aftertouchSeconds: aftertouchSeconds,
                 aftertouchBend: aftertouchBend,
                 aftertouchLift: aftertouchLift,
+                passMaxRange: passMaxRange,
+                passArrivalSpeed: passArrivalSpeed,
+                passBackWeight: passBackWeight,
+                passFreeDistance: passFreeDistance,
                 kickCooldownTicks: KickCooldownTicks,
                 goalLineX: GoalLineX);
         }

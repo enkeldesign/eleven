@@ -5,8 +5,8 @@ namespace Eleven.Simulation
 {
     /// <summary>
     /// What one footballer can do (#26): the smallest per-player capability surface the current
-    /// mechanics need, explicitly not the final attribute taxonomy. #36 added movement and #37 the
-    /// manual kick; later mechanics add only what they need.
+    /// mechanics need, explicitly not the final attribute taxonomy. #36 added movement, #37 the
+    /// manual kick and #38 the quick pass's perception; later mechanics add only what they need.
     ///
     /// It lives in <see cref="PlayerState"/>, not in <see cref="SimConfig"/>, so every player can
     /// differ and snapshots, hashes and replays carry it. The simulation reads it and never changes
@@ -33,6 +33,19 @@ namespace Eleven.Simulation
         public double KickError;
 
         /// <summary>
+        /// rad. Half-angle of the cone around this player's heading in which they notice teammates
+        /// for a quick pass (#38): perception decides which receivers are candidates.
+        /// </summary>
+        public double PassVision;
+
+        /// <summary>
+        /// 0–1. How much of a receiver's run this player reads into a quick pass (#38): the predicted
+        /// receive point is the receiver's position plus this fraction of their velocity times the
+        /// pass's wind-up and travel time. 0 passes to where the receiver is; 1 leads them fully.
+        /// </summary>
+        public double PassAnticipation;
+
+        /// <summary>
         /// The capability values, with their valid ranges and, where the research on #26 gives one,
         /// a starting range (docs/simulation/movement.md, kick.md). The valid ranges are wide enough
         /// for the test bench to explore past the starting ranges; neither is a feel target.
@@ -43,13 +56,18 @@ namespace Eleven.Simulation
             new TunableParameter("acceleration", "m/s²", 1, 100, 12, 30),
             new TunableParameter("kickPower", "fraction of kickSpeed", 0.1, 1),
             new TunableParameter("kickError", "rad", 0, 0.5),
+            new TunableParameter("passVision", "rad", 0, Math.PI),
+            new TunableParameter("passAnticipation", "fraction", 0, 1),
         });
 
         /// <summary>
         /// The technical reference profile: the spike's movement and kick values, inside the starting
         /// ranges where there are any. Not approved feel; the test bench (#27) is where Erik judges it.
         /// </summary>
-        public static PlayerCapabilities Reference => new PlayerCapabilities { MaxSpeed = 7, Acceleration = 25, KickPower = 1, KickError = 0.05 };
+        public static PlayerCapabilities Reference => new PlayerCapabilities
+        {
+            MaxSpeed = 7, Acceleration = 25, KickPower = 1, KickError = 0.05, PassVision = 1.05, PassAnticipation = 0.75,
+        };
 
         /// <summary>A capability value by its name in <see cref="Parameters"/>.</summary>
         public double Get(string name) => name switch
@@ -58,6 +76,8 @@ namespace Eleven.Simulation
             "acceleration" => Acceleration,
             "kickPower" => KickPower,
             "kickError" => KickError,
+            "passVision" => PassVision,
+            "passAnticipation" => PassAnticipation,
             _ => throw new ArgumentException($"'{name}' is not a player capability.", nameof(name)),
         };
 
@@ -71,6 +91,8 @@ namespace Eleven.Simulation
                 case "acceleration": copy.Acceleration = value; break;
                 case "kickPower": copy.KickPower = value; break;
                 case "kickError": copy.KickError = value; break;
+                case "passVision": copy.PassVision = value; break;
+                case "passAnticipation": copy.PassAnticipation = value; break;
                 default: throw new ArgumentException($"'{name}' is not a player capability.", nameof(name));
             }
 

@@ -17,13 +17,14 @@ namespace Eleven.Simulation.Harness
     /// Encoding (canonical, see docs/simulation/determinism.md): magic "ELRC", format version
     /// (int32), snapshot length (int32) and bytes, step count (int32), then per step a command count
     /// (int32) and per command: controller id (int32), tick (int64), move x and y, whether there is a
-    /// kick intent (bool), and if so its direction x and y, strength and loft, then aftertouch x and y.
-    /// Every double is written as its raw IEEE-754 bits (uint64), so even invalid input is preserved.
-    /// Version 2 replaced the kick flag with the kick intent and added aftertouch (#37).
+    /// kick intent (bool), and if so its direction x and y, strength and loft, then aftertouch x and y,
+    /// then quick pass (bool). Every double is written as its raw IEEE-754 bits (uint64), so even
+    /// invalid input is preserved. Version 2 replaced the kick flag with the kick intent and added
+    /// aftertouch (#37); version 3 added the quick pass (#38).
     /// </summary>
     public sealed class CommandRecording
     {
-        public const int FormatVersion = 2;
+        public const int FormatVersion = 3;
         private static readonly byte[] Magic = { (byte)'E', (byte)'L', (byte)'R', (byte)'C' };
 
         private readonly List<Command[]> _steps = new List<Command[]>();
@@ -100,6 +101,7 @@ namespace Eleven.Simulation.Harness
 
                     WriteBits(w, c.Aftertouch.X);
                     WriteBits(w, c.Aftertouch.Y);
+                    w.WriteBool(c.QuickPass);
                 }
             }
 
@@ -139,7 +141,7 @@ namespace Eleven.Simulation.Harness
                     }
 
                     var aftertouch = new Vec2(ReadBits(r), ReadBits(r));
-                    step[i] = new Command(controller, tick, move, kick, aftertouch);
+                    step[i] = new Command(controller, tick, move, kick, aftertouch, r.ReadBool());
                 }
 
                 recording._steps.Add(step);
