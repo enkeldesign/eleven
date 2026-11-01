@@ -21,6 +21,9 @@ using Eleven.Simulation.Harness;
 /// eleven-sim kicks &lt;dir&gt; [name=value ...]
 ///                              characterise the manual kick and aftertouch (#37) under the default config
 ///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
+/// eleven-sim passes &lt;dir&gt; [name=value ...]
+///                              measure the quick pass (#38) in the practice drills under the reference profile
+///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1
 /// </summary>
 internal static class Program
 {
@@ -42,8 +45,10 @@ internal static class Program
                 return Movement(args[1], args.Skip(2));
             case "kicks" when args.Length >= 2:
                 return Kicks(args[1], args.Skip(2));
+            case "passes" when args.Length >= 2:
+                return Passes(args[1], args.Skip(2));
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...]");
                 return 2;
         }
     }
@@ -206,13 +211,14 @@ internal static class Program
         return 0;
     }
 
-    private static int Kicks(string directory, IEnumerable<string> settings)
+    // A name is a player capability or a config tunable; each fails on what it doesn't know.
+    private static bool SplitSettings(IEnumerable<string> settings, out SimConfig config, out PlayerCapabilities profile)
     {
+        config = new SimConfig();
+        profile = PlayerCapabilities.Reference;
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
-        if (overrides == null) return 2;
+        if (overrides == null) return false;
 
-        // A name is a player capability or a config tunable; each fails on what it doesn't know.
-        PlayerCapabilities profile = PlayerCapabilities.Reference;
         var configOverrides = new List<KeyValuePair<string, double>>();
         foreach (KeyValuePair<string, double> o in overrides)
         {
@@ -220,7 +226,33 @@ internal static class Program
             else configOverrides.Add(o);
         }
 
-        SimConfig config = new SimConfig().With(configOverrides);
+        config = config.With(configOverrides);
+        return true;
+    }
+
+    private static int Passes(string directory, IEnumerable<string> settings)
+    {
+        if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
+
+        List<PassCurve> curves = PassCurves.Characterise(config, profile);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "pass-curves.csv")))
+        {
+            PassCurves.WriteCsv(csv, config, curves);
+        }
+
+        using (var summary = new StreamWriter(Path.Combine(directory, "pass-curves.txt")))
+        {
+            PassCurves.WriteSummary(summary, config, profile, curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {PassCurves.KeyNumbers(curves)} -> {directory}");
+        return 0;
+    }
+
+    private static int Kicks(string directory, IEnumerable<string> settings)
+    {
+        if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
         List<KickCurve> curves = KickCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "kick-curves.csv")))

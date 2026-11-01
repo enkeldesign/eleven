@@ -67,14 +67,15 @@ namespace Eleven.Simulation.Harness
         public const double MaxSeconds = 6;
 
         /// <summary>
-        /// The standard drill: an obvious advancing receiver ahead, a closer one behind, and one
-        /// wide, standing at about 66° off the passer's heading.
+        /// The standard drill: an obvious advancing receiver ahead, a closer one behind, and a near
+        /// one wide, standing at about 63° off the passer's heading: just outside the reference
+        /// profile's view, and the cheapest pass for anyone who sees them.
         /// </summary>
         public static readonly IReadOnlyList<PracticeReceiver> Standard = new[]
         {
             new PracticeReceiver("ahead-advancing", new Vec2(14, 3), new Vec2(5.0 / 7, 0)),
             new PracticeReceiver("behind-closer", new Vec2(-7, -1), Vec2.Zero),
-            new PracticeReceiver("wide", new Vec2(4, 9), Vec2.Zero),
+            new PracticeReceiver("wide", new Vec2(3, 6), Vec2.Zero),
         };
 
         /// <summary>A single runner crossing the passer's line from left to right: the lead case.</summary>
