@@ -114,7 +114,7 @@ namespace Eleven.Simulation.Tests
             Assert.True(a["bounce-and-roll"].Bounces > 0 && a["bounce-and-roll"].RolloutMetres > 0);
         }
 
-        private static string RepositoryRoot()
+        internal static string RepositoryRoot()
         {
             for (DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
             {

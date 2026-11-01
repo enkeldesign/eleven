@@ -64,6 +64,19 @@ jobs:
           path: ball-curves/
           if-no-files-found: error
 
+      # Technical reference movement of the reference profile and the starting-range grid (#36).
+      - name: Characterise movement
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll movement movement-curves | tee movement.txt
+          echo "::notice title=Movement curves::$(sed 's| -> .*||' movement.txt)"
+
+      - name: Publish movement curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-curves
+          path: movement-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |
