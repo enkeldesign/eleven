@@ -204,10 +204,11 @@ namespace Eleven.Simulation
             ref BallState ball = ref _state.Ball;
             double radius = Config.BallRadius;
             bool airborne = ball.Position.Z > radius || ball.Velocity.Z > 0;
-            Vec3 magnus = Vec3.Cross(ball.Spin, ball.Velocity) * Config.MagnusCoefficient;
 
             if (airborne)
             {
+                // Spin curves the ball in flight only (#33): once rolling, it keeps its line.
+                Vec3 magnus = Vec3.Cross(ball.Spin, ball.Velocity) * Config.MagnusCoefficient;
                 ball.Velocity += (magnus + new Vec3(0, 0, -Config.Gravity)) * dt;
                 ball.Position += ball.Velocity * dt;
 
@@ -225,8 +226,9 @@ namespace Eleven.Simulation
                 return;
             }
 
-            // Rolling: horizontal curve, then friction against the direction of travel.
-            Vec2 velocity = ball.Velocity.Horizontal + magnus.Horizontal * dt;
+            // Rolling: friction against the direction of travel. Spin keeps decaying but no longer
+            // curves the ball (SOL's research answer on #24: shaping is a short post-kick effect).
+            Vec2 velocity = ball.Velocity.Horizontal;
             double speedSquared = velocity.LengthSquared;
             if (speedSquared > 0)
             {

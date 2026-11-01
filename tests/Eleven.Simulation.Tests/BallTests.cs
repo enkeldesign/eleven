@@ -78,6 +78,22 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(0, plain.PeekState().Ball.Position.Y);
         }
 
+        // #33 (SOL's research answer on #24): curve shapes the ball in the air; a rolling ball
+        // keeps its line. Its spin still decays, for later bounce, presentation and aftertouch work.
+        [Fact]
+        public void A_rolling_ball_with_sidespin_keeps_its_line()
+        {
+            var config = Config();
+            var spun = Simulator(config, State(config, ballPosition: new Vec3(0, 0, config.BallRadius), ballVelocity: new Vec3(10, 0, 0), ballSpin: new Vec3(0, 0, 20)));
+            for (int t = 0; t < 60; t++) Step(spun);
+
+            BallState ball = spun.PeekState().Ball;
+            Assert.Equal(0, ball.Position.Y);
+            Assert.Equal(0, ball.Velocity.Y);
+            Assert.True(ball.Position.X > 5);
+            Assert.InRange(ball.Spin.Z, 0.001, 19.999);
+        }
+
         [Fact]
         public void A_kick_launches_the_ball_along_the_heading_with_loft_and_spin()
         {
