@@ -12,7 +12,8 @@ namespace Eleven.Host
         public static readonly Color PitchLine = new Color32(0xF2, 0xF2, 0xF2, 0xFF);
         public static readonly Color Ball = new Color32(0xF7, 0xE2, 0x6B, 0xFF);
         public static readonly Color BallShadow = new Color(0f, 0f, 0f, 0.35f);
-        public static readonly Color Dot = new Color32(0xE0, 0x4A, 0x3F, 0xFF);
+        // The player. Light green, 3.4:1 against the pitch (WCAG 1.4.11 asks 3:1 for graphics).
+        public static readonly Color Dot = new Color32(0x99, 0xCC, 0x44, 0xFF);
         public static readonly Color HudText = Color.white;
         public static readonly Color HudPanel = new Color(0f, 0f, 0f, 0.6f);
         public static readonly Color ControlIdle = new Color(1f, 1f, 1f, 0.35f);
