@@ -58,8 +58,35 @@ namespace Eleven.Simulation.Tests
             string text = summary.ToString();
             Assert.Contains($"build: {SimulationInfo.BuildId}", text);
             Assert.Contains($"config-hash: {config.Hash:x16}", text);
-            Assert.Contains("rollingFriction: 0.150 fraction of g  (override)", text);
+            Assert.Contains("rollingFriction: 0.15 fraction of g  (override)", text);
             Assert.Contains("not approved feel", text);
+        }
+
+        [Fact]
+        public void The_summary_records_settings_exactly_enough_to_rebuild_the_config()
+        {
+            SimConfig config = new SimConfig().With(new[]
+            {
+                new KeyValuePair<string, double>("magnusCoefficient", 0.00412345),
+                new KeyValuePair<string, double>("kickLoft", 0.123456789),
+            });
+            var summary = new StringWriter();
+            BallCurves.WriteSummary(summary, config, new[] { "magnusCoefficient", "kickLoft" }, BallCurves.Characterise(config));
+
+            // Read every tunable back from the summary and rebuild: the hash must match.
+            var recorded = new List<KeyValuePair<string, double>>();
+            foreach (string line in summary.ToString().Split('\n'))
+            {
+                foreach (TunableParameter p in SimConfig.Tunables)
+                {
+                    if (!line.StartsWith(p.Name + ": ")) continue;
+                    string value = line.Substring(p.Name.Length + 2).Split(' ')[0];
+                    recorded.Add(new KeyValuePair<string, double>(p.Name, double.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+                }
+            }
+
+            Assert.Equal(SimConfig.Tunables.Count, recorded.Count);
+            Assert.Equal(config.Hash, new SimConfig().With(recorded).Hash);
         }
 
         // Football-shaped, for any config in the research starting ranges: what each action is,

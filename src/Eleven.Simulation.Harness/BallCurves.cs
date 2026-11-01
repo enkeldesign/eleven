@@ -247,7 +247,7 @@ namespace Eleven.Simulation.Harness
             foreach (TunableParameter p in SimConfig.Tunables)
             {
                 string mark = Contains(overridden, p.Name) ? "  (override)" : "";
-                writer.WriteLine($"{p.Name}: {F(config.Get(p.Name))} {p.Unit}{mark}");
+                writer.WriteLine($"{p.Name}: {Exact(config.Get(p.Name))} {p.Unit}{mark}");
             }
 
             foreach (BallAction a in Actions(config))
@@ -302,6 +302,10 @@ namespace Eleven.Simulation.Harness
             foreach (double v in values) parts.Add(v.ToString("0.##", CultureInfo.InvariantCulture));
             return string.Join("/", parts);
         }
+
+        // Settings are written exactly (shortest round-trip form), so a summary rebuilds the very
+        // config that made its curves. Measured results are rounded.
+        private static string Exact(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
         // Adding +0 turns −0 into +0, so a sign-less zero never prints as "-0.000".
         private static string F(double value) => (value + 0.0).ToString("0.000", CultureInfo.InvariantCulture);
