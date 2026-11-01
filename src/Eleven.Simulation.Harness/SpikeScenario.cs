@@ -52,7 +52,7 @@ namespace Eleven.Simulation.Harness
             },
             Players = new[]
             {
-                new PlayerState { Id = PlayerId, OwnerControllerId = ControllerId, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(10, 0) },
+                new PlayerState { Id = PlayerId, OwnerControllerId = ControllerId, Capabilities = capabilities, Position = new Vec2(10, 0) },
             },
         };
 

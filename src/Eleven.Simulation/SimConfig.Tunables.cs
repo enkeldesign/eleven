@@ -13,7 +13,7 @@ namespace Eleven.Simulation
     {
         internal TunableParameter(string group, string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
         {
-            Group = "";
+            Group = group;
             Name = name;
             Unit = unit;
             Min = min;

@@ -3,6 +3,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
 
 namespace Eleven.Simulation.Harness
 {
@@ -13,8 +15,10 @@ namespace Eleven.Simulation.Harness
         {
             Parameter = parameter;
             OnPlayer = onPlayer;
-            Label = "";
-            Step = 1;
+            Label = LabelFor(parameter.Name);
+            int exponent;
+            Step = StepFor(parameter, out exponent);
+            StepDecimals = Math.Max(0, -exponent);
         }
 
         /// <summary>The metadata it shows: unit, valid range and research starting range.</summary>
@@ -39,6 +43,47 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>Decimal places of <see cref="Step"/>, for showing values on its grid.</summary>
         public int StepDecimals { get; }
+
+        // "kickWindUpSeconds" → "Kick wind up seconds".
+        private static string LabelFor(string name)
+        {
+            var label = new StringBuilder(name.Length + 4);
+            foreach (char c in name)
+            {
+                if (label.Length == 0) label.Append(char.ToUpperInvariant(c));
+                else if (char.IsUpper(c)) label.Append(' ').Append(char.ToLowerInvariant(c));
+                else label.Append(c);
+            }
+
+            return label.ToString();
+        }
+
+        // The largest 1, 2 or 5 × 10^exponent at most a twentieth of the range. Powers of ten are
+        // exact up to 10^22, and m / 10^k is correctly rounded, so the step is the double its decimal
+        // spelling names (0.0002, not 2 × 0.0001).
+        private static double StepFor(TunableParameter p, out int exponent)
+        {
+            bool start = p.StartMin.HasValue && p.StartMax.HasValue && p.StartMax.Value > p.StartMin.Value;
+            double span = start ? p.StartMax!.Value - p.StartMin!.Value : p.Max - p.Min;
+            double target = span / 20 * (1 + 1e-9);
+
+            exponent = 0;
+            while (exponent > -12 && Scaled(1, exponent) > target) exponent--;
+            while (exponent < 12 && Scaled(1, exponent + 1) <= target) exponent++;
+            foreach (int m in new[] { 5, 2 })
+            {
+                if (Scaled(m, exponent) <= target) return Scaled(m, exponent);
+            }
+
+            return Scaled(1, exponent);
+        }
+
+        private static double Scaled(int m, int exponent)
+        {
+            double power = 1;
+            for (int i = 0; i < Math.Abs(exponent); i++) power *= 10;
+            return exponent >= 0 ? m * power : m / power;
+        }
     }
 
     /// <summary>
@@ -60,7 +105,9 @@ namespace Eleven.Simulation.Harness
         public const string UnsavedPreset = "unsaved";
 
         /// <summary>The config tunables, then the player capabilities, in metadata order.</summary>
-        public static readonly ReadOnlyCollection<BenchKnob> Knobs = Array.AsReadOnly(Array.Empty<BenchKnob>());
+        public static readonly ReadOnlyCollection<BenchKnob> Knobs = Array.AsReadOnly(MakeKnobs());
+
+        private static readonly BenchCandidate s_reference = new BenchCandidate(SpikeScenario.Config(), PlayerCapabilities.Reference);
 
         private BenchCandidate(SimConfig config, PlayerCapabilities capabilities)
         {
@@ -69,7 +116,7 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>The technical reference: the spike's config and <see cref="PlayerCapabilities.Reference"/>.</summary>
-        public static BenchCandidate Reference => new BenchCandidate(new SimConfig(), default);
+        public static BenchCandidate Reference => s_reference;
 
         /// <summary>The values of an existing config and player.</summary>
         public static BenchCandidate From(SimConfig config, PlayerCapabilities capabilities) => new BenchCandidate(config, capabilities);
@@ -81,24 +128,66 @@ namespace Eleven.Simulation.Harness
         public PlayerCapabilities Capabilities { get; }
 
         /// <summary>A knob's value, by name.</summary>
-        public double Get(string name) => 0;
+        public double Get(string name)
+        {
+            BenchKnob knob = Find(name) ?? throw new ArgumentException($"'{name}' is not a bench knob.", nameof(name));
+            return knob.OnPlayer ? Capabilities.Get(name) : Config.Get(name);
+        }
 
         /// <summary>The standard practice start under these values: the spike's start with this player.</summary>
-        public SimState PracticeStart() => SpikeScenario.InitialState(Config);
+        public SimState PracticeStart() => SpikeScenario.InitialState(Config, Capabilities);
 
         /// <summary>The state hash of <see cref="PracticeStart"/>.</summary>
-        public ulong PracticeStartHash() => 0;
+        public ulong PracticeStartHash() => new Simulator(Config, PracticeStart()).StateHash();
 
         /// <summary>How many knobs differ from <paramref name="other"/>, bit for bit.</summary>
-        public int ChangesFrom(BenchCandidate other) => 0;
+        public int ChangesFrom(BenchCandidate other)
+        {
+            int changes = 0;
+            foreach (BenchKnob k in Knobs)
+            {
+                if (BitConverter.DoubleToInt64Bits(Get(k.Name)) != BitConverter.DoubleToInt64Bits(other.Get(k.Name))) changes++;
+            }
+
+            return changes;
+        }
 
         /// <summary><see cref="ReferencePreset"/> for the technical reference values, otherwise <see cref="UnsavedPreset"/>.</summary>
-        public string PresetName => ReferencePreset;
+        public string PresetName => ChangesFrom(s_reference) == 0 ? ReferencePreset : UnsavedPreset;
 
         /// <summary>These values with some changed. Refused whole, with the knob and its range named, if any change is invalid.</summary>
         public bool TryWith(IEnumerable<KeyValuePair<string, double>> changes, out BenchCandidate? result, out string problem)
         {
-            result = this;
+            result = null;
+            var config = new List<KeyValuePair<string, double>>();
+            PlayerCapabilities capabilities = Capabilities;
+            foreach (KeyValuePair<string, double> change in changes)
+            {
+                BenchKnob? knob = Find(change.Key);
+                if (knob == null)
+                {
+                    problem = $"'{change.Key}' is not a bench knob.";
+                    return false;
+                }
+
+                problem = RangeProblem(knob, change.Value);
+                if (problem.Length > 0) return false;
+                if (knob.OnPlayer) capabilities = capabilities.With(knob.Name, change.Value);
+                else config.Add(change);
+            }
+
+            SimConfig made;
+            try
+            {
+                made = config.Count == 0 ? Config : Config.With(config);
+            }
+            catch (ArgumentException e)
+            {
+                problem = e.Message;
+                return false;
+            }
+
+            result = new BenchCandidate(made, capabilities);
             problem = "";
             return true;
         }
@@ -108,10 +197,30 @@ namespace Eleven.Simulation.Harness
         /// min, start max, step, step decimals, value. Numbers are IEEE-754 bits in hex; an absent
         /// starting range is "-".
         /// </summary>
-        public string Describe() => "";
+        public string Describe()
+        {
+            var text = new StringBuilder();
+            foreach (BenchKnob k in Knobs)
+            {
+                TunableParameter p = k.Parameter;
+                text.Append(k.Group).Append('\t').Append(k.Name).Append('\t').Append(k.Label).Append('\t').Append(p.Unit).Append('\t')
+                    .Append(Bits(p.Min)).Append('\t').Append(Bits(p.Max)).Append('\t')
+                    .Append(p.StartMin.HasValue ? Bits(p.StartMin.Value) : "-").Append('\t')
+                    .Append(p.StartMax.HasValue ? Bits(p.StartMax.Value) : "-").Append('\t')
+                    .Append(Bits(k.Step)).Append('\t').Append(k.StepDecimals.ToString(CultureInfo.InvariantCulture)).Append('\t')
+                    .Append(Bits(Get(k.Name))).Append('\n');
+            }
+
+            return text.ToString();
+        }
 
         /// <summary>Every value, one <c>name=bits</c> line per knob: what the page sends back to apply.</summary>
-        public string Values() => "";
+        public string Values()
+        {
+            var text = new StringBuilder();
+            foreach (BenchKnob k in Knobs) text.Append(k.Name).Append('=').Append(Bits(Get(k.Name))).Append('\n');
+            return text.ToString();
+        }
 
         /// <summary>
         /// Reads <see cref="Values"/>. Every knob must appear exactly once with a valid value, or the
@@ -119,12 +228,90 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static bool TryParse(string values, out BenchCandidate? candidate, out string problem)
         {
-            candidate = Reference;
-            problem = "";
-            return true;
+            candidate = null;
+            var given = new Dictionary<string, double>();
+            foreach (string raw in (values ?? "").Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0) continue;
+                int equals = line.IndexOf('=');
+                string name = equals < 0 ? line : line.Substring(0, equals);
+                BenchKnob? knob = Find(name);
+                if (knob == null)
+                {
+                    problem = $"'{name}' is not a bench knob.";
+                    return false;
+                }
+
+                if (equals < 0 || !TryFromBits(line.Substring(equals + 1), out double value))
+                {
+                    problem = $"{knob.Label} has no readable value (16 hex digits of its IEEE-754 bits).";
+                    return false;
+                }
+
+                if (given.ContainsKey(name))
+                {
+                    problem = $"{knob.Label} is given twice.";
+                    return false;
+                }
+
+                given.Add(name, value);
+            }
+
+            var changes = new List<KeyValuePair<string, double>>(Knobs.Count);
+            foreach (BenchKnob k in Knobs)
+            {
+                if (!given.TryGetValue(k.Name, out double value))
+                {
+                    problem = $"Missing {k.Label}: every knob must be given.";
+                    return false;
+                }
+
+                changes.Add(new KeyValuePair<string, double>(k.Name, value));
+            }
+
+            return s_reference.TryWith(changes, out candidate, out problem);
         }
 
         /// <summary>A double as its IEEE-754 bits, 16 hex digits.</summary>
-        public static string Bits(double value) => "";
+        public static string Bits(double value) =>
+            BitConverter.DoubleToInt64Bits(value).ToString("x16", CultureInfo.InvariantCulture);
+
+        /// <summary>Reads <see cref="Bits"/>: exactly 16 hex digits.</summary>
+        public static bool TryFromBits(string text, out double value)
+        {
+            value = 0;
+            if (text == null || text.Length != 16) return false;
+            if (!ulong.TryParse(text, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out ulong bits)) return false;
+            value = BitConverter.Int64BitsToDouble(unchecked((long)bits));
+            return true;
+        }
+
+        private static BenchKnob? Find(string name)
+        {
+            foreach (BenchKnob k in Knobs)
+            {
+                if (k.Name == name) return k;
+            }
+
+            return null;
+        }
+
+        // Empty if the value may be applied.
+        private static string RangeProblem(BenchKnob knob, double value)
+        {
+            TunableParameter p = knob.Parameter;
+            if (double.IsNaN(value) || double.IsInfinity(value)) return $"{knob.Label} must be a finite number.";
+            if (value >= p.Min && value <= p.Max) return "";
+            return string.Format(CultureInfo.InvariantCulture, "{0} must be within {1:G6}–{2:G6} {3}; got {4:G6}.", knob.Label, p.Min, p.Max, p.Unit, value);
+        }
+
+        private static BenchKnob[] MakeKnobs()
+        {
+            var knobs = new List<BenchKnob>(SimConfig.Tunables.Count + PlayerCapabilities.Parameters.Count);
+            foreach (TunableParameter p in SimConfig.Tunables) knobs.Add(new BenchKnob(p, onPlayer: false));
+            foreach (TunableParameter p in PlayerCapabilities.Parameters) knobs.Add(new BenchKnob(p, onPlayer: true));
+            return knobs.ToArray();
+        }
     }
 }
