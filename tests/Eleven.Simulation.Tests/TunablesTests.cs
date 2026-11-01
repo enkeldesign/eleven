@@ -70,7 +70,7 @@ namespace Eleven.Simulation.Tests
             TunableParameter[] researched = SimConfig.Tunables.Where(p => p.StartMin.HasValue).ToArray();
 
             // #24: kick speed, loft, spin/curve, bounce and ground friction have research-derived starting ranges.
-            foreach (string name in new[] { "kickSpeed", "kickLoft", "kickSideSpin", "magnusCoefficient", "bounceRestitution", "bounceTangentialRetention", "rollingFriction" })
+            foreach (string name in new[] { "kickSpeed", "kickLoft", "kickSideSpin", "magnusCoefficient", "bounceRestitution", "bounceTangentialRetention", "bounceSpinRetention", "rollingFriction" })
             {
                 Assert.Contains(researched, p => p.Name == name);
             }

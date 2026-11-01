@@ -22,7 +22,7 @@ namespace Eleven.Simulation.Harness
     public static class SpikeScenario
     {
         public const string Id = "spike-1";
-        public const int Version = 3;
+        public const int Version = 4;
         public const ulong Seed = 0x0E1E7E2026UL;
         public const int ControllerId = 1;
         public const int PlayerId = 1;
@@ -66,7 +66,7 @@ namespace Eleven.Simulation.Harness
             new Segment(76, 1.0, 0.1, Aimed),                 // kick held: the first wind-up ends out of reach, the next connects
             new Segment(89, 1.0, 0.1, null, 0, 1),            // sideways aftertouch: bend it left
             new Segment(110, 0.0, 0.0),                       // stop and watch the ball fly
-            new Segment(240, 1.0, 0.205),                     // run to a point past the ball's resting place
+            new Segment(240, 1.0, 0.191),                     // run to a point past the ball's resting place
             new Segment(790, 0.0, 0.0),                       // stop
             new Segment(840, -1.0, 0.0, Return, 1, 0),        // run back at the ball, kick held, back aftertouch to lift it
             new Segment(960, 0.0, 0.0),                       // stand still to the end

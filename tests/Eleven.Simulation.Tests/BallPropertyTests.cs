@@ -222,8 +222,10 @@ namespace Eleven.Simulation.Tests
         public void Spin_never_grows() => Holds(SpinNeverGrows);
 
         [Fact]
+        // The mutant grows spin past where the step began. Scaling the step's own result would only
+        // grow it where a drawn decay is smaller than the scaling, which a re-seeded fuzz may never draw.
         public void The_spin_check_catches_growing_spin() =>
-            CatchesMutant(SpinNeverGrows, s => WithAfter(s, b => { b.Spin = b.Spin * 1.001; return b; }));
+            CatchesMutant(SpinNeverGrows, s => WithAfter(s, b => { b.Spin = s.Before.Spin * 1.001; return b; }));
 
         [Fact]
         public void A_ball_at_rest_stays_at_rest() => Holds(RestStaysRest);

@@ -315,6 +315,9 @@ namespace Eleven.Simulation
                     double keep = Config.BounceTangentialRetention;
                     ball.Velocity = new Vec3(ball.Velocity.X * keep, ball.Velocity.Y * keep, up);
                     ball.Position = new Vec3(ball.Position.X, ball.Position.Y, radius);
+
+                    // Ground contact removes most of the spin (#40), so repeated hops stop curving.
+                    ball.Spin *= Config.BounceSpinRetention;
                     events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
                 }
 
