@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Eleven.Simulation.Harness;
-using Eleven.Simulation.Maths;
 using Xunit;
 
 namespace Eleven.Simulation.Tests
@@ -10,9 +9,9 @@ namespace Eleven.Simulation.Tests
     {
         // Records the scripted scenario from tick `from` for `steps` steps, the way a host would,
         // adding an unowned and a stale command so rejections are part of the recording too.
-        private static (Simulator live, CommandRecording recording, List<SimEvent> events) RecordScenario(MathBackend backend, long from, int steps)
+        private static (Simulator live, CommandRecording recording, List<SimEvent> events) RecordScenario(long from, int steps)
         {
-            SimConfig config = SpikeScenario.Config(backend);
+            SimConfig config = SpikeScenario.Config();
             var live = new Simulator(config, SpikeScenario.InitialState(config));
             ScenarioRunner.Continue(live, stopAtTick: from);
 
@@ -33,14 +32,14 @@ namespace Eleven.Simulation.Tests
         }
 
         [Theory]
-        [InlineData(MathBackend.Portable, 0)]
-        [InlineData(MathBackend.SystemMath, 500)]
-        public void Replaying_a_recording_reproduces_the_session(MathBackend backend, long from)
+        [InlineData(0)]
+        [InlineData(500)]
+        public void Replaying_a_recording_reproduces_the_session(long from)
         {
-            var (live, recording, liveEvents) = RecordScenario(backend, from, 1200);
+            var (live, recording, liveEvents) = RecordScenario(from, 1200);
 
             var replayEvents = new List<SimEvent>();
-            Simulator replay = recording.Replay(SpikeScenario.Config(backend), replayEvents);
+            Simulator replay = recording.Replay(SpikeScenario.Config(), replayEvents);
 
             Assert.Equal(from + 1200, replay.Tick);
             Assert.Equal(live.StateHash(), replay.StateHash());
@@ -52,7 +51,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_recording_survives_its_encoding_bit_for_bit()
         {
-            var (live, recording, _) = RecordScenario(MathBackend.Portable, 100, 600);
+            var (live, recording, _) = RecordScenario(100, 600);
 
             byte[] bytes = recording.Encode();
             CommandRecording decoded = CommandRecording.Decode(bytes);
@@ -60,7 +59,7 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(bytes, decoded.Encode());
             Assert.Equal(100, decoded.StartTick);
             Assert.Equal(600, decoded.StepCount);
-            Assert.Equal(live.StateHash(), decoded.Replay(SpikeScenario.Config(MathBackend.Portable)).StateHash());
+            Assert.Equal(live.StateHash(), decoded.Replay(SpikeScenario.Config()).StateHash());
         }
     }
 }

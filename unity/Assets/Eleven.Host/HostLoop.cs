@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
-using Eleven.Simulation.Maths;
 using UnityEngine;
 
 namespace Eleven.Host
@@ -26,11 +25,9 @@ namespace Eleven.Host
         private const int MaxStepsPerFrame = 8;
         private const int TraceEveryTicks = 60;
         private const int ReplayCheckEveryTicks = 300;
-        private static readonly MathBackend[] Backends = { MathBackend.SystemMath, MathBackend.Portable };
 
         private readonly List<Command> _commands = new List<Command>(1);
         private readonly List<SimEvent> _events = new List<SimEvent>();
-        private readonly Dictionary<MathBackend, string[]> _scenarioResults = new Dictionary<MathBackend, string[]>();
         private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
         private readonly FramePacing _pacing = new FramePacing();
 
@@ -64,7 +61,7 @@ namespace Eleven.Host
             string url = Application.absoluteURL ?? "";
             _trace = url.Contains("trace");
 
-            _config = SpikeScenario.Config(MathBackend.Portable);
+            _config = SpikeScenario.Config();
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _view = new PitchView(_config, transform);
@@ -75,13 +72,9 @@ namespace Eleven.Host
             _lastTime = Time.realtimeSinceStartupAsDouble;
             _loadSeconds = PageSeconds();
 
-            Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} maths={_config.MathBackend} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
+            Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
 
-            if (url.Contains("autorun"))
-            {
-                RunScenario(MathBackend.SystemMath);
-                RunScenario(MathBackend.Portable);
-            }
+            if (url.Contains("autorun")) RunScenario();
         }
 
         private void OnDestroy() => _input?.Dispose();
@@ -101,8 +94,7 @@ namespace Eleven.Host
             _input.Sample(_layout);
 
             if (_input.ResetTapped) ResetMatch();
-            if (_input.MathsTapped) SwitchMaths();
-            if (_input.RunTapped) RunScenario(_config.MathBackend);
+            if (_input.RunTapped) RunScenario();
 
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
@@ -180,43 +172,26 @@ namespace Eleven.Host
             _recording = CommandRecording.StartFrom(_simulator);
             _input.Clear();
             RememberPrevious();
-            Log($"ELEVEN reset maths={_config.MathBackend}");
-        }
-
-        /// <summary>Continues the live match from its current state under the other maths backend.</summary>
-        private void SwitchMaths()
-        {
-            MathBackend next = _config.MathBackend == MathBackend.Portable ? MathBackend.SystemMath : MathBackend.Portable;
-            _config = SpikeScenario.Config(next);
-            _simulator = new Simulator(_config, _simulator.CopyState());
-            _recording = CommandRecording.StartFrom(_simulator);
-            Log($"ELEVEN maths={next} config={_config.Hash:x16}");
+            Log("ELEVEN reset");
         }
 
         /// <summary>Runs the whole issue 1 scenario inside this build and shows its hashes.</summary>
-        private void RunScenario(MathBackend backend)
+        private void RunScenario()
         {
             double started = Time.realtimeSinceStartupAsDouble;
-            ScenarioRun run = ScenarioRunner.Run(SpikeScenario.Config(backend));
+            ScenarioRun run = ScenarioRunner.Run(SpikeScenario.Config());
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
 
             ulong final = run.TickHashes[run.TickHashes.Count - 1];
             ulong digest = run.SequenceDigest();
-            _scenarioResults[backend] = new[]
-            {
-                FormattableString.Invariant($"{backend}, {milliseconds:F0} ms"),
-                $"digest {digest:x16}",
-                $"final  {final:x16}",
-            };
             _resultLines.Clear();
-            foreach (MathBackend b in Backends)
-            {
-                if (_scenarioResults.TryGetValue(b, out string[] lines)) _resultLines.AddRange(lines);
-            }
+            _resultLines.Add(FormattableString.Invariant($"Scenario, {milliseconds:F0} ms"));
+            _resultLines.Add($"digest {digest:x16}");
+            _resultLines.Add($"final  {final:x16}");
 
             _resultFitChecked = false;
             UpdateLayout(force: false);
-            Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} maths={backend} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
+            Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
         private void UpdateLayout(bool force)
@@ -238,7 +213,6 @@ namespace Eleven.Host
 
             Button(_layout.ResetButton, "Reset");
             Button(_layout.RunButton, "Run scenario");
-            Button(_layout.MathsButton, $"Maths: {_config.MathBackend}");
 
             if (_resultLines.Count > 0) DrawResult();
 
@@ -262,21 +236,17 @@ namespace Eleven.Host
             Panel(panel);
             float pad = _layout.Padding;
             float widest = 0;
-            // Two columns put each backend's three lines side by side.
-            int columns = _layout.ResultColumns;
-            int rows = columns == 2 ? HudLayout.MaxResultLines / 2 : _resultLines.Count;
-            float columnWidth = (panel.width - 2 * pad) / columns;
+            float columnWidth = panel.width - 2 * pad;
             for (int i = 0; i < _resultLines.Count; i++)
             {
-                int column = i / rows, row = i % rows;
-                var line = new Rect(panel.x + pad + column * columnWidth, panel.y + pad * 0.5f + row * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
+                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
                 GUI.Label(line, _resultLines[i], _resultStyle);
                 widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
             }
 
             if (_resultFitChecked) return;
             _resultFitChecked = true;
-            float needed = Mathf.Min(rows, _resultLines.Count) * _layout.ResultLineHeight + pad;
+            float needed = _resultLines.Count * _layout.ResultLineHeight + pad;
             bool fits = widest <= columnWidth && needed <= panel.height + 0.01f && panel.yMax <= _layout.ScreenHeight
                 && !panel.Overlaps(_layout.PlayArea);
             Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));

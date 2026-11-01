@@ -20,7 +20,6 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed class Simulator
     {
-        private readonly SimMath _math;
         private readonly SimState _state;
         private readonly CanonicalWriter _hashScratch = new CanonicalWriter();
 
@@ -31,7 +30,6 @@ namespace Eleven.Simulation
         public Simulator(SimConfig config, SimState initial)
         {
             Config = config ?? throw new ArgumentNullException(nameof(config));
-            _math = new SimMath(config.MathBackend);
             _state = Validate(initial ?? throw new ArgumentNullException(nameof(initial))).Clone();
         }
 
@@ -142,7 +140,7 @@ namespace Eleven.Simulation
             // Scale by the largest component first, so a huge finite move can't overflow when squared.
             double largest = Math.Max(Math.Abs(c.Move.X), Math.Abs(c.Move.Y));
             Vec2 scaled = c.Move * (1 / largest);
-            return new Command(c.ControllerId, c.Tick, scaled * (1 / _math.Sqrt(scaled.LengthSquared)), c.Kick);
+            return new Command(c.ControllerId, c.Tick, scaled * (1 / SimMath.Sqrt(scaled.LengthSquared)), c.Kick);
         }
 
         private Command? FindAccepted(int controllerId)
@@ -165,7 +163,7 @@ namespace Eleven.Simulation
             double changeSquared = change.LengthSquared;
             if (changeSquared > maxChange * maxChange)
             {
-                change = change * (maxChange / _math.Sqrt(changeSquared));
+                change = change * (maxChange / SimMath.Sqrt(changeSquared));
             }
 
             dot.Velocity += change;
@@ -174,7 +172,7 @@ namespace Eleven.Simulation
             // Below a millimetre per second the dot counts as stopped and keeps its last heading.
             if (dot.Velocity.LengthSquared > 1e-6)
             {
-                dot.Heading = _math.Atan2(dot.Velocity.Y, dot.Velocity.X);
+                dot.Heading = SimMath.Atan2(dot.Velocity.Y, dot.Velocity.X);
             }
         }
 
@@ -190,11 +188,11 @@ namespace Eleven.Simulation
             var spinDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickSpin, dot.Id);
 
             double direction = dot.Heading + (2 * directionDraws.NextUniform() - 1) * Config.KickDirectionError;
-            double horizontal = Config.KickSpeed * _math.Cos(Config.KickLoft);
+            double horizontal = Config.KickSpeed * SimMath.Cos(Config.KickLoft);
             ball.Velocity = new Vec3(
-                horizontal * _math.Cos(direction),
-                horizontal * _math.Sin(direction),
-                Config.KickSpeed * _math.Sin(Config.KickLoft));
+                horizontal * SimMath.Cos(direction),
+                horizontal * SimMath.Sin(direction),
+                Config.KickSpeed * SimMath.Sin(Config.KickLoft));
             ball.Spin = new Vec3(0, 0, Config.KickSideSpin * (0.5 + 0.5 * spinDraws.NextUniform()));
 
             dot.KickCooldown = Config.KickCooldownTicks;
@@ -232,7 +230,7 @@ namespace Eleven.Simulation
             double speedSquared = velocity.LengthSquared;
             if (speedSquared > 0)
             {
-                double speed = _math.Sqrt(speedSquared);
+                double speed = SimMath.Sqrt(speedSquared);
                 double slowed = speed - Config.RollingFriction * Config.Gravity * dt;
                 velocity = slowed <= Config.StopSpeed ? Vec2.Zero : velocity * (slowed / speed);
             }

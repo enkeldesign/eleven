@@ -21,12 +21,12 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
 - `HostBootstrap` creates the host after the (empty) scene loads. Camera, pitch, dot and ball are built at runtime from generated textures.
 - `HostLoop` accumulates real time and spends it in whole simulation ticks, interpolating between the last two ticks for drawing. A frame longer than 0.25 s (backgrounded tab, pause, stall) is dropped, not caught up, so the simulation never advances for unseen time. At most 8 ticks run per frame.
 - `TouchAdapter` reads touches (and the mouse, as one finger on desktop) through the Input System. It produces owned commands for controller 1: a floating stick in the left half and a kick button bottom right.
-- On screen: the build id (CI run number and commit) with the page's load time and dropped frames over the last minute of play (for the device session, #5), **Reset**, **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash), and **Maths** (switches between the `Portable` and `SystemMath` backends).
-- URL options for testing: `?autorun` runs the scenario with both backends at start; `?trace` logs state every 60 ticks and every event.
+- On screen: the build id (CI run number and commit) with the page's load time and dropped frames over the last minute of play (for the device session, #5), **Reset**, and **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash).
+- URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event.
 
 ## Building
 
-CI (`.github/workflows/unity.yml`) builds the Web player with GameCI on every PR and on `main`, then smoke-tests it in headless Chromium. The test drives the stick and buttons with the mouse, compares the in-build scenario digests with the .NET hash logs, and checks the rendered colours. Results appear as check annotations; the player and screenshots are uploaded as artifacts.
+CI (`.github/workflows/unity.yml`) builds the Web player with GameCI on every PR and on `main`, then smoke-tests it in headless Chromium. The test drives the stick and buttons with the mouse, fails unless the in-build scenario digest equals the .NET hash log's (ADR-0002), and checks the rendered colours. Results appear as check annotations; the player and screenshots are uploaded as artifacts.
 
 Locally, with Unity 6000.3 installed:
 

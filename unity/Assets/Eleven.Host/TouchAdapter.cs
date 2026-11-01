@@ -62,7 +62,6 @@ namespace Eleven.Host
         public bool KickHeld { get; private set; }
 
         public bool RunTapped { get; private set; }
-        public bool MathsTapped { get; private set; }
         public bool ResetTapped { get; private set; }
 
         /// <summary>Reads this frame's pointers. Call once per frame before generating commands.</summary>
@@ -70,7 +69,7 @@ namespace Eleven.Host
         {
             CollectPointers(layout.ScreenHeight);
 
-            RunTapped = MathsTapped = ResetTapped = false;
+            RunTapped = ResetTapped = false;
             KickHeld = false;
             foreach (Pointer p in _pointers)
             {
@@ -83,7 +82,6 @@ namespace Eleven.Host
                 string target;
                 if (layout.InKick(at)) { _kickRequested = true; target = "kick"; }
                 else if (layout.RunButton.Contains(at)) { RunTapped = true; target = "run"; }
-                else if (layout.MathsButton.Contains(at)) { MathsTapped = true; target = "maths"; }
                 else if (layout.ResetButton.Contains(at)) { ResetTapped = true; target = "reset"; }
                 else if (_stickPointer == NoPointer && layout.StickZone.Contains(at))
                 {

@@ -12,9 +12,9 @@ namespace Eleven.Simulation.Maths
     /// Accuracy against <c>System.Math</c> is asserted in <c>PortableMathTests</c>; the bounds and
     /// their justification are in docs/simulation/determinism.md.
     ///
-    /// This is spike evidence for ADR-0002, not ELEVEN's final maths model.
+    /// ELEVEN's maths model (ADR-0002): the only implementation behind <see cref="SimMath"/>.
     /// </summary>
-    internal sealed class PortableMathBackend : IMathBackend
+    internal static class PortableMath
     {
         // π/2 split into three parts (fdlibm's pio2_1, pio2_2, pio2_3). The first two have 33
         // significant bits, so n × part is exact for |n| < 2^20, which covers |x| ≤ 1e5.
@@ -28,7 +28,7 @@ namespace Eleven.Simulation.Maths
         private const double PiOver4 = 7.85398163397448278999e-01;
         private const double TanPiOver8 = 4.14213562373095034470e-01;
 
-        public double Sin(double x)
+        public static double Sin(double x)
         {
             double r = Reduce(x, out int quadrant);
             switch (quadrant)
@@ -40,7 +40,7 @@ namespace Eleven.Simulation.Maths
             }
         }
 
-        public double Cos(double x)
+        public static double Cos(double x)
         {
             double r = Reduce(x, out int quadrant);
             switch (quadrant)
@@ -52,7 +52,7 @@ namespace Eleven.Simulation.Maths
             }
         }
 
-        public double Atan2(double y, double x)
+        public static double Atan2(double y, double x)
         {
             double ax = Math.Abs(x);
             double ay = Math.Abs(y);
@@ -77,7 +77,7 @@ namespace Eleven.Simulation.Maths
             return BitConverter.DoubleToInt64Bits(y) < 0 ? -angle : angle;
         }
 
-        public double Sqrt(double x)
+        public static double Sqrt(double x)
         {
             // Bring subnormal and tiny inputs into the normal range, where the bit-level guess works.
             double scale = 1;

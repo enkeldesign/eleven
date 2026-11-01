@@ -7,8 +7,9 @@ namespace Eleven.Simulation
     {
         /// <summary>
         /// Version of the state schema. Bumped whenever the snapshot layout changes (INV-7).
+        /// Version 2 dropped the maths backend from the header (ADR-0002).
         /// </summary>
-        public const int StateSchemaVersion = 1;
+        public const int StateSchemaVersion = 2;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

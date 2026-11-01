@@ -1,6 +1,5 @@
 using System;
 using Eleven.Simulation.Encoding;
-using Eleven.Simulation.Maths;
 
 namespace Eleven.Simulation
 {
@@ -10,13 +9,13 @@ namespace Eleven.Simulation
     ///
     /// The physics values are spike placeholders chosen to exercise the code, not tuned feel.
     /// Changing a field's meaning, or adding or reordering fields, bumps <see cref="FormatVersion"/>.
+    /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model.
     /// </summary>
     public sealed class SimConfig
     {
-        public const int FormatVersion = 1;
+        public const int FormatVersion = 2;
 
         public SimConfig(
-            MathBackend mathBackend = MathBackend.Portable,
             int tickRate = 60,
             double gravity = 9.81,
             double ballRadius = 0.11,
@@ -39,12 +38,9 @@ namespace Eleven.Simulation
             int kickCooldownTicks = 30,
             double goalLineX = 52.5)
         {
-            if (mathBackend != MathBackend.SystemMath && mathBackend != MathBackend.Portable)
-                throw new ArgumentOutOfRangeException(nameof(mathBackend));
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
 
-            MathBackend = mathBackend;
             TickRate = tickRate;
             Gravity = gravity;
             BallRadius = ballRadius;
@@ -70,9 +66,6 @@ namespace Eleven.Simulation
             // Fails on non-finite values, so a broken config can't be constructed.
             Hash = Fnv1a64.Hash(Encode());
         }
-
-        /// <summary>Which implementation sits behind the maths boundary.</summary>
-        public MathBackend MathBackend { get; }
 
         /// <summary>Fixed steps per simulated second.</summary>
         public int TickRate { get; }
@@ -148,7 +141,6 @@ namespace Eleven.Simulation
         {
             var w = new CanonicalWriter();
             w.WriteInt32(FormatVersion);
-            w.WriteInt32((int)MathBackend);
             w.WriteInt32(TickRate);
             w.WriteDouble(Gravity, nameof(Gravity));
             w.WriteDouble(BallRadius, nameof(BallRadius));

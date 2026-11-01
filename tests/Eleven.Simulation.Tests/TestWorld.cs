@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Eleven.Simulation.Maths;
 
 namespace Eleven.Simulation.Tests
 {
@@ -10,7 +9,7 @@ namespace Eleven.Simulation.Tests
         public const int DotId = 1;
         public const int BallId = 100;
 
-        public static SimConfig Config(MathBackend backend = MathBackend.Portable) => new SimConfig(mathBackend: backend);
+        public static SimConfig Config() => new SimConfig();
 
         public static SimState State(SimConfig config, Vec3? ballPosition = null, Vec3? ballVelocity = null, Vec3? ballSpin = null,
             Vec2? dotPosition = null) => new SimState

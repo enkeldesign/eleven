@@ -34,7 +34,7 @@ namespace Eleven.Simulation
         public int Ticks() => Environment.TickCount;                     // ELEVEN001 TickCount
         public void Spawn() => new Thread(() => { }).Start();            // ELEVEN001 Thread
         public Task Later() => Task.Delay(1);                            // ELEVEN001 Task ×2
-        public double Wave(double x) => Math.Sin(x);                     // ELEVEN002 outside backend
+        public double Wave(double x) => Math.Sin(x);                     // ELEVEN002
         public float Root(float x) => MathF.Sqrt(x);                     // ELEVEN002
         public double Power(double x) => Math.Pow(x, 2);                 // ELEVEN002
     }
@@ -42,16 +42,6 @@ namespace Eleven.Simulation
 
         private const string Allowed = @"
 using System;
-
-namespace Eleven.Simulation.Maths
-{
-    internal sealed class SystemMathBackend
-    {
-        public double Sin(double x) => Math.Sin(x);
-        public double Atan2(double y, double x) => Math.Atan2(y, x);
-        public double Sqrt(double x) => Math.Sqrt(x);
-    }
-}
 
 namespace Eleven.Simulation
 {
@@ -94,15 +84,28 @@ namespace Eleven.Simulation
         }
 
         [Fact]
-        public void The_allowed_fixture_passes_including_system_math_inside_its_backend()
+        public void The_allowed_fixture_passes()
         {
             Assert.Empty(Analyze(Allowed));
         }
 
+        // ADR-0002 left one maths model, so no type is exempt any more, not even one in the maths
+        // namespace named like the removed System.Math backend.
         [Fact]
-        public void The_backend_exception_does_not_extend_to_other_types_in_its_namespace()
+        public void No_type_may_call_system_math_transcendentals()
         {
-            string source = Allowed.Replace("class SystemMathBackend", "class SomeOtherBackend");
+            const string source = @"
+using System;
+
+namespace Eleven.Simulation.Maths
+{
+    internal sealed class SystemMathBackend
+    {
+        public double Sin(double x) => Math.Sin(x);
+        public double Atan2(double y, double x) => Math.Atan2(y, x);
+        public double Sqrt(double x) => Math.Sqrt(x);
+    }
+}";
 
             Assert.Equal(3, Analyze(source).Count(d => d.Id == BannedApiAnalyzer.MathBoundaryId));
         }

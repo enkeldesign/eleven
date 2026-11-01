@@ -3,26 +3,20 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Eleven.Simulation.Harness;
-using Eleven.Simulation.Maths;
 using Xunit;
 
 namespace Eleven.Simulation.Tests
 {
     /// <summary>
     /// The scripted 60-second scenario: it exercises every claimed behaviour, repeats exactly, and
-    /// continues identically from a snapshot. Determinism is compared within one maths backend;
-    /// the two backends are not required to hash alike.
+    /// continues identically from a snapshot.
     /// </summary>
     public class ScenarioTests
     {
-        public static IEnumerable<object[]> Backends() =>
-            new[] { new object[] { MathBackend.SystemMath }, new object[] { MathBackend.Portable } };
-
-        [Theory]
-        [MemberData(nameof(Backends))]
-        public void The_scenario_exercises_every_claimed_behaviour(MathBackend backend)
+        [Fact]
+        public void The_scenario_exercises_every_claimed_behaviour()
         {
-            SimConfig config = SpikeScenario.Config(backend);
+            SimConfig config = SpikeScenario.Config();
             var trace = new List<SimState>();
             ScenarioRun run = ScenarioRunner.Run(config, s => trace.Add(s.Clone()));
             Assert.Equal(SpikeScenario.DurationTicks(config) + 1, trace.Count);
@@ -74,11 +68,10 @@ namespace Eleven.Simulation.Tests
             Assert.DoesNotContain(run.Events, e => e.Kind == SimEventKind.CommandRejected);
         }
 
-        [Theory]
-        [MemberData(nameof(Backends))]
-        public void A_different_seed_changes_the_outcome(MathBackend backend)
+        [Fact]
+        public void A_different_seed_changes_the_outcome()
         {
-            SimConfig config = SpikeScenario.Config(backend);
+            SimConfig config = SpikeScenario.Config();
             SimState other = SpikeScenario.InitialState(config);
             other.Seed ^= 1;
 
@@ -88,23 +81,21 @@ namespace Eleven.Simulation.Tests
             Assert.NotEqual(scripted.FinalState.Ball.Position.X, reseeded.FinalState.Ball.Position.X);
         }
 
-        [Theory]
-        [MemberData(nameof(Backends))]
-        public void Running_twice_gives_identical_hashes_every_tick(MathBackend backend)
+        [Fact]
+        public void Running_twice_gives_identical_hashes_every_tick()
         {
-            ScenarioRun first = ScenarioRunner.Run(SpikeScenario.Config(backend));
-            ScenarioRun second = ScenarioRunner.Run(SpikeScenario.Config(backend));
+            ScenarioRun first = ScenarioRunner.Run(SpikeScenario.Config());
+            ScenarioRun second = ScenarioRunner.Run(SpikeScenario.Config());
 
             Assert.Equal(first.TickHashes, second.TickHashes);
             Assert.Equal(first.Events, second.Events);
             Assert.Equal(first.SequenceDigest(), second.SequenceDigest());
         }
 
-        [Theory]
-        [MemberData(nameof(Backends))]
-        public void Restoring_a_snapshot_into_a_fresh_simulator_continues_identically(MathBackend backend)
+        [Fact]
+        public void Restoring_a_snapshot_into_a_fresh_simulator_continues_identically()
         {
-            SimConfig config = SpikeScenario.Config(backend);
+            SimConfig config = SpikeScenario.Config();
             ScenarioRun uninterrupted = ScenarioRunner.Run(config);
 
             // Mid-run, ball in the air, ball rolling beyond the line, dot kicking back, ball at rest.
@@ -122,42 +113,24 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void Both_backends_agree_closely_although_their_hashes_may_not()
-        {
-            // A broken backend would drift far from System.Math; a correct one stays within
-            // rounding. The hashes themselves are not compared.
-            ScenarioRun system = ScenarioRunner.Run(SpikeScenario.Config(MathBackend.SystemMath));
-            ScenarioRun portable = ScenarioRunner.Run(SpikeScenario.Config(MathBackend.Portable));
-
-            Assert.Equal(system.Events, portable.Events);
-            Assert.True(Distance(system.FinalState.Ball.Position, portable.FinalState.Ball.Position) < 1e-6);
-            Assert.True(Distance(system.FinalState.Dots[0].Position, portable.FinalState.Dots[0].Position) < 1e-6);
-        }
-
-        [Fact]
         public void The_hash_log_identifies_its_run_and_covers_every_tick()
         {
-            SimConfig config = SpikeScenario.Config(MathBackend.Portable);
+            SimConfig config = SpikeScenario.Config();
             ScenarioRun run = ScenarioRunner.Run(config);
             var text = new StringWriter();
             HashLog.Write(text, run);
             string[] lines = text.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-            Assert.Equal("# eleven-hashlog v1", lines[0]);
+            Assert.Equal("# eleven-hashlog v2", lines[0]);
             Assert.Contains($"# scenario: {SpikeScenario.Name}", lines);
             Assert.Contains($"# build: {SimulationInfo.BuildId}", lines);
             Assert.Contains($"# state-schema: {SimulationInfo.StateSchemaVersion}", lines);
             Assert.Contains($"# tick-convention: {SimulationInfo.TickConvention}", lines);
             Assert.Contains($"# config-hash: {config.Hash:x16}", lines);
-            Assert.Contains("# maths: Portable", lines);
             Assert.Contains($"# seed: {SpikeScenario.Seed:x16}", lines);
             Assert.Equal(SpikeScenario.DurationTicks(config) + 1, lines.Count(l => !l.StartsWith("#")));
             Assert.Equal($"{SpikeScenario.DurationTicks(config)} {run.TickHashes[run.TickHashes.Count - 1]:x16}", lines[lines.Length - 2]);
             Assert.Equal($"# digest: {run.SequenceDigest():x16}", lines[lines.Length - 1]);
         }
-
-        private static double Distance(Vec3 a, Vec3 b) => Math.Sqrt((a - b).X * (a - b).X + (a - b).Y * (a - b).Y + (a - b).Z * (a - b).Z);
-
-        private static double Distance(Vec2 a, Vec2 b) => Math.Sqrt((a - b).LengthSquared);
     }
 }
