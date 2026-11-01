@@ -39,7 +39,7 @@ A command is `(controller id, tick, move vector, kick intent or none, aftertouch
 
 ## Events
 
-`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach). They're the simulation's internal events, not the match-result contract (INV-14).
+`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach), `QuickPassResolved` (player; `Other` is the chosen receiver, or 0 for a free pass). They're the simulation's internal events, not the match-result contract (INV-14).
 
 **Goal-line crossing** is geometry only. The ball is beyond the line when it is wholly past it: `x − radius > GoalLineX`. `BallState.BeyondGoalLine` records whether that held after the previous step. The event fires only on the step where it goes from false to true, so a ball resting beyond the line emits one event, not one per tick. A ball that comes back behind the line clears the flag and can cross again.
 

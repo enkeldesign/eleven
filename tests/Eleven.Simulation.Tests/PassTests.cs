@@ -231,6 +231,63 @@ namespace Eleven.Simulation.Tests
             Assert.InRange(Launch(0.2), -0.2, 0.2);
         }
 
+        // Codex on #43: with a weak kick, a receiver running back past the ball is reachable only for a
+        // while. The pass must take that first chance, not aim behind the passer at the horizon.
+        [Fact]
+        public void A_runner_coming_back_past_the_ball_is_met_at_the_first_chance()
+        {
+            var config = Config();
+            PlayerCapabilities weak = Profile(anticipation: 1);
+            weak.KickPower = 0.1;
+            PlayerState p = Passer(Ask(config, Drill(config, weak, (new Vec2(14, 0), new Vec2(-5.0 / 7, 0), 0))));
+
+            Assert.Equal(FirstReceiver, p.WindUpTarget);
+            Assert.True(Math.Cos(p.WindUpDirection) > 0, $"aimed behind the passer: {p.WindUpDirection} rad");
+        }
+
+        // A receiver no pass can reach within the search gets the pass where they are: no lead into nowhere.
+        [Fact]
+        public void A_receiver_no_pass_can_catch_gets_it_where_they_are()
+        {
+            var config = Config();
+            PlayerCapabilities weak = Profile(anticipation: 1);
+            weak.KickPower = 0.1;
+            PlayerState p = Passer(Ask(config, Drill(config, weak, (new Vec2(5, 5), new Vec2(0, 5.0 / 7), 0))));
+
+            // Where they are when the pass is resolved: after this step's movement, one step up their run.
+            Assert.Equal(FirstReceiver, p.WindUpTarget);
+            Assert.Equal(Math.Atan2(5 + 5 * config.TickSeconds, 4.5), p.WindUpDirection, 12);
+        }
+
+        // Codex on #43: with no wind-up the pass resolves and connects in one step, and the drill must
+        // still see who it was for.
+        [Fact]
+        public void The_drill_measures_a_pass_that_connects_on_its_own_step()
+        {
+            SimConfig config = Config().With("kickWindUpSeconds", 0);
+            PassOutcome outcome = PassDrill.Run(config, Profile(anticipation: 1), PassDrill.CrossingRun);
+
+            Assert.Equal("crossing-run", outcome.Target);
+            Assert.True(outcome.LeadMetres > 1, $"lead {outcome.LeadMetres}");
+            Assert.True(outcome.ClosestApproachMetres < 0.5, $"misses by {outcome.ClosestApproachMetres} m");
+            Assert.True(outcome.ArrivalSpeedMps > 0);
+        }
+
+        [Fact]
+        public void Resolving_a_quick_pass_reports_its_target()
+        {
+            var config = Config();
+            var events = new List<SimEvent>();
+            SimState state = Drill(config, Profile(), (new Vec2(10, 0), Vec2.Zero, 0));
+            new Simulator(config, state).Step(Commands(0, state, true), events);
+            Assert.Contains(new SimEvent(0, SimEventKind.QuickPassResolved, PlayerId, other: FirstReceiver), events);
+
+            events.Clear();
+            SimState alone = Drill(config, Profile());
+            new Simulator(config, alone).Step(Commands(0, alone, true), events);
+            Assert.Contains(new SimEvent(0, SimEventKind.QuickPassResolved, PlayerId, other: 0), events);
+        }
+
         // ---- Replay, snapshots, validation ----------------------------------------------------------
 
         [Fact]

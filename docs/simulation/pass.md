@@ -51,7 +51,9 @@ Resolved in the kick stage of the step that accepts the intent, after every play
    - **Why current positions, not predicted ones.** Charging candidates by the distance to their predicted receive point would penalise a runner for running away: the opposite of preferring receivers ahead and advancing. The first design on #38 did that; the drill measured it, and it was changed before the PR.
 3. **The aim** leads the chosen receiver:
    - It is their position plus the run the passer reads (`passAnticipation` × their velocity), projected to the first ball step after contact at which a pass weighted for that point can get there.
-   - The search bisects over whole steps (a fixed number of iterations), up to 8 s ahead. It rolls the ball with the simulation's own integration (`IntegrateBall`, INV-13).
+   - The search rolls the ball with the simulation's own integration (`IntegrateBall`, INV-13), up to 8 s ahead. It scans forward in strides of a tenth of a second for the first reachable step, then bisects inside that stride.
+   - Reachability can switch back: with a weak kick, a runner coming back past the ball is reachable only for a while. That's why the search takes the first chance rather than assuming one crossing (Codex on #43).
+   - If no step within the horizon is reachable, the pass goes where the receiver is.
    - At anticipation 0 the pass goes where the receiver is; at 1 it meets a runner who keeps their line and speed.
 4. **The weight:** a ground pass (loft 0) launched at `√(arrival² + 2 · rollingFriction · g · distance)`, so it arrives at about `arrival = passArrivalSpeed + run`.
    - `run` is the read run's speed along the pass, never below 0. So a standing receiver gets `passArrivalSpeed`, and a runner a ball `passArrivalSpeed` faster than their run, which they can take in stride.
@@ -61,7 +63,7 @@ Resolved in the kick stage of the step that accepts the intent, after every play
 
 **Then it is an ordinary kick.** The resolved line, strength and loft go into the same wind-up and launch as a manual kick, so the passer's `kickError` shapes the execution of assisted passes too, and aftertouch can shape them.
 
-**State.** `PlayerState.WindUpTarget` holds the chosen receiver's id through the wind-up, so presentation can show who the pass is for (INV-12). It is 0 for a manual kick, a free pass, or no wind-up. Player ids are therefore positive, and `Simulator` refuses a target outside a wind-up or off the passer's team.
+**State and events.** `PlayerState.WindUpTarget` holds the chosen receiver's id through the wind-up, so presentation can show who the pass is for (INV-12). The `QuickPassResolved` event (subject: the passer; `Other`: the receiver, or 0 for a free pass) reports the choice even when there is no wind-up and the pass connects on its own step. It is 0 for a manual kick, a free pass, or no wind-up. Player ids are therefore positive, and `Simulator` refuses a target outside a wind-up or off the passer's team.
 
 **Lanes.** With no opponents yet, an obvious lane is simply the shortest; lane blocking comes with opponents.
 

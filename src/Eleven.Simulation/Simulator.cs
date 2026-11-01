@@ -259,6 +259,7 @@ namespace Eleven.Simulation
             else if (command.HasValue && ready && command.Value.QuickPass)
             {
                 ResolveQuickPass(index);
+                events.Add(new SimEvent(tick, SimEventKind.QuickPassResolved, player.Id, other: player.WindUpTarget));
             }
 
             if (player.WindUpTicks == 0) return;
@@ -367,8 +368,11 @@ namespace Eleven.Simulation
         /// <summary>
         /// Where the passer expects to meet the receiver: their position plus the run the passer
         /// reads (anticipation × velocity), at the first ball step after contact by which a pass
-        /// weighted for that point can get there. The search bisects over whole steps (a fixed number
-        /// of iterations) and rolls the ball with the simulation's own integration (INV-13).
+        /// weighted for that point can get there. Whether a step is reachable can switch back, for a
+        /// runner coming past the ball with a weak kick, so the search scans forward in strides of a
+        /// tenth of a second for the first reachable one and bisects inside that stride. With no
+        /// reachable step within the horizon the pass goes where the receiver is. It rolls the ball
+        /// with the simulation's own integration (INV-13).
         /// </summary>
         private Vec2 ReceivePoint(Vec2 position, Vec2 read, Vec2 origin, double hardest)
         {
@@ -387,16 +391,24 @@ namespace Eleven.Simulation
             }
 
             if (Reaches(1)) return At(1);
-            if (!Reaches(horizon)) return At(horizon);
-            int lo = 1, hi = horizon;
-            while (hi - lo > 1)
+            int stride = Math.Max(1, Config.TickRate / 10);
+            for (int lo = 1; lo < horizon; lo += stride)
             {
-                int mid = lo + (hi - lo) / 2;
-                if (Reaches(mid)) hi = mid;
-                else lo = mid;
+                int hi = Math.Min(lo + stride, horizon);
+                if (!Reaches(hi)) continue;
+
+                // Unreachable at lo, reachable at hi: bisect for the step between.
+                while (hi - lo > 1)
+                {
+                    int mid = lo + (hi - lo) / 2;
+                    if (Reaches(mid)) hi = mid;
+                    else lo = mid;
+                }
+
+                return At(hi);
             }
 
-            return At(hi);
+            return position;
         }
 
         // Whether a ground pass launched at `speed` rolls `distance` within `steps` ball steps.

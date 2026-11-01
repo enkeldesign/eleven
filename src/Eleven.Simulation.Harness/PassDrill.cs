@@ -121,7 +121,11 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < receivers.Count; i++) into.Add(new Command(Controller(i), tick, receivers[i].Stick));
         }
 
-        /// <summary>Runs the drill and measures the pass against the receiver it was meant for.</summary>
+        /// <summary>
+        /// Runs the drill and measures the pass against the receiver it was meant for. The target comes
+        /// from the <see cref="SimEventKind.QuickPassResolved"/> event and the line from the kick, so a
+        /// pass that connects on its own step, with no wind-up, is measured too.
+        /// </summary>
         public static PassOutcome Run(SimConfig config, PlayerCapabilities passer, IReadOnlyList<PracticeReceiver> receivers, List<SimEvent>? events = null)
         {
             var sim = new Simulator(config, InitialState(config, passer, receivers));
@@ -130,6 +134,7 @@ namespace Eleven.Simulation.Harness
             var outcome = new PassOutcome { ClosestApproachMetres = double.PositiveInfinity };
             int ticks = (int)(MaxSeconds * config.TickRate);
             bool launched = false;
+            Vec2 receiverAtIntent = Vec2.Zero, ballAtIntent = Vec2.Zero;
             for (int t = 0; t < ticks; t++)
             {
                 commands.Clear();
@@ -138,28 +143,30 @@ namespace Eleven.Simulation.Harness
                 sim.Step(commands, events);
                 SimState state = sim.PeekState();
 
-                if (t == 0)
-                {
-                    PlayerState p = state.Players[0];
-                    outcome.TargetId = p.WindUpTarget;
-                    outcome.Line = p.WindUpDirection;
-                    int index = p.WindUpTarget - PasserId - 1;
-                    outcome.Target = p.WindUpTarget == 0 ? null : receivers[index].Name;
-                    if (p.WindUpTarget != 0)
-                    {
-                        // The lead: how far the aim point lies ahead of the receiver along the pass line.
-                        Vec2 toReceiver = state.Players[index + 1].Position - state.Ball.Position.Horizontal;
-                        double along = toReceiver.X * SimMath.Cos(p.WindUpDirection) + toReceiver.Y * SimMath.Sin(p.WindUpDirection);
-                        outcome.LeadMetres = SimMath.Sqrt(Math.Max(0, toReceiver.LengthSquared - along * along));
-                    }
-                }
-
                 for (int e = before; e < events.Count; e++)
                 {
-                    if (events[e].Kind == SimEventKind.Kicked && !launched)
+                    SimEvent ev = events[e];
+                    if (ev.Kind == SimEventKind.QuickPassResolved && ev.Subject == PasserId)
+                    {
+                        outcome.TargetId = ev.Other;
+                        outcome.Target = ev.Other == 0 ? null : receivers[ev.Other - PasserId - 1].Name;
+                        if (ev.Other != 0) receiverAtIntent = state.Players[ev.Other - PasserId].Position;
+                        ballAtIntent = state.Ball.Position.Horizontal;
+                    }
+                    else if (ev.Kind == SimEventKind.Kicked && ev.Subject == PasserId && !launched)
                     {
                         launched = true;
                         outcome.LaunchSpeedMps = SimMath.Sqrt(state.Ball.Velocity.LengthSquared);
+
+                        // The intended line: what the kick shapes against, set when it connects.
+                        outcome.Line = state.Players[0].AftertouchDirection;
+                        if (outcome.TargetId != 0)
+                        {
+                            // The lead: how far the line runs from the receiver as they were at the intent.
+                            Vec2 toReceiver = receiverAtIntent - ballAtIntent;
+                            double along = toReceiver.X * SimMath.Cos(outcome.Line) + toReceiver.Y * SimMath.Sin(outcome.Line);
+                            outcome.LeadMetres = SimMath.Sqrt(Math.Max(0, toReceiver.LengthSquared - along * along));
+                        }
                     }
                 }
 

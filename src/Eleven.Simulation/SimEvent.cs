@@ -28,6 +28,12 @@ namespace Eleven.Simulation
         /// high, so the kick doesn't connect.
         /// </summary>
         KickMissed = 5,
+
+        /// <summary>
+        /// Subject: the passer. Emitted when a quick pass is resolved (#38); <see cref="SimEvent.Other"/>
+        /// is the chosen receiver's id, or 0 for a free pass. Presentation can show the receiver.
+        /// </summary>
+        QuickPassResolved = 6,
     }
 
     /// <summary>
@@ -42,22 +48,28 @@ namespace Eleven.Simulation
         public readonly int Subject;
         public readonly CommandRejection Rejection;
 
-        public SimEvent(long tick, SimEventKind kind, int subject, CommandRejection rejection = CommandRejection.None)
+        /// <summary>A second id where the kind has one: the receiver of <see cref="SimEventKind.QuickPassResolved"/>; otherwise 0.</summary>
+        public readonly int Other;
+
+        public SimEvent(long tick, SimEventKind kind, int subject, CommandRejection rejection = CommandRejection.None, int other = 0)
         {
             Tick = tick;
             Kind = kind;
             Subject = subject;
             Rejection = rejection;
+            Other = other;
         }
 
         public bool Equals(SimEvent other) =>
-            Tick == other.Tick && Kind == other.Kind && Subject == other.Subject && Rejection == other.Rejection;
+            Tick == other.Tick && Kind == other.Kind && Subject == other.Subject && Rejection == other.Rejection && Other == other.Other;
 
         public override bool Equals(object? obj) => obj is SimEvent other && Equals(other);
 
-        public override int GetHashCode() => unchecked((int)Tick * 31 + (int)Kind * 7 + Subject * 3 + (int)Rejection);
+        public override int GetHashCode() => unchecked((int)Tick * 31 + (int)Kind * 7 + Subject * 3 + (int)Rejection + Other * 13);
 
         public override string ToString() =>
-            Rejection == CommandRejection.None ? $"{Tick} {Kind} {Subject}" : $"{Tick} {Kind} {Subject} {Rejection}";
+            Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
+            : Kind == SimEventKind.QuickPassResolved ? $"{Tick} {Kind} {Subject} {Other}"
+            : $"{Tick} {Kind} {Subject}";
     }
 }
