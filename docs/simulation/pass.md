@@ -50,10 +50,13 @@ Resolved in the kick stage of the step that accepts the intent, after every play
    - Ahead costs the distance, to the side (1 + w/2) times it, and straight back (1 + w) times it. So an obvious receiver ahead beats a closer one behind, all else equal, and a back pass to someone right beside the passer is still possible.
    - **Why current positions, not predicted ones.** Charging candidates by the distance to their predicted receive point would penalise a runner for running away: the opposite of preferring receivers ahead and advancing. The first design on #38 did that; the drill measured it, and it was changed before the PR.
 3. **The aim** leads the chosen receiver:
-   - It is their position plus `passAnticipation` × their velocity, projected to the first ball step after contact at which a pass weighted for that point can get there.
+   - It is their position plus the run the passer reads (`passAnticipation` × their velocity), projected to the first ball step after contact at which a pass weighted for that point can get there.
    - The search bisects over whole steps (a fixed number of iterations), up to 8 s ahead. It rolls the ball with the simulation's own integration (`IntegrateBall`, INV-13).
    - At anticipation 0 the pass goes where the receiver is; at 1 it meets a runner who keeps their line and speed.
-4. **The weight:** a ground pass (loft 0) launched at `√(passArrivalSpeed² + 2 · rollingFriction · g · distance)`, so it arrives at about `passArrivalSpeed`. It is capped by the passer's kick power × `kickSpeed`.
+4. **The weight:** a ground pass (loft 0) launched at `√(arrival² + 2 · rollingFriction · g · distance)`, so it arrives at about `arrival = passArrivalSpeed + run`.
+   - `run` is the read run's speed along the pass, never below 0. So a standing receiver gets `passArrivalSpeed`, and a runner a ball `passArrivalSpeed` faster than their run, which they can take in stride.
+   - It is capped by the passer's kick power × `kickSpeed`.
+   - **Why relative to the run.** At a fixed 4 m/s, a pass to a runner going away at 5 m/s is slower than him at the end. The search then met him 51 m out after 7.5 s, and the ball overtook him a metre to the side on the way. The drill measured this, and the rule changed before the PR.
 5. **No candidate:** a free pass along the heading, weighted the same way for `passFreeDistance`.
 
 **Then it is an ordinary kick.** The resolved line, strength and loft go into the same wind-up and launch as a manual kick, so the passer's `kickError` shapes the execution of assisted passes too, and aftertouch can shape them.
@@ -74,7 +77,7 @@ The config's values are in `SimConfig.Tunables`:
 | Name | Unit | Valid | Starting | Reference |
 | --- | --- | --- | --- | --- |
 | `passMaxRange` | m | 5–60 | — | 30 |
-| `passArrivalSpeed` | m/s | 0–15 | — | 4 |
+| `passArrivalSpeed` (over the receiver's run) | m/s | 0–15 | — | 4 |
 | `passBackWeight` | factor | 0–10 | — | 2 |
 | `passFreeDistance` | m | 1–40 | — | 10 |
 
@@ -124,22 +127,24 @@ None has a research range; the ranges are open questions for SOL on #38. They ar
 
 ### Findings for the test bench
 
-| Drill / profile | Target | Lead | Misses by | Arrives at |
-| --- | --- | --- | --- | --- |
-| standard / reference | ahead-advancing | 1.8 m | 6.5 m | 5.0 m/s |
-| standard / literal-narrow | ahead-advancing | 0 m | 13.4 m | 5.0 m/s |
-| standard / reader-wide | wide | 0 m | 0.02 m | 4.0 m/s |
-| standard / all-round | wide | 0 m | 0.02 m | 4.0 m/s |
-| crossing-run / reference | crossing-run | 10.4 m | 2.4 m | 4.3 m/s |
-| crossing-run / literal-narrow | crossing-run | 0 m | 7.4 m | — |
-| crossing-run / reader-wide | crossing-run | 13.5 m | 0.04 m | 4.0 m/s |
+| Drill / profile | Target | Lead | Closest approach | When | Ball speed then |
+| --- | --- | --- | --- | --- | --- |
+| standard / reference | ahead-advancing | 1.3 m | 1.3 m | 4.3 s | 6.6 m/s |
+| standard / literal-narrow | ahead-advancing | 0 m | 13.4 m | 1.5 s | 5.0 m/s |
+| standard / reader-wide | wide | 0 m | 0.02 m | 1.5 s | 4.0 m/s |
+| standard / all-round | wide | 0 m | 0.02 m | 1.5 s | 4.0 m/s |
+| crossing-run / reference | crossing-run | 9.6 m | 2.3 m | 2.3 s | 4.8 m/s |
+| crossing-run / literal-narrow | crossing-run | 0 m | 7.4 m | 1.5 s | 5.3 m/s |
+| crossing-run / reader-wide | crossing-run | 11.3 m | 0.1 m | 2.4 s | 5.4 m/s |
+
+For a pass aimed behind its receiver, the closest approach is when the ball passes them by, not a reception.
 
 - **Perception decides the target.** Only a passer who sees the near wide receiver picks them. No profile picks the closer receiver behind.
-- **Anticipation decides the lead.** Reading 0, 0.75 and all of a crossing run misses the runner by 7.4 m, 2.4 m and 0.04 m.
-- **The reference reads three quarters of a run, so it underleads.**
-  - A runner going straight away at 5 m/s is missed by 6.5 m.
-  - The pass is weighted to arrive at 4 m/s, slower than the runner, so passes to runners going away are long and get there late.
-  - If the bench finds that quick passes to runners feel unhelpful, the knobs are `passAnticipation` and `passArrivalSpeed`.
+- **Anticipation decides the lead.** Reading none, three quarters and all of a crossing run comes within 7.4 m, 2.3 m and 0.1 m of the runner.
+- **The reference reads three quarters of a run, so it underleads by design.**
+  - It misses a runner going straight away at 5 m/s by 1.3 m, and a crossing one by 2.3 m.
+  - Its pass to the runner going away still takes 4.3 s to reach him, because he is running away from the ball.
+  - If the bench finds quick passes to runners unhelpful, the knobs are `passAnticipation` and `passArrivalSpeed`.
 
 ## Tests and properties
 
@@ -150,7 +155,10 @@ None has a research range; the ranges are open questions for SOL on #38. They ar
   - only teammates in view and in range are candidates, with a free pass when there is none;
   - perception decides who is noticed;
   - a manual kick takes precedence.
-- **Lead:** a full reader leads a crossing runner to under 0.5 m, a literal passer misses by over 3 m, and the lead changes deterministically with anticipation.
+- **Lead:**
+  - a full reader leads a crossing runner to under 0.5 m, and a literal passer misses by over 3 m;
+  - the lead changes deterministically with anticipation;
+  - in the drill, a full reader meets a runner going away, with the ball arriving faster than he runs.
 - **Weight and execution:** a standing receiver gets the configured arrival speed, and the passer's execution error shapes assisted passes.
 - **Replay, snapshots and validation:**
   - commands recorded before assistance replay tick for tick;

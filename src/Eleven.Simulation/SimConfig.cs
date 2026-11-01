@@ -180,7 +180,11 @@ namespace Eleven.Simulation
         /// <summary>m. The furthest teammate a quick pass considers (#38).</summary>
         public double PassMaxRange { get; }
 
-        /// <summary>m/s. The speed a quick pass is weighted to arrive at, at the predicted receive point.</summary>
+        /// <summary>
+        /// m/s. How much faster than the receiver's run along it a quick pass is weighted to arrive,
+        /// at the predicted receive point: a standing receiver gets this speed, a runner the speed of
+        /// their run plus this, so they can take it in stride.
+        /// </summary>
         public double PassArrivalSpeed { get; }
 
         /// <summary>
