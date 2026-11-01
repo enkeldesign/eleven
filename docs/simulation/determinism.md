@@ -117,7 +117,9 @@ The "this felt wrong" capture (#44, part of #27) is evidence, not telemetry: it 
 2. The host build and simulation build (strings), and the tick convention (string).
 3. The state schema, config format and recording format (int32 each).
 4. The config hash and seed (uint64), the window's start tick (int64) and its step count (int32).
-5. The active preset, control candidate and note (strings). These are `technical-reference` and `none` until #46 and #10.
+5. The active preset, control candidate and note (strings).
+   - **The preset** is `technical-reference` for the reference values. It is `unsaved` for any other test bench candidate ([test-bench.md](test-bench.md)), until #46 names presets.
+   - **The control candidate** is `none` until #10.
 6. The config payload (`SimConfig.Encode`) and the window's `CommandRecording`, each as an int32 length, then bytes.
 7. The live run's tick hashes (int32 count, uint64 each): the hash at the window's start and after every step.
 8. Its events (int32 count, then tick int64, and kind, subject, rejection and other as int32 each).

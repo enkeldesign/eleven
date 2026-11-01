@@ -26,6 +26,11 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
   - **A press** asks for an optional note with the browser's own prompt. No frames run while it is open, so play does not go on under it.
   - **The capture** is the last ten seconds (`FeelRecorder`/`FeelCapture`, [determinism.md](../docs/simulation/determinism.md#feel-captures)). It is kept in the page's `localStorage` (the last five) and announced.
   - **SAVE CAPTURE** shares or downloads it as `.elfc`, for `eleven-sim replay`. Nothing leaves the device unless it is saved.
+- **TEST BENCH** (#45) is a real page button in the top row, left of Reset. It opens the FEEL / TEST BENCH panel, which lists every tunable from the metadata ([test-bench.md](../docs/simulation/test-bench.md)).
+  - **Editing** a knob makes a pending candidate.
+  - **APPLY / RETRY** starts a fresh run under it: a new immutable config, from the practice start.
+  - **Opening and closing** the panel leave the run alone.
+  - **The page keeps the keyboard:** the player no longer captures keys, since the host reads none.
 - URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event, and each capture in base64 (the smoke test replays them with .NET).
 
 ## Building
