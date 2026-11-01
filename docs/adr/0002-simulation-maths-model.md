@@ -41,7 +41,7 @@ The simulation uses the **`Portable`** maths backend: our own transcendental fun
 - **One entry point:** every `sin`, `cos`, `atan2` and `sqrt` in simulation code goes through `SimMath`, and `SimMath` uses `Portable` in every shipped build. New transcendental functions are added to `Portable`, with a stated domain, an error bound against `System.Math` and a test, before simulation code may use them.
 - **Doubles, not fixed point:** state stays in `double`, because `Portable` doubles already agree across the runtimes we ship.
 - **`SystemMath` is removed** from the simulation once this ADR is accepted, together with the maths switch in the spike host. The `MathBackend` config field goes with it. That changes the config hash, so the hash baselines change in a separate commit with that reason.
-- **Cross-runtime hashes are a gate, not a report.** CI compares the WebGL build's per-tick hash digest with .NET's on every build, and a mismatch fails the build. In the spike it was only a warning.
+- **Cross-runtime hashes are a gate, not a report.** CI compares the WebGL build's per-tick hash digest with .NET's on every build, and a mismatch fails the build. In the spike it was only a warning. The gate is implemented by #22, together with removing `SystemMath`. Until #22 merges, a mismatch is still only a warning.
 
 ## Alternatives considered
 
@@ -79,7 +79,7 @@ The simulation uses the **`Portable`** maths backend: our own transcendental fun
   - **ELEVEN002:** `System.Math` or `MathF` outside the maths backend.
   - Once `SystemMathBackend` is removed, no simulation type may call them except for exact helpers.
 - **`Portable`'s tests:** domains, error bounds and special values.
-- **CI cross-runtime gate:** the WebGL digest must equal the .NET digest, on every PR and on `main`.
+- **CI cross-runtime gate (from #22):** the WebGL digest must equal the .NET digest, on every PR and on `main`.
 - **On devices:** each new shipped runtime gets a determinism-matrix row on #5, or its successor, before release.
 
 ## Approval
