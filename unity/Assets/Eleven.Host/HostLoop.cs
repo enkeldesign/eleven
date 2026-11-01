@@ -31,6 +31,9 @@ namespace Eleven.Host
         private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
         private readonly FramePacing _pacing = new FramePacing();
 
+        // The last ten seconds, for THIS FELT WRONG (#44). It only reads the simulator.
+        private readonly FeelRecorder _feel = new FeelRecorder();
+
         private SimConfig _config;
         private Simulator _simulator;
         private CommandRecording _recording;
@@ -64,6 +67,8 @@ namespace Eleven.Host
             _config = SpikeScenario.Config();
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
+            _feel.Start(_simulator);
+            FeltWrongInstall();
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
@@ -95,6 +100,10 @@ namespace Eleven.Host
 
             if (_input.ResetTapped) ResetMatch();
             if (_input.RunTapped) RunScenario();
+
+            // Before this frame's steps, so the window ends where the press was.
+            string feltWrong = TakeFeltWrong();
+            if (feltWrong != null) CaptureFeltWrong(feltWrong);
 
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
@@ -134,6 +143,7 @@ namespace Eleven.Host
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
             _simulator.Step(_commands, _events);
+            _feel.Record(_simulator, _commands, _events);
 
             if (!_trace) return;
 
@@ -170,9 +180,40 @@ namespace Eleven.Host
         {
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
+            _feel.Start(_simulator);
             _input.Clear();
             RememberPrevious();
             Log("ELEVEN reset");
+        }
+
+        /// <summary>
+        /// THIS FELT WRONG (#44): the last ten seconds, the snapshot that starts them, this build, the
+        /// config and the note, kept on the device for SAVE CAPTURE. Only reads the simulation. In
+        /// trace mode the capture is also logged in base64, so the CI smoke test can replay it with .NET.
+        /// </summary>
+        private void CaptureFeltWrong(string note)
+        {
+            FeelCapture capture = _feel.Capture(_simulator, _buildId, "technical-reference", "none", note);
+            byte[] bytes = capture.Encode();
+            double seconds = capture.StepCount * _config.TickSeconds;
+            string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{_simulator.Tick}.elfc");
+            string summary = FormattableString.Invariant($"the last {seconds:F0} s");
+            KeepCapture(bytes, name, summary);
+
+            string line = FormattableString.Invariant(
+                $"ELEVEN capture ticks={capture.StartTick}..{capture.StartTick + capture.StepCount} steps={capture.StepCount} bytes={bytes.Length} name={name}");
+            Log(_trace ? $"{line} base64={Convert.ToBase64String(bytes)}" : line);
+        }
+
+        private static string SafeName(string s)
+        {
+            var chars = s.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                if (!char.IsLetterOrDigit(chars[i]) && chars[i] != '-') chars[i] = '-';
+            }
+
+            return new string(chars);
         }
 
         /// <summary>Runs the whole issue 1 scenario inside this build and shows its hashes.</summary>
@@ -200,6 +241,8 @@ namespace Eleven.Host
                 && _layout.ResultLines == _resultLines.Count) return;
 
             _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
+            Rect felt = _layout.FeltWrongButton;
+            FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
@@ -311,10 +354,41 @@ namespace Eleven.Host
         [DllImport("__Internal")]
         private static extern double ElevenPageMilliseconds();
 
+        [DllImport("__Internal")]
+        private static extern void ElevenFeltWrongInstall();
+
+        [DllImport("__Internal")]
+        private static extern void ElevenFeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
+
+        [DllImport("__Internal")]
+        private static extern string ElevenTakeFeltWrong();
+
+        [DllImport("__Internal")]
+        private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
+
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
+
+        private static void FeltWrongInstall() => ElevenFeltWrongInstall();
+
+        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
+            ElevenFeltWrongPlace(x, y, width, height, screenWidth, screenHeight);
+
+        private static string TakeFeltWrong() => ElevenTakeFeltWrong();
+
+        private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
+
+        // Outside the web build there is no page: no button, and captures go to persistent data.
+        private static void FeltWrongInstall() { }
+
+        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
+
+        private static string TakeFeltWrong() => null;
+
+        private static void KeepCapture(byte[] bytes, string name, string summary) =>
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, name), bytes);
 #endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);

@@ -15,6 +15,9 @@
 //     player and ball inside the area the HUD leaves free
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
+//   - THIS FELT WRONG (#44): a labelled page button of at least 44 x 44 px; a press asks for a note,
+//     captures the last 10 s without stopping play, keeps it in localStorage and offers SAVE CAPTURE.
+//     The capture is written to <output dir>/capture-<pass>.elfc for CI to replay with .NET
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -253,6 +256,40 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // The live session's command recording replays headlessly in the build to the same state.
     const replay = await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromKick);
     check('recording replays to the live state', !!replay && replay.match[4] === 'match', replay ? replay.match[0].replace('ELEVEN ', '') : 'no recording check');
+
+    // THIS FELT WRONG (#44): a real page button, found by its accessible name, big enough to hit.
+    const felt = page.getByRole('button', { name: /felt wrong/i });
+    const feltBox = await felt.boundingBox().catch(() => null);
+    check('felt-wrong is a labelled button of at least 44 x 44 px', !!feltBox && feltBox.width >= 44 && feltBox.height >= 44,
+      feltBox ? `${feltBox.width.toFixed(0)} x ${feltBox.height.toFixed(0)} px at ${feltBox.x.toFixed(0)},${feltBox.y.toFixed(0)}` : 'no button named "felt wrong"');
+    const fromCapture = logs.length;
+    page.once('dialog', (d) => d.accept(`smoke ${name}`));
+    if (useTouch) await felt.tap();
+    else await felt.click();
+    const captured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)(?: base64=(\S+))?/, 10_000, fromCapture);
+    check('felt-wrong captures the last seconds', !!captured && Number(captured.match[3]) > 0 && !!captured.match[6],
+      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, ${captured.match[4]} bytes, ${captured.match[5]}` : 'no capture line');
+    if (captured?.match[6]) {
+      fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), Buffer.from(captured.match[6], 'base64'));
+      notes.capture = `${captured.match[3]} steps, ${captured.match[4]} bytes`;
+    }
+
+    // Capturing doesn't stop play: the simulation runs on past the capture.
+    const afterCapture = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+    check('play goes on after a capture', !!captured && !!afterCapture && Number(afterCapture[1]) > Number(captured.match[2]),
+      afterCapture ? `trace tick ${afterCapture[1]} after capture end ${captured?.match[2]}` : 'no trace line after the capture');
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').length).catch(() => 0);
+    check('the capture is kept on the device', kept >= 1, `${kept} capture(s) in localStorage`);
+    const announced = await page.locator('#eleven-capture-status').textContent().catch(() => '');
+    check('the capture is announced', /Captured/.test(announced ?? ''), announced || 'empty status');
+    const save = page.getByRole('button', { name: /save capture/i });
+    if (name === 'desktop') {
+      const [download] = await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)]);
+      check('SAVE CAPTURE downloads it', !!download && /\.elfc$/.test(download.suggestedFilename()),
+        download ? download.suggestedFilename() : 'no download');
+    } else {
+      check('SAVE CAPTURE is offered', await save.isVisible().catch(() => false), 'button visible');
+    }
 
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
     const png = await canvas.screenshot({ path: path.join(outDir, `${name}-canvas.png`) });

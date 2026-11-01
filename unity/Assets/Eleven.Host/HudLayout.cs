@@ -42,6 +42,13 @@ namespace Eleven.Host
         public readonly float KickRadius;
         public readonly Rect PlayArea;
 
+        /// <summary>
+        /// Where the page lays its THIS FELT WRONG button (#44), outside the play area: between the
+        /// stick and the kick button at the bottom (portrait band), or above the kick button in its
+        /// column (landscape). The page keeps it at least 44 × 44 pt.
+        /// </summary>
+        public readonly Rect FeltWrongButton;
+
         /// <summary>Lines the result panel was laid out for.</summary>
         public readonly int ResultLines;
 
@@ -100,12 +107,29 @@ namespace Eleven.Host
                 ? new Rect(safe.xMin, PlayArea.yMax, safe.width * 0.5f, safe.yMax - PlayArea.yMax)
                 : new Rect(safe.xMin, belowHud, PlayArea.xMin - safe.xMin, safe.yMax - belowHud);
 
+            // C# 9 struct rule: every field is assigned before StickDrawnRadius reads `this` below.
+            FeltWrongButton = default;
+
             // Last resort for cramped screens: the stick shrinks to fit its zone, and rests inside it,
             // so its base can always be drawn whole without covering the play.
             StickRadius = Mathf.Min(StickRadius, (Mathf.Min(StickZone.width, StickZone.height) * 0.5f - 2f) / DrawnRadiusScale);
             StickRest = new Vector2(
                 Mathf.Clamp(StickRest.x, StickZone.xMin + StickDrawnRadius, StickZone.xMax - StickDrawnRadius),
                 Mathf.Clamp(StickRest.y, StickZone.yMin + StickDrawnRadius, StickZone.yMax - StickDrawnRadius));
+
+            float buttonWidth = 2.6f * Unit, buttonHeight = 1.1f * Unit;
+            if (useBand)
+            {
+                float left = StickRest.x + StickDrawnRadius + Padding;
+                float right = KickCentre.x - KickRadius - Padding;
+                buttonWidth = Mathf.Max(0, Mathf.Min(buttonWidth, right - left));
+                FeltWrongButton = new Rect((left + right - buttonWidth) * 0.5f, safe.yMax - Padding - buttonHeight, buttonWidth, buttonHeight);
+            }
+            else
+            {
+                buttonWidth = Mathf.Min(buttonWidth, 2 * KickRadius + Padding);
+                FeltWrongButton = new Rect(KickCentre.x - buttonWidth * 0.5f, KickCentre.y - KickRadius - Padding - buttonHeight, buttonWidth, buttonHeight);
+            }
         }
 
         /// <summary>The stick base's outline is drawn this much wider than its radius.</summary>
@@ -139,7 +163,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={PlayArea.x:F0},{PlayArea.y:F0},{PlayArea.width:F0},{PlayArea.height:F0} feltWrong={FeltWrongButton.x:F0},{FeltWrongButton.y:F0},{FeltWrongButton.width:F0},{FeltWrongButton.height:F0}");
 
         // The largest font at which a line of this many characters fits in this width.
         private static int FontToFit(float width, int characters) => Mathf.FloorToInt(width / (characters * 0.62f));
