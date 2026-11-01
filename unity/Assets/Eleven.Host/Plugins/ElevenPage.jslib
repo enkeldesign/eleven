@@ -82,6 +82,21 @@ mergeInto(LibraryManager.library, {
     document.body.appendChild(felt);
     document.body.appendChild(save);
     document.body.appendChild(status);
+
+    // A capture kept on an earlier visit stays exportable: SAVE CAPTURE offers the newest one.
+    try {
+      var kept = JSON.parse(localStorage.getItem('eleven.captures') || '[]');
+      var newest = kept[kept.length - 1];
+      if (newest && newest.name && newest.data) {
+        var binary = atob(newest.data);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        window.__elevenLastCapture = { bytes: bytes, name: newest.name };
+        save.style.display = 'block';
+      }
+    } catch (e) {
+      // Storage unavailable or unreadable: nothing kept to offer.
+    }
   },
 
   // Lays the button over the host's rect, given in the canvas's backing pixels (top-left origin),

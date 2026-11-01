@@ -68,6 +68,7 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
+            AllowPageKeyboard();
             FeltWrongInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel),
                 HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
             _view = new PitchView(_config, transform);
@@ -370,6 +371,11 @@ namespace Eleven.Host
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
+        // The player captures every key on the page by default, so page controls could never be
+        // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
+        // finger), so the page keeps them.
+        private static void AllowPageKeyboard() => WebGLInput.captureAllKeyboardInput = false;
+
         private static void FeltWrongInstall(string text, string panel, string border, string focus) =>
             ElevenFeltWrongInstall(text, panel, border, focus);
 
@@ -381,6 +387,8 @@ namespace Eleven.Host
         private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
+
+        private static void AllowPageKeyboard() { }
 
         // Outside the web build there is no page: no button, and captures go to persistent data.
         private static void FeltWrongInstall(string text, string panel, string border, string focus) { }
