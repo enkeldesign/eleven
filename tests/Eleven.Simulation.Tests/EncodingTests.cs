@@ -1,6 +1,5 @@
 using System;
 using Eleven.Simulation.Encoding;
-using Eleven.Simulation.Maths;
 using Xunit;
 using static Eleven.Simulation.Tests.TestWorld;
 
@@ -14,15 +13,14 @@ namespace Eleven.Simulation.Tests
         {
             // Golden values: they change only when the config encoding or defaults change, which
             // needs its own commit with a stated reason.
-            Assert.Equal(0xd572d88ff7150194UL, new SimConfig(mathBackend: MathBackend.Portable).Hash);
+            Assert.Equal(0xd572d88ff7150194UL, new SimConfig().Hash);
             Assert.Equal(new SimConfig().Hash, new SimConfig().Hash);
         }
 
         [Fact]
-        public void Maths_backend_and_every_value_are_part_of_the_config_hash()
+        public void Every_value_is_part_of_the_config_hash()
         {
             ulong baseline = new SimConfig().Hash;
-            Assert.NotEqual(baseline, new SimConfig(mathBackend: MathBackend.SystemMath).Hash);
             Assert.NotEqual(baseline, new SimConfig(tickRate: 50).Hash);
             Assert.NotEqual(baseline, new SimConfig(goalLineX: 52.5000001).Hash);
             Assert.NotEqual(baseline, new SimConfig(kickCooldownTicks: 31).Hash);

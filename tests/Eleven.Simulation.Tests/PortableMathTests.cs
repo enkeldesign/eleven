@@ -5,13 +5,11 @@ using Xunit;
 namespace Eleven.Simulation.Tests
 {
     /// <summary>
-    /// Accuracy of the simulation-owned backend against System.Math over its supported domain.
+    /// Accuracy of the simulation's own maths (ADR-0002) against System.Math over its supported domain.
     /// The bounds are a few ulp of the results' magnitude; docs/simulation/determinism.md says why.
     /// </summary>
     public class PortableMathTests
     {
-        private static readonly SimMath Portable = new SimMath(MathBackend.Portable);
-
         // Absolute, 4 ulp of 1 (measured worst: 1 ulp of 1, 2.2e-16).
         private const double TrigBound = 9e-16;
 
@@ -28,8 +26,8 @@ namespace Eleven.Simulation.Tests
             for (int i = -200_000; i <= 200_000; i++)
             {
                 double x = i * 1e-4 * Math.PI / 2;
-                worst = Math.Max(worst, Math.Abs(Portable.Sin(x) - Math.Sin(x)));
-                worst = Math.Max(worst, Math.Abs(Portable.Cos(x) - Math.Cos(x)));
+                worst = Math.Max(worst, Math.Abs(SimMath.Sin(x) - Math.Sin(x)));
+                worst = Math.Max(worst, Math.Abs(SimMath.Cos(x) - Math.Cos(x)));
             }
 
             Assert.True(worst <= TrigBound, $"worst error {worst:e3}");
@@ -44,8 +42,8 @@ namespace Eleven.Simulation.Tests
                 // Irregular spacing so arguments don't sit on multiples of π/2.
                 double x = SimMath.MaxTrigArgument * i / 100_000.0 - 0.123456789 * (i % 7);
                 if (Math.Abs(x) > SimMath.MaxTrigArgument) continue;
-                worst = Math.Max(worst, Math.Abs(Portable.Sin(x) - Math.Sin(x)));
-                worst = Math.Max(worst, Math.Abs(Portable.Cos(x) - Math.Cos(x)));
+                worst = Math.Max(worst, Math.Abs(SimMath.Sin(x) - Math.Sin(x)));
+                worst = Math.Max(worst, Math.Abs(SimMath.Cos(x) - Math.Cos(x)));
             }
 
             Assert.True(worst <= TrigBound, $"worst error {worst:e3}");
@@ -62,7 +60,7 @@ namespace Eleven.Simulation.Tests
                     if (i == 0 && j == 0) continue;
                     double y = i * 0.37 + 0.001 * j;
                     double x = j * 0.41 - 0.002 * i;
-                    worst = Math.Max(worst, Math.Abs(Portable.Atan2(y, x) - Math.Atan2(y, x)));
+                    worst = Math.Max(worst, Math.Abs(SimMath.Atan2(y, x) - Math.Atan2(y, x)));
                 }
             }
 
@@ -78,7 +76,7 @@ namespace Eleven.Simulation.Tests
         [InlineData(5, 0)]
         public void Atan2_handles_extreme_ratios_and_axes(double y, double x)
         {
-            Assert.True(Math.Abs(Portable.Atan2(y, x) - Math.Atan2(y, x)) <= Atan2Bound);
+            Assert.True(Math.Abs(SimMath.Atan2(y, x) - Math.Atan2(y, x)) <= Atan2Bound);
         }
 
         [Fact]
@@ -89,7 +87,7 @@ namespace Eleven.Simulation.Tests
             {
                 foreach (double y in new[] { negativeZero, 0.0 })
                 {
-                    double portable = Portable.Atan2(y, x), system = Math.Atan2(y, x);
+                    double portable = SimMath.Atan2(y, x), system = Math.Atan2(y, x);
                     Assert.True(Math.Abs(portable - system) <= Atan2Bound, $"atan2({y}, {x}): {portable} vs {system}");
                     Assert.Equal(BitConverter.DoubleToInt64Bits(system) < 0, BitConverter.DoubleToInt64Bits(portable) < 0);
                 }
@@ -100,7 +98,7 @@ namespace Eleven.Simulation.Tests
         public void Sqrt_matches_system_math_from_subnormal_to_huge()
         {
             double worst = 0;
-            void Check(double x) => worst = Math.Max(worst, Math.Abs(Portable.Sqrt(x) - Math.Sqrt(x)) / Math.Sqrt(x));
+            void Check(double x) => worst = Math.Max(worst, Math.Abs(SimMath.Sqrt(x) - Math.Sqrt(x)) / Math.Sqrt(x));
 
             foreach (double subnormal in new[] { 4.9e-324, 1e-320, 3.3e-315, 1.5e-310 }) Check(subnormal);
             for (double x = 2.2250738585072014e-308; x < 1e300; x *= 1.0137) Check(x);
@@ -108,18 +106,15 @@ namespace Eleven.Simulation.Tests
             Assert.True(worst <= SqrtRelativeBound, $"worst relative error {worst:e3}");
         }
 
-        [Theory]
-        [InlineData(MathBackend.SystemMath)]
-        [InlineData(MathBackend.Portable)]
-        public void Out_of_domain_arguments_fail_the_same_way_on_both_backends(MathBackend backend)
+        [Fact]
+        public void Out_of_domain_arguments_fail_with_an_exception()
         {
-            var math = new SimMath(backend);
-            Assert.Throws<ArgumentOutOfRangeException>(() => math.Sin(SimMath.MaxTrigArgument * 2));
-            Assert.Throws<ArgumentOutOfRangeException>(() => math.Cos(double.NaN));
-            Assert.Throws<ArgumentOutOfRangeException>(() => math.Atan2(double.PositiveInfinity, 1));
-            Assert.Throws<ArgumentOutOfRangeException>(() => math.Sqrt(-1e-9));
-            Assert.Equal(0, math.Atan2(0, 0));
-            Assert.Equal(0, math.Sqrt(0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SimMath.Sin(SimMath.MaxTrigArgument * 2));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SimMath.Cos(double.NaN));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SimMath.Atan2(double.PositiveInfinity, 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SimMath.Sqrt(-1e-9));
+            Assert.Equal(0, SimMath.Atan2(0, 0));
+            Assert.Equal(0, SimMath.Sqrt(0));
         }
     }
 }

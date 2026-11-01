@@ -16,16 +16,14 @@ namespace Eleven.Simulation.Analyzers
     /// <c>System.Threading</c>).
     ///
     /// ELEVEN002: any <c>System.Math</c>/<c>MathF</c> member other than the exact helpers below,
-    /// outside the System.Math backend type. Transcendentals go through the maths boundary.
+    /// anywhere in simulation code. Transcendentals go through <c>SimMath</c>, which is backed by
+    /// the simulation's own <c>PortableMath</c> (ADR-0002).
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class BannedApiAnalyzer : DiagnosticAnalyzer
     {
         public const string NondeterministicId = "ELEVEN001";
         public const string MathBoundaryId = "ELEVEN002";
-
-        /// <summary>The one type allowed to call System.Math transcendentals.</summary>
-        public const string SystemMathBackendType = "Eleven.Simulation.Maths.SystemMathBackend";
 
         private static readonly DiagnosticDescriptor Nondeterministic = new DiagnosticDescriptor(
             NondeterministicId,
@@ -114,8 +112,7 @@ namespace Eleven.Simulation.Analyzers
             }
 
             if ((containingName == "System.Math" || containingName == "System.MathF")
-                && !ExactMathMembers.Contains(symbol.Name)
-                && !InsideSystemMathBackend(context))
+                && !ExactMathMembers.Contains(symbol.Name))
             {
                 Report(context, MathBoundary, name, memberName, "");
             }
@@ -142,20 +139,6 @@ namespace Eleven.Simulation.Analyzers
             && SymbolEqualityComparer.Default.Equals(
                 context.SemanticModel.GetSymbolInfo(access.Expression, context.CancellationToken).Symbol?.OriginalDefinition,
                 type.OriginalDefinition);
-
-        private static bool InsideSystemMathBackend(SyntaxNodeAnalysisContext context)
-        {
-            for (SyntaxNode? node = context.Node; node != null; node = node.Parent)
-            {
-                if (node is TypeDeclarationSyntax declaration)
-                {
-                    ISymbol? declared = context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken);
-                    return declared?.ToDisplayString() == SystemMathBackendType;
-                }
-            }
-
-            return false;
-        }
 
         private static void Report(SyntaxNodeAnalysisContext context, DiagnosticDescriptor descriptor,
             SimpleNameSyntax name, string api, string reason) =>

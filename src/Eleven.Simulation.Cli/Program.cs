@@ -6,17 +6,14 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
-using Eleven.Simulation.Maths;
 
 /// <summary>
-/// eleven-sim hashlog &lt;dir&gt;   write the scenario's per-tick hash log for each maths backend
-/// eleven-sim bench [runs]       measure mean simulation-step cost per tick for each backend
-/// eleven-sim trace &lt;backend&gt;  print the ball and dot every 10 ticks (for scripting the scenario)
+/// eleven-sim hashlog &lt;dir&gt;  write the scenario's per-tick hash log
+/// eleven-sim bench [runs]      measure mean simulation-step cost per tick
+/// eleven-sim trace             print the ball and dot every 10 ticks (for scripting the scenario)
 /// </summary>
 internal static class Program
 {
-    private static readonly MathBackend[] Backends = { MathBackend.SystemMath, MathBackend.Portable };
-
     private static int Main(string[] args)
     {
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -27,10 +24,10 @@ internal static class Program
                 return WriteHashLogs(args[1]);
             case "bench":
                 return Bench(args.Length > 1 ? int.Parse(args[1]) : 30);
-            case "trace" when args.Length == 2:
-                return Trace(Enum.Parse<MathBackend>(args[1]));
+            case "trace":
+                return Trace();
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace <SystemMath|Portable>");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace");
                 return 2;
         }
     }
@@ -38,25 +35,21 @@ internal static class Program
     private static int WriteHashLogs(string directory)
     {
         Directory.CreateDirectory(directory);
-        foreach (MathBackend backend in Backends)
+        ScenarioRun run = ScenarioRunner.Run(SpikeScenario.Config());
+        string path = Path.Combine(directory, $"hashlog-{SpikeScenario.Id}-v{SpikeScenario.Version}.txt");
+        using (var writer = new StreamWriter(path))
         {
-            ScenarioRun run = ScenarioRunner.Run(SpikeScenario.Config(backend));
-            string path = Path.Combine(directory, $"hashlog-{SpikeScenario.Id}-v{SpikeScenario.Version}-{backend}.txt");
-            using (var writer = new StreamWriter(path))
-            {
-                HashLog.Write(writer, run);
-            }
-
-            Console.WriteLine($"{backend}: {run.TickHashes.Count} tick hashes, digest {run.SequenceDigest():x16} -> {path}");
+            HashLog.Write(writer, run);
         }
 
+        Console.WriteLine($"{run.TickHashes.Count} tick hashes, digest {run.SequenceDigest():x16} -> {path}");
         return 0;
     }
 
     /// <summary>
     /// Times only <see cref="Simulator.Step"/>: commands are generated before the timed loop and
-    /// state hashing is timed separately. Both backends are warmed up before either is timed, so
-    /// tiered JIT compilation has settled; then timed runs alternate between backends.
+    /// state hashing is timed separately. Warm-up runs come first, so tiered JIT compilation has
+    /// settled before anything is timed.
     /// </summary>
     private static int Bench(int runs)
     {
@@ -66,27 +59,18 @@ internal static class Program
 #if DEBUG
         Console.WriteLine("WARNING: Debug build; measure in Release.");
 #endif
-        Console.WriteLine($"method: {SpikeScenario.Name} ({SpikeScenario.DurationSeconds} s), {warmUpRuns} warm-up runs per backend, " +
-            $"then {runs} timed runs per backend, alternating; Step only, state hashing timed separately");
+        Console.WriteLine($"method: {SpikeScenario.Name} ({SpikeScenario.DurationSeconds} s), {warmUpRuns} warm-up runs, " +
+            $"then {runs} timed runs; Step only, state hashing timed separately");
 
-        var benches = new List<BackendBench>();
-        foreach (MathBackend backend in Backends) benches.Add(new BackendBench(backend));
+        var bench = new ScenarioBench();
+        for (int i = 0; i < warmUpRuns; i++) bench.Run(record: false);
+        for (int i = 0; i < runs; i++) bench.Run(record: true);
 
-        for (int i = 0; i < warmUpRuns; i++)
-        {
-            foreach (BackendBench bench in benches) bench.Run(record: false);
-        }
-
-        for (int i = 0; i < runs; i++)
-        {
-            foreach (BackendBench bench in benches) bench.Run(record: true);
-        }
-
-        foreach (BackendBench bench in benches) Console.WriteLine(bench.Summary());
+        Console.WriteLine(bench.Summary());
         return 0;
     }
 
-    private sealed class BackendBench
+    private sealed class ScenarioBench
     {
         private readonly SimConfig _config;
         private readonly List<Command>[] _commands;
@@ -94,9 +78,9 @@ internal static class Program
         private readonly List<double> _stepNs = new List<double>();
         private readonly List<double> _hashNs = new List<double>();
 
-        public BackendBench(MathBackend backend)
+        public ScenarioBench()
         {
-            _config = SpikeScenario.Config(backend);
+            _config = SpikeScenario.Config();
             _commands = new List<Command>[SpikeScenario.DurationTicks(_config)];
             for (int t = 0; t < _commands.Length; t++)
             {
@@ -136,14 +120,14 @@ internal static class Program
         {
             var sorted = new List<double>(_stepNs);
             sorted.Sort();
-            return $"{_config.MathBackend}: step mean {Mean(_stepNs):F0} ns/tick (min {sorted[0]:F0}, median {sorted[sorted.Count / 2]:F0}, " +
+            return $"step mean {Mean(_stepNs):F0} ns/tick (min {sorted[0]:F0}, median {sorted[sorted.Count / 2]:F0}, " +
                 $"max {sorted[sorted.Count - 1]:F0}); state hash mean {Mean(_hashNs):F0} ns/tick";
         }
     }
 
-    private static int Trace(MathBackend backend)
+    private static int Trace()
     {
-        ScenarioRunner.Run(SpikeScenario.Config(backend), state =>
+        ScenarioRunner.Run(SpikeScenario.Config(), state =>
         {
             if (state.Tick % 10 != 0) return;
             BallState b = state.Ball;
