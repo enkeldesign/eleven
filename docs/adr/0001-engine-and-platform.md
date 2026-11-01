@@ -17,7 +17,7 @@ As the brief points out, this is largely a language decision: **a C# simulation 
 | --- | --- | --- | --- |
 | K1 | Push to playable link over 20 min median, or any manual Editor step | **Median 367 s (6.1 min)** over 13 pushes, range 256–514 s. No Editor step: settings, scene, service worker and icons all come from code at build time | #4, `unity/ci/loop-metrics.sh` |
 | K2 | CI can't build reliably with our licence | **20 of 20** Unity build jobs succeeded, 26 Oct–1 Nov. Licence activation from repository secrets never failed. Three runs went red in our own smoke test, and five were cancelled by newer pushes; neither is a build failure | #4, Actions history |
-| K3 | Web build unreliable on iPhone or iPad, over 10 s to load, or more than a frame slower than TURN LAB | **iPhone 16, Safari:** cold load 1.1–2.1 s, 0 dropped frames in 60 s of play, touch "at least as responsive" as TURN by Erik's assessment. Installed to the home screen, it cold-launches and plays in flight mode | #5 |
+| K3 | Web build unreliable on iPhone or iPad, over 10 s to load, or more than a frame slower than TURN LAB | **Not fully assessed.** iPhone 16 in Safari: cold load 1.1–2.1 s, 0 dropped frames in 60 s of play, and it cold-launches and plays offline from the home screen. Touch was judged "at least as responsive" as TURN by Erik by feel, not measured against the 17 ms threshold with the specified 240 fps video. **The iPad is untested.** See *Open before acceptance* | #5 |
 | K4 | Hashes diverge and neither own trig nor fixed point fixes it at acceptable cost | **Own trig fixes it:** `Portable` maths is identical on .NET x64, WebGL in Chromium and WebGL in Safari on iOS, at about 2.5 µs a tick on the phone. See ADR-0002 | #3, #5, ADR-0002 |
 | K5 | Opus can't make and verify a visible change without the Editor | **Passed.** Erik's unannounced change, "make the player twice as big and green", was made through code and verified by CI in **9 minutes, one round trip, with nothing needing the Editor**. The smoke test confirmed the new colour and a fourfold pixel area | #7, PR #21 |
 
@@ -48,9 +48,9 @@ Unity's settings live in `ProjectSetup` as code, and the build runs in batch mod
 
 - **TypeScript web stack, as in TURN.**
   - It is the strongest alternative, with the fastest loop, already proven by TURN.
-  - It lost because Unity cleared every kill criterion it was meant to fail on. The loop is about 6 minutes, well inside the limit.
   - It would also need its own deterministic transcendental maths.
-  - It closes the console path and needs wrappers for native iOS and Steam.
+  - It needs wrappers for native iOS and Steam, and effectively closes consoles.
+  - Passing the kill criteria only shows Unity is viable. Why it is nonetheless preferred, and at what price, is set out below.
   - It stays the control: if Unity's loop or licensing degrades, K1 and K2 point here.
 - **Defold (Lua).**
   - Smaller web builds and command-line builds.
@@ -58,6 +58,44 @@ Unity's settings live in `ProjectSetup` as code, and the build runs in batch mod
   - The fallback if Unity's CI licensing breaks.
 - **Godot 4 with C#.** It can't export C# to the web, which breaks the web loop. It stays a possible future host behind the engine-free boundary if its C# web export ships.
 - **Unreal.** Too heavy for this game.
+
+## Why Unity rather than TypeScript
+
+Unity passing its kill criteria shows it is viable, not that it is better. The brief asks for the trade itself: a slower loop is acceptable only for a reason, and console reach alone is not one (brief principle 4, and *Where Opus disagrees*, point 1).
+
+**What Unity costs today, measured:**
+
+- **A slower loop:** push to playable link takes 6.1 minutes (median). TURN's loop is the baseline, still to be stated (see *Open before acceptance*).
+- **A larger download:** about 6.5 MiB compressed. It loaded in 1.1–2.1 s on the iPhone.
+- **Editor-free discipline:** every setting, scene and asset pipeline must be code.
+- **Licensing exposure:** Unity's terms have changed abruptly before.
+
+**What it buys today:**
+
+- **C# for the simulation.** Static types, value-type vectors with no per-tick allocation, and the same source compiled as plain .NET. That already gives a headless harness, hash logs, replays, the banned-API analyzer and 65 tests that run in CI and in agent sessions. TypeScript could rebuild most of this, but not value types, and its numbers are all doubles.
+- **A host with input, rendering, audio and animation tooling.** Slice 1 will lean on it once there is more than dots, but today it is a modest benefit.
+
+**What it buys later:**
+
+- Native iOS and Android, desktop and Steam through one pipeline, and consoles with platform approval.
+- This is option value, which the brief says not to overpay for.
+
+**The strongest argument against** (Codex, adversarial architecture lens): Unity imposes its loop, size and licensing costs today without a demonstrated present-day product advantage over the proven TypeScript route.
+
+**Opus's position:**
+
+- The present-day advantage is mainly the simulation language: the most expensive choice to reverse, and the one Slice 1 builds on. Option value comes second.
+- The price is acceptable if a 6-minute loop doesn't feel materially slower to Erik than TURN's in daily use.
+- That judgement is Erik's. He has used both loops during the spike.
+
+## Open before acceptance
+
+These are Erik's to settle. The approval records which way each went.
+
+1. **K3 evidence.** Either:
+   - measure the iPad (cold load ×3, 70 s of play) and touch latency with the 240 fps video method on #5; or
+   - accept K3 on the iPhone measurements and Erik's side-by-side assessment.
+2. **The loop trade.** Is a median 6.1-minute push-to-link materially slower than TURN LAB's in practice? The answer needs TURN's typical push-to-link time, which agents can't read from TURN's repository.
 
 ## Consequences
 
