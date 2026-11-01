@@ -19,7 +19,7 @@ As the brief points out, this is largely a language decision: **a C# simulation 
 | K2 | CI can't build reliably with our licence | **20 of 20** Unity build jobs succeeded, 26 Oct–1 Nov. Licence activation from repository secrets never failed. Three runs went red in our own smoke test, and five were cancelled by newer pushes; neither is a build failure | #4, Actions history |
 | K3 | Web build unreliable on iPhone or iPad, over 10 s to load, or more than a frame slower than TURN LAB | **iPhone 16, Safari:** cold load 1.1–2.1 s, 0 dropped frames in 60 s of play, touch "at least as responsive" as TURN by Erik's assessment. Installed to the home screen, it cold-launches and plays in flight mode | #5 |
 | K4 | Hashes diverge and neither own trig nor fixed point fixes it at acceptable cost | **Own trig fixes it:** `Portable` maths is identical on .NET x64, WebGL in Chromium and WebGL in Safari on iOS, at about 2.5 µs a tick on the phone. See ADR-0002 | #3, #5, ADR-0002 |
-| K5 | Opus can't make and verify a visible change without the Editor | Pending: Erik's unannounced change ("make the player twice as big and green") was made through code in 1 minute and pushed as PR #21; CI verification to follow | #7, PR #21 |
+| K5 | Opus can't make and verify a visible change without the Editor | **Passed.** Erik's unannounced change, "make the player twice as big and green", was made through code and verified by CI in **9 minutes, one round trip, with nothing needing the Editor**. The smoke test confirmed the new colour and a fourfold pixel area | #7, PR #21 |
 
 **Beyond the kill criteria**, the spike's Unity work all went through code and CI without the Editor:
 
