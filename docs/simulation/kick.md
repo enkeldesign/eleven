@@ -32,7 +32,7 @@ A `Command` carries, besides its move vector:
   - `Direction` on the pitch plane. Only its direction counts; exactly zero means the player's heading when the intent arrives.
   - `Strength`, 0–1, a fraction of the player's kick power.
   - `Loft`, 0–1, a fraction of the config's maximum loft.
-  It names no action.
+  It names no action. A quick pass ([pass.md](pass.md)) is resolved by the footballer into the same kind of intent and enters the same wind-up and launch.
 - **`Aftertouch`**, a vector on the pitch plane. It is separate from the move vector, so the gesture mapping (#10) decides whether the stick doubles as aftertouch.
 
 Non-finite values anywhere in the command make it `Invalid`. Strength and loft are clamped to 0–1, and an aftertouch vector longer than 1 is scaled to length 1, as the move vector is.
