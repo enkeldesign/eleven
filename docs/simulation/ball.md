@@ -19,7 +19,7 @@ The starting model follows from that:
 - **No air drag.** Gravity, bounce, rolling friction and spin-induced curve only. Drag returns only if playable evidence shows a concrete problem the model can't solve cleanly, and then through a focused issue.
 - **Launch is three independent quantities:** speed, loft (elevation) and spin.
   - A kick sets the ball's velocity and spin directly.
-  - Magnus curve acts on whatever spin the ball carries in flight.
+  - Magnus curve acts on whatever spin the ball carries in flight, and only in flight: a rolling ball keeps its line (#33).
   - So later control work can implement researched pass, shot and aftertouch candidates (changing spin or adding a nudge after the kick) through commands, without rewriting the ball physics.
 
 ## Integration
@@ -35,9 +35,10 @@ Every tick (`Simulator.StepBall`), with `dt` = 1 / tick rate:
      - the ball is put back at ground height.
   4. Spin decays by `airSpinDecay`.
 - **On the ground:**
-  1. Horizontal velocity gains the horizontal Magnus acceleration.
-  2. Rolling friction (`rollingFriction × g`, constant deceleration) slows it, and below `stopSpeed` it stops.
-  3. Spin decays by `groundSpinDecay`.
+  1. Rolling friction (`rollingFriction × g`, constant deceleration) slows it, and below `stopSpeed` it stops.
+  2. Spin decays by `groundSpinDecay` but doesn't curve the ball. It stays in state for later bounce, presentation and aftertouch work.
+
+  Why no curve on the ground (#33, SOL on #24): the retro lineage treats shaping as a short post-kick effect. That is Kick Off 2's aftertouch window and SWOS's ten-update spin sequence, not a ball that keeps carving sideways while it rolls.
 
 ## Tunable values and starting ranges
 
@@ -129,7 +130,8 @@ Every launch starts on the ground along +x, with no players on the pitch, and ru
 | `rollout_m` | Distance from the first bounce to rest |
 | `total_m` | Distance from release to rest |
 | `lateral_flight_m` | Sideways bend at the first bounce, + left |
-| `lateral_m` | Sideways distance at rest |
+| `lateral_m` | Sideways distance at rest: bend in flight carried along the exit line |
+| `curve_after_landing_m` | How far the rest point lies off the line the ball was travelling when it first landed, + left |
 | `rebound_m` | Highest clearance after the first bounce |
 | `rest_s` | Time to rest |
 
@@ -157,7 +159,7 @@ The test bench changes config only through `SimConfig.With`.
 
 ### Findings for the test bench
 
-These are measured with the curve tool. None of them is changed by #24.
+These are measured with the curve tool.
 
 | Configuration | Short pass total | Firm pass total | Chip carry / peak | Bend in flight (shot / cross) | 2 m drop rebound |
 | --- | --- | --- | --- | --- | --- |
@@ -169,7 +171,11 @@ These are measured with the curve tool. None of them is changed by #24.
 \** friction 0.05, restitution 0.75, retention 0.85, kick 32 m/s, sidespin 40, Magnus 0.008.
 
 - **Ground passes need firm ground.** With no drag, constant rolling friction in the real-pitch band lets firm passes roll 85–220 m, which isn't readable. The upper part of the starting range (0.2–0.3 g) gives passes of about 15–65 m. If the test bench can't make passes readable without distorting other values, that is the kind of concrete problem that would justify a focused issue on speed-dependent rolling resistance or drag.
-- **Curve continues on the ground.** The model applies Magnus curve to a rolling ball too. On slick ground, a spun ball drifts far sideways after landing: 34–39 m at the slick end, against 2–5 m of bend in flight. `groundSpinDecay` is the existing knob for it.
+- **Where the sideways distance after landing comes from.** #24 reported 34–39 m of sideways distance at rest at the slick end, against 2–5 m of bend in flight, and attributed it to curve on the ground. Measuring it properly (#33) showed it was mostly two other things:
+  1. **The exit line.** Bend in flight leaves the ball travelling at an angle, and on slick ground it rolls about 100 m along that line. That is `lateral_m`, a consequence of the ground-pass finding above.
+  2. **Bounce hops.** A lively ball is airborne between bounces, and its spin, which a bounce doesn't remove, keeps curving each hop.
+
+  Removing rolling curve (#33) changed `curve_after_landing_m` only from 20.0 to 18.5 m (bending shot) and from 11.4 to 11.2 m (bending cross) at the slick, lively end, and from 1.3 to 0.8 m and 1.4 to 1.3 m at the defaults. Whether a bounce should strip or reduce spin is open for research (SOL, #33).
 
 ## Properties
 
@@ -200,10 +206,10 @@ Energy per unit mass is `E = ½|v|² + g · (z − r)`. The explicit integrator 
 
 Each term has a source:
 
-- **Magnus:** the acceleration is perpendicular to the velocity, so it does no work in continuous time. A discrete step still adds `½ dt² |m|²`, up to `dt² |m|²` when a rolling ball still has some vertical speed.
+- **Magnus:** the acceleration is perpendicular to the velocity, so it does no work in continuous time. A discrete step in the air still adds `½ dt² |m|²`. Allowing `dt² |m|²` is conservative now that a rolling ball gets no Magnus (#33).
 - **Gravity:** the semi-implicit step loses `½ g² dt²` per step, so gravity never adds energy.
 - **The bounce:** putting the ball back at ground height raises it by at most `|vz| · dt`.
 
-Over the fuzz, energy rose on 1,824 of 240,000 steps. The largest rise was 83 % of its allowance, and a ball that gains 1 % speed per step fails the check.
+Over the fuzz, energy rose on 1,807 of 240,000 steps. The largest rise was 83 % of its allowance, and a ball that gains 1 % speed per step fails the check.
 
 **Kicks** are the one modelled energy source, so the fuzz has no players.

@@ -42,8 +42,14 @@ namespace Eleven.Simulation.Harness
         /// <summary>Sideways distance from the launch line at the first bounce: the bend in flight (+y, left, for spin about +z).</summary>
         public double LateralFlightMetres;
 
-        /// <summary>Sideways distance from the launch line at rest, including any curve while rolling.</summary>
+        /// <summary>Sideways distance from the launch line at rest: bend in flight carried along the exit line.</summary>
         public double LateralMetres;
+
+        /// <summary>
+        /// How far the rest point lies off the straight line the ball was travelling along when it
+        /// first landed (+ left): curve after landing. 0 if it never left the ground.
+        /// </summary>
+        public double CurveAfterLandingMetres;
 
         /// <summary>Highest clearance after the first bounce.</summary>
         public double ReboundMetres;
@@ -170,6 +176,7 @@ namespace Eleven.Simulation.Harness
             double radius = config.BallRadius;
             Vec2 start = ball.Position.Horizontal;
             Vec2 firstContact = start;
+            Vec2 landingDirection = Vec2.Zero;
             long firstBounceTick = -1;
             long maxTicks = (long)(MaxSeconds * config.TickRate);
 
@@ -191,6 +198,7 @@ namespace Eleven.Simulation.Harness
                     {
                         firstBounceTick = sim.Tick;
                         firstContact = b.Position.Horizontal;
+                        landingDirection = b.Velocity.Horizontal;
                         curve.CarryMetres = Distance(start, firstContact);
                         curve.LateralFlightMetres = firstContact.Y - start.Y;
                         curve.FlightSeconds = sim.Tick * config.TickSeconds;
@@ -208,13 +216,20 @@ namespace Eleven.Simulation.Harness
             curve.RolloutMetres = Distance(firstContact, end.Position.Horizontal);
             curve.TotalMetres = Distance(start, end.Position.Horizontal);
             curve.LateralMetres = end.Position.Y - start.Y;
+            double landingSpeed = SimMath.Sqrt(landingDirection.LengthSquared);
+            if (landingSpeed > 0)
+            {
+                Vec2 offset = end.Position.Horizontal - firstContact;
+                curve.CurveAfterLandingMetres = (landingDirection.X * offset.Y - landingDirection.Y * offset.X) / landingSpeed;
+            }
+
             return curve;
         }
 
         private static double Distance(Vec2 a, Vec2 b) => SimMath.Sqrt((a - b).LengthSquared);
 
         public const string CsvHeader =
-            "config_hash,kind,case,speed_mps,loft_deg,spin_radps,drop_m,carry_m,peak_m,flight_s,bounces,rollout_m,total_m,lateral_flight_m,lateral_m,rebound_m,rest_s";
+            "config_hash,kind,case,speed_mps,loft_deg,spin_radps,drop_m,carry_m,peak_m,flight_s,bounces,rollout_m,total_m,lateral_flight_m,lateral_m,curve_after_landing_m,rebound_m,rest_s";
 
         /// <summary>One row per curve. Every row carries the config hash, so a plot traces back to its settings.</summary>
         public static void WriteCsv(TextWriter writer, SimConfig config, IEnumerable<BallCurve> curves)
@@ -230,7 +245,7 @@ namespace Eleven.Simulation.Harness
                     F(c.SpeedMps), F(c.LoftDegrees), F(c.SpinRadps), F(c.DropMetres),
                     F(c.CarryMetres), F(c.PeakMetres), F(c.FlightSeconds),
                     c.Bounces.ToString(CultureInfo.InvariantCulture),
-                    F(c.RolloutMetres), F(c.TotalMetres), F(c.LateralFlightMetres), F(c.LateralMetres), F(c.ReboundMetres),
+                    F(c.RolloutMetres), F(c.TotalMetres), F(c.LateralFlightMetres), F(c.LateralMetres), F(c.CurveAfterLandingMetres), F(c.ReboundMetres),
                     c.RestSeconds.HasValue ? F(c.RestSeconds.Value) : ""));
             }
         }
@@ -267,7 +282,7 @@ namespace Eleven.Simulation.Harness
             {
                 if (c.Kind != "action") continue;
                 string carry = c.Bounces > 0 ? $"carry {F1(c.CarryMetres)} m, peak {F1(c.PeakMetres)} m, " : "";
-                string lateral = c.SpinRadps != 0 ? $", bend in flight {F1(c.LateralFlightMetres)} m, lateral at rest {F1(c.LateralMetres)} m" : "";
+                string lateral = c.SpinRadps != 0 ? $", bend in flight {F1(c.LateralFlightMetres)} m, lateral at rest {F1(c.LateralMetres)} m, curve after landing {F1(c.CurveAfterLandingMetres)} m" : "";
                 parts.Add($"{c.Case} {carry}total {F1(c.TotalMetres)} m{lateral}");
             }
 
