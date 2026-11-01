@@ -103,6 +103,36 @@ Encoding, canonical:
 
 Every double is its raw IEEE-754 bits (uint64), so even invalid input replays as it was. Version 2 replaced version 1's kick flag with the kick intent and added aftertouch (#37); version 3 added the quick pass (#38). Recordings are version-specific and may expire (INV-7).
 
+## Feel captures
+
+The "this felt wrong" capture (#44, part of #27) is evidence, not telemetry: it is made and kept on the device, with no service (INV-15). It holds the last ten seconds of a run and everything needed to replay them exactly.
+
+**The recorder.** `FeelRecorder` (harness) is fed after every step: the owned commands exactly as passed (INV-10), then the step's hash and events.
+- It takes a snapshot every second and drops whatever the window no longer needs.
+- So a capture covers 10–11 s, or the whole run if it is younger.
+- It only reads the simulator, so recording and capturing never change a run. A test checks that runs with and without captures hash identically.
+
+**Encoding** (`FeelCapture`), canonical:
+1. Magic `ELFC` and the capture format (int32, now 1).
+2. The host build and simulation build (strings), and the tick convention (string).
+3. The state schema, config format and recording format (int32 each).
+4. The config hash and seed (uint64), the window's start tick (int64) and its step count (int32).
+5. The active preset, control candidate and note (strings). These are `technical-reference` and `none` until #46 and #10.
+6. The config payload (`SimConfig.Encode`) and the window's `CommandRecording`, each as an int32 length, then bytes.
+7. The live run's tick hashes (int32 count, uint64 each): the hash at the window's start and after every step.
+8. Its events (int32 count, then tick int64, and kind, subject, rejection and other as int32 each).
+
+**Replaying** (`FeelCapture.Replay`, `eleven-sim replay <file>`):
+1. **Versions first.** The versions come before the payloads, so a capture from another build is read far enough to say, by name, which version differs ("state schema 4, this build reads 5"). It is never replayed under the wrong rules.
+2. **The config.** It is rebuilt from the payload with `SimConfig.Decode`, which checks its format, and must hash to the recorded hash. A capture made under a tuned candidate therefore replays under that candidate.
+3. **Every tick and event.** The window replays, and every tick's hash and every event is compared. A divergence names the first tick that differs. The CLI exits 1 on any mismatch.
+
+**In CI:**
+- **The WebGL build:** the smoke test presses THIS FELT WRONG in it, and CI replays each capture with the .NET CLI.
+- **The fixture:** `FeelCaptureTests` also replays a committed fixture, `tests/Eleven.Simulation.Tests/Fixtures/spike-felt-wrong.elfc`, made by `eleven-sim capture <file>` from the scripted spike session.
+
+Like recordings, captures are version-specific (INV-7). A schema or format change makes the fixture test report the mismatch by name, and the fixture is then regenerated in its own commit.
+
 ## Hash logs
 
 `eleven-sim hashlog <dir>` writes the scenario's log (`eleven-hashlog v2`). The header records the scenario name and version, build, state schema, tick convention, config hash and seed. Then come `<tick> <hash>` lines for every tick, then `# digest: …`. The format is text with LF line endings, so logs from different runtimes diff directly. CI publishes them as the `hashlogs` artifact.

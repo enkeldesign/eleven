@@ -22,7 +22,11 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
 - `HostLoop` accumulates real time and spends it in whole simulation ticks, interpolating between the last two ticks for drawing. A frame longer than 0.25 s (backgrounded tab, pause, stall) is dropped, not caught up, so the simulation never advances for unseen time. At most 8 ticks run per frame.
 - `TouchAdapter` reads touches (and the mouse, as one finger on desktop) through the Input System. It produces owned commands for controller 1: a floating stick in the left half and a kick button bottom right.
 - On screen: the build id (CI run number and commit) with the page's load time and dropped frames over the last minute of play (for the device session, #5), **Reset**, and **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash).
-- URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event.
+- **FELT WRONG** (#44) is a real page button (`Plugins/ElevenPage.jslib`), laid over a spot the HUD leaves free. Being a page button, it reaches assistive technology, the keyboard and touch alike, and it is at least 44 × 44 px.
+  - **A press** asks for an optional note with the browser's own prompt. No frames run while it is open, so play does not go on under it.
+  - **The capture** is the last ten seconds (`FeelRecorder`/`FeelCapture`, [determinism.md](../docs/simulation/determinism.md#feel-captures)). It is kept in the page's `localStorage` (the last five) and announced.
+  - **SAVE CAPTURE** shares or downloads it as `.elfc`, for `eleven-sim replay`. Nothing leaves the device unless it is saved.
+- URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event, and each capture in base64 (the smoke test replays them with .NET).
 
 ## Building
 
