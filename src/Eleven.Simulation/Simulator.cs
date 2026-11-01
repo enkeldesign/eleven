@@ -317,14 +317,16 @@ namespace Eleven.Simulation
             }
 
             // Aim into the chosen receiver's run, or, with no candidate, a free pass along the heading.
-            Vec2 aim = best < double.PositiveInfinity
-                ? ReceivePoint(_state.Players[target], passer.Capabilities.PassAnticipation, origin, hardest)
+            bool chosen = best < double.PositiveInfinity;
+            Vec2 read = chosen ? _state.Players[target].Velocity * passer.Capabilities.PassAnticipation : Vec2.Zero;
+            Vec2 aim = chosen
+                ? ReceivePoint(_state.Players[target].Position, read, origin, hardest)
                 : origin + new Vec2(cos, sin) * Config.PassFreeDistance;
-            int targetId = best < double.PositiveInfinity ? _state.Players[target].Id : 0;
+            int targetId = chosen ? _state.Players[target].Id : 0;
 
             Vec2 line = aim - origin;
             double length = SimMath.Sqrt(line.LengthSquared);
-            double speed = PassSpeed(length);
+            double speed = PassSpeed(length, RunAlong(read, line, length));
             StartWindUp(ref passer,
                 length > 0 ? SimMath.Atan2(line.Y, line.X) : passer.Heading,
                 hardest > 0 ? Clamp01(speed / hardest) : 1,
@@ -346,30 +348,42 @@ namespace Eleven.Simulation
             return off <= passer.Capabilities.PassVision;
         }
 
-        // The ground pass that arrives at passArrivalSpeed after `distance`, under constant rolling friction.
-        private double PassSpeed(double distance) =>
-            SimMath.Sqrt(Config.PassArrivalSpeed * Config.PassArrivalSpeed + 2 * Config.RollingFriction * Config.Gravity * distance);
+        /// <summary>
+        /// The ground pass that arrives at <paramref name="run"/> + passArrivalSpeed after
+        /// <paramref name="distance"/>, under constant rolling friction: faster than the receiver's
+        /// run along the pass by passArrivalSpeed, so a runner can take it in stride and a standing
+        /// receiver gets passArrivalSpeed.
+        /// </summary>
+        private double PassSpeed(double distance, double run)
+        {
+            double arrival = Config.PassArrivalSpeed + run;
+            return SimMath.Sqrt(arrival * arrival + 2 * Config.RollingFriction * Config.Gravity * distance);
+        }
+
+        // m/s. How fast a run read as `read` goes along the pass `line` of `length`; never negative.
+        private static double RunAlong(Vec2 read, Vec2 line, double length) =>
+            length > 0 ? Math.Max(0, (read.X * line.X + read.Y * line.Y) / length) : 0;
 
         /// <summary>
-        /// Where the passer expects to meet the receiver: the receiver's position plus the passer's
-        /// anticipation times their velocity, at the first ball step after contact by which a pass
+        /// Where the passer expects to meet the receiver: their position plus the run the passer
+        /// reads (anticipation × velocity), at the first ball step after contact by which a pass
         /// weighted for that point can get there. The search bisects over whole steps (a fixed number
         /// of iterations) and rolls the ball with the simulation's own integration (INV-13).
         /// </summary>
-        private Vec2 ReceivePoint(PlayerState receiver, double anticipation, Vec2 origin, double hardest)
+        private Vec2 ReceivePoint(Vec2 position, Vec2 read, Vec2 origin, double hardest)
         {
             double dt = Config.TickSeconds;
             int windUp = Config.KickWindUpTicks;
             int horizon = (int)(PassHorizonSeconds * Config.TickRate);
 
             // After ball step j the receiver has moved windUp + j - 1 steps on from now.
-            Vec2 At(int steps) => receiver.Position + receiver.Velocity * (anticipation * (windUp + steps - 1) * dt);
+            Vec2 At(int steps) => position + read * ((windUp + steps - 1) * dt);
 
             bool Reaches(int steps)
             {
                 Vec2 to = At(steps) - origin;
                 double distance = SimMath.Sqrt(to.LengthSquared);
-                return Rolls(Math.Min(PassSpeed(distance), hardest), distance, steps);
+                return Rolls(Math.Min(PassSpeed(distance, RunAlong(read, to, distance)), hardest), distance, steps);
             }
 
             if (Reaches(1)) return At(1);

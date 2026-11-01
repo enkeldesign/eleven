@@ -123,8 +123,12 @@ namespace Eleven.Simulation.Tests
             // A full reader also meets the runner. The reference reads three quarters of his run, so
             // it falls short by design: anticipation is the footballer's.
             PassOutcome full = PassDrill.Run(Config(), Profile(vision: Math.PI, anticipation: 1), pair);
-            Assert.True(full.ClosestApproachMetres < 1, $"misses the runner by {full.ClosestApproachMetres} m");
-            Assert.True(PassDrill.Run(Config(), Profile(vision: Math.PI), pair).ClosestApproachMetres > 3);
+            PassOutcome reference = PassDrill.Run(Config(), Profile(vision: Math.PI), pair);
+            Assert.True(full.ClosestApproachMetres < 0.5, $"misses the runner by {full.ClosestApproachMetres} m");
+            Assert.True(reference.ClosestApproachMetres > full.ClosestApproachMetres + 0.5, $"{reference.ClosestApproachMetres} vs {full.ClosestApproachMetres}");
+
+            // Weighted against the run, the ball gets to a runner going away faster than he runs.
+            Assert.InRange(full.ArrivalSpeedMps, 5 + Config().PassArrivalSpeed - 0.5, 5 + Config().PassArrivalSpeed + 0.5);
         }
 
         [Fact]
