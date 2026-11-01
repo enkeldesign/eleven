@@ -41,6 +41,26 @@ namespace Eleven.Simulation.Tests
             Assert.All(Default.Where(c => c.Kind == "aftertouch"), c => Assert.Equal(Config.With("aftertouchSeconds", c.WindowSeconds).Hash, c.ConfigHash));
         }
 
+        // An aftertouchSeconds override is measured as well as the starting-range windows, and summarised.
+        [Theory]
+        [InlineData(0.18)]
+        [InlineData(0.0)]
+        [InlineData(0.6)]
+        public void A_configured_window_off_the_grid_is_measured_too(double window)
+        {
+            SimConfig config = Config.With("aftertouchSeconds", window);
+            List<KickCurve> curves = KickCurves.Characterise(config, PlayerCapabilities.Reference);
+
+            Assert.Equal(KickCurves.ShapedKicks.Count * 4, curves.Count(c => c.Kind == "aftertouch" && c.WindowSeconds == window));
+            Assert.Equal(KickCurves.ShapedKicks.Count * (KickCurves.WindowsSeconds.Count + 1) * 4, curves.Count(c => c.Kind == "aftertouch"));
+            double[] windows = curves.Where(c => c.Kind == "aftertouch" && c.Case == "lofted" && c.Input == "none").Select(c => c.WindowSeconds).ToArray();
+            Assert.Equal(windows.OrderBy(w => w), windows);
+
+            var summary = new StringWriter();
+            KickCurves.WriteSummary(summary, config, PlayerCapabilities.Reference, curves);
+            Assert.Contains($"key: ", summary.ToString());
+        }
+
         // With no drag and no spin, a lofted launch is a projectile: it peaks at vz²/2g and lands
         // after 2vz/g, having carried h · 2vz/g. The measurement agrees to within a tick.
         [Fact]

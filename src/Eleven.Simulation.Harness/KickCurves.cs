@@ -86,7 +86,22 @@ namespace Eleven.Simulation.Harness
         private const int PlayerId = 1;
         private const int ControllerId = 1;
 
-        /// <summary>The launch grid under <paramref name="config"/>, then every input on every shaped kick across the windows.</summary>
+        /// <summary>
+        /// The windows aftertouch is measured across: the starting-range samples, plus the config's
+        /// own window if it is not one of them, in ascending order.
+        /// </summary>
+        public static List<double> WindowsFor(SimConfig config)
+        {
+            var windows = new List<double>(WindowsSeconds);
+            if (!windows.Contains(config.AftertouchSeconds)) windows.Add(config.AftertouchSeconds);
+            windows.Sort();
+            return windows;
+        }
+
+        /// <summary>
+        /// The launch grid under <paramref name="config"/>, then every input on every shaped kick
+        /// across <see cref="WindowsFor"/>.
+        /// </summary>
         public static List<KickCurve> Characterise(SimConfig config, PlayerCapabilities profile)
         {
             var curves = new List<KickCurve>();
@@ -97,7 +112,7 @@ namespace Eleven.Simulation.Harness
             }
 
             foreach ((string name, double strength, double loft) in ShapedKicks)
-            foreach (double window in WindowsSeconds)
+            foreach (double window in WindowsFor(config))
             {
                 SimConfig windowed = config.With("aftertouchSeconds", window);
                 double? unshaped = null;
@@ -255,7 +270,7 @@ namespace Eleven.Simulation.Harness
             writer.WriteLine($"launch grid: strength {List(Strengths)} x loft {List(Lofts)}; one player at rest kicks a ball at rest along +x");
             writer.WriteLine($"aftertouch: none/left/back/forward at full stick, held from the step after the intent, on a ground pass " +
                 $"(strength {R(ShapedKicks[0].Strength)}, loft {R(ShapedKicks[0].Loft)}) and a lofted kick (strength {R(ShapedKicks[1].Strength)}, loft {R(ShapedKicks[1].Loft)}), " +
-                $"windows {List(WindowsSeconds)} s (the research starting range)");
+                $"windows {List(WindowsFor(config))} s (the research starting range, and the config's own {R(config.AftertouchSeconds)} s)");
             writer.WriteLine($"key: {KeyNumbers(config, curves)}");
         }
 

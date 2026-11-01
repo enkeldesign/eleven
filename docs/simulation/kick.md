@@ -135,7 +135,7 @@ Each is a candidate for the test bench, not a decision.
 Each run uses the real simulator. One player at rest, facing +x, gives the intent on tick 0, with a ball at rest 0.5 m ahead. Aftertouch is held from the next step to the end.
 
 - **Launches** (`kind=launch`): strength 0.25/0.5/0.75/1 × loft 0/0.25/0.5/0.75/1, with no aftertouch.
-- **Aftertouch** (`kind=aftertouch`): none, left, back and forward at full stick. They shape a `ground-pass` (strength 0.6, loft 0) and a `lofted` kick (strength 1, loft 0.4), across windows of 0.15/0.20/0.25/0.30 s, the starting range. Each window is its own config, so these rows carry its hash.
+- **Aftertouch** (`kind=aftertouch`): none, left, back and forward at full stick. They shape a `ground-pass` (strength 0.6, loft 0) and a `lofted` kick (strength 1, loft 0.4), across windows of 0.15/0.20/0.25/0.30 s, the starting range, plus the config's own window if it isn't one of them. Each window is its own config, so these rows carry its hash.
 
 `kick-curves.csv` has one row per kick:
 
