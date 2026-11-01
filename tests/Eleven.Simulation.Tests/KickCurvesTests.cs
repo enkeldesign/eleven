@@ -140,7 +140,8 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Curves_trace_back_to_the_build_config_and_profile_that_made_them()
         {
-            SimConfig config = Config.With("aftertouchBend", 0.123456789).With("kickSpeed", 21.5);
+            // A ball value too: the kick tool takes every tunable, so its summary must record every one.
+            SimConfig config = Config.With("aftertouchBend", 0.123456789).With("kickSpeed", 21.5).With("rollingFriction", 0.2);
             PlayerCapabilities profile = PlayerCapabilities.Reference.With("kickPower", 0.875).With("kickError", 0.0125);
             List<KickCurve> curves = KickCurves.Characterise(config, profile);
 
@@ -157,7 +158,7 @@ namespace Eleven.Simulation.Tests
             Assert.Contains($"config-format: {SimConfig.FormatVersion}", text);
             Assert.Contains("not approved feel", text);
 
-            // The kick values and every capability are written exactly, so the summary rebuilds both.
+            // Every tunable and every capability is written exactly, so the summary rebuilds both.
             var recorded = new List<KeyValuePair<string, double>>();
             PlayerCapabilities capabilities = default;
             foreach (string line in text.Split('\n'))
@@ -166,11 +167,12 @@ namespace Eleven.Simulation.Tests
                 if (colon <= 0) continue;
                 string name = line.Substring(0, colon);
                 string value = line.Substring(colon + 2).Split(' ')[0];
-                if (KickCurves.KickTunables.Contains(name)) recorded.Add(new KeyValuePair<string, double>(name, double.Parse(value, CultureInfo.InvariantCulture)));
+                if (SimConfig.Tunables.Any(p => p.Name == name)) recorded.Add(new KeyValuePair<string, double>(name, double.Parse(value, CultureInfo.InvariantCulture)));
                 if (PlayerCapabilities.Parameters.Any(p => p.Name == name)) capabilities = capabilities.With(name, double.Parse(value, CultureInfo.InvariantCulture));
             }
 
-            Assert.Equal(KickCurves.KickTunables.Count, recorded.Count);
+            Assert.Equal(SimConfig.Tunables.Count, recorded.Count);
+            Assert.Contains("rollingFriction: 0.2 fraction of g  (override)", text);
             Assert.Equal(config.Hash, new SimConfig().With(recorded).Hash);
             Assert.Equal(profile, capabilities);
         }

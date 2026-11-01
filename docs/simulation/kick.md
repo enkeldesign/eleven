@@ -151,7 +151,7 @@ Each run uses the real simulator. One player at rest, facing +x, gives the inten
 
 `kick-curves.txt` records:
 - the build, the config hash and format, and the tick rate;
-- the kick values and the profile's capabilities, written exactly, so the summary rebuilds both;
+- every tunable (ball and kick values, overrides marked) and the profile's capabilities, written exactly, so the summary rebuilds both;
 - the grids, and the key numbers.
 
 CI publishes both as the `kick-curves` artifact.

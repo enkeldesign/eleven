@@ -241,13 +241,11 @@ namespace Eleven.Simulation.Harness
             }
         }
 
-        /// <summary>The kick and aftertouch values tools may vary, as SimConfig.Tunables names them.</summary>
-        public static readonly ReadOnlyCollection<string> KickTunables = Array.AsReadOnly(new[]
-        {
-            "kickSpeed", "kickLoft", "kickSideSpin", "kickWindUpSeconds", "aftertouchSeconds", "aftertouchBend", "aftertouchLift",
-        });
-
-        /// <summary>Who made the curves (build, config, the kick values and the profile, written exactly) and the key numbers.</summary>
+        /// <summary>
+        /// Who made the curves (build, config, every tunable and the profile, written exactly) and the
+        /// key numbers. The tool takes ball values as well as kick values, so every tunable is
+        /// recorded, and those that differ from the defaults are marked.
+        /// </summary>
         public static void WriteSummary(TextWriter writer, SimConfig config, PlayerCapabilities profile, IReadOnlyList<KickCurve> curves)
         {
             writer.NewLine = "\n";
@@ -257,9 +255,11 @@ namespace Eleven.Simulation.Harness
             writer.WriteLine($"config-format: {SimConfig.FormatVersion}");
             writer.WriteLine($"tick-rate: {config.TickRate}");
             writer.WriteLine("status: technical reference of the current values, not approved feel");
-            foreach (string name in KickTunables)
+            var defaults = new SimConfig();
+            foreach (TunableParameter p in SimConfig.Tunables)
             {
-                writer.WriteLine($"{name}: {R(config.Get(name))}");
+                string mark = config.Get(p.Name) != defaults.Get(p.Name) ? "  (override)" : "";
+                writer.WriteLine($"{p.Name}: {R(config.Get(p.Name))} {p.Unit}{mark}");
             }
 
             foreach (TunableParameter p in PlayerCapabilities.Parameters)
