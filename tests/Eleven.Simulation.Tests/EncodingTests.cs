@@ -24,6 +24,7 @@ namespace Eleven.Simulation.Tests
             Assert.NotEqual(baseline, new SimConfig(tickRate: 50).Hash);
             Assert.NotEqual(baseline, new SimConfig(goalLineX: 52.5000001).Hash);
             Assert.NotEqual(baseline, new SimConfig(kickCooldownTicks: 31).Hash);
+            Assert.NotEqual(baseline, new SimConfig(airDrag: 0.015).Hash);
         }
 
         [Fact]

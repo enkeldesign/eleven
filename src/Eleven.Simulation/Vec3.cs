@@ -25,6 +25,8 @@ namespace Eleven.Simulation
         public static Vec3 Cross(Vec3 a, Vec3 b) =>
             new Vec3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 
+        public double LengthSquared => X * X + Y * Y + Z * Z;
+
         public Vec2 Horizontal => new Vec2(X, Y);
 
         public override string ToString() => $"({X}, {Y}, {Z})";

@@ -61,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 2`; version 2 dropped the maths backend). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel.
+`SimConfig` is immutable and versioned (`FormatVersion = 3`; version 2 dropped the maths backend, version 3 added air drag). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, and their valid ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md).
 
 ## Canonical encoding
 

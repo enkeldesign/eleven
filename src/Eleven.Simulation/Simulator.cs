@@ -209,6 +209,7 @@ namespace Eleven.Simulation
             if (airborne)
             {
                 ball.Velocity += (magnus + new Vec3(0, 0, -Config.Gravity)) * dt;
+                ball.Velocity *= DragFactor(ball.Velocity.LengthSquared, dt);
                 ball.Position += ball.Velocity * dt;
 
                 if (ball.Position.Z <= radius && ball.Velocity.Z < 0)
@@ -225,8 +226,9 @@ namespace Eleven.Simulation
                 return;
             }
 
-            // Rolling: horizontal curve, then friction against the direction of travel.
+            // Rolling: horizontal curve, air drag, then friction against the direction of travel.
             Vec2 velocity = ball.Velocity.Horizontal + magnus.Horizontal * dt;
+            velocity *= DragFactor(velocity.LengthSquared, dt);
             double speedSquared = velocity.LengthSquared;
             if (speedSquared > 0)
             {
@@ -250,6 +252,16 @@ namespace Eleven.Simulation
             }
 
             ball.BeyondGoalLine = beyond;
+        }
+
+        // Quadratic drag, dv/dt = −airDrag·|v|·v, taken semi-implicitly: v ← v / (1 + airDrag·|v|·dt).
+        // The factor is in (0, 1] for any speed and step, so drag only ever slows the ball and can't
+        // reverse it. At airDrag = 0 it is exactly 1 and skips the square root, so the no-drag
+        // trajectory is bit-identical to the spike's.
+        private double DragFactor(double speedSquared, double dt)
+        {
+            if (Config.AirDrag == 0 || speedSquared == 0) return 1;
+            return 1 / (1 + Config.AirDrag * SimMath.Sqrt(speedSquared) * dt);
         }
 
         private static double Decay(double perSecond, double dt)
