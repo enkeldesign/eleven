@@ -17,7 +17,7 @@ namespace Eleven.Host
         private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
-        private const float DotDiameter = 0.9f;
+        private const float DotDiameter = 1.8f;
         private const float BallExaggeration = 3f;
         private const float HeightLift = 0.5f;
         private const float HeightGrowth = 0.08f;
