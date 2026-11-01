@@ -4,7 +4,11 @@ ELEVEN is a retro-style football game by Enkel Design: touch-first, not mobile-b
 
 ## Status
 
-Project startup. The engine and platform are undecided until **ADR-0001**; Unity 6 is the primary hypothesis being tested by the engine spike. **Do not implement football (Slice 1) before ADR-0001 is accepted.**
+Slice 1. The engine spike is done and its decisions are accepted:
+- **[ADR-0001](docs/adr/0001-engine-and-platform.md):** Unity 6 hosts the engine-free C# simulation, and the PWA Web build is the channel. Native iOS follows when there is an Apple Developer membership.
+- **[ADR-0002](docs/adr/0002-simulation-maths-model.md):** the `Portable` maths model.
+
+Football work (Slice 1) can start, issue by issue.
 
 ## Where things are
 
@@ -94,7 +98,7 @@ An invariant is superseded only by an ADR that sets out the evidence and migrati
 
 ## Simulation code rules
 
-Until ADR-0002 defines the maths model:
+Per ADR-0001 and ADR-0002:
 
 - Target `netstandard2.1` and C# 9 so the same source compiles in Unity and in plain .NET.
 - No references to UnityEngine or any engine, rendering, physics, input or platform API.

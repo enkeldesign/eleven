@@ -18,3 +18,5 @@ Use [template.md](template.md) for new ADRs.
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0000](0000-baseline-brief-v0.3.md) | Baseline: ELEVEN brief v0.3 | Accepted |
+| [0001](0001-engine-and-platform.md) | Engine and platform | Accepted |
+| [0002](0002-simulation-maths-model.md) | Simulation maths model | Accepted |
