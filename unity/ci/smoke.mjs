@@ -291,6 +291,25 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       check('SAVE CAPTURE is offered', await save.isVisible().catch(() => false), 'button visible');
     }
 
+    // The keyboard reaches the page controls (Accessibility lens, question 4): Tab moves focus to
+    // THIS FELT WRONG and Enter presses it. Unity's WebGL player captures every key by default.
+    if (name === 'desktop') {
+      let focused = '';
+      for (let i = 0; i < 8 && focused !== 'eleven-felt-wrong'; i++) {
+        await page.keyboard.press('Tab');
+        focused = await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName || '');
+      }
+      const ring = focused === 'eleven-felt-wrong'
+        && await page.evaluate(() => document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none');
+      check('Tab reaches felt-wrong, with a visible focus ring', focused === 'eleven-felt-wrong' && ring,
+        `focus on ${focused || 'nothing'}${focused === 'eleven-felt-wrong' ? `, ring ${ring ? 'shown' : 'not shown'}` : ''}`);
+      const fromKey = logs.length;
+      page.once('dialog', (d) => d.accept(''));
+      if (focused === 'eleven-felt-wrong') await page.keyboard.press('Enter');
+      const keyed = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+)/, 5_000, fromKey);
+      check('Enter on felt-wrong captures', !!keyed, keyed ? keyed.match[0].replace('ELEVEN ', '') : 'no capture line after Enter');
+    }
+
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
     const png = await canvas.screenshot({ path: path.join(outDir, `${name}-canvas.png`) });
     notes.pixels = await page.evaluate(async ({ data, colours }) => {
@@ -315,6 +334,21 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+
+    // A kept capture stays exportable after the page reloads: "kept on this device" has to mean it.
+    if (name === 'desktop') {
+      const newest = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').pop()?.name ?? '');
+      const fromReload = logs.length;
+      await page.reload();
+      const again = await waitForLog(/ELEVEN host ready build=(\S+)/, 240_000, fromReload);
+      check('reload boots', !!again, again ? 'host ready after reload' : 'no "ELEVEN host ready" after reload');
+      const offered = await save.isVisible().catch(() => false);
+      const [download] = offered
+        ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)])
+        : [null];
+      check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
+        !offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download');
+    }
   } catch (e) {
     check('ran to completion', false, e.message);
   } finally {
