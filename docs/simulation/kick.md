@@ -22,7 +22,7 @@ Aftertouch follows the SWOS port that #26 cites ([`ball.cpp`](https://github.com
 
 It agrees with SOL's research answer on #33: shaping is a short post-kick effect.
 
-**SOL's clarification on #37:** the aftertouch window gates input; it does not define the lifetime of physical spin. Spin already on the ball keeps curving it in flight after the window closes. Bounce spin attenuation is a separate issue, #40.
+**SOL's clarification on #37:** the aftertouch window gates input; it does not define the lifetime of physical spin. Spin already on the ball keeps curving it in flight after the window closes. A ground bounce then keeps only `bounceSpinRetention` of it (#40, [ball.md](ball.md)).
 
 ## The intent
 
@@ -185,7 +185,7 @@ Aftertouch at full stick, across the starting window:
 | --- | --- | --- | --- | --- | --- |
 | Ground pass, rolls 74.2 m | left: turn, rests left by | 5.73°, 7.34 m | 5.73°, 7.33 m | 5.73°, 7.31 m | 5.73°, 7.29 m |
 | | back: peak, total | 0.10 m, 25.1 m | 0.07 m, 34.9 m | 0.03 m, 34.3 m | 0.01 m, 11.1 m |
-| Lofted, carries 24.4 m, peaks 2.7 m | left: turn, rests left by | 6.15°, 10.61 m | 6.28°, 10.55 m | 6.41°, 10.49 m | 6.53°, 10.43 m |
+| Lofted, carries 24.4 m, peaks 2.7 m | left: turn, rests left by | 6.15°, 9.75 m | 6.28°, 9.68 m | 6.41°, 9.62 m | 6.53°, 9.55 m |
 | | back: carry, peak | 31.0 m, 4.25 m | 31.0 m, 4.21 m | 31.0 m, 4.18 m | 30.7 m, 4.15 m |
 | | forward: carry, peak | 18.1 m, 1.53 m | 18.4 m, 1.57 m | 18.4 m, 1.60 m | 18.4 m, 1.63 m |
 
@@ -194,7 +194,7 @@ Aftertouch at full stick, across the starting window:
   - On a lofted kick, back and forward input change vertical speed by exactly ±2 m/s at every window. A longer window delivers the lift later, so the peak moves by about 0.1 m.
 - **Spin keeps curving after the window**, as SOL's clarification says.
   - A lofted kick bent left leaves the window turned 6.2–6.5°, more than the bend alone, and spinning at 10.8–11.4 rad/s.
-  - It comes to rest 10.4–10.6 m left, against 7.3 m for a ground pass, whose spin can't curve it while it rolls (#33).
+  - It comes to rest 9.6–9.8 m left, against 7.3 m for a ground pass, whose spin can't curve it while it rolls (#33). Its first bounce keeps only a quarter of the spin (#40), so the curve after landing is small.
 - **Back input can't chip a ground pass at the reference lift.**
   - The 2 m/s spread over the window competes with gravity, so the ball only hops: 0.01–0.10 m, depending on the window.
   - Each hop's bounce costs it most of its roll: 11–35 m instead of 74 m.

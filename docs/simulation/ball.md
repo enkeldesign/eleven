@@ -19,7 +19,8 @@ The starting model follows from that:
 - **No air drag.** Gravity, bounce, rolling friction and spin-induced curve only. Drag returns only if playable evidence shows a concrete problem the model can't solve cleanly, and then through a focused issue.
 - **Launch is three independent quantities:** speed, loft (elevation) and spin.
   - A kick sets the ball's velocity directly and launches it without spin; aftertouch then turns it, adds sidespin or lifts it during a short window ([kick.md](kick.md), #37).
-  - Magnus curve acts on whatever spin the ball carries in flight, and only in flight: a rolling ball keeps its line (#33). Spin outlives the aftertouch window.
+  - Magnus curve acts on whatever spin the ball carries in flight, and only in flight: a rolling ball keeps its line (#33).
+  - **Two separate things limit shaping.** The aftertouch window controls when the player's input may shape the kick (#37); it does not end physical spin, which keeps curving the ball in flight after the window closes. A ground bounce removes most of that spin (#40), so the curve of repeated hops dies within a few bounces.
   - So control work implements researched pass, shot and aftertouch candidates through commands, without rewriting the ball physics.
 
 ## Integration
@@ -32,6 +33,7 @@ Every tick (`Simulator.StepBall`), with `dt` = 1 / tick rate:
   3. A ball that reaches the ground while falling bounces:
      - upward speed × `bounceRestitution`, or 0 below `settleSpeed`;
      - horizontal speed × `bounceTangentialRetention`;
+     - spin × `bounceSpinRetention`, exactly once per bounce (#40);
      - the ball is put back at ground height.
   4. Spin decays by `airSpinDecay`.
 - **On the ground:**
@@ -62,6 +64,7 @@ Every default lies inside its starting range.
 | `magnusCoefficient` (curve strength) | 1/rad | 0–0.05 | 0.004–0.008 | 0.006 |
 | `bounceRestitution` | fraction | 0–1 | 0.5–0.75 | 0.55 |
 | `bounceTangentialRetention` | fraction | 0–1 | 0.45–0.85 | 0.8 |
+| `bounceSpinRetention` | fraction | 0–1 | 0.15–0.35 | 0.25 |
 | `rollingFriction` | fraction of g | 0–2 | 0.05–0.3 | 0.08 |
 | `gravity` | m/s² | 0.1–50 | — | 9.81 |
 | `ballRadius` | m | 0.05–0.5 | — | 0.11 |
@@ -88,6 +91,10 @@ Every default lies inside its starting range.
   - Turfgrass measurements give 0.56–0.69 ([University of Tennessee, 2024](https://trace.tennessee.edu/utk_gradthes/11814)).
   - In this integrator a 2 m drop rebounds 0.47 m at 0.5 and 1.07 m at 0.75, so the range brackets the band.
 - **`bounceTangentialRetention`, 0.45–0.85:** FIFA's angle-rebound test band is 45–80 % (same test report).
+- **`bounceSpinRetention`, 0.15–0.35:** SOL's research answer on #33, set out on #40.
+  - In SWOS, aftertouch is a ten-update shaping sequence, and no persistent spin state lets later bounces curve the ball again. Kick Off 2 limits aftertouch to a very short period after the kick.
+  - Real oblique ground contact changes rotation through tangential friction, so spin shouldn't simply become zero.
+  - So ELEVEN keeps its physical spin state and has a bounce remove most of it. The band is a game-design range, not a real-football measurement: at 0.25, 12 rad/s becomes 3 after one bounce, 0.75 after two and 0.19 after three.
 - **`rollingFriction`, 0.05–0.3 g:**
   - **The real-pitch band, 0.06–0.15 g.** FIFA's ball-roll test releases the ball from 1 m on a 45° ramp, so it leaves at about 3.4 m/s. Real pitches stop it in 4–10 m ([FIFA natural pitch rating system](https://digitalhub.fifa.com/m/58aa765dd3e85f26/original/FIFA-natural-pitch-rating-system_EN.pdf); [Labosport](https://labosport.com/ball-roll-ramp/)). That is a deceleration of about 0.06–0.15 g.
   - **The extension to 0.3 g.** With no drag and constant friction, the real band lets a firm 16 m/s ground pass roll 85–220 m. Readable retro ground passes need the upper part of the range. See *Findings*.
@@ -174,9 +181,20 @@ These are measured with the curve tool.
 - **Ground passes need firm ground.** With no drag, constant rolling friction in the real-pitch band lets firm passes roll 85–220 m, which isn't readable. The upper part of the starting range (0.2–0.3 g) gives passes of about 15–65 m. If the test bench can't make passes readable without distorting other values, that is the kind of concrete problem that would justify a focused issue on speed-dependent rolling resistance or drag.
 - **Where the sideways distance after landing comes from.** #24 reported 34–39 m of sideways distance at rest at the slick end, against 2–5 m of bend in flight, and attributed it to curve on the ground. Measuring it properly (#33) showed it was mostly two other things:
   1. **The exit line.** Bend in flight leaves the ball travelling at an angle, and on slick ground it rolls about 100 m along that line. That is `lateral_m`, a consequence of the ground-pass finding above.
-  2. **Bounce hops.** A lively ball is airborne between bounces, and its spin, which a bounce doesn't remove, keeps curving each hop.
+  2. **Bounce hops.** A lively ball is airborne between bounces, and its spin kept curving each hop. Since #40 a bounce keeps only `bounceSpinRetention` of it.
 
-  Removing rolling curve (#33) changed `curve_after_landing_m` only from 20.0 to 18.5 m (bending shot) and from 11.4 to 11.2 m (bending cross) at the slick, lively end, and from 1.3 to 0.8 m and 1.4 to 1.3 m at the defaults. Whether a bounce should strip or reduce spin is open for research (SOL, #33).
+  Removing rolling curve (#33) changed `curve_after_landing_m` only from 20.0 to 18.5 m (bending shot) and from 11.4 to 11.2 m (bending cross) at the slick, lively end, and from 1.3 to 0.8 m and 1.4 to 1.3 m at the defaults.
+
+  **Bounce spin retention (#40)** then took out the hop curve. Bend in flight is unchanged in every case:
+
+  | `curve_after_landing_m` | Before #40 (spin kept) | 0.25 (reference) | 0.15–0.35 (starting range) |
+  | --- | --- | --- | --- |
+  | Defaults: bending shot / cross | 0.75 / 1.26 m | 0.15 / 0.23 m | — |
+  | Slick, lively end*: bending shot / cross | 18.5 / 11.2 m | 2.5 / 1.9 m | 1.4–3.7 / 1.1–2.7 m |
+
+  \* as in the findings table above.
+
+  The lateral distance at rest still includes the exit line: at the slick, lively end the shot rests 22.5 m and the cross 25.7 m off the launch line (from 37.7 and 34.1 m), almost all of it bend in flight carried about 100 m along slick ground.
 
 ## Properties
 
