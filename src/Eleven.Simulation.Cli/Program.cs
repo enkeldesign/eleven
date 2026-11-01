@@ -18,6 +18,9 @@ using Eleven.Simulation.Harness;
 /// eleven-sim movement &lt;dir&gt; [name=value ...]
 ///                              characterise player movement for a capability profile (the reference
 ///                              by default) and the starting-range grid (#36), e.g. movement out maxSpeed=9
+/// eleven-sim kicks &lt;dir&gt; [name=value ...]
+///                              characterise the manual kick and aftertouch (#37) under the default config
+///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
 /// </summary>
 internal static class Program
 {
@@ -37,8 +40,10 @@ internal static class Program
                 return Curves(args[1], args.Skip(2));
             case "movement" when args.Length >= 2:
                 return Movement(args[1], args.Skip(2));
+            case "kicks" when args.Length >= 2:
+                return Kicks(args[1], args.Skip(2));
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...]");
                 return 2;
         }
     }
@@ -198,6 +203,37 @@ internal static class Program
         }
 
         Console.WriteLine($"config {config.Hash:x16}, {MovementCurves.KeyNumbers(curves)} -> {directory}");
+        return 0;
+    }
+
+    private static int Kicks(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
+
+        // A name is a player capability or a config tunable; each fails on what it doesn't know.
+        PlayerCapabilities profile = PlayerCapabilities.Reference;
+        var configOverrides = new List<KeyValuePair<string, double>>();
+        foreach (KeyValuePair<string, double> o in overrides)
+        {
+            if (PlayerCapabilities.Parameters.Any(p => p.Name == o.Key)) profile = profile.With(o.Key, o.Value);
+            else configOverrides.Add(o);
+        }
+
+        SimConfig config = new SimConfig().With(configOverrides);
+        List<KickCurve> curves = KickCurves.Characterise(config, profile);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "kick-curves.csv")))
+        {
+            KickCurves.WriteCsv(csv, curves);
+        }
+
+        using (var summary = new StreamWriter(Path.Combine(directory, "kick-curves.txt")))
+        {
+            KickCurves.WriteSummary(summary, config, profile, curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {KickCurves.KeyNumbers(config, curves)} -> {directory}");
         return 0;
     }
 
