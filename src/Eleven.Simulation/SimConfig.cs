@@ -9,14 +9,15 @@ namespace Eleven.Simulation
     ///
     /// The physics values are spike placeholders chosen to exercise the code, not tuned feel.
     /// Changing a field's meaning, or adding or reordering fields, bumps <see cref="FormatVersion"/>.
-    /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model.
+    /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model. Version 3 moved
+    /// player movement out to each player's <see cref="PlayerCapabilities"/> (#36).
     ///
     /// The ball-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 2;
+        public const int FormatVersion = 3;
 
         public SimConfig(
             int tickRate = 60,
@@ -30,8 +31,6 @@ namespace Eleven.Simulation
             double magnusCoefficient = 0.006,
             double airSpinDecay = 0.5,
             double groundSpinDecay = 3.0,
-            double dotMaxSpeed = 7.0,
-            double dotAcceleration = 25.0,
             double kickReach = 0.9,
             double kickMaxBallHeight = 0.5,
             double kickSpeed = 18.0,
@@ -55,8 +54,6 @@ namespace Eleven.Simulation
             MagnusCoefficient = magnusCoefficient;
             AirSpinDecay = airSpinDecay;
             GroundSpinDecay = groundSpinDecay;
-            DotMaxSpeed = dotMaxSpeed;
-            DotAcceleration = dotAcceleration;
             KickReach = kickReach;
             KickMaxBallHeight = kickMaxBallHeight;
             KickSpeed = kickSpeed;
@@ -108,12 +105,6 @@ namespace Eleven.Simulation
         /// <summary>Fraction of spin lost per second on the ground.</summary>
         public double GroundSpinDecay { get; }
 
-        /// <summary>m/s at full stick.</summary>
-        public double DotMaxSpeed { get; }
-
-        /// <summary>m/s². Limit on how fast the player's velocity changes.</summary>
-        public double DotAcceleration { get; }
-
         /// <summary>m. Horizontal distance from player to ball centre within which a kick connects.</summary>
         public double KickReach { get; }
 
@@ -157,8 +148,6 @@ namespace Eleven.Simulation
             w.WriteDouble(MagnusCoefficient, nameof(MagnusCoefficient));
             w.WriteDouble(AirSpinDecay, nameof(AirSpinDecay));
             w.WriteDouble(GroundSpinDecay, nameof(GroundSpinDecay));
-            w.WriteDouble(DotMaxSpeed, nameof(DotMaxSpeed));
-            w.WriteDouble(DotAcceleration, nameof(DotAcceleration));
             w.WriteDouble(KickReach, nameof(KickReach));
             w.WriteDouble(KickMaxBallHeight, nameof(KickMaxBallHeight));
             w.WriteDouble(KickSpeed, nameof(KickSpeed));

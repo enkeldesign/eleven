@@ -21,7 +21,7 @@ namespace Eleven.Simulation
 
         public BallState Ball;
 
-        /// <summary>Controllable players, in ascending id order. The spike has exactly one.</summary>
+        /// <summary>Controllable players, in ascending id order. Slice 1 has exactly one.</summary>
         public PlayerState[] Players = Array.Empty<PlayerState>();
 
         public SimState Clone()
@@ -33,8 +33,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball, player count (int32),
-        /// each player. Field order within the ball and players is as declared. Fails on NaN or
-        /// ±Infinity anywhere.
+        /// each player. Field order within the ball and players is as declared, a player's
+        /// capabilities in their own declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
         {
@@ -52,6 +52,8 @@ namespace Eleven.Simulation
             {
                 w.WriteInt32(player.Id);
                 w.WriteInt32(player.OwnerControllerId);
+                w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
+                w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -82,6 +84,11 @@ namespace Eleven.Simulation
                 {
                     Id = r.ReadInt32(),
                     OwnerControllerId = r.ReadInt32(),
+                    Capabilities = new PlayerCapabilities
+                    {
+                        MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
+                        Acceleration = r.ReadDouble("Player.Capabilities.Acceleration"),
+                    },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
                     Heading = r.ReadDouble("Player.Heading"),
@@ -146,6 +153,9 @@ namespace Eleven.Simulation
 
         /// <summary>The controller whose commands move this player (INV-10).</summary>
         public int OwnerControllerId;
+
+        /// <summary>What this footballer can do. Read by the simulation, never changed by it.</summary>
+        public PlayerCapabilities Capabilities;
 
         /// <summary>m, on the pitch plane.</summary>
         public Vec2 Position;

@@ -97,7 +97,7 @@ namespace Eleven.Simulation.Tests
 
             Assert.Equal(full.StateHash(), over.StateHash());
             Vec2 v = diagonal.PeekState().Players[0].Velocity;
-            Assert.Equal(config.DotMaxSpeed, Math.Sqrt(v.LengthSquared), 9);
+            Assert.Equal(PlayerCapabilities.Reference.MaxSpeed, Math.Sqrt(v.LengthSquared), 9);
         }
 
         [Fact]

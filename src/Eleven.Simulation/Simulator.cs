@@ -157,9 +157,11 @@ namespace Eleven.Simulation
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
 
+            // The stick asks for a velocity; the player's own capabilities decide how fast they
+            // run and how quickly they get there, whether speeding up, braking or turning (#36).
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
-            Vec2 change = move * Config.DotMaxSpeed - player.Velocity;
-            double maxChange = Config.DotAcceleration * dt;
+            Vec2 change = move * player.Capabilities.MaxSpeed - player.Velocity;
+            double maxChange = player.Capabilities.Acceleration * dt;
             double changeSquared = change.LengthSquared;
             if (changeSquared > maxChange * maxChange)
             {
@@ -265,12 +267,14 @@ namespace Eleven.Simulation
             // Encoding refuses non-finite values, so this checks every authoritative field.
             state.Encode(new CanonicalWriter());
 
-            for (int i = 1; i < state.Players.Length; i++)
+            for (int i = 0; i < state.Players.Length; i++)
             {
-                if (state.Players[i].Id <= state.Players[i - 1].Id)
+                if (i > 0 && state.Players[i].Id <= state.Players[i - 1].Id)
                 {
                     throw new ArgumentException("Players must be in strictly ascending id order.", nameof(state));
                 }
+
+                state.Players[i].Capabilities.CheckRanges($"Player {state.Players[i].Id}");
             }
 
             return state;

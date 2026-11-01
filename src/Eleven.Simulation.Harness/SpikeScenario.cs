@@ -19,7 +19,7 @@ namespace Eleven.Simulation.Harness
     public static class SpikeScenario
     {
         public const string Id = "spike-1";
-        public const int Version = 1;
+        public const int Version = 2;
         public const ulong Seed = 0x0E1E7E2026UL;
         public const int ControllerId = 1;
         public const int PlayerId = 1;
@@ -43,7 +43,7 @@ namespace Eleven.Simulation.Harness
             },
             Players = new[]
             {
-                new PlayerState { Id = PlayerId, OwnerControllerId = ControllerId, Position = new Vec2(10, 0) },
+                new PlayerState { Id = PlayerId, OwnerControllerId = ControllerId, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(10, 0) },
             },
         };
 

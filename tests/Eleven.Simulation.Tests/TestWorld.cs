@@ -22,7 +22,7 @@ namespace Eleven.Simulation.Tests
                 Velocity = ballVelocity ?? Vec3.Zero,
                 Spin = ballSpin ?? Vec3.Zero,
             },
-            Players = new[] { new PlayerState { Id = PlayerId, OwnerControllerId = Controller, Position = playerPosition ?? Vec2.Zero } },
+            Players = new[] { new PlayerState { Id = PlayerId, OwnerControllerId = Controller, Capabilities = PlayerCapabilities.Reference, Position = playerPosition ?? Vec2.Zero } },
         };
 
         public static Simulator Simulator(SimConfig? config = null, SimState? state = null)

@@ -72,6 +72,7 @@ namespace Eleven.Simulation.Tests
             state.Ball.BeyondGoalLine = true;
             state.Players[0].Heading = -1.25;
             state.Players[0].KickCooldown = 3;
+            state.Players[0].Capabilities = new PlayerCapabilities { MaxSpeed = 9.5, Acceleration = 13.25 };
 
             var w = new CanonicalWriter();
             state.Encode(w);
@@ -104,6 +105,8 @@ namespace Eleven.Simulation.Tests
             Differs(s => s.Ball.BeyondGoalLine = true);
             Differs(s => s.Players[0].Id = 2);
             Differs(s => s.Players[0].OwnerControllerId = 2);
+            Differs(s => s.Players[0].Capabilities.MaxSpeed = 8);
+            Differs(s => s.Players[0].Capabilities.Acceleration = 24);
             Differs(s => s.Players[0].Position = new Vec2(0, 1));
             Differs(s => s.Players[0].Velocity = new Vec2(1, 0));
             Differs(s => s.Players[0].Heading = 1);

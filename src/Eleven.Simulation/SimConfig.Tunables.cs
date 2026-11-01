@@ -5,8 +5,9 @@ using System.Collections.ObjectModel;
 namespace Eleven.Simulation
 {
     /// <summary>
-    /// A config value tools may vary: its unit, its valid range (inclusive), and, where the
-    /// retro-football research gives one, the starting range a feel test bench should explore.
+    /// A value tools may vary, a config value or a player capability: its unit, its valid range
+    /// (inclusive), and, where the retro-football research gives one, the starting range a feel
+    /// test bench should explore.
     /// </summary>
     public sealed class TunableParameter
     {
@@ -20,19 +21,23 @@ namespace Eleven.Simulation
             StartMax = startMax;
         }
 
-        /// <summary>The <see cref="SimConfig"/> constructor parameter it sets, e.g. <c>kickSpeed</c>.</summary>
+        /// <summary>
+        /// The name tools use: a <see cref="SimConfig"/> constructor parameter, e.g. <c>kickSpeed</c>,
+        /// or a <see cref="PlayerCapabilities"/> value, e.g. <c>maxSpeed</c>.
+        /// </summary>
         public string Name { get; }
 
         public string Unit { get; }
 
-        /// <summary>Lowest valid value. The constructor refuses anything outside [Min, Max].</summary>
+        /// <summary>Lowest valid value. Anything outside [Min, Max] is refused.</summary>
         public double Min { get; }
 
         public double Max { get; }
 
         /// <summary>
-        /// The research-derived starting range (docs/simulation/ball.md), or null where the research
-        /// gives none. A starting point for play, to be narrowed by playable evidence, not a target.
+        /// The research-derived starting range (docs/simulation/ball.md and movement.md), or null
+        /// where the research gives none. A starting point for play, to be narrowed by playable
+        /// evidence, not a target.
         /// </summary>
         public double? StartMin { get; }
 
@@ -134,8 +139,6 @@ namespace Eleven.Simulation
                 magnusCoefficient: magnusCoefficient,
                 airSpinDecay: airSpinDecay,
                 groundSpinDecay: groundSpinDecay,
-                dotMaxSpeed: DotMaxSpeed,
-                dotAcceleration: DotAcceleration,
                 kickReach: KickReach,
                 kickMaxBallHeight: KickMaxBallHeight,
                 kickSpeed: kickSpeed,
