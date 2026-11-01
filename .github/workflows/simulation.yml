@@ -51,6 +51,19 @@ jobs:
           path: hashlogs/
           if-no-files-found: error
 
+      # Technical reference curves of the current ball values, not approved feel (#24).
+      - name: Characterise the ball
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll curves ball-curves | tee curves.txt
+          echo "::notice title=Ball curves::$(sed 's| -> .*||' curves.txt)"
+
+      - name: Publish ball curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: ball-curves
+          path: ball-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

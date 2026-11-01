@@ -10,8 +10,11 @@ namespace Eleven.Simulation
     /// The physics values are spike placeholders chosen to exercise the code, not tuned feel.
     /// Changing a field's meaning, or adding or reordering fields, bumps <see cref="FormatVersion"/>.
     /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model.
+    ///
+    /// The ball-feel values tools may vary, and their valid ranges, are listed in
+    /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
-    public sealed class SimConfig
+    public sealed partial class SimConfig
     {
         public const int FormatVersion = 2;
 
@@ -62,6 +65,8 @@ namespace Eleven.Simulation
             KickDirectionError = kickDirectionError;
             KickCooldownTicks = kickCooldownTicks;
             GoalLineX = goalLineX;
+
+            CheckTunableRanges();
 
             // Fails on non-finite values, so a broken config can't be constructed.
             Hash = Fnv1a64.Hash(Encode());

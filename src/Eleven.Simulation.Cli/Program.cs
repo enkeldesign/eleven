@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
@@ -11,6 +12,9 @@ using Eleven.Simulation.Harness;
 /// eleven-sim hashlog &lt;dir&gt;  write the scenario's per-tick hash log
 /// eleven-sim bench [runs]      measure mean simulation-step cost per tick
 /// eleven-sim trace             print the ball and dot every 10 ticks (for scripting the scenario)
+/// eleven-sim curves &lt;dir&gt; [name=value ...]
+///                              characterise the ball under the default config with any tunables
+///                              overridden (#24), e.g. curves out rollingFriction=0.15 kickSpeed=28
 /// </summary>
 internal static class Program
 {
@@ -26,8 +30,10 @@ internal static class Program
                 return Bench(args.Length > 1 ? int.Parse(args[1]) : 30);
             case "trace":
                 return Trace();
+            case "curves" when args.Length >= 2:
+                return Curves(args[1], args.Skip(2));
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...]");
                 return 2;
         }
     }
@@ -123,6 +129,38 @@ internal static class Program
             return $"step mean {Mean(_stepNs):F0} ns/tick (min {sorted[0]:F0}, median {sorted[sorted.Count / 2]:F0}, " +
                 $"max {sorted[sorted.Count - 1]:F0}); state hash mean {Mean(_hashNs):F0} ns/tick";
         }
+    }
+
+    private static int Curves(string directory, IEnumerable<string> settings)
+    {
+        var overrides = new List<KeyValuePair<string, double>>();
+        foreach (string setting in settings)
+        {
+            int eq = setting.IndexOf('=');
+            if (eq <= 0 || !double.TryParse(setting.Substring(eq + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            {
+                Console.Error.WriteLine($"not a name=value setting: {setting}");
+                return 2;
+            }
+
+            overrides.Add(new KeyValuePair<string, double>(setting.Substring(0, eq), value));
+        }
+
+        SimConfig config = new SimConfig().With(overrides);
+        List<BallCurve> curves = BallCurves.Characterise(config);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "ball-curves.csv")))
+        {
+            BallCurves.WriteCsv(csv, config, curves);
+        }
+
+        using (var summary = new StreamWriter(Path.Combine(directory, "ball-curves.txt")))
+        {
+            BallCurves.WriteSummary(summary, config, overrides.Select(o => o.Key).ToList(), curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}: {BallCurves.KeyNumbers(config, curves)} -> {directory}");
+        return 0;
     }
 
     private static int Trace()
