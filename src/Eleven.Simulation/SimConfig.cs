@@ -211,6 +211,50 @@ namespace Eleven.Simulation
         /// <summary>FNV-1a 64 of <see cref="Encode"/>. Stable across runs, processes and platforms.</summary>
         public ulong Hash { get; }
 
+        /// <summary>
+        /// Rebuilds a config from <see cref="Encode"/>'s bytes (#44), so evidence can carry the exact
+        /// config it was made under. Fails clearly on another format version, truncation or trailing
+        /// bytes; the constructor's own checks still apply.
+        /// </summary>
+        public static SimConfig Decode(byte[] data)
+        {
+            var r = new CanonicalReader(data ?? throw new ArgumentNullException(nameof(data)));
+            int format = r.ReadInt32();
+            if (format != FormatVersion) throw new FormatException($"Unsupported config format {format}; this build reads config format {FormatVersion}.");
+
+            var config = new SimConfig(
+                tickRate: r.ReadInt32(),
+                gravity: r.ReadDouble(nameof(Gravity)),
+                ballRadius: r.ReadDouble(nameof(BallRadius)),
+                bounceRestitution: r.ReadDouble(nameof(BounceRestitution)),
+                bounceTangentialRetention: r.ReadDouble(nameof(BounceTangentialRetention)),
+                bounceSpinRetention: r.ReadDouble(nameof(BounceSpinRetention)),
+                settleSpeed: r.ReadDouble(nameof(SettleSpeed)),
+                rollingFriction: r.ReadDouble(nameof(RollingFriction)),
+                stopSpeed: r.ReadDouble(nameof(StopSpeed)),
+                magnusCoefficient: r.ReadDouble(nameof(MagnusCoefficient)),
+                airSpinDecay: r.ReadDouble(nameof(AirSpinDecay)),
+                groundSpinDecay: r.ReadDouble(nameof(GroundSpinDecay)),
+                kickReach: r.ReadDouble(nameof(KickReach)),
+                kickMaxBallHeight: r.ReadDouble(nameof(KickMaxBallHeight)),
+                kickSpeed: r.ReadDouble(nameof(KickSpeed)),
+                kickLoft: r.ReadDouble(nameof(KickLoft)),
+                kickSideSpin: r.ReadDouble(nameof(KickSideSpin)),
+                kickWindUpSeconds: r.ReadDouble(nameof(KickWindUpSeconds)),
+                aftertouchSeconds: r.ReadDouble(nameof(AftertouchSeconds)),
+                aftertouchBend: r.ReadDouble(nameof(AftertouchBend)),
+                aftertouchLift: r.ReadDouble(nameof(AftertouchLift)),
+                passMaxRange: r.ReadDouble(nameof(PassMaxRange)),
+                passArrivalSpeed: r.ReadDouble(nameof(PassArrivalSpeed)),
+                passBackWeight: r.ReadDouble(nameof(PassBackWeight)),
+                passFreeDistance: r.ReadDouble(nameof(PassFreeDistance)),
+                kickCooldownTicks: r.ReadInt32(),
+                goalLineX: r.ReadDouble(nameof(GoalLineX)));
+
+            if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
+            return config;
+        }
+
         /// <summary>The canonical encoding: format version, then every field in declaration order.</summary>
         public byte[] Encode()
         {
