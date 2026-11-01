@@ -61,6 +61,27 @@ namespace Eleven.Simulation.Tests
             Assert.Contains($"key: ", summary.ToString());
         }
 
+        // With no friction a ground pass never stops: like the ball curves, the kick curves measure to
+        // the time limit and leave the rest time empty instead of failing.
+        [Fact]
+        public void A_kick_that_never_comes_to_rest_is_measured_to_the_time_limit()
+        {
+            SimConfig config = Config.With("rollingFriction", 0);
+            List<KickCurve>? curves = null;
+            Exception? failure = Record.Exception(() => curves = KickCurves.Characterise(config, PlayerCapabilities.Reference));
+
+            Assert.Null(failure);
+            KickCurve roller = curves!.First(c => c.Kind == "launch" && c.Loft == 0);
+            Assert.Null(roller.RestSeconds);
+            Assert.True(roller.TotalMetres > roller.LaunchSpeedMps * KickCurves.MaxSeconds * 0.99);
+
+            var csv = new StringWriter();
+            KickCurves.WriteCsv(csv, curves!);
+            Assert.EndsWith(",", csv.ToString().Split('\n')[1]);
+            var summary = new StringWriter();
+            KickCurves.WriteSummary(summary, config, PlayerCapabilities.Reference, curves!);
+        }
+
         // With no drag and no spin, a lofted launch is a projectile: it peaks at vz²/2g and lands
         // after 2vz/g, having carried h · 2vz/g. The measurement agrees to within a tick.
         [Fact]

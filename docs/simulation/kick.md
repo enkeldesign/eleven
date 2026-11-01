@@ -147,7 +147,7 @@ Each run uses the real simulator. One player at rest, facing +x, gives the inten
 | `error_deg` | Measured: the launch's deviation from the intended line, the kicker's execution error. Every row shares a seed and contact tick, so it is the same draw throughout. |
 | `turn_deg`, `spin_radps`, `lift_mps` | At the window's end: how far the horizontal velocity turned since the launch (+ left), the sidespin, and the vertical speed relative to the same kick with no input. |
 | `carry_m`, `peak_m`, `flight_s` | To the first bounce: distance, highest clearance and time. |
-| `total_m`, `lateral_m`, `rest_s` | At rest: distance from the start, distance off the launch line (+ left), and time. |
+| `total_m`, `lateral_m`, `rest_s` | At rest: distance from the start, distance off the launch line (+ left), and time. A ball still moving after 120 s is measured where it is then, with `rest_s` empty, as in the ball curves. |
 
 `kick-curves.txt` records:
 - the build, the config hash and format, and the tick rate;

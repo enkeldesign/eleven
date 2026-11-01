@@ -56,7 +56,8 @@ namespace Eleven.Simulation.Harness
         /// <summary>Where the ball comes to rest, off the launch line, + left.</summary>
         public double LateralMetres;
 
-        public double RestSeconds;
+        /// <summary>Time to come to rest, or null if it hadn't after <see cref="KickCurves.MaxSeconds"/>.</summary>
+        public double? RestSeconds;
     }
 
     /// <summary>
@@ -66,6 +67,7 @@ namespace Eleven.Simulation.Harness
     /// </summary>
     public static class KickCurves
     {
+        /// <summary>Longest a kick is followed; one still moving then has no rest time.</summary>
         public const double MaxSeconds = 120;
 
         public static readonly ReadOnlyCollection<double> Strengths = Array.AsReadOnly(new[] { 0.25, 0.5, 0.75, 1.0 });
@@ -205,15 +207,18 @@ namespace Eleven.Simulation.Harness
                 bool resting = b.Velocity.X == 0 && b.Velocity.Y == 0 && b.Velocity.Z == 0 && b.Position.Z == radius;
                 if (t >= windowEnd && resting)
                 {
-                    Vec2 travelled = b.Position.Horizontal - start;
-                    curve.TotalMetres = Length(travelled);
-                    curve.LateralMetres = line.X * travelled.Y - line.Y * travelled.X;
                     curve.RestSeconds = (t - contact + 1) / rate;
-                    return curve;
+                    break;
                 }
             }
 
-            throw new InvalidOperationException($"The kick did not come to rest within {MaxSeconds} s.");
+            if (contact < 0) throw new InvalidOperationException("The characterisation's kick never connected.");
+
+            // At rest, or where the ball was when time ran out, as the ball curves do.
+            Vec2 travelled = sim.PeekState().Ball.Position.Horizontal - start;
+            curve.TotalMetres = Length(travelled);
+            curve.LateralMetres = line.X * travelled.Y - line.Y * travelled.X;
+            return curve;
         }
 
         private static double Length(Vec2 v) => SimMath.Sqrt(v.LengthSquared);
@@ -237,7 +242,7 @@ namespace Eleven.Simulation.Harness
                     F(c.Strength), F(c.Loft), c.Input, F(c.WindowSeconds),
                     F(c.LaunchSpeedMps), F(c.LaunchElevationDegrees), F(c.ErrorDegrees),
                     F(c.TurnDegrees), F(c.SpinRadps), F(c.LiftMps),
-                    F(c.CarryMetres), F(c.PeakMetres), F(c.FlightSeconds), F(c.TotalMetres), F(c.LateralMetres), F(c.RestSeconds)));
+                    F(c.CarryMetres), F(c.PeakMetres), F(c.FlightSeconds), F(c.TotalMetres), F(c.LateralMetres), c.RestSeconds.HasValue ? F(c.RestSeconds.Value) : ""));
             }
         }
 
