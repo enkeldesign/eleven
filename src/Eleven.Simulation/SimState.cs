@@ -21,19 +21,19 @@ namespace Eleven.Simulation
 
         public BallState Ball;
 
-        /// <summary>Controllable dots, in ascending id order. The spike has exactly one.</summary>
-        public DotState[] Dots = Array.Empty<DotState>();
+        /// <summary>Controllable players, in ascending id order. The spike has exactly one.</summary>
+        public PlayerState[] Players = Array.Empty<PlayerState>();
 
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
-            copy.Dots = (DotState[])Dots.Clone();
+            copy.Players = (PlayerState[])Players.Clone();
             return copy;
         }
 
         /// <summary>
-        /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball, dot count (int32),
-        /// each dot. Field order within the ball and dots is as declared. Fails on NaN or
+        /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball, player count (int32),
+        /// each player. Field order within the ball and players is as declared. Fails on NaN or
         /// ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
@@ -47,15 +47,15 @@ namespace Eleven.Simulation
             WriteVec3(w, Ball.Spin, "Ball.Spin");
             w.WriteBool(Ball.BeyondGoalLine);
 
-            w.WriteInt32(Dots.Length);
-            foreach (DotState dot in Dots)
+            w.WriteInt32(Players.Length);
+            foreach (PlayerState player in Players)
             {
-                w.WriteInt32(dot.Id);
-                w.WriteInt32(dot.OwnerControllerId);
-                WriteVec2(w, dot.Position, "Dot.Position");
-                WriteVec2(w, dot.Velocity, "Dot.Velocity");
-                w.WriteDouble(dot.Heading, "Dot.Heading");
-                w.WriteInt32(dot.KickCooldown);
+                w.WriteInt32(player.Id);
+                w.WriteInt32(player.OwnerControllerId);
+                WriteVec2(w, player.Position, "Player.Position");
+                WriteVec2(w, player.Velocity, "Player.Velocity");
+                w.WriteDouble(player.Heading, "Player.Heading");
+                w.WriteInt32(player.KickCooldown);
             }
         }
 
@@ -74,17 +74,17 @@ namespace Eleven.Simulation
             state.Ball.BeyondGoalLine = r.ReadBool();
 
             int count = r.ReadInt32();
-            if (count < 0 || count > 1024) throw new FormatException($"Implausible dot count {count}.");
-            state.Dots = new DotState[count];
+            if (count < 0 || count > 1024) throw new FormatException($"Implausible player count {count}.");
+            state.Players = new PlayerState[count];
             for (int i = 0; i < count; i++)
             {
-                state.Dots[i] = new DotState
+                state.Players[i] = new PlayerState
                 {
                     Id = r.ReadInt32(),
                     OwnerControllerId = r.ReadInt32(),
-                    Position = ReadVec2(r, "Dot.Position"),
-                    Velocity = ReadVec2(r, "Dot.Velocity"),
-                    Heading = r.ReadDouble("Dot.Heading"),
+                    Position = ReadVec2(r, "Player.Position"),
+                    Velocity = ReadVec2(r, "Player.Velocity"),
+                    Heading = r.ReadDouble("Player.Heading"),
                     KickCooldown = r.ReadInt32(),
                 };
             }
@@ -140,11 +140,11 @@ namespace Eleven.Simulation
         public bool BeyondGoalLine;
     }
 
-    public struct DotState
+    public struct PlayerState
     {
         public int Id;
 
-        /// <summary>The controller whose commands move this dot (INV-10).</summary>
+        /// <summary>The controller whose commands move this player (INV-10).</summary>
         public int OwnerControllerId;
 
         /// <summary>m, on the pitch plane.</summary>
@@ -153,11 +153,11 @@ namespace Eleven.Simulation
         /// <summary>m/s.</summary>
         public Vec2 Velocity;
 
-        /// <summary>rad, direction of travel; kept when the dot stops. Kicks go this way.</summary>
+        /// <summary>rad, direction of travel; kept when the player stops. Kicks go this way.</summary>
         public double Heading;
 
         /// <summary>
-        /// Kick cooldown: ticks left before this dot can kick again. Set to the configured cooldown
+        /// Kick cooldown: ticks left before this player can kick again. Set to the configured cooldown
         /// by a kick, decreased by one at the start of each later step.
         /// </summary>
         public int KickCooldown;

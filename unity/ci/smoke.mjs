@@ -11,11 +11,11 @@
 //   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
 //     (ADR-0002: cross-runtime determinism is a gate)
 //   - Run scenario: the tap is acknowledged, and the result panel fits its text
-//   - stick: dragging it moves the dot (from the host's trace lines), and the camera keeps the
-//     dot and ball inside the area the HUD leaves free
+//   - stick: dragging it moves the player (from the host's trace lines), and the camera keeps the
+//     player and ball inside the area the HUD leaves free
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
-//   - rendering: the screenshot contains the pitch, line, dot and ball colours
+//   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
 // server stopped the player still boots from the cache.
@@ -37,12 +37,12 @@ fs.mkdirSync(outDir, { recursive: true });
 const colours = {
   pitch: [0x2e, 0x6b, 0x3a],
   line: [0xf2, 0xf2, 0xf2],
-  dot: [0x99, 0xcc, 0x44],
+  player: [0x99, 0xcc, 0x44],
   ball: [0xf7, 0xe2, 0x6b],
 };
 
 const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
-const tracePattern = /ELEVEN trace tick=(\d+) dot=(-?[\d.]+),(-?[\d.]+)/;
+const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
 
 const results = { checks: [], notes: {} };
 const annotate = (level, title, message) =>
@@ -212,7 +212,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
     check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
-    // Stick: drag right from the stick's rest position and hold; the dot should move along +x.
+    // Stick: drag right from the stick's rest position and hold; the player should move along +x.
     // Trace lines come once a simulated second, so wait for a fresh one on each side of the drag.
     const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     const origin = at(n[8], n[9]);
@@ -234,14 +234,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     else await page.mouse.up();
     const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     notes.stickMovedMetres = before && after ? Number(after[2]) - Number(before[2]) : NaN;
-    const view = after?.input.match(/view=dot:(\w+),ball:(\w+)/);
-    check('dot and ball stay clear of the HUD', !!view && view[1] === 'in' && view[2] === 'in',
+    const view = after?.input.match(/view=player:(\w+),ball:(\w+)/);
+    check('player and ball stay clear of the HUD', !!view && view[1] === 'in' && view[2] === 'in',
       view ? view[0] : 'no view report in the trace line');
     const pacing = after?.input.match(/dropped=(\d+) frames=(\d+) interval=([\d.]+)/);
     notes.dropped = pacing ? `${pacing[1]}/${pacing[2]}` : 'none';
     check('counts dropped frames', !!pacing && Number(pacing[2]) > 0,
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
-    check('stick moves the dot', notes.stickMovedMetres > 3, before && after ? `dot x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
+    check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
     // Kick button: a tap must be taken without errors (whether it connects depends on position).
     const fromKick = logs.length;
@@ -274,7 +274,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       return out;
     }, { data: png.toString('base64'), colours });
-    check('pitch, line, dot and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
+    check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');

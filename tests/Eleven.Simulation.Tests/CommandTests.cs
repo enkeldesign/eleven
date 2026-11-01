@@ -15,21 +15,21 @@ namespace Eleven.Simulation.Tests
             for (long t = 0; t < 5; t++)
             {
                 Step(sim);
-                Assert.Equal(0, sim.PeekState().Dots[0].Velocity.X);
+                Assert.Equal(0, sim.PeekState().Players[0].Velocity.X);
             }
 
             Step(sim, Move(5, 1, 0));
-            Assert.True(sim.PeekState().Dots[0].Velocity.X > 0);
+            Assert.True(sim.PeekState().Players[0].Velocity.X > 0);
         }
 
         [Fact]
-        public void An_unowned_command_cannot_control_the_dot()
+        public void An_unowned_command_cannot_control_the_player()
         {
             var sim = Simulator();
             var events = Step(sim, Move(0, 1, 0, kick: true, controller: Controller + 1));
 
-            Assert.Equal(Vec2.Zero.X, sim.PeekState().Dots[0].Velocity.X);
-            Assert.Equal(Vec2.Zero.Y, sim.PeekState().Dots[0].Velocity.Y);
+            Assert.Equal(Vec2.Zero.X, sim.PeekState().Players[0].Velocity.X);
+            Assert.Equal(Vec2.Zero.Y, sim.PeekState().Players[0].Velocity.Y);
             Assert.Equal(new SimEvent(0, SimEventKind.CommandRejected, Controller + 1, CommandRejection.Unowned), Assert.Single(events));
         }
 
@@ -42,7 +42,7 @@ namespace Eleven.Simulation.Tests
 
             var events = Step(sim, Move(1, 1, 0), Move(3, 1, 0));
 
-            Assert.Equal(0, sim.PeekState().Dots[0].Velocity.X);
+            Assert.Equal(0, sim.PeekState().Players[0].Velocity.X);
             Assert.Equal(
                 new[] { CommandRejection.Stale, CommandRejection.Early },
                 events.Select(e => e.Rejection).ToArray());
@@ -54,7 +54,7 @@ namespace Eleven.Simulation.Tests
             var sim = Simulator();
             var events = Step(sim, Move(0, 1, 0), Move(0, -1, 0));
 
-            Assert.Equal(0, sim.PeekState().Dots[0].Velocity.X);
+            Assert.Equal(0, sim.PeekState().Players[0].Velocity.X);
             Assert.Equal(2, events.Count(e => e.Rejection == CommandRejection.Duplicate));
         }
 
@@ -96,7 +96,7 @@ namespace Eleven.Simulation.Tests
             }
 
             Assert.Equal(full.StateHash(), over.StateHash());
-            Vec2 v = diagonal.PeekState().Dots[0].Velocity;
+            Vec2 v = diagonal.PeekState().Players[0].Velocity;
             Assert.Equal(config.DotMaxSpeed, Math.Sqrt(v.LengthSquared), 9);
         }
 

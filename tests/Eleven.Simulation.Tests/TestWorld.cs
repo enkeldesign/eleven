@@ -6,13 +6,13 @@ namespace Eleven.Simulation.Tests
     internal static class TestWorld
     {
         public const int Controller = 7;
-        public const int DotId = 1;
+        public const int PlayerId = 1;
         public const int BallId = 100;
 
         public static SimConfig Config() => new SimConfig();
 
         public static SimState State(SimConfig config, Vec3? ballPosition = null, Vec3? ballVelocity = null, Vec3? ballSpin = null,
-            Vec2? dotPosition = null) => new SimState
+            Vec2? playerPosition = null) => new SimState
         {
             Seed = 99,
             Ball = new BallState
@@ -22,7 +22,7 @@ namespace Eleven.Simulation.Tests
                 Velocity = ballVelocity ?? Vec3.Zero,
                 Spin = ballSpin ?? Vec3.Zero,
             },
-            Dots = new[] { new DotState { Id = DotId, OwnerControllerId = Controller, Position = dotPosition ?? Vec2.Zero } },
+            Players = new[] { new PlayerState { Id = PlayerId, OwnerControllerId = Controller, Position = playerPosition ?? Vec2.Zero } },
         };
 
         public static Simulator Simulator(SimConfig? config = null, SimState? state = null)

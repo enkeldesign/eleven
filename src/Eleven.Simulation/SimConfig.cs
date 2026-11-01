@@ -111,10 +111,10 @@ namespace Eleven.Simulation
         /// <summary>m/s at full stick.</summary>
         public double DotMaxSpeed { get; }
 
-        /// <summary>m/s². Limit on how fast the dot's velocity changes.</summary>
+        /// <summary>m/s². Limit on how fast the player's velocity changes.</summary>
         public double DotAcceleration { get; }
 
-        /// <summary>m. Horizontal distance from dot to ball centre within which a kick connects.</summary>
+        /// <summary>m. Horizontal distance from player to ball centre within which a kick connects.</summary>
         public double KickReach { get; }
 
         /// <summary>m. A ball centre higher than this can't be kicked.</summary>
@@ -129,10 +129,10 @@ namespace Eleven.Simulation
         /// <summary>rad/s. Largest sidespin a kick gives (about +z).</summary>
         public double KickSideSpin { get; }
 
-        /// <summary>rad. Largest random deviation of a kick from the dot's heading.</summary>
+        /// <summary>rad. Largest random deviation of a kick from the player's heading.</summary>
         public double KickDirectionError { get; }
 
-        /// <summary>Ticks after a kick before the same dot can kick again.</summary>
+        /// <summary>Ticks after a kick before the same player can kick again.</summary>
         public int KickCooldownTicks { get; }
 
         /// <summary>m. x of the goal line; the ball crosses it when wholly beyond, x − radius &gt; this.</summary>

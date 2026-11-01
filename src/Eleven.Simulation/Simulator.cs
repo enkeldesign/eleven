@@ -12,7 +12,7 @@ namespace Eleven.Simulation
     ///
     /// Order within a step:
     /// 1. resolve commands for this tick,
-    /// 2. count down kick cooldowns, move dots and update their headings,
+    /// 2. count down kick cooldowns, move players and update their headings,
     /// 3. apply kicks,
     /// 4. integrate the ball,
     /// 5. check the goal line,
@@ -56,18 +56,18 @@ namespace Eleven.Simulation
             ResolveCommands(tick, commands, events);
 
             double dt = Config.TickSeconds;
-            for (int i = 0; i < _state.Dots.Length; i++)
+            for (int i = 0; i < _state.Players.Length; i++)
             {
-                Command? command = FindAccepted(_state.Dots[i].OwnerControllerId);
-                StepDot(ref _state.Dots[i], command, dt);
+                Command? command = FindAccepted(_state.Players[i].OwnerControllerId);
+                StepPlayer(ref _state.Players[i], command, dt);
             }
 
-            for (int i = 0; i < _state.Dots.Length; i++)
+            for (int i = 0; i < _state.Players.Length; i++)
             {
-                Command? command = FindAccepted(_state.Dots[i].OwnerControllerId);
+                Command? command = FindAccepted(_state.Players[i].OwnerControllerId);
                 if (command.HasValue && command.Value.Kick)
                 {
-                    TryKick(ref _state.Dots[i], tick, events);
+                    TryKick(ref _state.Players[i], tick, events);
                 }
             }
 
@@ -125,9 +125,9 @@ namespace Eleven.Simulation
             if (c.Tick > tick) return CommandRejection.Early;
             if (!SimMath.IsFinite(c.Move.X) || !SimMath.IsFinite(c.Move.Y)) return CommandRejection.Invalid;
 
-            foreach (DotState dot in _state.Dots)
+            foreach (PlayerState player in _state.Players)
             {
-                if (dot.OwnerControllerId == c.ControllerId) return CommandRejection.None;
+                if (player.OwnerControllerId == c.ControllerId) return CommandRejection.None;
             }
 
             return CommandRejection.Unowned;
@@ -153,12 +153,12 @@ namespace Eleven.Simulation
             return null;
         }
 
-        private void StepDot(ref DotState dot, Command? command, double dt)
+        private void StepPlayer(ref PlayerState player, Command? command, double dt)
         {
-            if (dot.KickCooldown > 0) dot.KickCooldown--;
+            if (player.KickCooldown > 0) player.KickCooldown--;
 
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
-            Vec2 change = move * Config.DotMaxSpeed - dot.Velocity;
+            Vec2 change = move * Config.DotMaxSpeed - player.Velocity;
             double maxChange = Config.DotAcceleration * dt;
             double changeSquared = change.LengthSquared;
             if (changeSquared > maxChange * maxChange)
@@ -166,28 +166,28 @@ namespace Eleven.Simulation
                 change = change * (maxChange / SimMath.Sqrt(changeSquared));
             }
 
-            dot.Velocity += change;
-            dot.Position += dot.Velocity * dt;
+            player.Velocity += change;
+            player.Position += player.Velocity * dt;
 
-            // Below a millimetre per second the dot counts as stopped and keeps its last heading.
-            if (dot.Velocity.LengthSquared > 1e-6)
+            // Below a millimetre per second the player counts as stopped and keeps its last heading.
+            if (player.Velocity.LengthSquared > 1e-6)
             {
-                dot.Heading = SimMath.Atan2(dot.Velocity.Y, dot.Velocity.X);
+                player.Heading = SimMath.Atan2(player.Velocity.Y, player.Velocity.X);
             }
         }
 
-        private void TryKick(ref DotState dot, long tick, List<SimEvent> events)
+        private void TryKick(ref PlayerState player, long tick, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
-            if (dot.KickCooldown > 0 || ball.Position.Z > Config.KickMaxBallHeight) return;
+            if (player.KickCooldown > 0 || ball.Position.Z > Config.KickMaxBallHeight) return;
 
-            Vec2 offset = ball.Position.Horizontal - dot.Position;
+            Vec2 offset = ball.Position.Horizontal - player.Position;
             if (offset.LengthSquared > Config.KickReach * Config.KickReach) return;
 
-            var directionDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, dot.Id);
-            var spinDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickSpin, dot.Id);
+            var directionDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, player.Id);
+            var spinDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickSpin, player.Id);
 
-            double direction = dot.Heading + (2 * directionDraws.NextUniform() - 1) * Config.KickDirectionError;
+            double direction = player.Heading + (2 * directionDraws.NextUniform() - 1) * Config.KickDirectionError;
             double horizontal = Config.KickSpeed * SimMath.Cos(Config.KickLoft);
             ball.Velocity = new Vec3(
                 horizontal * SimMath.Cos(direction),
@@ -195,8 +195,8 @@ namespace Eleven.Simulation
                 Config.KickSpeed * SimMath.Sin(Config.KickLoft));
             ball.Spin = new Vec3(0, 0, Config.KickSideSpin * (0.5 + 0.5 * spinDraws.NextUniform()));
 
-            dot.KickCooldown = Config.KickCooldownTicks;
-            events.Add(new SimEvent(tick, SimEventKind.Kicked, dot.Id));
+            player.KickCooldown = Config.KickCooldownTicks;
+            events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
 
         private void StepBall(long tick, double dt, List<SimEvent> events)
@@ -265,11 +265,11 @@ namespace Eleven.Simulation
             // Encoding refuses non-finite values, so this checks every authoritative field.
             state.Encode(new CanonicalWriter());
 
-            for (int i = 1; i < state.Dots.Length; i++)
+            for (int i = 1; i < state.Players.Length; i++)
             {
-                if (state.Dots[i].Id <= state.Dots[i - 1].Id)
+                if (state.Players[i].Id <= state.Players[i - 1].Id)
                 {
-                    throw new ArgumentException("Dots must be in strictly ascending id order.", nameof(state));
+                    throw new ArgumentException("Players must be in strictly ascending id order.", nameof(state));
                 }
             }
 

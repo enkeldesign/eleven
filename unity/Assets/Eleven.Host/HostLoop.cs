@@ -43,7 +43,7 @@ namespace Eleven.Host
         private bool _paused;
         private double _lastTime;
         private double _accumulator;
-        private Vector2 _previousDot;
+        private Vector2 _previousPlayer;
         private Vector3 _previousBall;
         private GUIStyle _textStyle;
         private GUIStyle _buildStyle;
@@ -121,7 +121,7 @@ namespace Eleven.Host
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
             _view.Render(
-                Vector2.Lerp(_previousDot, ToVector(state.Dots[0].Position), alpha),
+                Vector2.Lerp(_previousPlayer, ToVector(state.Players[0].Position), alpha),
                 Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
                 _layout);
         }
@@ -145,7 +145,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} dot={s.Dots[0].Position.X:F2},{s.Dots[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -162,7 +162,7 @@ namespace Eleven.Host
         private void RememberPrevious()
         {
             SimState state = _simulator.PeekState();
-            _previousDot = ToVector(state.Dots[0].Position);
+            _previousPlayer = ToVector(state.Players[0].Position);
             _previousBall = ToVector(state.Ball.Position);
         }
 

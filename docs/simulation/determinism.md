@@ -21,7 +21,7 @@ The rules the engine-free simulation follows so that the same code, config, seed
 
 `tick-v1`: state N is the state after N steps. Step N applies the commands whose tick is N and turns state N into state N+1. Hash N is the hash of state N, so a 60-second run at 60 Hz has 3601 hashes, ticks 0 to 3600.
 
-Inside a step: resolve commands → count down kick cooldowns, move dots, update headings → apply kicks → integrate the ball → check the goal line → advance the tick.
+Inside a step: resolve commands → count down kick cooldowns, move players, update headings → apply kicks → integrate the ball → check the goal line → advance the tick.
 
 The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`.
 
@@ -29,17 +29,17 @@ The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`
 
 A command is `(controller id, tick, move vector, kick)`, recorded before any assistance (INV-10).
 
-- A command controls the dot whose `OwnerControllerId` equals its controller id. Ownership is part of state. A command for a controller that owns no dot is rejected as `Unowned`.
+- A command controls the player whose `OwnerControllerId` equals its controller id. Ownership is part of state. A command for a controller that owns no player is rejected as `Unowned`.
 - A command applies only at its own tick. Passed to a step after its tick, it is `Stale`; before, `Early`.
 - Two or more commands for the same controller at the same tick are all rejected as `Duplicate`. Resolving them in submission order would make the result depend on the order an adapter happened to use.
 - A non-finite move vector is `Invalid`. A move vector longer than 1 is scaled to length 1.
 - Accepted commands are applied in ascending controller id. Submission order never matters.
-- A dot with no accepted command in a tick gets a neutral command: no move, no kick.
+- A player with no accepted command in a tick gets a neutral command: no move, no kick.
 - Every rejection emits a `CommandRejected` event naming the controller and the reason.
 
 ## Events
 
-`Kicked` (subject: dot), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller). They're the simulation's internal events, not the match-result contract (INV-14).
+`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller). They're the simulation's internal events, not the match-result contract (INV-14).
 
 **Goal-line crossing** is geometry only. The ball is beyond the line when it is wholly past it: `x − radius > GoalLineX`. `BallState.BeyondGoalLine` records whether that held after the previous step. The event fires only on the step where it goes from false to true, so a ball resting beyond the line emits one event, not one per tick. A ball that comes back behind the line clears the flag and can cross again.
 
@@ -72,7 +72,7 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 - Booleans: one byte, 0 or 1.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), dot count, then each dot (id, owner controller id, position, velocity, heading, kick cooldown).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, position, velocity, heading, kick cooldown).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.

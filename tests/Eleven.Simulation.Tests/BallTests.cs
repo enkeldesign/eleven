@@ -102,12 +102,12 @@ namespace Eleven.Simulation.Tests
             var events = Step(sim, Move(0, 1, 0, kick: true));
 
             BallState ball = sim.PeekState().Ball;
-            Assert.Contains(new SimEvent(0, SimEventKind.Kicked, DotId), events);
+            Assert.Contains(new SimEvent(0, SimEventKind.Kicked, PlayerId), events);
             Assert.True(ball.Velocity.Z > 0);
             Assert.True(ball.Spin.Z > 0);
             double heading = Math.Atan2(ball.Velocity.Y, ball.Velocity.X);
             Assert.InRange(heading, -config.KickDirectionError, config.KickDirectionError);
-            Assert.Equal(config.KickCooldownTicks, sim.PeekState().Dots[0].KickCooldown);
+            Assert.Equal(config.KickCooldownTicks, sim.PeekState().Players[0].KickCooldown);
         }
 
         [Fact]
@@ -122,11 +122,11 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void A_dot_cooling_down_cannot_kick()
+        public void A_player_cooling_down_cannot_kick()
         {
             var config = Config();
             SimState state = State(config, ballPosition: new Vec3(0.5, 0, config.BallRadius));
-            state.Dots[0].KickCooldown = 2;
+            state.Players[0].KickCooldown = 2;
             var sim = Simulator(config, state);
 
             Assert.DoesNotContain(Step(sim, Move(0, 0, 0, kick: true)), e => e.Kind == SimEventKind.Kicked);

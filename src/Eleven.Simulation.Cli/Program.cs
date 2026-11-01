@@ -11,7 +11,7 @@ using Eleven.Simulation.Harness;
 /// <summary>
 /// eleven-sim hashlog &lt;dir&gt;  write the scenario's per-tick hash log
 /// eleven-sim bench [runs]      measure mean simulation-step cost per tick
-/// eleven-sim trace             print the ball and dot every 10 ticks (for scripting the scenario)
+/// eleven-sim trace             print the ball and player every 10 ticks (for scripting the scenario)
 /// eleven-sim curves &lt;dir&gt; [name=value ...]
 ///                              characterise the ball under the default config with any tunables
 ///                              overridden (#24), e.g. curves out rollingFriction=0.15 kickSpeed=28
@@ -169,11 +169,11 @@ internal static class Program
         {
             if (state.Tick % 10 != 0) return;
             BallState b = state.Ball;
-            DotState d = state.Dots[0];
+            PlayerState d = state.Players[0];
             Console.WriteLine(
                 $"{state.Tick,5} ball ({b.Position.X,7:F2} {b.Position.Y,6:F2} {b.Position.Z,5:F2}) " +
                 $"v ({b.Velocity.X,6:F2} {b.Velocity.Y,6:F2} {b.Velocity.Z,6:F2}) spin {b.Spin.Z,5:F2} " +
-                $"dot ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown}");
+                $"player ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown}");
         }).Events.ForEach(e => Console.WriteLine($"event {e}"));
         return 0;
     }
