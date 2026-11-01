@@ -52,12 +52,12 @@ namespace Eleven.Simulation
         /// </summary>
         public static readonly ReadOnlyCollection<TunableParameter> Parameters = Array.AsReadOnly(new[]
         {
-            new TunableParameter("maxSpeed", "m/s", 1, 15, 7, 10),
-            new TunableParameter("acceleration", "m/s²", 1, 100, 12, 30),
-            new TunableParameter("kickPower", "fraction of kickSpeed", 0.1, 1),
-            new TunableParameter("kickError", "rad", 0, 0.5),
-            new TunableParameter("passVision", "rad", 0, Math.PI),
-            new TunableParameter("passAnticipation", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.PlayerGroup, "maxSpeed", "m/s", 1, 15, 7, 10),
+            new TunableParameter(TunableParameter.PlayerGroup, "acceleration", "m/s²", 1, 100, 12, 30),
+            new TunableParameter(TunableParameter.PlayerGroup, "kickPower", "fraction of kickSpeed", 0.1, 1),
+            new TunableParameter(TunableParameter.PlayerGroup, "kickError", "rad", 0, 0.5),
+            new TunableParameter(TunableParameter.PlayerGroup, "passVision", "rad", 0, Math.PI),
+            new TunableParameter(TunableParameter.PlayerGroup, "passAnticipation", "fraction", 0, 1),
         });
 
         /// <summary>

@@ -35,7 +35,13 @@ namespace Eleven.Simulation.Harness
 
         public static int DurationTicks(SimConfig config) => DurationSeconds * config.TickRate;
 
-        public static SimState InitialState(SimConfig config) => new SimState
+        public static SimState InitialState(SimConfig config) => InitialState(config, PlayerCapabilities.Reference);
+
+        /// <summary>
+        /// The same start with the player's capabilities replaced: the feel test bench's standard
+        /// practice start (#45).
+        /// </summary>
+        public static SimState InitialState(SimConfig config, PlayerCapabilities capabilities) => new SimState
         {
             Tick = 0,
             Seed = Seed,
