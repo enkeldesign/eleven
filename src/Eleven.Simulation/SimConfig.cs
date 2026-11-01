@@ -9,14 +9,14 @@ namespace Eleven.Simulation
     ///
     /// The physics values are spike placeholders chosen to exercise the code, not tuned feel.
     /// Changing a field's meaning, or adding or reordering fields, bumps <see cref="FormatVersion"/>.
-    /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model. Version 3 added air drag.
+    /// Version 2 dropped the maths backend: ADR-0002 leaves one maths model.
     ///
     /// The ball-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 3;
+        public const int FormatVersion = 2;
 
         public SimConfig(
             int tickRate = 60,
@@ -30,7 +30,6 @@ namespace Eleven.Simulation
             double magnusCoefficient = 0.006,
             double airSpinDecay = 0.5,
             double groundSpinDecay = 3.0,
-            double airDrag = 0.0,
             double dotMaxSpeed = 7.0,
             double dotAcceleration = 25.0,
             double kickReach = 0.9,
@@ -56,7 +55,6 @@ namespace Eleven.Simulation
             MagnusCoefficient = magnusCoefficient;
             AirSpinDecay = airSpinDecay;
             GroundSpinDecay = groundSpinDecay;
-            AirDrag = airDrag;
             DotMaxSpeed = dotMaxSpeed;
             DotAcceleration = dotAcceleration;
             KickReach = kickReach;
@@ -110,12 +108,6 @@ namespace Eleven.Simulation
         /// <summary>Fraction of spin lost per second on the ground.</summary>
         public double GroundSpinDecay { get; }
 
-        /// <summary>
-        /// 1/m. Quadratic air drag: deceleration = airDrag × speed². 0 is no drag, the spike's
-        /// pure-parabola flight. A real football is roughly 0.01–0.02; the value is a feel knob.
-        /// </summary>
-        public double AirDrag { get; }
-
         /// <summary>m/s at full stick.</summary>
         public double DotMaxSpeed { get; }
 
@@ -165,7 +157,6 @@ namespace Eleven.Simulation
             w.WriteDouble(MagnusCoefficient, nameof(MagnusCoefficient));
             w.WriteDouble(AirSpinDecay, nameof(AirSpinDecay));
             w.WriteDouble(GroundSpinDecay, nameof(GroundSpinDecay));
-            w.WriteDouble(AirDrag, nameof(AirDrag));
             w.WriteDouble(DotMaxSpeed, nameof(DotMaxSpeed));
             w.WriteDouble(DotAcceleration, nameof(DotAcceleration));
             w.WriteDouble(KickReach, nameof(KickReach));

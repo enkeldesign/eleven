@@ -45,13 +45,13 @@ namespace Eleven.Simulation.Tests
             var original = new SimConfig();
             SimConfig changed = original.With(new[]
             {
-                new KeyValuePair<string, double>("airDrag", 0.015),
+                new KeyValuePair<string, double>("rollingFriction", 0.15),
                 new KeyValuePair<string, double>("kickSpeed", 25),
             });
 
-            Assert.Equal(0.015, changed.AirDrag);
+            Assert.Equal(0.15, changed.RollingFriction);
             Assert.Equal(25, changed.KickSpeed);
-            foreach (TunableParameter p in SimConfig.Tunables.Where(p => p.Name != "airDrag" && p.Name != "kickSpeed"))
+            foreach (TunableParameter p in SimConfig.Tunables.Where(p => p.Name != "rollingFriction" && p.Name != "kickSpeed"))
             {
                 Assert.Equal(original.Get(p.Name), changed.Get(p.Name));
             }
@@ -61,6 +61,27 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(original.GoalLineX, changed.GoalLineX);
             Assert.NotEqual(original.Hash, changed.Hash);
             Assert.Equal(original.Hash, original.With(Array.Empty<KeyValuePair<string, double>>()).Hash);
+        }
+
+        [Fact]
+        public void Research_starting_ranges_lie_within_the_valid_ranges_and_contain_the_defaults()
+        {
+            var config = new SimConfig();
+            TunableParameter[] researched = SimConfig.Tunables.Where(p => p.StartMin.HasValue).ToArray();
+
+            // #24: kick speed, loft, spin/curve, bounce and ground friction have research-derived starting ranges.
+            foreach (string name in new[] { "kickSpeed", "kickLoft", "kickSideSpin", "magnusCoefficient", "bounceRestitution", "bounceTangentialRetention", "rollingFriction" })
+            {
+                Assert.Contains(researched, p => p.Name == name);
+            }
+
+            foreach (TunableParameter p in researched)
+            {
+                Assert.True(p.StartMax.HasValue, p.Name);
+                Assert.InRange(p.StartMin!.Value, p.Min, p.StartMax!.Value);
+                Assert.InRange(p.StartMax.Value, p.StartMin.Value, p.Max);
+                Assert.InRange(config.Get(p.Name), p.StartMin.Value, p.StartMax.Value);
+            }
         }
 
         [Fact]

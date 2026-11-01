@@ -7,15 +7,15 @@ namespace Eleven.Simulation.Tests
 {
     /// <summary>
     /// Fuzzed properties of the ball model (#24), over seeded random balls and configs within the
-    /// documented valid ranges (<see cref="SimConfig.Tunables"/>), with and without air drag.
+    /// documented valid ranges (<see cref="SimConfig.Tunables"/>).
     ///
     /// Each property has a companion test that feeds its check a deliberately broken trajectory and
     /// shows the check catches it, so a passing property means something.
     ///
     /// The energy allowance is the integrator's known numerical error, derived in
-    /// docs/simulation/ball.md: per step, at most dt²·|m|² + g²·dt² (m: the Magnus acceleration at
-    /// the start of the step), plus g·dt·(|vz| + (|m| + g)·dt) on a step that bounces (the ball is
-    /// put back on the ground), plus 1e-9 relative rounding.
+    /// docs/simulation/ball.md: per step, at most dt²·|m|² (m: the Magnus acceleration at the start
+    /// of the step), plus g·dt·(|vz| + (|m| + g)·dt) on a step that bounces (the ball is put back on
+    /// the ground), plus 1e-9 relative rounding.
     /// </summary>
     public class BallPropertyTests
     {
@@ -55,8 +55,8 @@ namespace Eleven.Simulation.Tests
 
         // ---- The fuzz ----------------------------------------------------------------------
 
-        // Half the cases have no drag, a quarter a realistic 0.01–0.03 and a quarter anywhere in the
-        // valid range. Balls start in the air, rolling, or at rest, with arbitrary spin.
+        // Every tunable is drawn from its whole valid range. Balls start in the air, rolling, or at
+        // rest, with arbitrary spin.
         private static IEnumerable<Case> Cases_()
         {
             for (int seed = 1; seed <= Cases; seed++)
@@ -68,13 +68,6 @@ namespace Eleven.Simulation.Tests
                     overrides.Add(new KeyValuePair<string, double>(p.Name, p.Min + random.NextDouble() * (p.Max - p.Min)));
                 }
 
-                double drag = (seed % 4) switch
-                {
-                    0 or 1 => 0,
-                    2 => 0.01 + 0.02 * random.NextDouble(),
-                    _ => random.NextDouble(),
-                };
-                overrides.Add(new KeyValuePair<string, double>("airDrag", drag));
                 SimConfig config = new SimConfig().With(overrides);
 
                 double r = config.BallRadius;
@@ -154,7 +147,7 @@ namespace Eleven.Simulation.Tests
         {
             double dt = config.TickSeconds, g = config.Gravity;
             double magnus = Math.Sqrt(Vec3.Cross(s.Before.Spin, s.Before.Velocity).LengthSquared) * config.MagnusCoefficient;
-            double allowed = dt * dt * magnus * magnus + g * g * dt * dt;
+            double allowed = dt * dt * magnus * magnus;
             if (s.Bounced) allowed += g * dt * (Math.Abs(s.Before.Velocity.Z) + (magnus + g) * dt);
             return allowed;
         }
@@ -193,13 +186,11 @@ namespace Eleven.Simulation.Tests
         // ---- The fuzz covers what it claims ---------------------------------------------------
 
         [Fact]
-        public void The_fuzz_covers_bounces_rest_drag_and_no_drag()
+        public void The_fuzz_covers_bounces_rolling_and_rest()
         {
             Assert.Contains(Fuzzed, f => f.Steps.Any(s => s.Bounced));
+            Assert.Contains(Fuzzed, f => f.Steps.Any(s => s.Before.Position.Z == f.Case.Config.BallRadius && !IsZero(s.Before.Velocity)));
             Assert.Contains(Fuzzed, f => f.Steps.Any(s => IsZero(s.After.Velocity)));
-            Assert.Contains(Fuzzed, f => f.Case.Config.AirDrag == 0);
-            Assert.Contains(Fuzzed, f => f.Case.Config.AirDrag > 0 && f.Case.Config.AirDrag < 0.05);
-            Assert.Contains(Fuzzed, f => f.Case.Config.AirDrag > 0.5);
         }
 
         // ---- Properties, each with its mutant -------------------------------------------------

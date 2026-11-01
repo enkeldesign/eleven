@@ -14,7 +14,7 @@ using Eleven.Simulation.Harness;
 /// eleven-sim trace             print the ball and dot every 10 ticks (for scripting the scenario)
 /// eleven-sim curves &lt;dir&gt; [name=value ...]
 ///                              characterise the ball under the default config with any tunables
-///                              overridden (#24), e.g. curves out airDrag=0.015 kickSpeed=25
+///                              overridden (#24), e.g. curves out rollingFriction=0.15 kickSpeed=28
 /// </summary>
 internal static class Program
 {

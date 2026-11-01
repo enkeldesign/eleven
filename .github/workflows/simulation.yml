@@ -51,14 +51,11 @@ jobs:
           path: hashlogs/
           if-no-files-found: error
 
-      # Technical reference curves of the current ball values, not approved feel (#24). The
-      # second run shows what a realistic air drag does to the same grid.
+      # Technical reference curves of the current ball values, not approved feel (#24).
       - name: Characterise the ball
         run: |
-          cli=artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll
-          dotnet "$cli" curves ball-curves/default | tee curves.txt
-          dotnet "$cli" curves ball-curves/air-drag-0.015 airDrag=0.015 | tee -a curves.txt
-          echo "::notice title=Ball curves::$(sed 's| -> .*||' curves.txt | paste -sd '|' -)"
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll curves ball-curves | tee curves.txt
+          echo "::notice title=Ball curves::$(sed 's| -> .*||' curves.txt)"
 
       - name: Publish ball curves
         uses: actions/upload-artifact@v4

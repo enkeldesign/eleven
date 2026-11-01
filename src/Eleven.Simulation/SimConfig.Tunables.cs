@@ -4,23 +4,39 @@ using System.Collections.ObjectModel;
 
 namespace Eleven.Simulation
 {
-    /// <summary>A config value tools may vary, with its unit and valid range (inclusive).</summary>
+    /// <summary>
+    /// A config value tools may vary: its unit, its valid range (inclusive), and, where the
+    /// retro-football research gives one, the starting range a feel test bench should explore.
+    /// </summary>
     public sealed class TunableParameter
     {
-        internal TunableParameter(string name, string unit, double min, double max)
+        internal TunableParameter(string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
         {
             Name = name;
             Unit = unit;
             Min = min;
             Max = max;
+            StartMin = startMin;
+            StartMax = startMax;
         }
 
-        /// <summary>The <see cref="SimConfig"/> constructor parameter it sets, e.g. <c>airDrag</c>.</summary>
+        /// <summary>The <see cref="SimConfig"/> constructor parameter it sets, e.g. <c>kickSpeed</c>.</summary>
         public string Name { get; }
 
         public string Unit { get; }
+
+        /// <summary>Lowest valid value. The constructor refuses anything outside [Min, Max].</summary>
         public double Min { get; }
+
         public double Max { get; }
+
+        /// <summary>
+        /// The research-derived starting range (docs/simulation/ball.md), or null where the research
+        /// gives none. A starting point for play, to be narrowed by playable evidence, not a target.
+        /// </summary>
+        public double? StartMin { get; }
+
+        public double? StartMax { get; }
     }
 
     /// <summary>
@@ -31,26 +47,26 @@ namespace Eleven.Simulation
     public sealed partial class SimConfig
     {
         /// <summary>
-        /// The tunable values and their valid ranges. The ranges keep the ball physical and the
-        /// integration well behaved (restitution and retention at most 1, decay at most one tick's
-        /// worth); they are not feel targets.
+        /// The tunable values. The valid ranges keep the ball physical and the integration well
+        /// behaved (restitution and retention at most 1, decay at most one tick's worth). The
+        /// starting ranges come from the retro-football research and football measurements in
+        /// docs/simulation/ball.md. Neither is a feel target.
         /// </summary>
         public static readonly ReadOnlyCollection<TunableParameter> Tunables = Array.AsReadOnly(new[]
         {
             new TunableParameter("gravity", "m/s²", 0.1, 50),
             new TunableParameter("ballRadius", "m", 0.05, 0.5),
-            new TunableParameter("bounceRestitution", "fraction", 0, 1),
-            new TunableParameter("bounceTangentialRetention", "fraction", 0, 1),
+            new TunableParameter("bounceRestitution", "fraction", 0, 1, 0.5, 0.75),
+            new TunableParameter("bounceTangentialRetention", "fraction", 0, 1, 0.45, 0.85),
             new TunableParameter("settleSpeed", "m/s", 0, 5),
-            new TunableParameter("rollingFriction", "fraction of g", 0, 2),
+            new TunableParameter("rollingFriction", "fraction of g", 0, 2, 0.05, 0.3),
             new TunableParameter("stopSpeed", "m/s", 0, 2),
-            new TunableParameter("magnusCoefficient", "1/rad", 0, 0.05),
+            new TunableParameter("magnusCoefficient", "1/rad", 0, 0.05, 0.004, 0.008),
             new TunableParameter("airSpinDecay", "1/s", 0, 60),
             new TunableParameter("groundSpinDecay", "1/s", 0, 60),
-            new TunableParameter("airDrag", "1/m", 0, 1),
-            new TunableParameter("kickSpeed", "m/s", 0, 60),
-            new TunableParameter("kickLoft", "rad", 0, 1.5),
-            new TunableParameter("kickSideSpin", "rad/s", 0, 100),
+            new TunableParameter("kickSpeed", "m/s", 0, 60, 15, 32),
+            new TunableParameter("kickLoft", "rad", 0, 1.5, 0, 1.05),
+            new TunableParameter("kickSideSpin", "rad/s", 0, 100, 0, 40),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -66,7 +82,6 @@ namespace Eleven.Simulation
             "magnusCoefficient" => MagnusCoefficient,
             "airSpinDecay" => AirSpinDecay,
             "groundSpinDecay" => GroundSpinDecay,
-            "airDrag" => AirDrag,
             "kickSpeed" => KickSpeed,
             "kickLoft" => KickLoft,
             "kickSideSpin" => KickSideSpin,
@@ -83,7 +98,7 @@ namespace Eleven.Simulation
             double gravity = Gravity, ballRadius = BallRadius, bounceRestitution = BounceRestitution;
             double bounceTangentialRetention = BounceTangentialRetention, settleSpeed = SettleSpeed;
             double rollingFriction = RollingFriction, stopSpeed = StopSpeed, magnusCoefficient = MagnusCoefficient;
-            double airSpinDecay = AirSpinDecay, groundSpinDecay = GroundSpinDecay, airDrag = AirDrag;
+            double airSpinDecay = AirSpinDecay, groundSpinDecay = GroundSpinDecay;
             double kickSpeed = KickSpeed, kickLoft = KickLoft, kickSideSpin = KickSideSpin;
 
             foreach (KeyValuePair<string, double> o in overrides)
@@ -100,7 +115,6 @@ namespace Eleven.Simulation
                     case "magnusCoefficient": magnusCoefficient = o.Value; break;
                     case "airSpinDecay": airSpinDecay = o.Value; break;
                     case "groundSpinDecay": groundSpinDecay = o.Value; break;
-                    case "airDrag": airDrag = o.Value; break;
                     case "kickSpeed": kickSpeed = o.Value; break;
                     case "kickLoft": kickLoft = o.Value; break;
                     case "kickSideSpin": kickSideSpin = o.Value; break;
@@ -120,7 +134,6 @@ namespace Eleven.Simulation
                 magnusCoefficient: magnusCoefficient,
                 airSpinDecay: airSpinDecay,
                 groundSpinDecay: groundSpinDecay,
-                airDrag: airDrag,
                 dotMaxSpeed: DotMaxSpeed,
                 dotAcceleration: DotAcceleration,
                 kickReach: KickReach,

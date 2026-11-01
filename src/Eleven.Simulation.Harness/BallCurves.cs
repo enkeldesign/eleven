@@ -12,8 +12,11 @@ namespace Eleven.Simulation.Harness
     /// <summary>What one launch or drop of the ball did, from release until it came to rest.</summary>
     public sealed class BallCurve
     {
-        /// <summary><c>kick</c> (grid launch), <c>config-kick</c> (the config's own kick) or <c>drop</c>.</summary>
+        /// <summary><c>action</c> (a named football action), <c>grid</c>, <c>config-kick</c> (the config's own kick) or <c>drop</c>.</summary>
         public string Kind = "";
+
+        /// <summary>The action's name, e.g. <c>chip</c>; empty for grid launches and drops.</summary>
+        public string Case = "";
         public double SpeedMps;
         public double LoftDegrees;
         public double SpinRadps;
@@ -36,7 +39,10 @@ namespace Eleven.Simulation.Harness
         /// <summary>Horizontal distance from release to where it stopped.</summary>
         public double TotalMetres;
 
-        /// <summary>Sideways distance at rest from the launch line (+y, left, for spin about +z).</summary>
+        /// <summary>Sideways distance from the launch line at the first bounce: the bend in flight (+y, left, for spin about +z).</summary>
+        public double LateralFlightMetres;
+
+        /// <summary>Sideways distance from the launch line at rest, including any curve while rolling.</summary>
         public double LateralMetres;
 
         /// <summary>Highest clearance after the first bounce.</summary>
@@ -46,10 +52,30 @@ namespace Eleven.Simulation.Harness
         public double? RestSeconds;
     }
 
+    /// <summary>A recurring football action, as a launch: speed, loft and sidespin about +z.</summary>
+    public sealed class BallAction
+    {
+        internal BallAction(string name, double speedMps, double loftDegrees, double spinRadps, string meaning)
+        {
+            Name = name;
+            SpeedMps = speedMps;
+            LoftDegrees = loftDegrees;
+            SpinRadps = spinRadps;
+            Meaning = meaning;
+        }
+
+        public string Name { get; }
+        public double SpeedMps { get; }
+        public double LoftDegrees { get; }
+        public double SpinRadps { get; }
+        public string Meaning { get; }
+    }
+
     /// <summary>
-    /// Characterises the ball over a documented grid of launches and drops, under any config, so
-    /// candidate feels can be compared (#24). The ball is launched from the ground along +x with no
-    /// players on the pitch; only the ball model runs.
+    /// Characterises the ball under any config, so candidate feels can be compared (#24): named
+    /// football actions from the retro-football research, a documented grid of launches, the
+    /// config's own kick, and drops. The ball is launched from the ground along +x with no players
+    /// on the pitch; only the ball model runs.
     /// </summary>
     public static class BallCurves
     {
@@ -61,15 +87,41 @@ namespace Eleven.Simulation.Harness
 
         private const int BallId = 100;
 
-        /// <summary>The whole grid, then the config's own kick, then the drops.</summary>
+        /// <summary>
+        /// The actions recurring across successful retro football games (docs/simulation/ball.md):
+        /// ground passes, a full-power drive, a lofted pass, a chip, bent shots and crosses, and a
+        /// ball that bounces and rolls out. The full-power and bending actions take the config's
+        /// maximum kick speed and sidespin, which define them; the others are fixed launches, so
+        /// presets compare like for like. They characterise, they are not targets.
+        /// </summary>
+        public static IReadOnlyList<BallAction> Actions(SimConfig config) => new[]
+        {
+            new BallAction("ground-pass-short", 10, 0, 0, "a short pass along the ground"),
+            new BallAction("ground-pass-medium", 16, 0, 0, "a firm pass along the ground"),
+            new BallAction("driven-shot", config.KickSpeed, 8, 0, "a full-power drive, low over the grass"),
+            new BallAction("lofted-pass", 20, 35, 0, "a long ball over the midfield"),
+            new BallAction("chip", 12, 55, 0, "a chip over a keeper or a wall"),
+            new BallAction("bending-shot", 0.85 * config.KickSpeed, 8, config.KickSideSpin, "a shot bent with full sidespin"),
+            new BallAction("bending-cross", 20, 20, config.KickSideSpin, "a cross curled with full sidespin"),
+            new BallAction("bounce-and-roll", 16, 15, 0, "a low ball that lands and rolls on"),
+        };
+
+        /// <summary>The named actions, then the grid, then the config's own kick, then the drops.</summary>
         public static List<BallCurve> Characterise(SimConfig config)
         {
             var curves = new List<BallCurve>();
+            foreach (BallAction action in Actions(config))
+            {
+                BallCurve curve = Kick(config, "action", action.SpeedMps, action.LoftDegrees, action.SpinRadps);
+                curve.Case = action.Name;
+                curves.Add(curve);
+            }
+
             foreach (double speed in SpeedsMps)
             foreach (double loft in LoftsDegrees)
             foreach (double spin in SpinsRadps)
             {
-                curves.Add(Kick(config, "kick", speed, loft, spin));
+                curves.Add(Kick(config, "grid", speed, loft, spin));
             }
 
             curves.Add(ConfigKick(config));
@@ -140,6 +192,7 @@ namespace Eleven.Simulation.Harness
                         firstBounceTick = sim.Tick;
                         firstContact = b.Position.Horizontal;
                         curve.CarryMetres = Distance(start, firstContact);
+                        curve.LateralFlightMetres = firstContact.Y - start.Y;
                         curve.FlightSeconds = sim.Tick * config.TickSeconds;
                     }
                 }
@@ -161,7 +214,7 @@ namespace Eleven.Simulation.Harness
         private static double Distance(Vec2 a, Vec2 b) => SimMath.Sqrt((a - b).LengthSquared);
 
         public const string CsvHeader =
-            "config_hash,kind,speed_mps,loft_deg,spin_radps,drop_m,carry_m,peak_m,flight_s,bounces,rollout_m,total_m,lateral_m,rebound_m,rest_s";
+            "config_hash,kind,case,speed_mps,loft_deg,spin_radps,drop_m,carry_m,peak_m,flight_s,bounces,rollout_m,total_m,lateral_flight_m,lateral_m,rebound_m,rest_s";
 
         /// <summary>One row per curve. Every row carries the config hash, so a plot traces back to its settings.</summary>
         public static void WriteCsv(TextWriter writer, SimConfig config, IEnumerable<BallCurve> curves)
@@ -173,10 +226,11 @@ namespace Eleven.Simulation.Harness
                 writer.WriteLine(string.Join(",",
                     config.Hash.ToString("x16", CultureInfo.InvariantCulture),
                     c.Kind,
+                    c.Case,
                     F(c.SpeedMps), F(c.LoftDegrees), F(c.SpinRadps), F(c.DropMetres),
                     F(c.CarryMetres), F(c.PeakMetres), F(c.FlightSeconds),
                     c.Bounces.ToString(CultureInfo.InvariantCulture),
-                    F(c.RolloutMetres), F(c.TotalMetres), F(c.LateralMetres), F(c.ReboundMetres),
+                    F(c.RolloutMetres), F(c.TotalMetres), F(c.LateralFlightMetres), F(c.LateralMetres), F(c.ReboundMetres),
                     c.RestSeconds.HasValue ? F(c.RestSeconds.Value) : ""));
             }
         }
@@ -196,26 +250,29 @@ namespace Eleven.Simulation.Harness
                 writer.WriteLine($"{p.Name}: {F(config.Get(p.Name))} {p.Unit}{mark}");
             }
 
+            foreach (BallAction a in Actions(config))
+            {
+                writer.WriteLine($"action {a.Name}: {F1(a.SpeedMps)} m/s at {F1(a.LoftDegrees)} deg, spin {F1(a.SpinRadps)} rad/s ({a.Meaning})");
+            }
+
             writer.WriteLine($"grid: speed {List(SpeedsMps)} m/s x loft {List(LoftsDegrees)} deg x spin {List(SpinsRadps)} rad/s; drops {List(DropsMetres)} m; launched from the ground along +x, until rest or {MaxSeconds:F0} s");
             writer.WriteLine($"key: {KeyNumbers(config, curves)}");
         }
 
-        /// <summary>The numbers worth a glance: the config's own kick, a hard low drive and a 2 m drop.</summary>
+        /// <summary>The numbers worth a glance: each named action, and a 2 m drop.</summary>
         public static string KeyNumbers(SimConfig config, IReadOnlyList<BallCurve> curves)
         {
-            BallCurve? configKick = Find(curves, c => c.Kind == "config-kick");
-            BallCurve? drive = Find(curves, c => c.Kind == "kick" && c.SpeedMps == 30 && c.LoftDegrees == 10 && c.SpinRadps == 0);
-            BallCurve? drop = Find(curves, c => c.Kind == "drop" && c.DropMetres == 2);
             var parts = new List<string>();
-            if (configKick != null)
+            foreach (BallCurve c in curves)
             {
-                parts.Add($"config kick {F1(configKick.SpeedMps)} m/s at {F1(configKick.LoftDegrees)} deg, spin {F1(configKick.SpinRadps)}: " +
-                    $"carry {F1(configKick.CarryMetres)} m, peak {F1(configKick.PeakMetres)} m, total {F1(configKick.TotalMetres)} m, lateral {F1(configKick.LateralMetres)} m");
+                if (c.Kind != "action") continue;
+                string carry = c.Bounces > 0 ? $"carry {F1(c.CarryMetres)} m, peak {F1(c.PeakMetres)} m, " : "";
+                string lateral = c.SpinRadps != 0 ? $", bend in flight {F1(c.LateralFlightMetres)} m, lateral at rest {F1(c.LateralMetres)} m" : "";
+                parts.Add($"{c.Case} {carry}total {F1(c.TotalMetres)} m{lateral}");
             }
 
-            if (drive != null) parts.Add($"30 m/s at 10 deg: carry {F1(drive.CarryMetres)} m, total {F1(drive.TotalMetres)} m");
-            if (drop != null) parts.Add($"2 m drop: rebound {F(drop.ReboundMetres)} m, {drop.Bounces} bounces");
-            parts.Add($"airDrag {F(config.AirDrag)}");
+            BallCurve? drop = Find(curves, c => c.Kind == "drop" && c.DropMetres == 2);
+            if (drop != null) parts.Add($"2 m drop rebounds {F(drop.ReboundMetres)} m");
             return string.Join("; ", parts);
         }
 
