@@ -45,8 +45,8 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The ball-feel surface (#24): the supported way for tools, presets and the later tuning panel
-    /// to read and vary config. Values change only by building a new config with <see cref="With(string, double)"/>,
+    /// The ball- and kick-feel surface (#24, #37): the supported way for tools, presets and the later
+    /// tuning panel to read and vary config. Values change only by building a new config with <see cref="With(string, double)"/>,
     /// so every variant is validated and hashed like any other config.
     /// </summary>
     public sealed partial class SimConfig
@@ -55,7 +55,8 @@ namespace Eleven.Simulation
         /// The tunable values. The valid ranges keep the ball physical and the integration well
         /// behaved (restitution and retention at most 1, decay at most one tick's worth). The
         /// starting ranges come from the retro-football research and football measurements in
-        /// docs/simulation/ball.md. Neither is a feel target.
+        /// docs/simulation/ball.md and kick.md; values without one are technical references. Neither
+        /// range is a feel target.
         /// </summary>
         public static readonly ReadOnlyCollection<TunableParameter> Tunables = Array.AsReadOnly(new[]
         {
@@ -72,6 +73,10 @@ namespace Eleven.Simulation
             new TunableParameter("kickSpeed", "m/s", 0, 60, 15, 32),
             new TunableParameter("kickLoft", "rad", 0, 1.5, 0, 1.05),
             new TunableParameter("kickSideSpin", "rad/s", 0, 100, 0, 40),
+            new TunableParameter("kickWindUpSeconds", "s", 0, 0.5),
+            new TunableParameter("aftertouchSeconds", "s", 0, 1, 0.15, 0.30),
+            new TunableParameter("aftertouchBend", "rad", 0, 0.5),
+            new TunableParameter("aftertouchLift", "m/s", 0, 10),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -90,6 +95,10 @@ namespace Eleven.Simulation
             "kickSpeed" => KickSpeed,
             "kickLoft" => KickLoft,
             "kickSideSpin" => KickSideSpin,
+            "kickWindUpSeconds" => KickWindUpSeconds,
+            "aftertouchSeconds" => AftertouchSeconds,
+            "aftertouchBend" => AftertouchBend,
+            "aftertouchLift" => AftertouchLift,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -105,6 +114,8 @@ namespace Eleven.Simulation
             double rollingFriction = RollingFriction, stopSpeed = StopSpeed, magnusCoefficient = MagnusCoefficient;
             double airSpinDecay = AirSpinDecay, groundSpinDecay = GroundSpinDecay;
             double kickSpeed = KickSpeed, kickLoft = KickLoft, kickSideSpin = KickSideSpin;
+            double kickWindUpSeconds = KickWindUpSeconds, aftertouchSeconds = AftertouchSeconds;
+            double aftertouchBend = AftertouchBend, aftertouchLift = AftertouchLift;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -123,6 +134,10 @@ namespace Eleven.Simulation
                     case "kickSpeed": kickSpeed = o.Value; break;
                     case "kickLoft": kickLoft = o.Value; break;
                     case "kickSideSpin": kickSideSpin = o.Value; break;
+                    case "kickWindUpSeconds": kickWindUpSeconds = o.Value; break;
+                    case "aftertouchSeconds": aftertouchSeconds = o.Value; break;
+                    case "aftertouchBend": aftertouchBend = o.Value; break;
+                    case "aftertouchLift": aftertouchLift = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -144,7 +159,10 @@ namespace Eleven.Simulation
                 kickSpeed: kickSpeed,
                 kickLoft: kickLoft,
                 kickSideSpin: kickSideSpin,
-                kickDirectionError: KickDirectionError,
+                kickWindUpSeconds: kickWindUpSeconds,
+                aftertouchSeconds: aftertouchSeconds,
+                aftertouchBend: aftertouchBend,
+                aftertouchLift: aftertouchLift,
                 kickCooldownTicks: KickCooldownTicks,
                 goalLineX: GoalLineX);
         }

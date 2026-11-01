@@ -103,7 +103,7 @@ namespace Eleven.Simulation.Harness
             {
                 foreach (double acceleration in AccelerationsMps2)
                 {
-                    curves.Add(Measure(config, new PlayerCapabilities { MaxSpeed = speed, Acceleration = acceleration }, "grid"));
+                    curves.Add(Measure(config, profile.With("maxSpeed", speed).With("acceleration", acceleration), "grid"));
                 }
             }
 
@@ -205,7 +205,7 @@ namespace Eleven.Simulation.Harness
 
             for (int tick = 1; tick <= maxTicks; tick++)
             {
-                commands[0] = new Command(ControllerId, sim.Tick, stick, false);
+                commands[0] = new Command(ControllerId, sim.Tick, stick);
                 sim.Step(commands, events);
                 PlayerState player = sim.PeekState().Players[0];
                 double seconds = tick / (double)config.TickRate;

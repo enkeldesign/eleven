@@ -13,7 +13,7 @@ namespace Eleven.Simulation.Tests
         private const int First = 1, Second = 2; // player ids, and the ids of the controllers that own them
 
         private static PlayerCapabilities Profile(double maxSpeed, double acceleration) =>
-            new PlayerCapabilities { MaxSpeed = maxSpeed, Acceleration = acceleration };
+            new PlayerCapabilities { MaxSpeed = maxSpeed, Acceleration = acceleration, KickPower = 1, KickError = 0.05 };
 
         // Two players well apart and far from the ball, so nothing but movement happens.
         private static SimState TwoPlayers(SimConfig config, PlayerCapabilities first, PlayerCapabilities second,
@@ -35,7 +35,7 @@ namespace Eleven.Simulation.Tests
             var events = new List<SimEvent>();
             for (int i = 0; i < ticks; i++)
             {
-                sim.Step(new[] { new Command(First, sim.Tick, stick, false), new Command(Second, sim.Tick, stick, false) }, events);
+                sim.Step(new[] { new Command(First, sim.Tick, stick), new Command(Second, sim.Tick, stick) }, events);
             }
 
             return sim;
@@ -104,7 +104,7 @@ namespace Eleven.Simulation.Tests
                 for (int i = 0; i < 240; i++)
                 {
                     Vec2 stick = i < 120 ? new Vec2(1, 0.25) : new Vec2(-0.5, 1);
-                    sim.Step(new[] { new Command(First, sim.Tick, stick, false), new Command(Second, sim.Tick, stick, false) }, events);
+                    sim.Step(new[] { new Command(First, sim.Tick, stick), new Command(Second, sim.Tick, stick) }, events);
                     hashes.Add(sim.StateHash());
                     path.Add(Player(sim, First).Position);
                 }
@@ -156,8 +156,16 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Starting_ranges_lie_within_the_valid_ranges_and_hold_the_reference_profile()
         {
-            Assert.Equal(new[] { "maxSpeed", "acceleration" }, PlayerCapabilities.Parameters.Select(p => p.Name));
-            foreach (TunableParameter p in PlayerCapabilities.Parameters)
+            Assert.Equal(new[] { "maxSpeed", "acceleration", "kickPower", "kickError" }, PlayerCapabilities.Parameters.Select(p => p.Name));
+            foreach (TunableParameter p in PlayerCapabilities.Parameters.Skip(2))
+            {
+                // #26 gives no research range for kick power or error: technical references only (#37).
+                Assert.Null(p.StartMin);
+                Assert.Null(p.StartMax);
+                Assert.InRange(PlayerCapabilities.Reference.Get(p.Name), p.Min, p.Max);
+            }
+
+            foreach (TunableParameter p in PlayerCapabilities.Parameters.Take(2))
             {
                 Assert.NotNull(p.StartMin);
                 Assert.NotNull(p.StartMax);
@@ -192,8 +200,8 @@ namespace Eleven.Simulation.Tests
                 : tick < 150 ? new Vec2(0, 1)
                 : tick < 240 ? new Vec2(0, -1)
                 : Vec2.Zero;
-            into.Add(new Command(First, tick, stick, false));
-            into.Add(new Command(Second, tick, stick * 0.6, false));
+            into.Add(new Command(First, tick, stick));
+            into.Add(new Command(Second, tick, stick * 0.6));
         }
 
         private static SimState Contrasting(SimConfig config) => TwoPlayers(config, Profile(7, 12), Profile(10, 30));
@@ -245,7 +253,7 @@ namespace Eleven.Simulation.Tests
             {
                 commands.Clear();
                 Script(live.Tick, commands);
-                if (i % 40 == 0) commands.Add(new Command(99, live.Tick, new Vec2(1, 0), false)); // unowned
+                if (i % 40 == 0) commands.Add(new Command(99, live.Tick, new Vec2(1, 0))); // unowned
                 recording.Record(commands);
                 live.Step(commands, liveEvents);
                 liveHashes.Add(live.StateHash());

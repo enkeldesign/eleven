@@ -16,12 +16,14 @@ namespace Eleven.Simulation.Harness
     ///
     /// Encoding (canonical, see docs/simulation/determinism.md): magic "ELRC", format version
     /// (int32), snapshot length (int32) and bytes, step count (int32), then per step a command count
-    /// (int32) and per command: controller id (int32), tick (int64), move x and y (the raw IEEE-754
-    /// bits as uint64, so even invalid input is preserved), kick (bool).
+    /// (int32) and per command: controller id (int32), tick (int64), move x and y, whether there is a
+    /// kick intent (bool), and if so its direction x and y, strength and loft, then aftertouch x and y.
+    /// Every double is written as its raw IEEE-754 bits (uint64), so even invalid input is preserved.
+    /// Version 2 replaced the kick flag with the kick intent and added aftertouch (#37).
     /// </summary>
     public sealed class CommandRecording
     {
-        public const int FormatVersion = 1;
+        public const int FormatVersion = 2;
         private static readonly byte[] Magic = { (byte)'E', (byte)'L', (byte)'R', (byte)'C' };
 
         private readonly List<Command[]> _steps = new List<Command[]>();
@@ -84,9 +86,20 @@ namespace Eleven.Simulation.Harness
                 {
                     w.WriteInt32(c.ControllerId);
                     w.WriteInt64(c.Tick);
-                    w.WriteUInt64(unchecked((ulong)BitConverter.DoubleToInt64Bits(c.Move.X)));
-                    w.WriteUInt64(unchecked((ulong)BitConverter.DoubleToInt64Bits(c.Move.Y)));
-                    w.WriteBool(c.Kick);
+                    WriteBits(w, c.Move.X);
+                    WriteBits(w, c.Move.Y);
+                    w.WriteBool(c.Kick.HasValue);
+                    if (c.Kick.HasValue)
+                    {
+                        KickIntent kick = c.Kick.Value;
+                        WriteBits(w, kick.Direction.X);
+                        WriteBits(w, kick.Direction.Y);
+                        WriteBits(w, kick.Strength);
+                        WriteBits(w, kick.Loft);
+                    }
+
+                    WriteBits(w, c.Aftertouch.X);
+                    WriteBits(w, c.Aftertouch.Y);
                 }
             }
 
@@ -116,9 +129,17 @@ namespace Eleven.Simulation.Harness
                 {
                     int controller = r.ReadInt32();
                     long tick = r.ReadInt64();
-                    double x = BitConverter.Int64BitsToDouble(unchecked((long)r.ReadUInt64()));
-                    double y = BitConverter.Int64BitsToDouble(unchecked((long)r.ReadUInt64()));
-                    step[i] = new Command(controller, tick, new Vec2(x, y), r.ReadBool());
+                    var move = new Vec2(ReadBits(r), ReadBits(r));
+                    KickIntent? kick = null;
+                    if (r.ReadBool())
+                    {
+                        var direction = new Vec2(ReadBits(r), ReadBits(r));
+                        double strength = ReadBits(r);
+                        kick = new KickIntent(direction, strength, ReadBits(r));
+                    }
+
+                    var aftertouch = new Vec2(ReadBits(r), ReadBits(r));
+                    step[i] = new Command(controller, tick, move, kick, aftertouch);
                 }
 
                 recording._steps.Add(step);
@@ -127,6 +148,11 @@ namespace Eleven.Simulation.Harness
             if (!r.AtEnd) throw new FormatException("Trailing bytes after recording.");
             return recording;
         }
+
+        private static void WriteBits(CanonicalWriter w, double value) =>
+            w.WriteUInt64(unchecked((ulong)BitConverter.DoubleToInt64Bits(value)));
+
+        private static double ReadBits(CanonicalReader r) => BitConverter.Int64BitsToDouble(unchecked((long)r.ReadUInt64()));
 
         private static int ReadCount(CanonicalReader r)
         {

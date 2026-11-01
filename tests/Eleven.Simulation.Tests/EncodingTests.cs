@@ -72,7 +72,13 @@ namespace Eleven.Simulation.Tests
             state.Ball.BeyondGoalLine = true;
             state.Players[0].Heading = -1.25;
             state.Players[0].KickCooldown = 3;
-            state.Players[0].Capabilities = new PlayerCapabilities { MaxSpeed = 9.5, Acceleration = 13.25 };
+            state.Players[0].Capabilities = new PlayerCapabilities { MaxSpeed = 9.5, Acceleration = 13.25, KickPower = 0.75, KickError = 0.125 };
+            state.Players[0].WindUpTicks = 4;
+            state.Players[0].WindUpDirection = 0.5;
+            state.Players[0].WindUpStrength = 0.25;
+            state.Players[0].WindUpLoft = 0.625;
+            state.Players[0].AftertouchTicks = 9;
+            state.Players[0].AftertouchDirection = -2.5;
 
             var w = new CanonicalWriter();
             state.Encode(w);
@@ -111,6 +117,14 @@ namespace Eleven.Simulation.Tests
             Differs(s => s.Players[0].Velocity = new Vec2(1, 0));
             Differs(s => s.Players[0].Heading = 1);
             Differs(s => s.Players[0].KickCooldown = 1);
+            Differs(s => s.Players[0].Capabilities.KickPower = 0.5);
+            Differs(s => s.Players[0].Capabilities.KickError = 0.25);
+            Differs(s => s.Players[0].WindUpTicks = 1);
+            Differs(s => s.Players[0].WindUpDirection = 1);
+            Differs(s => s.Players[0].WindUpStrength = 1);
+            Differs(s => s.Players[0].WindUpLoft = 1);
+            Differs(s => s.Players[0].AftertouchTicks = 1);
+            Differs(s => s.Players[0].AftertouchDirection = 1);
             Differs(s => s.Players = new PlayerState[0]);
         }
     }

@@ -16,6 +16,10 @@ namespace Eleven.Host
     /// away from it gives the move vector, full stick at <see cref="HudLayout.StickRadius"/>.
     /// The kick button and the HUD buttons act when a press begins on them.
     ///
+    /// Provisional mapping until the touch candidates (#10) replace it: a kick tap is a full-strength
+    /// kick along the heading at the spike's old elevation, and the stick doubles as aftertouch, as
+    /// the joystick does in SWOS and Kick Off 2. The simulation ignores aftertouch outside a window.
+    ///
     /// Touchscreen first; the mouse stands in for a single finger on desktop browsers, and is
     /// ignored once any touch has been seen so a browser's emulated mouse events don't double up.
     ///
@@ -28,6 +32,9 @@ namespace Eleven.Host
     {
         private const int MousePointer = -1;
         private const int NoPointer = int.MinValue;
+
+        // 0.45 rad, the spike's kick elevation, as a fraction of the default maximum loft (1.05 rad).
+        private static readonly KickIntent TapKick = KickIntent.AlongHeading(1, 0.45 / 1.05);
 
         private readonly int _controllerId;
         private readonly List<Pointer> _pointers = new List<Pointer>(11);
@@ -126,7 +133,8 @@ namespace Eleven.Host
         /// </summary>
         public Command CommandFor(long tick)
         {
-            var command = new Command(_controllerId, tick, new Vec2(Stick.x, Stick.y), _kickRequested);
+            var stick = new Vec2(Stick.x, Stick.y);
+            var command = new Command(_controllerId, tick, stick, _kickRequested ? TapKick : (KickIntent?)null, stick);
             _kickRequested = false;
             return command;
         }

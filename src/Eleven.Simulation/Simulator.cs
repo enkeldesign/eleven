@@ -13,10 +13,14 @@ namespace Eleven.Simulation
     /// Order within a step:
     /// 1. resolve commands for this tick,
     /// 2. count down kick cooldowns, move players and update their headings,
-    /// 3. apply kicks,
-    /// 4. integrate the ball,
-    /// 5. check the goal line,
-    /// 6. advance the tick.
+    /// 3. aftertouch: each open window shapes the ball by its owner's input, then counts down,
+    /// 4. kicks: accept intents into wind-ups, count wind-ups down, and connect or miss those that end,
+    /// 5. integrate the ball,
+    /// 6. check the goal line,
+    /// 7. advance the tick.
+    ///
+    /// So a window opened by a contact first acts on the next step, and a wind-up of W steps
+    /// started on step N connects on step N + W.
     /// </summary>
     public sealed class Simulator
     {
@@ -30,7 +34,7 @@ namespace Eleven.Simulation
         public Simulator(SimConfig config, SimState initial)
         {
             Config = config ?? throw new ArgumentNullException(nameof(config));
-            _state = Validate(initial ?? throw new ArgumentNullException(nameof(initial))).Clone();
+            _state = Validate(initial ?? throw new ArgumentNullException(nameof(initial)), config).Clone();
         }
 
         public SimConfig Config { get; }
@@ -64,11 +68,12 @@ namespace Eleven.Simulation
 
             for (int i = 0; i < _state.Players.Length; i++)
             {
-                Command? command = FindAccepted(_state.Players[i].OwnerControllerId);
-                if (command.HasValue && command.Value.Kick)
-                {
-                    TryKick(ref _state.Players[i], tick, events);
-                }
+                StepAftertouch(ref _state.Players[i], FindAccepted(_state.Players[i].OwnerControllerId));
+            }
+
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                StepKick(i, FindAccepted(_state.Players[i].OwnerControllerId), tick, events);
             }
 
             StepBall(tick, dt, events);
@@ -123,7 +128,12 @@ namespace Eleven.Simulation
         {
             if (c.Tick < tick) return CommandRejection.Stale;
             if (c.Tick > tick) return CommandRejection.Early;
-            if (!SimMath.IsFinite(c.Move.X) || !SimMath.IsFinite(c.Move.Y)) return CommandRejection.Invalid;
+            if (!IsFinite(c.Move) || !IsFinite(c.Aftertouch)) return CommandRejection.Invalid;
+            if (c.Kick.HasValue)
+            {
+                KickIntent kick = c.Kick.Value;
+                if (!IsFinite(kick.Direction) || !SimMath.IsFinite(kick.Strength) || !SimMath.IsFinite(kick.Loft)) return CommandRejection.Invalid;
+            }
 
             foreach (PlayerState player in _state.Players)
             {
@@ -133,15 +143,32 @@ namespace Eleven.Simulation
             return CommandRejection.Unowned;
         }
 
-        private Command Normalise(Command c)
-        {
-            if (c.Move.LengthSquared <= 1) return c;
+        private static bool IsFinite(Vec2 v) => SimMath.IsFinite(v.X) && SimMath.IsFinite(v.Y);
 
-            // Scale by the largest component first, so a huge finite move can't overflow when squared.
-            double largest = Math.Max(Math.Abs(c.Move.X), Math.Abs(c.Move.Y));
-            Vec2 scaled = c.Move * (1 / largest);
-            return new Command(c.ControllerId, c.Tick, scaled * (1 / SimMath.Sqrt(scaled.LengthSquared)), c.Kick);
+        private static Command Normalise(Command c)
+        {
+            KickIntent? kick = null;
+            if (c.Kick.HasValue)
+            {
+                KickIntent k = c.Kick.Value;
+                kick = new KickIntent(k.Direction, Clamp01(k.Strength), Clamp01(k.Loft));
+            }
+
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch));
         }
+
+        private static Vec2 AtMostUnit(Vec2 v)
+        {
+            if (v.LengthSquared <= 1) return v;
+
+            // Scale by the largest component first, so a huge finite vector can't overflow when squared.
+            double largest = Math.Max(Math.Abs(v.X), Math.Abs(v.Y));
+            Vec2 scaled = v * (1 / largest);
+            return scaled * (1 / SimMath.Sqrt(scaled.LengthSquared));
+        }
+
+        // Plain comparisons rather than Math.Min and Max, whose treatment of −0 runtimes needn't share.
+        private static double Clamp01(double x) => x < 0 ? 0 : x > 1 ? 1 : x;
 
         private Command? FindAccepted(int controllerId)
         {
@@ -178,25 +205,92 @@ namespace Eleven.Simulation
             }
         }
 
-        private void TryKick(ref PlayerState player, long tick, List<SimEvent> events)
+        // Aftertouch (#37): while the window is open, the owner's input shapes the ball they kicked,
+        // measured against the kick's intended line. The window gates input only; spin the ball
+        // already carries keeps acting after it closes.
+        private void StepAftertouch(ref PlayerState player, Command? command)
+        {
+            if (player.AftertouchTicks == 0) return;
+
+            Vec2 input = command.HasValue ? command.Value.Aftertouch : Vec2.Zero;
+            if (input.X != 0 || input.Y != 0) Shape(player.AftertouchTicks, player.AftertouchDirection, input);
+            player.AftertouchTicks--;
+        }
+
+        // The window's steps weigh n / (1 + 2 + … + A) on the step with n left: they decay linearly
+        // and sum to 1, so the window's length sets when input acts, not how much it can do.
+        private void Shape(int stepsLeft, double line, Vec2 input)
         {
             ref BallState ball = ref _state.Ball;
-            if (player.KickCooldown > 0 || ball.Position.Z > Config.KickMaxBallHeight) return;
+            int window = Config.AftertouchTicks;
+            double weight = 2.0 * stepsLeft / ((double)window * (window + 1));
+
+            double cos = SimMath.Cos(line), sin = SimMath.Sin(line);
+            double forward = input.X * cos + input.Y * sin;
+            double side = input.Y * cos - input.X * sin; // + is left of the line
+
+            Vec3 v = ball.Velocity;
+            double turn = weight * side * Config.AftertouchBend;
+            if (turn != 0)
+            {
+                // Direct shaping, SWOS-style: the horizontal velocity turns, its speed unchanged.
+                double c = SimMath.Cos(turn), s = SimMath.Sin(turn);
+                v = new Vec3(v.X * c - v.Y * s, v.X * s + v.Y * c, v.Z);
+            }
+
+            ball.Velocity = new Vec3(v.X, v.Y, v.Z - weight * forward * Config.AftertouchLift);
+            ball.Spin = new Vec3(ball.Spin.X, ball.Spin.Y, ball.Spin.Z + weight * side * Config.KickSideSpin);
+        }
+
+        // The manual kick (#37): an intent accepted while the player is ready starts a wind-up that
+        // holds it; the step that ends the wind-up connects, or misses if the ball is out of reach.
+        private void StepKick(int index, Command? command, long tick, List<SimEvent> events)
+        {
+            ref PlayerState player = ref _state.Players[index];
+            if (command.HasValue && command.Value.Kick.HasValue && player.WindUpTicks == 0 && player.KickCooldown == 0)
+            {
+                KickIntent intent = command.Value.Kick.Value;
+                Vec2 d = intent.Direction;
+
+                // One more than the wind-up, because this step counts it down too.
+                player.WindUpTicks = Config.KickWindUpTicks + 1;
+                player.WindUpDirection = d.X == 0 && d.Y == 0 ? player.Heading : SimMath.Atan2(d.Y, d.X);
+                player.WindUpStrength = intent.Strength;
+                player.WindUpLoft = intent.Loft;
+            }
+
+            if (player.WindUpTicks == 0) return;
+            player.WindUpTicks--;
+            if (player.WindUpTicks == 0) Connect(index, tick, events);
+        }
+
+        private void Connect(int index, long tick, List<SimEvent> events)
+        {
+            ref PlayerState player = ref _state.Players[index];
+            ref BallState ball = ref _state.Ball;
+            double line = player.WindUpDirection, strength = player.WindUpStrength, loft = player.WindUpLoft;
+            player.WindUpDirection = player.WindUpStrength = player.WindUpLoft = 0;
 
             Vec2 offset = ball.Position.Horizontal - player.Position;
-            if (offset.LengthSquared > Config.KickReach * Config.KickReach) return;
+            if (ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
+            {
+                events.Add(new SimEvent(tick, SimEventKind.KickMissed, player.Id));
+                return;
+            }
 
-            var directionDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, player.Id);
-            var spinDraws = new StreamDraws(_state.Seed, tick, RandomStream.KickSpin, player.Id);
+            // The intended line plus the kicker's own bounded execution error: never retargeted.
+            var draws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, player.Id);
+            double direction = line + (2 * draws.NextUniform() - 1) * player.Capabilities.KickError;
+            double speed = strength * player.Capabilities.KickPower * Config.KickSpeed;
+            double elevation = loft * Config.KickLoft;
+            double horizontal = speed * SimMath.Cos(elevation);
+            ball.Velocity = new Vec3(horizontal * SimMath.Cos(direction), horizontal * SimMath.Sin(direction), speed * SimMath.Sin(elevation));
+            ball.Spin = Vec3.Zero;
 
-            double direction = player.Heading + (2 * directionDraws.NextUniform() - 1) * Config.KickDirectionError;
-            double horizontal = Config.KickSpeed * SimMath.Cos(Config.KickLoft);
-            ball.Velocity = new Vec3(
-                horizontal * SimMath.Cos(direction),
-                horizontal * SimMath.Sin(direction),
-                Config.KickSpeed * SimMath.Sin(Config.KickLoft));
-            ball.Spin = new Vec3(0, 0, Config.KickSideSpin * (0.5 + 0.5 * spinDraws.NextUniform()));
-
+            // The ball has a new kicker, so only they can shape it now.
+            for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
+            player.AftertouchTicks = Config.AftertouchTicks;
+            player.AftertouchDirection = line;
             player.KickCooldown = Config.KickCooldownTicks;
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
@@ -262,22 +356,41 @@ namespace Eleven.Simulation
             return factor > 0 ? factor : 0;
         }
 
-        private static SimState Validate(SimState state)
+        private static SimState Validate(SimState state, SimConfig config)
         {
             // Encoding refuses non-finite values, so this checks every authoritative field.
             state.Encode(new CanonicalWriter());
 
             for (int i = 0; i < state.Players.Length; i++)
             {
-                if (i > 0 && state.Players[i].Id <= state.Players[i - 1].Id)
+                PlayerState p = state.Players[i];
+                if (i > 0 && p.Id <= state.Players[i - 1].Id)
                 {
                     throw new ArgumentException("Players must be in strictly ascending id order.", nameof(state));
                 }
 
-                state.Players[i].Capabilities.CheckRanges($"Player {state.Players[i].Id}");
+                string owner = $"Player {p.Id}";
+                p.Capabilities.CheckRanges(owner);
+
+                // Kick state this config could have produced (#37). NaN fails the encoding above.
+                InRange(owner, nameof(p.KickCooldown), p.KickCooldown, config.KickCooldownTicks);
+                InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
+                InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
+                if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");
+                }
             }
 
             return state;
+        }
+
+        private static void InRange(string owner, string field, int value, int max)
+        {
+            if (value < 0 || value > max)
+            {
+                throw new ArgumentOutOfRangeException(field, value, $"{owner}: {field} must be within [0, {max}] under this config.");
+            }
         }
     }
 }

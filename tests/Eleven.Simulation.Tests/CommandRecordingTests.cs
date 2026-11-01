@@ -22,8 +22,9 @@ namespace Eleven.Simulation.Tests
             {
                 commands.Clear();
                 SpikeScenario.CommandsFor(live.Tick, commands);
-                if (i % 50 == 0) commands.Add(new Command(99, live.Tick, new Vec2(1, 0), true));
-                if (i % 70 == 0) commands.Add(new Command(SpikeScenario.ControllerId, live.Tick - 1, new Vec2(double.NaN, 0), false));
+                if (i % 50 == 0) commands.Add(new Command(99, live.Tick, new Vec2(1, 0), KickIntent.AlongHeading(1, 0.5)));
+                if (i % 70 == 0) commands.Add(new Command(SpikeScenario.ControllerId, live.Tick - 1, new Vec2(double.NaN, 0)));
+                if (i % 90 == 0) commands.Add(new Command(SpikeScenario.ControllerId, live.Tick, Vec2.Zero, new KickIntent(new Vec2(-0.0, double.NaN), double.PositiveInfinity, -0.0), new Vec2(double.NegativeInfinity, 2)));
                 recording.Record(commands);
                 live.Step(commands, events);
             }
@@ -46,6 +47,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(liveEvents, replayEvents);
             Assert.Contains(liveEvents, e => e.Rejection == CommandRejection.Unowned);
             Assert.Contains(liveEvents, e => e.Rejection == CommandRejection.Stale);
+            Assert.Contains(liveEvents, e => e.Rejection == CommandRejection.Invalid);
+            Assert.Contains(liveEvents, e => e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.KickMissed);
         }
 
         [Fact]

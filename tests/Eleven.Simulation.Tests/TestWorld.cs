@@ -38,7 +38,16 @@ namespace Eleven.Simulation.Tests
             return events;
         }
 
+        /// <summary>A full-strength kick along the heading, at the spike's old elevation (0.45 rad of the default 1.05).</summary>
+        public static readonly KickIntent FullKick = KickIntent.AlongHeading(1, 0.45 / 1.05);
+
         public static Command Move(long tick, double x, double y, bool kick = false, int controller = Controller) =>
-            new Command(controller, tick, new Vec2(x, y), kick);
+            new Command(controller, tick, new Vec2(x, y), kick ? FullKick : (KickIntent?)null);
+
+        public static Command Kick(long tick, KickIntent intent, Vec2 move = default, Vec2 aftertouch = default, int controller = Controller) =>
+            new Command(controller, tick, move, intent, aftertouch);
+
+        public static Command Aftertouch(long tick, double x, double y, Vec2 move = default, int controller = Controller) =>
+            new Command(controller, tick, move, null, new Vec2(x, y));
     }
 }

@@ -22,6 +22,12 @@ namespace Eleven.Simulation
 
         /// <summary>Subject: the controller id. <see cref="SimEvent.Rejection"/> says why.</summary>
         CommandRejected = 4,
+
+        /// <summary>
+        /// Subject: the player. Emitted when a kick's wind-up ends with the ball out of reach or too
+        /// high, so the kick doesn't connect.
+        /// </summary>
+        KickMissed = 5,
     }
 
     /// <summary>

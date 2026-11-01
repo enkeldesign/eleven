@@ -211,7 +211,7 @@ internal static class Program
             Console.WriteLine(
                 $"{state.Tick,5} ball ({b.Position.X,7:F2} {b.Position.Y,6:F2} {b.Position.Z,5:F2}) " +
                 $"v ({b.Velocity.X,6:F2} {b.Velocity.Y,6:F2} {b.Velocity.Z,6:F2}) spin {b.Spin.Z,5:F2} " +
-                $"player ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown}");
+                $"player ({d.Position.X,7:F2} {d.Position.Y,6:F2}) h {d.Heading,5:F2} cd {d.KickCooldown} wind-up {d.WindUpTicks} window {d.AftertouchTicks}");
         }).Events.ForEach(e => Console.WriteLine($"event {e}"));
         return 0;
     }
