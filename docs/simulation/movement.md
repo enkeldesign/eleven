@@ -18,9 +18,9 @@ From #26 (SOL), where the sources are:
 - id and owner controller id;
 - capabilities;
 - position, velocity and heading;
-- kick cooldown.
+- kick cooldown, and the kick's wind-up and aftertouch phases ([kick.md](kick.md)).
 
-`PlayerCapabilities` is what one footballer can do. It is the smallest per-player surface the current mechanics need, not the final attribute taxonomy. #36 adds movement; later mechanics add only what they need.
+`PlayerCapabilities` is what one footballer can do. It is the smallest per-player surface the current mechanics need, not the final attribute taxonomy. #36 adds movement and #37 the kick's power and execution error ([kick.md](kick.md)); later mechanics add only what they need.
 
 Capabilities live in state, not in `SimConfig`:
 - every player can differ, and no universal value or UI helper owns them;
