@@ -50,12 +50,12 @@ namespace Eleven.Presentation
         public static readonly Rgba Slate300 = Rgba.Hex("#9AA3B0");
 
         // Buttons (Erik, 2026-11-02): darker and desaturated, white text at 5:1 or better.
-        public static readonly Rgba Royal700 = default;
-        public static readonly Rgba Violet700 = default;
-        public static readonly Rgba Sky700 = default;
-        public static readonly Rgba Grass700 = default;
-        public static readonly Rgba Slate700 = default;
-        public static readonly Rgba Red700 = default;
+        public static readonly Rgba Royal700 = Rgba.Hex("#4E60A8");
+        public static readonly Rgba Violet700 = Rgba.Hex("#6E5596");
+        public static readonly Rgba Sky700 = Rgba.Hex("#2F6B7C");
+        public static readonly Rgba Grass700 = Rgba.Hex("#4D6B2E");
+        public static readonly Rgba Slate700 = Rgba.Hex("#3A4250");
+        public static readonly Rgba Red700 = Rgba.Hex("#A23B4B");
 
         /// <summary>Every primitive with its name, for tests and the specimen.</summary>
         public static readonly (string Name, Rgba Colour)[] All =
@@ -64,6 +64,8 @@ namespace Eleven.Presentation
             ("royal-300", Royal300), ("grass-300", Grass300), ("violet-200", Violet200), ("sky-300", Sky300),
             ("gold-300", Gold300), ("green-400", Green400), ("red-400", Red400),
             ("night-900", Night900), ("night-800", Night800), ("slate-300", Slate300),
+            ("royal-700", Royal700), ("violet-700", Violet700), ("sky-700", Sky700),
+            ("grass-700", Grass700), ("slate-700", Slate700), ("red-700", Red700),
         };
     }
 

@@ -4,11 +4,23 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
 
 **The palette is a hypothesis** until Erik reviews the specimen on an iPhone or iPad. Changing it after that review is product and design tuning, Erik's call.
 
+**Buttons (Erik, 2026-11-02, after the first specimen review):**
+- **Text:** buttons never mix white and black text. Every button's text is white, on darker, desaturated fills at 5:1 or better. The tests check both.
+- **Borders:** borders carry button contrast against whatever the button sits on. Over the pitch, the pitch context gives them chalk borders.
+- **Everything else:** content that isn't a button stays dark on light in the ordinary mapping, including state banners and badges in their light colours with ink text.
+
 ## Layers
 
 1. **Primitives** (`Eleven.Presentation.Primitives`) are the #48 starting palette (chalk, paper, ink, slate, royal, grass, violet, sky, gold, green, red) plus dark-context neutrals.
-2. **Semantic roles** (`Role`) are what components read: surfaces, text, outline, shadow, the focus ring and its gap, scrim, and action and state fills. There is no generic "football" role.
-3. **Context mappings** (`Theme.Ordinary`, `Theme.Dark`) map every role. A dark or other context replaces the mapping, never a component. Coloured fills keep Ink text in both.
+2. **Semantic roles** (`Role`) are what components read. There is no generic "football" role.
+   - **Surfaces and text:** surfaces, text, outline, shadow, inner edge, the focus ring and its gap, and the scrim.
+   - **Button fills:** `ActionPrimary`, `ActionSupporting`, `ActionInformation`, `ActionNeutral`, `ActionDestructive` and `Selection`, all with white `OnAction` text.
+   - **State fills that aren't buttons:** success, warning and danger, with ink `OnState` text.
+3. **Context mappings** map every role. A context replaces the mapping, never a component.
+   - **`Theme.Ordinary`:** light pages, with ink text and borders.
+   - **`Theme.Dark`:** navy-black pages, with chalk text and borders.
+   - **`Theme.Pitch`:** controls over the pitch, with chalk borders and a chalk focus ring.
+   - **A comparison:** `Theme.WithLightButtons` gives the specimen's light-button variant (SOL's original fills with ink text). The game doesn't use it.
 4. **Component-state recipes** (`unity/Assets/Eleven.Host/UiKit.cs`) are C# functions that read roles only.
 5. **Screen composition** happens in the host: placed from `HudLayout`, or laid out by flexbox.
 
@@ -80,4 +92,6 @@ Screen-reader support is out of scope (Erik, ADR-0003). Everything else stands:
   - UI Toolkit lays out text and takes clicks in the WebGL build;
   - presses on the UI never reach play;
   - the UI's frame cost, as idle fps with and without the UI.
-- **The specimen** (`?specimen`, `?specimen=dark`) is built only from these recipes. CI renders it at phone and tablet sizes in both mappings, and on a 320 pt phone with text at 150 %. Each must keep every target at 44 × 44 pt or more, with nothing wider than the page. CI keeps the screenshots as artifacts.
+- **The specimen** (`?specimen`, `?specimen=dark`) is built only from these recipes.
+  - It switches between the dark and light button palettes for comparison.
+  - It shows the pitch context on the pitch's own colour. CI renders it at phone and tablet sizes in both mappings, and on a 320 pt phone with text at 150 %. Each must keep every target at 44 × 44 pt or more, with nothing wider than the page. CI keeps the screenshots as artifacts.

@@ -15,6 +15,8 @@ namespace Eleven.Host
     internal sealed class Specimen
     {
         private readonly UiRoot _ui;
+        private bool _dark;
+        private bool _lightButtons;
         private VisualElement _page;
         private UiKit.Data _tick;
         private UiKit.Data _frame;
@@ -23,7 +25,15 @@ namespace Eleven.Host
         public Specimen(UiRoot ui, bool dark)
         {
             _ui = ui;
-            Build(dark ? Theme.Dark : Theme.Ordinary);
+            _dark = dark;
+            Build(Current());
+        }
+
+        // The context, and the light-button comparison when chosen (Erik's review, 2026-11-02).
+        private Theme Current()
+        {
+            Theme context = _dark ? Theme.Dark : Theme.Ordinary;
+            return _lightButtons ? Theme.WithLightButtons(context) : context;
         }
 
         /// <summary>Called once a frame: the HUD data changes, the layout must not move.</summary>
@@ -61,10 +71,20 @@ namespace Eleven.Host
             caption.style.marginBottom = Spacing.L;
             column.Add(caption);
 
-            UiKit.Segmented context = UiKit.MakeSegmented(_ui, theme, new[] { "Ordinary", "Dark" }, theme == Theme.Dark ? 1 : 0,
-                i => Build(i == 1 ? Theme.Dark : Theme.Ordinary));
-            context.Element.style.marginBottom = Spacing.L;
+            UiKit.Segmented context = UiKit.MakeSegmented(_ui, theme, new[] { "Ordinary", "Dark" }, _dark ? 1 : 0, i =>
+            {
+                _dark = i == 1;
+                Build(Current());
+            });
+            context.Element.style.marginBottom = Spacing.S;
             column.Add(context.Element);
+            UiKit.Segmented buttons = UiKit.MakeSegmented(_ui, theme, new[] { "Dark buttons", "Light buttons" }, _lightButtons ? 1 : 0, i =>
+            {
+                _lightButtons = i == 1;
+                Build(Current());
+            });
+            buttons.Element.style.marginBottom = Spacing.L;
+            column.Add(buttons.Element);
 
             // Cards wrap into columns where the screen is wide enough (tablets), one column on phones.
             VisualElement grid = UiKit.Row(Spacing.L);
@@ -118,6 +138,23 @@ namespace Eleven.Host
                 s.Add(UiKit.MakeSegmented(_ui, theme, new[] { "Low", "Medium", "High" }, 1, _ => { }).Element);
                 s.Add(Caption(theme, "Selected: fill, a mark and bold text."));
                 s.Add(UiKit.MakeValue(_ui, theme, "Kick speed", "m/s", "Current 18 · research start 15–32 · valid 0–60", 0, 60, 0.5, 1, 18, _ => { }).Element);
+            }));
+
+            grid.Add(Card(theme, "Over the pitch", s =>
+            {
+                // The pitch context: the same buttons with chalk borders on the pitch's own colour.
+                Theme pitch = _lightButtons ? Theme.WithLightButtons(Theme.Pitch) : Theme.Pitch;
+                var field = new VisualElement { pickingMode = PickingMode.Ignore };
+                field.style.backgroundColor = Domain.Pitch.ToColor();
+                UiKit.Radius(field, Shapes.Control.Radius);
+                field.style.paddingLeft = field.style.paddingRight = field.style.paddingTop = field.style.paddingBottom = Spacing.M;
+                VisualElement row = Wrapping();
+                row.Add(UiKit.MakeAction(_ui, pitch, ActionRole.Utility, "Reset", () => { }).Element);
+                row.Add(UiKit.MakeAction(_ui, pitch, ActionRole.Primary, "Felt wrong", () => { }).Element);
+                UiKit.Gaps(row);
+                field.Add(row);
+                s.Add(field);
+                s.Add(Caption(theme, "Dark fills are about 1:1 against the pitch; chalk borders carry the boundary."));
             }));
 
             grid.Add(Card(theme, "HUD data", s =>

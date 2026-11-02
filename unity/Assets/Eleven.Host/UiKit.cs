@@ -142,7 +142,8 @@ namespace Eleven.Host
             a.Body.style.alignItems = Align.Center;
             a.Body.style.paddingLeft = a.Body.style.paddingRight = Spacing.S;
 
-            a.Label = Text(theme, TypeScale.Label, name, ActionText(role));
+            // One button text colour everywhere (Erik, 2026-11-02): never black on some, white on others.
+            a.Label = Text(theme, TypeScale.Label, name, Role.OnAction);
             a.Label.style.unityTextAlign = TextAnchor.MiddleCenter;
             a.Body.Add(a.Label);
 
@@ -286,7 +287,7 @@ namespace Eleven.Host
             for (int i = 0; i < options.Length; i++)
             {
                 int index = i;
-                Raised r = MakeRaised<Raised>(theme, Shapes.Control, theme[Role.SurfaceRaised], focusable: true);
+                Raised r = MakeRaised<Raised>(theme, Shapes.Control, theme[Role.ActionNeutral], focusable: true);
                 r.Element.name = options[i];
                 r.Element.style.minWidth = r.Element.style.minHeight = Interaction.MinTarget;
                 r.Element.style.marginBottom = Spacing.Xs;
@@ -300,7 +301,7 @@ namespace Eleven.Host
                 Radius(mark, Spacing.S / 2f);
                 mark.style.backgroundColor = theme[Role.OnAction].ToColor();
                 mark.style.marginRight = Spacing.Xs;
-                Label label = Text(theme, TypeScale.Label, options[i], Role.Text);
+                Label label = Text(theme, TypeScale.Label, options[i], Role.OnAction);
                 r.Body.Add(mark);
                 r.Body.Add(label);
                 seg.Segments.Add(r);
@@ -325,9 +326,9 @@ namespace Eleven.Host
             for (int i = 0; i < seg.Segments.Count; i++)
             {
                 bool on = i == index;
-                seg.Segments[i].Body.style.backgroundColor = (on ? theme[Role.Selection] : theme[Role.SurfaceRaised]).ToColor();
+                seg.Segments[i].Body.style.backgroundColor = (on ? theme[Role.Selection] : theme[Role.ActionNeutral]).ToColor();
                 seg.Marks[i].style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
-                seg.Labels[i].style.color = (on ? theme[Role.OnAction] : theme[Role.Text]).ToColor();
+                seg.Labels[i].style.color = theme[Role.OnAction].ToColor();
                 seg.Labels[i].style.unityFontStyleAndWeight = on ? FontStyle.Bold : FontStyle.Normal;
             }
         }
@@ -526,16 +527,13 @@ namespace Eleven.Host
             e.style.borderTopColor = e.style.borderBottomColor = e.style.borderLeftColor = e.style.borderRightColor = c;
         }
 
-        private static bool IsFilled(ActionRole role) => role == ActionRole.Primary || role == ActionRole.Supporting || role == ActionRole.Destructive;
-
-        private static Role ActionText(ActionRole role) => IsFilled(role) ? Role.OnAction : Role.Text;
 
         private static Rgba ActionFill(Theme theme, ActionRole role) => role switch
         {
             ActionRole.Primary => theme[Role.ActionPrimary],
             ActionRole.Supporting => theme[Role.ActionSupporting],
-            ActionRole.Destructive => theme[Role.StateDanger],
-            _ => theme[Role.SurfaceRaised],
+            ActionRole.Destructive => theme[Role.ActionDestructive],
+            _ => theme[Role.ActionNeutral],
         };
     }
 }

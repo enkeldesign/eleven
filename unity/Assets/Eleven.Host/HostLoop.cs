@@ -271,7 +271,8 @@ namespace Eleven.Host
             string step = "panel";
             try
             {
-                _ui = new UiRoot(transform, Theme.Ordinary);
+                // Reset and Run sit over the pitch: the pitch context gives them chalk borders.
+                _ui = new UiRoot(transform, Theme.Pitch);
                 step = "scale";
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
                 step = "actions";
@@ -366,14 +367,14 @@ namespace Eleven.Host
         {
             float ppp = Mathf.Max(0.5f, PixelsPerPoint());
             Shape shape = Shapes.Control;
-            Theme theme = Theme.Ordinary;
+            Theme theme = Theme.Pitch;
             float radius = shape.Radius * ppp;
             var shadow = new Rect(rect.x + shape.Shadow * ppp, rect.y + shape.Shadow * ppp, rect.width, rect.height);
             GUI.DrawTexture(shadow, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Shadow].ToColor(), 0, radius);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.SurfaceRaised].ToColor(), 0, radius);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.ActionNeutral].ToColor(), 0, radius);
             GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Outline].ToColor(), shape.Border * ppp, radius);
             Color before = _buttonStyle.normal.textColor;
-            _buttonStyle.normal.textColor = theme[Role.Text].ToColor();
+            _buttonStyle.normal.textColor = theme[Role.OnAction].ToColor();
             GUI.Label(rect, label, _buttonStyle);
             _buttonStyle.normal.textColor = before;
         }

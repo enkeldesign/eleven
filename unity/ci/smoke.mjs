@@ -412,8 +412,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }, { data: png.toString('base64'), colours });
     check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
-    // The Run scenario action is UI Toolkit (#48): around its centre, its Paper fill and its Ink
-    // label must be on screen, so text really renders in the WebGL build, not only measures.
+    // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
+    // white label must be on screen, so text really renders in the WebGL build, not only measures.
+    // Buttons are dark with white text (Erik, 2026-11-02).
     const label = await page.evaluate(async ({ data, cx, cy, ui }) => {
       const image = new Image();
       image.src = `data:image/png;base64,${data}`;
@@ -426,15 +427,15 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const half = { x: Math.round(24 * ui), y: Math.round(5 * ui) };
       const px = g.getImageData(cx - half.x, cy - half.y, half.x * 2, half.y * 2).data;
       const near = (i, [r, gg, b]) => Math.abs(px[i] - r) + Math.abs(px[i + 1] - gg) + Math.abs(px[i + 2] - b) < 40;
-      const out = { paper: 0, ink: 0, total: px.length / 4 };
+      const out = { fill: 0, text: 0, total: px.length / 4 };
       for (let i = 0; i < px.length; i += 4) {
-        if (near(i, [0xfc, 0xfd, 0xf8])) out.paper++;
-        if (near(i, [0x11, 0x15, 0x1c])) out.ink++;
+        if (near(i, [0x3a, 0x42, 0x50])) out.fill++;
+        if (near(i, [0xfc, 0xfd, 0xf8])) out.text++;
       }
       return out;
     }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[2] ?? 1) });
-    check('the UI action shows its fill and its label', label.paper > label.total * 0.2 && label.ink > label.total * 0.03,
-      `around Run scenario's centre: ${label.paper} paper, ${label.ink} ink of ${label.total} pixels`);
+    check('the UI action shows its fill and its label', label.fill > label.total * 0.2 && label.text > label.total * 0.03,
+      `around Run scenario's centre: ${label.fill} slate fill, ${label.text} white text of ${label.total} pixels`);
 
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');

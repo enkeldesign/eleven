@@ -103,20 +103,20 @@ namespace Eleven.Presentation
             [Role.Text] = Primitives.Ink900,
             [Role.TextHeading] = Primitives.Ink900,
             [Role.TextMuted] = Primitives.Slate500,
-            [Role.OnAction] = Primitives.Ink900,
+            [Role.OnAction] = Primitives.Paper0,
             [Role.Outline] = Primitives.Ink900,
             [Role.Shadow] = Primitives.Ink900,
             [Role.InnerEdge] = Primitives.Paper0.WithAlpha(0.55),
             [Role.FocusRing] = Primitives.Ink900,
             [Role.FocusGap] = Primitives.Paper0,
             [Role.Scrim] = Primitives.Ink900.WithAlpha(0.5),
-            [Role.ActionPrimary] = Primitives.Royal300,
-            [Role.ActionSupporting] = Primitives.Violet200,
-            [Role.ActionInformation] = Primitives.Sky300,
-            [Role.ActionNeutral] = Primitives.Paper0,
-            [Role.ActionDestructive] = Primitives.Red400,
+            [Role.ActionPrimary] = Primitives.Royal700,
+            [Role.ActionSupporting] = Primitives.Violet700,
+            [Role.ActionInformation] = Primitives.Sky700,
+            [Role.ActionNeutral] = Primitives.Slate700,
+            [Role.ActionDestructive] = Primitives.Red700,
             [Role.OnState] = Primitives.Ink900,
-            [Role.Selection] = Primitives.Grass300,
+            [Role.Selection] = Primitives.Grass700,
             [Role.StateSuccess] = Primitives.Green400,
             [Role.StateWarning] = Primitives.Gold300,
             [Role.StateDanger] = Primitives.Red400,
@@ -132,32 +132,64 @@ namespace Eleven.Presentation
             [Role.Text] = Primitives.Chalk50,
             [Role.TextHeading] = Primitives.Paper0,
             [Role.TextMuted] = Primitives.Slate300,
-            [Role.OnAction] = Primitives.Ink900,
+            [Role.OnAction] = Primitives.Paper0,
             [Role.Outline] = Primitives.Chalk50,
             [Role.Shadow] = Primitives.Ink900,
             [Role.InnerEdge] = Primitives.Paper0.WithAlpha(0.3),
             [Role.FocusRing] = Primitives.Chalk50,
             [Role.FocusGap] = Primitives.Night900,
             [Role.Scrim] = Primitives.Ink900.WithAlpha(0.7),
-            [Role.ActionPrimary] = Primitives.Royal300,
-            [Role.ActionSupporting] = Primitives.Violet200,
-            [Role.ActionInformation] = Primitives.Sky300,
-            [Role.ActionNeutral] = Primitives.Night800,
-            [Role.ActionDestructive] = Primitives.Red400,
+            [Role.ActionPrimary] = Primitives.Royal700,
+            [Role.ActionSupporting] = Primitives.Violet700,
+            [Role.ActionInformation] = Primitives.Sky700,
+            [Role.ActionNeutral] = Primitives.Slate700,
+            [Role.ActionDestructive] = Primitives.Red700,
             [Role.OnState] = Primitives.Ink900,
-            [Role.Selection] = Primitives.Grass300,
+            [Role.Selection] = Primitives.Grass700,
             [Role.StateSuccess] = Primitives.Green400,
             [Role.StateWarning] = Primitives.Gold300,
             [Role.StateDanger] = Primitives.Red400,
         });
 
-        /// <summary>Controls over the pitch: the ordinary mapping with chalk borders.</summary>
-        public static readonly Theme Pitch = new Theme("pitch", (Rgba[])Ordinary._colours.Clone());
+        /// <summary>
+        /// Controls over the pitch (the HUD): the ordinary mapping with chalk borders and a chalk
+        /// focus ring. Dark button fills are about 1:1 against the pitch, so the border carries the
+        /// whole boundary (Erik, 2026-11-02).
+        /// </summary>
+        public static readonly Theme Pitch = Derive("pitch", Ordinary, new Dictionary<Role, Rgba>
+        {
+            [Role.Outline] = Primitives.Chalk50,
+            [Role.FocusRing] = Primitives.Chalk50,
+            [Role.FocusGap] = Primitives.Night900,
+        });
 
         public static IReadOnlyList<Theme> All { get; } = new[] { Ordinary, Dark, Pitch };
 
-        /// <summary>The specimen's comparison mappings: light buttons with ink text.</summary>
-        public static IReadOnlyList<Theme> Comparisons { get; } = new Theme[0];
+        /// <summary>
+        /// The specimen's comparison: the same contexts with SOL's light button fills and ink text,
+        /// so the two button palettes can be compared on a device. Not used by the game.
+        /// </summary>
+        public static IReadOnlyList<Theme> Comparisons { get; } = new[] { WithLightButtons(Ordinary), WithLightButtons(Dark) };
+
+        /// <summary>A context with light button fills and ink button text, for comparison.</summary>
+        public static Theme WithLightButtons(Theme theme) => Derive(theme.Name + ", light buttons", theme, new Dictionary<Role, Rgba>
+        {
+            [Role.ActionPrimary] = Primitives.Royal300,
+            [Role.ActionSupporting] = Primitives.Violet200,
+            [Role.ActionInformation] = Primitives.Sky300,
+            [Role.ActionNeutral] = Primitives.Paper0,
+            [Role.ActionDestructive] = Primitives.Red400,
+            [Role.Selection] = Primitives.Grass300,
+            [Role.OnAction] = Primitives.Ink900,
+        });
+
+        // A mapping that differs from another in a few roles: a context, not a recolouring.
+        private static Theme Derive(string name, Theme from, Dictionary<Role, Rgba> overrides)
+        {
+            var colours = (Rgba[])from._colours.Clone();
+            foreach (KeyValuePair<Role, Rgba> o in overrides) colours[(int)o.Key] = o.Value;
+            return new Theme(name, colours);
+        }
 
         public static readonly Role[] Roles = (Role[])Enum.GetValues(typeof(Role));
 
