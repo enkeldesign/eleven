@@ -92,13 +92,7 @@ namespace Eleven.Host
             _tabs.Element.style.marginBottom = Spacing.S;
             _sheet.Content.Add(_tabs.Element);
 
-            _list = new ScrollView(ScrollViewMode.Vertical)
-            {
-                touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped,
-                horizontalScrollerVisibility = ScrollerVisibility.Hidden,
-                // Touch and the wheel scroll it; the scroller's own buttons would be undersized targets.
-                verticalScrollerVisibility = ScrollerVisibility.Hidden,
-            };
+            _list = UiKit.MakeScroll();
             _list.style.flexShrink = 1;
             _list.style.minHeight = 0;
             _sheet.Content.Add(_list);

@@ -555,6 +555,26 @@ namespace Eleven.Host
 
         // ---- Layout helpers ----
 
+        /// <summary>
+        /// A vertical scroll list (#45). There is no theme stylesheet (#48), so the defaults it would
+        /// carry are set here: the viewport clips, and the content keeps its natural height and never
+        /// shrinks to fit, so what doesn't fit scrolls rather than squeezes. Touch and the wheel
+        /// scroll it; the scrollers' own buttons would be undersized targets, so they are hidden.
+        /// </summary>
+        public static ScrollView MakeScroll()
+        {
+            var scroll = new ScrollView(ScrollViewMode.Vertical)
+            {
+                touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped,
+                verticalScrollerVisibility = ScrollerVisibility.Hidden,
+                horizontalScrollerVisibility = ScrollerVisibility.Hidden,
+            };
+            scroll.contentViewport.style.overflow = Overflow.Hidden;
+            scroll.contentViewport.style.flexGrow = 1;
+            scroll.contentContainer.style.flexShrink = 0;
+            return scroll;
+        }
+
         /// <summary>A row with a gap between its children; call <see cref="Gaps"/> once they are added.</summary>
         public static VisualElement Row(float gap)
         {

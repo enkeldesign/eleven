@@ -524,7 +524,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const fromClose = logs.length;
     if (opened) await tap(at(...point(opened.match[6])));
     await waitForLog(/ELEVEN bench closed/, 3_000, fromClose);
-    await waitForLog(tracePattern, 5_000, logs.length);
+    // CI's software renderer runs the phone pass near 5 fps, where frames over 250 ms are dropped
+    // rather than caught up, so give play time to cover a trace interval past the opening.
+    const traceAfter = (from) => waitFor(logs, { exec: (l) => { const m = tracePattern.exec(l); return m && Number(m[1]) > tickBeforeOpen ? m : null; } }, 20_000, from);
+    await traceAfter(fromOpen);
     const whileOpen = logs.slice(fromOpen).filter((l) => /^ELEVEN (reset|bench applied)/.test(l) || (/^ELEVEN press /.test(l) && !/target=ui/.test(l)));
     const tickAfterClose = Number(lastLog(tracePattern)?.[1] ?? -1);
     check('opening and closing the bench leaves the run alone', !!opened && whileOpen.length === 0 && tickAfterClose > tickBeforeOpen,

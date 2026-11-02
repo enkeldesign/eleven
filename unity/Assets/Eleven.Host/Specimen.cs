@@ -47,12 +47,7 @@ namespace Eleven.Host
             _page.style.left = _page.style.top = _page.style.right = _page.style.bottom = 0;
             _page.style.backgroundColor = theme[Role.SurfacePage].ToColor();
 
-            var scroll = new ScrollView(ScrollViewMode.Vertical)
-            {
-                touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped,
-                verticalScrollerVisibility = ScrollerVisibility.Hidden,
-                horizontalScrollerVisibility = ScrollerVisibility.Hidden,
-            };
+            ScrollView scroll = UiKit.MakeScroll();
             scroll.style.flexGrow = 1;
             VisualElement column = scroll.contentContainer;
             column.style.paddingLeft = column.style.paddingRight = Spacing.L;
