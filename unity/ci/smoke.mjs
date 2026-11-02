@@ -392,7 +392,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         if (near(i, [0x11, 0x15, 0x1c])) out.ink++;
       }
       return out;
-    }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[3] ?? 1) });
+    }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[2] ?? 1) });
     check('the UI action shows its fill and its label', label.paper > label.total * 0.2 && label.ink > label.total * 0.03,
       `around Run scenario's centre: ${label.paper} paper, ${label.ink} ink of ${label.total} pixels`);
 
@@ -495,10 +495,16 @@ const browser = await chromium.launch({
   args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist'],
 });
 try {
-  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', { viewport: { width: 1280, height: 800 } }, false);
-  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui', { viewport: { width: 1280, height: 800 } }, false);
+  // The UI's frame cost (#48): idle passes without the UI before and after each full pass, so
+  // neither side gets the cold or the warm browser.
+  const desktop = { viewport: { width: 1280, height: 800 } };
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
+  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui-before', desktop, false);
+  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
+  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui-after', desktop, false);
+  await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-before', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
+  await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-after', phone, true);
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();
@@ -509,7 +515,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => pass.includes('noui') ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);
