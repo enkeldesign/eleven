@@ -247,17 +247,29 @@ namespace Eleven.Host
         private void BuildUi()
         {
             double started = Time.realtimeSinceStartupAsDouble;
-            _ui = new UiRoot(transform, Theme.Ordinary);
-            _ui.SetPixelsPerPoint(PixelsPerPoint());
-            _resetAction = UiActions.Make(_ui, ActionRole.Utility, "Reset", ResetMatch);
-            _runAction = UiActions.Make(_ui, ActionRole.Utility, "Run scenario", RunScenario);
-            _ui.Root.Add(_resetAction.Element);
-            _ui.Root.Add(_runAction.Element);
-            _input.OverUi = _ui.IsOverUi;
-            float textWidth = _ui.MeasureText("RUN SCENARIO", TypeScale.Label);
-            double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
-            Log(FormattableString.Invariant(
-                $"ELEVEN ui ready font={(_ui.Font != null ? _ui.Font.name : "none")} textWidth={textWidth:F1} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1}"));
+            string step = "panel";
+            try
+            {
+                _ui = new UiRoot(transform, Theme.Ordinary);
+                step = "scale";
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                step = "actions";
+                _resetAction = UiActions.Make(_ui, ActionRole.Utility, "Reset", ResetMatch);
+                _runAction = UiActions.Make(_ui, ActionRole.Utility, "Run scenario", RunScenario);
+                _ui.Root.Add(_resetAction.Element);
+                _ui.Root.Add(_runAction.Element);
+                _input.OverUi = _ui.IsOverUi;
+                step = "measure";
+                float textWidth = _ui.MeasureText("RUN SCENARIO", TypeScale.Label);
+                double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+                string font = _ui.Font != null ? _ui.Font.name.Replace(' ', '_') : "none";
+                Log(FormattableString.Invariant(
+                    $"ELEVEN ui ready font={font} textWidth={textWidth:F1} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1} panel={(_ui.Root.panel != null ? "yes" : "no")}"));
+            }
+            catch (Exception e)
+            {
+                Log($"ELEVEN ui failed at {step}: {e.GetType().Name}: {e.Message}");
+            }
         }
 
         private void UpdateLayout(bool force)

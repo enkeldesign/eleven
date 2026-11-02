@@ -390,6 +390,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const presses = logs.filter((l) => l.startsWith('ELEVEN press')).slice(-8);
       const traces = logs.filter((l) => l.startsWith('ELEVEN trace')).slice(-3);
       annotate('notice', `Smoke context (${name})`, `layouts: ${(notes.layouts || []).join(' / ')}\npresses: ${presses.join(' | ') || 'none'}\ntraces: ${traces.join(' | ')}`);
+      // The most repeated other console lines (a per-frame warning shows here), and every UI line.
+      const counts = new Map();
+      for (const l of logs) {
+        if (/^ELEVEN (trace|press|event)/.test(l)) continue;
+        const key = l.slice(0, 220);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([l, c]) => `${c}x ${l}`);
+      const uiLines = logs.filter((l) => /ELEVEN ui|UIElements|UI Toolkit|PanelSettings|Theme Style|TextSettings|font/i.test(l)).slice(0, 8).map((l) => l.slice(0, 300));
+      annotate('notice', `Smoke console (${name})`, `${logs.length} lines; most repeated:\n${repeated.join('\n')}\nUI lines:\n${uiLines.join('\n') || 'none'}`);
     }
     await context.close();
   }
