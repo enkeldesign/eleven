@@ -489,6 +489,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('bench controls are at least 44 x 44 pt, and nothing is wider than the screen',
       !!targets && Number(targets.match[2]) >= 44 && targets.match[4] === 'none',
       targets ? targets.match[0].replace('ELEVEN bench ', '') : 'no target report');
+    // Tab while the sheet is open (Codex on #49): only controls that can be seen, ending at the actions.
+    const focusOrder = await waitForLog(/ELEVEN bench focus order=(\S*) count=(\d+) hidden=(\d+)/, 3_000, fromOpen);
+    check('Tab in the bench stops only at controls that can be seen, ending at its actions',
+      !!focusOrder && focusOrder.match[3] === '0' && /Close,Revert,Apply_\/_Retry$/.test(focusOrder.match[1]),
+      focusOrder ? `${focusOrder.match[2]} stops, ${focusOrder.match[3]} hidden; ends ${focusOrder.match[1].split(',').slice(-4).join(',')}` : 'no focus order line');
     const tabs = Object.fromEntries((opened?.match[3] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
     const tabTo = async (group, knob) => {
       const from = logs.length;

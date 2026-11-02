@@ -276,6 +276,11 @@ namespace Eleven.Host
                 });
                 Log(FormattableString.Invariant(
                     $"ELEVEN bench targets={targets} smallest={(targets > 0 ? smallest : 0):F1} smallestName={(smallestName ?? "none").Replace(' ', '_')} overflow={overflow.Replace(' ', '_')}"));
+
+                // Where Tab goes while the sheet is open, and how many of those stops can't be seen.
+                List<VisualElement> order = FocusOrder();
+                int hidden = order.Count(Hidden);
+                Log($"ELEVEN bench focus order={string.Join(",", order.Select(v => (v.name ?? "").Replace(' ', '_')))} count={order.Count} hidden={hidden}");
             }
 
             if (_reportControls && _trace)
@@ -289,6 +294,17 @@ namespace Eleven.Host
                         $"ELEVEN bench control name={knob.Name} value={Number(v.Current)} less={P(v.Less.Element)} more={P(v.More.Element)} track={track.xMin * s:F0},{track.xMax * s:F0},{track.center.y * s:F0}"));
                 }
             }
+        }
+
+        // Whether an element can't be seen: it or an ancestor is not displayed or hidden, or it has no size.
+        private static bool Hidden(VisualElement e)
+        {
+            for (VisualElement v = e; v != null; v = v.parent)
+            {
+                if (v.resolvedStyle.display == DisplayStyle.None || v.resolvedStyle.visibility == Visibility.Hidden) return true;
+            }
+
+            return !(e.worldBound.width > 0) || !(e.worldBound.height > 0);
         }
 
         private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
