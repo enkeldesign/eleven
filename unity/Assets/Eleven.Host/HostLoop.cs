@@ -35,6 +35,10 @@ namespace Eleven.Host
         // The last ten seconds, for THIS FELT WRONG (#44). It only reads the simulator.
         private readonly FeelRecorder _feel = new FeelRecorder();
 
+        // The feel test bench's applied values (#45). The config and the practice start come from
+        // them; APPLY / RETRY replaces them whole and starts a fresh run.
+        private BenchCandidate _bench = BenchCandidate.Reference;
+
         private SimConfig _config;
         private Simulator _simulator;
         private CommandRecording _recording;
@@ -71,8 +75,8 @@ namespace Eleven.Host
             string url = Application.absoluteURL ?? "";
             _trace = url.Contains("trace");
 
-            _config = SpikeScenario.Config();
-            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _config = _bench.Config;
+            _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             // The player keeps every key (WebGLInput.captureAllKeyboardInput stays at its default):
@@ -107,6 +111,7 @@ namespace Eleven.Host
             _loadSeconds = PageSeconds();
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
+            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
 
             if (url.Contains("autorun")) RunScenario();
         }
@@ -209,7 +214,7 @@ namespace Eleven.Host
 
         private void ResetMatch()
         {
-            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
+            _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             _input.Clear();
@@ -225,7 +230,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, "technical-reference", "none", "");
+            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, "none", "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -254,6 +259,27 @@ namespace Eleven.Host
                 ? $"Captured {summary}, kept on this device."
                 : $"Captured {summary}, not kept on this device (storage unavailable): save it now.");
             _hud.ShowSave();
+        }
+
+        /// <summary>
+        /// APPLY / RETRY (#45): the bench's candidate, already whole and valid, becomes the applied
+        /// values, a new immutable config and a fresh run from the standard practice start. Nothing
+        /// here touches the running simulation: it is replaced.
+        /// </summary>
+        private void ApplyBench(BenchCandidate candidate)
+        {
+            double started = Time.realtimeSinceStartupAsDouble;
+            int changes = candidate.ChangesFrom(_bench);
+            _bench = candidate;
+            _config = candidate.Config;
+            _view.Use(_config);
+            ResetMatch();
+            _accumulator = 0;
+            double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+
+            Log(FormattableString.Invariant(
+                $"ELEVEN bench applied changes={changes} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
+            _hud.ShowStatus(FormattableString.Invariant($"Applied {changes} change{(changes == 1 ? "" : "s")}, fresh run in {Math.Max(1, milliseconds):F0} ms."));
         }
 
         private static string SafeName(string s)
@@ -303,7 +329,7 @@ namespace Eleven.Host
                     return;
                 }
 
-                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, () => _bench, ApplyBench);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -370,8 +396,8 @@ namespace Eleven.Host
         // The match controls (#28's) are the only thing still drawn with IMGUI.
         private void OnGUI()
         {
-            // Not over the note sheet: play waits while it is open.
-            if (Event.current.type != EventType.Repaint || (_hud != null && _hud.SheetOpen)) return;
+            // Not over a sheet: the note sheet or the test bench covers the match.
+            if (Event.current.type != EventType.Repaint || (_hud != null && _hud.ModalOpen)) return;
             EnsureStyles();
 
             // The stick's vector is measured from where the thumb landed; its base is drawn as near

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Eleven.Presentation;
+using Eleven.Simulation.Harness;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -56,7 +57,8 @@ namespace Eleven.Host
         private float _buildShownAt = -1;
 
         public Hud(UiRoot ui, bool trace, System.Action relayout, System.Action reset, System.Action run,
-            System.Action feltWrong, System.Action saveCapture, Action<string> noteDone)
+            System.Action feltWrong, System.Action saveCapture, Action<string> noteDone,
+            Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply)
         {
             _ui = ui;
             _trace = trace;
@@ -85,6 +87,8 @@ namespace Eleven.Host
 
             Reset = Action(ActionRole.Utility, "Reset", reset, null, (n, v) => n.Reset = v, n => n.Reset);
             Run = Action(ActionRole.Utility, "Run scenario", run, null, (n, v) => n.Run = v, n => n.Run);
+            // TEST BENCH (#45) opens a sheet, so it is a supporting action.
+            TestBench = Action(ActionRole.Supporting, "Test bench", OpenBench, null, (n, v) => n.Bench = v, n => n.Bench);
 
             // The scenario result: its time and hashes, names in one column and values in tabular slots.
             _result = UiKit.MakeHudPanel(pitch);
@@ -102,7 +106,7 @@ namespace Eleven.Host
             // there is a capture to save (its place is kept meanwhile).
             FeltWrong = Action(ActionRole.Primary, "Felt wrong", () =>
             {
-                if (!SheetOpen && Time.frameCount - _closedFrame > 2) feltWrong();
+                if (!ModalOpen && Time.frameCount - _closedFrame > 2) feltWrong();
             }, "Felt\nwrong", (n, v) => n.FeltWrong = v, n => n.FeltWrong);
             SaveCapture = Action(ActionRole.Supporting, "Save capture", saveCapture, "Save\ncapture", (n, v) => n.SaveCapture = v, n => n.SaveCapture);
             SaveCapture.Element.style.visibility = Visibility.Hidden;
@@ -144,6 +148,8 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
+            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, BenchClosed);
+
             // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
             // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel
             // turning Tab into navigation, which the smoke test found it doesn't here (#53).
@@ -169,6 +175,13 @@ namespace Eleven.Host
             // the sheet is open; not the key that opened it.
             tree.RegisterCallback<KeyDownEvent>(e =>
             {
+                if (Bench.Open && e.keyCode == KeyCode.Escape)
+                {
+                    Bench.Close();
+                    e.StopPropagation();
+                    return;
+                }
+
                 if (!SheetOpen || Time.frameCount == _openedFrame) return;
                 if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
                 {
@@ -183,6 +196,13 @@ namespace Eleven.Host
             }, TrickleDown.TrickleDown);
             tree.RegisterCallback<NavigationCancelEvent>(e =>
             {
+                if (Bench.Open)
+                {
+                    Bench.Close();
+                    e.StopPropagation();
+                    return;
+                }
+
                 if (!SheetOpen || Time.frameCount == _openedFrame) return;
                 CloseNote("");
                 e.StopPropagation();
@@ -216,6 +236,11 @@ namespace Eleven.Host
 
         public UiKit.Action Run { get; }
 
+        public UiKit.Action TestBench { get; }
+
+        /// <summary>The feel test bench's sheet (#45).</summary>
+        public BenchSheet Bench { get; }
+
         public UiKit.Action FeltWrong { get; }
 
         public UiKit.Action SaveCapture { get; }
@@ -223,8 +248,11 @@ namespace Eleven.Host
         /// <summary>Whether the note sheet is open: play waits, as it did under the browser's prompt (#44).</summary>
         public bool SheetOpen { get; private set; }
 
-        /// <summary>Whether a press on SAVE CAPTURE would save now: shown, and not behind the sheet.</summary>
-        public bool SaveActive => _saveShown && !SheetOpen;
+        /// <summary>Whether a sheet covers the match: the note sheet or the test bench.</summary>
+        public bool ModalOpen => SheetOpen || Bench.Open;
+
+        /// <summary>Whether a press on SAVE CAPTURE would save now: shown, and not behind a sheet.</summary>
+        public bool SaveActive => _saveShown && !ModalOpen;
 
         /// <summary>The build panel's laid-out size in points, for the trace line (it must not jitter).</summary>
         public string BuildSize => FormattableString.Invariant($"{_build.Element.layout.width:F0}x{_build.Element.layout.height:F0}");
@@ -237,6 +265,7 @@ namespace Eleven.Host
             _ui.PlaceAuto(_build.Element, layout.BuildLabel.position, row);
             _ui.Place(Reset.Element, layout.ResetButton);
             _ui.Place(Run.Element, layout.RunButton);
+            _ui.Place(TestBench.Element, layout.BenchButton);
             _ui.PlaceAuto(_result.Element, layout.Result.position, row);
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
@@ -329,6 +358,19 @@ namespace Eleven.Host
             _noteDone(note);
         }
 
+        // The test bench opens over the match; the HUD behind it takes neither presses nor focus.
+        private void OpenBench()
+        {
+            if (ModalOpen) return;
+            foreach (UiKit.Action a in _actions) a.Element.focusable = false;
+            Bench.Show();
+        }
+
+        private void BenchClosed()
+        {
+            foreach (UiKit.Action a in _actions) a.Element.focusable = a != SaveCapture || _saveShown;
+        }
+
         // Once the sheet has its layout: focus the note, so typing goes straight in, and say where
         // its actions are for the smoke test.
         private void SheetPlaced()
@@ -346,7 +388,11 @@ namespace Eleven.Host
         private void MoveFocus(int step)
         {
             var order = new List<VisualElement>();
-            if (SheetOpen)
+            if (Bench.Open)
+            {
+                order = Bench.FocusOrder();
+            }
+            else if (SheetOpen)
             {
                 order.Add(_note.Field);
                 order.Add(_skip.Element);

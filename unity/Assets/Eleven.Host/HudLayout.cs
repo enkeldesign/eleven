@@ -13,6 +13,7 @@ namespace Eleven.Host
         public Vector2 Build;
         public Vector2 Reset;
         public Vector2 Run;
+        public Vector2 Bench;
         public Vector2 FeltWrong;
         public Vector2 SaveCapture;
         public Vector2 Result;
@@ -43,6 +44,9 @@ namespace Eleven.Host
         public readonly Rect BuildLabel;
         public readonly Rect ResetButton;
         public readonly Rect RunButton;
+
+        /// <summary>TEST BENCH (#45): in the top row with Reset and Run scenario, away from the thumbs.</summary>
+        public readonly Rect BenchButton;
 
         /// <summary>The scenario result's panel, empty until a scenario has run.</summary>
         public readonly Rect Result;
@@ -85,16 +89,19 @@ namespace Eleven.Host
 
             // The top row's actions widen to hold their labels on one line, as far as the row allows,
             // and take the height that gives: enlarged text (WCAG 1.4.4) or a longer label never
-            // overflows them (#48). Side by side where they fit, otherwise Reset goes below Run.
+            // overflows them (#48). They flow from the right, Run scenario, Reset, then TEST BENCH, and
+            // an action that no longer fits its row starts the next one, right-aligned.
             float runWidth = Mathf.Min(row, Mathf.Max(4.5f * Unit, needs.Run.x));
             float resetWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.Reset.x));
-            float actionHeight = Mathf.Max(1.1f * Unit, Mathf.Max(needs.Run.y, needs.Reset.y));
+            float benchWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.Bench.x));
+            float actionHeight = Mathf.Max(1.1f * Unit, Mathf.Max(needs.Run.y, Mathf.Max(needs.Reset.y, needs.Bench.y)));
             RunButton = new Rect(safe.xMax - Padding - runWidth, BuildLabel.yMax + Padding * 0.5f, runWidth, actionHeight);
-            ResetButton = runWidth + Padding + resetWidth <= row
-                ? new Rect(RunButton.x - Padding - resetWidth, RunButton.y, resetWidth, actionHeight)
-                : new Rect(safe.xMax - Padding - resetWidth, RunButton.yMax + Padding * 0.5f, resetWidth, actionHeight);
-            float actionsLeft = Mathf.Min(RunButton.x, ResetButton.x);
-            float actionsBottom = Mathf.Max(RunButton.yMax, ResetButton.yMax);
+            float rowLeft = RunButton.x;
+            float rowTop = RunButton.y;
+            ResetButton = Flow(resetWidth, actionHeight, safe, Padding, ref rowLeft, ref rowTop);
+            BenchButton = Flow(benchWidth, actionHeight, safe, Padding, ref rowLeft, ref rowTop);
+            float actionsLeft = Mathf.Min(RunButton.x, Mathf.Min(ResetButton.x, BenchButton.x));
+            float actionsBottom = Mathf.Max(RunButton.yMax, Mathf.Max(ResetButton.yMax, BenchButton.yMax));
 
             // Empty until a scenario has run, then the size its panel needs: beside the actions where
             // it fits (landscape), otherwise below them.
@@ -187,9 +194,27 @@ namespace Eleven.Host
             return new HudLayout(width, height, safe, resultLines, needs ?? new HudNeeds());
         }
 
+        // The next action in the top row: left of the last where it fits, otherwise the start of a new
+        // row below, right-aligned.
+        private static Rect Flow(float width, float height, Rect safe, float padding, ref float rowLeft, ref float rowTop)
+        {
+            if (rowLeft - padding - width < safe.xMin + padding)
+            {
+                rowTop += height + padding * 0.5f;
+                rowLeft = safe.xMax - padding;
+                var start = new Rect(rowLeft - width, rowTop, width, height);
+                rowLeft = start.x;
+                return start;
+            }
+
+            var next = new Rect(rowLeft - padding - width, rowTop, width, height);
+            rowLeft = next.x;
+            return next;
+        }
+
         /// <summary>Whether every element sits where it does in <paramref name="other"/>.</summary>
         public bool SamePlaces(in HudLayout other) =>
-            BuildLabel == other.BuildLabel && ResetButton == other.ResetButton && RunButton == other.RunButton
+            BuildLabel == other.BuildLabel && ResetButton == other.ResetButton && RunButton == other.RunButton && BenchButton == other.BenchButton
             && Result == other.Result && FeltWrongButton == other.FeltWrongButton && SaveCaptureButton == other.SaveCaptureButton
             && StatusArea == other.StatusArea && PlayArea == other.PlayArea && StickZone == other.StickZone;
 
@@ -210,7 +235,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)}");
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 
