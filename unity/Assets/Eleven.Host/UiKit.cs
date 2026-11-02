@@ -247,6 +247,7 @@ namespace Eleven.Host
             d.Element.style.alignItems = Align.Center;
             d.Element.Add(d.Name);
             d.Element.Add(d.Value);
+            Gaps(d.Element);
             return d;
         }
 
@@ -302,6 +303,7 @@ namespace Eleven.Host
             }
 
             Select(theme, seg, selected);
+            Gaps(seg.Element);
             return seg;
         }
 
@@ -367,6 +369,7 @@ namespace Eleven.Host
             row.Add(v.Less.Element);
             row.Add(v.Shown);
             row.Add(v.More.Element);
+            Gaps(row);
             v.Element.Add(row);
 
             // The slider: its own full-width row, a track with a fill and a thumb of touch size.
@@ -462,16 +465,28 @@ namespace Eleven.Host
 
         // ---- Layout helpers ----
 
+        /// <summary>A row with a gap between its children; call <see cref="Gaps"/> once they are added.</summary>
         public static VisualElement Row(float gap)
         {
-            var row = new VisualElement { pickingMode = PickingMode.Ignore };
+            var row = new VisualElement { pickingMode = PickingMode.Ignore, userData = gap };
             row.style.flexDirection = FlexDirection.Row;
-            // UI Toolkit has no gap property; children carry the gap as a right margin.
-            row.RegisterCallback<GeometryChangedEvent>(_ =>
-            {
-                for (int i = 0; i < row.childCount; i++) row[i].style.marginRight = i < row.childCount - 1 ? gap : 0;
-            });
             return row;
+        }
+
+        /// <summary>
+        /// Applies a row's gap to its children, once: UI Toolkit has no gap property, so each child
+        /// but the last carries it as a right margin, and wrapping rows also as a bottom margin. Set
+        /// once rather than on every geometry change, which would make layout feed itself.
+        /// </summary>
+        public static void Gaps(VisualElement row)
+        {
+            float gap = row.userData is float g ? g : 0;
+            bool wraps = row.style.flexWrap.value == Wrap.Wrap;
+            for (int i = 0; i < row.childCount; i++)
+            {
+                row[i].style.marginRight = wraps || i < row.childCount - 1 ? gap : 0;
+                if (wraps) row[i].style.marginBottom = gap;
+            }
         }
 
         public static VisualElement Stack(float outset, float radius)

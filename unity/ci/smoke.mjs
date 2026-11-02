@@ -139,7 +139,8 @@ async function runSpecimenPass(browser, url, name, contextOptions) {
       check('nothing is wider than the page', m[5] === 'none', `page ${m[4]} pt wide, overflow: ${m[5]}`);
     }
     await sleep(500);
-    await page.locator('#unity-canvas').screenshot({ path: path.join(outDir, `specimen-${name}.png`) });
+    // The viewport, not the canvas element: no wait for the element to hold still.
+    await page.screenshot({ path: path.join(outDir, `specimen-${name}.png`), timeout: 60_000 });
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
   } catch (e) {

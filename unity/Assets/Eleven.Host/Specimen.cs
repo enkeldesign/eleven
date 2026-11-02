@@ -91,6 +91,7 @@ namespace Eleven.Host
                 roles.Add(UiKit.MakeAction(_ui, theme, ActionRole.Utility, "Reset", () => { }).Element);
                 roles.Add(UiKit.MakeAction(_ui, theme, ActionRole.Navigation, "Back", () => { }).Element);
                 roles.Add(UiKit.MakeAction(_ui, theme, ActionRole.Destructive, "Delete", () => { }).Element);
+                UiKit.Gaps(roles);
                 s.Add(roles);
                 s.Add(Caption(theme, "Primary, supporting, utility, navigation, destructive. One primary per view."));
 
@@ -107,6 +108,7 @@ namespace Eleven.Host
                 states.Add(focused.Element);
                 states.Add(disabled.Element);
                 states.Add(busy.Element);
+                UiKit.Gaps(states);
                 s.Add(states);
                 s.Add(Caption(theme, "Pressed sits in its shadow; focus is a two-colour ring; disabled loses its elevation; busy says so."));
             }));
@@ -147,9 +149,11 @@ namespace Eleven.Host
                     swatches.Add(swatch);
                 }
 
+                UiKit.Gaps(swatches);
                 s.Add(swatches);
             }));
 
+            UiKit.Gaps(grid);
             _ui.Root.Add(_page);
             _page.RegisterCallback<GeometryChangedEvent>(Report);
             Log($"ELEVEN specimen context={theme.Name}");
@@ -201,11 +205,6 @@ namespace Eleven.Host
             VisualElement row = UiKit.Row(Spacing.S);
             row.style.flexWrap = Wrap.Wrap;
             row.style.marginBottom = Spacing.Xs;
-            foreach (VisualElement child in row.Children()) child.style.marginBottom = Spacing.S;
-            row.RegisterCallback<GeometryChangedEvent>(_ =>
-            {
-                foreach (VisualElement child in row.Children()) child.style.marginBottom = Spacing.S;
-            });
             return row;
         }
 
