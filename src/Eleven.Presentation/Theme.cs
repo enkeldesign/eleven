@@ -30,8 +30,11 @@ namespace Eleven.Presentation
         /// <summary>Muted essential text: metadata, hints.</summary>
         TextMuted,
 
-        /// <summary>Text and symbols on any coloured action or state fill.</summary>
+        /// <summary>Text and symbols on every button: one colour on every action fill, never mixed.</summary>
         OnAction,
+
+        /// <summary>Text and symbols on state fills that are not buttons (banners, badges).</summary>
+        OnState,
 
         /// <summary>Component boundaries.</summary>
         Outline,
@@ -58,6 +61,14 @@ namespace Eleven.Presentation
         ActionPrimary,
         ActionSupporting,
         ActionInformation,
+
+        /// <summary>Everyday tools and navigation: Reset, Run scenario, Back.</summary>
+        ActionNeutral,
+
+        /// <summary>Deletes or discards.</summary>
+        ActionDestructive,
+
+        /// <summary>The selected segment or option: a button fill, with a drawn mark.</summary>
         Selection,
         StateSuccess,
         StateWarning,
@@ -102,6 +113,9 @@ namespace Eleven.Presentation
             [Role.ActionPrimary] = Primitives.Royal300,
             [Role.ActionSupporting] = Primitives.Violet200,
             [Role.ActionInformation] = Primitives.Sky300,
+            [Role.ActionNeutral] = Primitives.Paper0,
+            [Role.ActionDestructive] = Primitives.Red400,
+            [Role.OnState] = Primitives.Ink900,
             [Role.Selection] = Primitives.Grass300,
             [Role.StateSuccess] = Primitives.Green400,
             [Role.StateWarning] = Primitives.Gold300,
@@ -128,13 +142,22 @@ namespace Eleven.Presentation
             [Role.ActionPrimary] = Primitives.Royal300,
             [Role.ActionSupporting] = Primitives.Violet200,
             [Role.ActionInformation] = Primitives.Sky300,
+            [Role.ActionNeutral] = Primitives.Night800,
+            [Role.ActionDestructive] = Primitives.Red400,
+            [Role.OnState] = Primitives.Ink900,
             [Role.Selection] = Primitives.Grass300,
             [Role.StateSuccess] = Primitives.Green400,
             [Role.StateWarning] = Primitives.Gold300,
             [Role.StateDanger] = Primitives.Red400,
         });
 
-        public static IReadOnlyList<Theme> All { get; } = new[] { Ordinary, Dark };
+        /// <summary>Controls over the pitch: the ordinary mapping with chalk borders.</summary>
+        public static readonly Theme Pitch = new Theme("pitch", (Rgba[])Ordinary._colours.Clone());
+
+        public static IReadOnlyList<Theme> All { get; } = new[] { Ordinary, Dark, Pitch };
+
+        /// <summary>The specimen's comparison mappings: light buttons with ink text.</summary>
+        public static IReadOnlyList<Theme> Comparisons { get; } = new Theme[0];
 
         public static readonly Role[] Roles = (Role[])Enum.GetValues(typeof(Role));
 
@@ -158,11 +181,13 @@ namespace Eleven.Presentation
         /// <summary>The text roles used on surfaces.</summary>
         public static readonly Role[] TextRoles = { Role.Text, Role.TextHeading, Role.TextMuted };
 
-        /// <summary>The coloured fills that carry <see cref="Role.OnAction"/> text.</summary>
-        public static readonly Role[] Fills =
+        /// <summary>Button fills: they carry <see cref="Role.OnAction"/> text.</summary>
+        public static readonly Role[] ActionFills =
         {
-            Role.ActionPrimary, Role.ActionSupporting, Role.ActionInformation, Role.Selection,
-            Role.StateSuccess, Role.StateWarning, Role.StateDanger,
+            Role.ActionPrimary, Role.ActionSupporting, Role.ActionInformation, Role.ActionNeutral, Role.ActionDestructive, Role.Selection,
         };
+
+        /// <summary>State fills that are not buttons: they carry <see cref="Role.OnState"/> text.</summary>
+        public static readonly Role[] StateFills = { Role.StateSuccess, Role.StateWarning, Role.StateDanger };
     }
 }

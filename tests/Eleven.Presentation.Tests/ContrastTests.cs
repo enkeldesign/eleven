@@ -50,6 +50,8 @@ namespace Eleven.Presentation.Tests
     {
         public static IEnumerable<object[]> Themes() => Theme.All.Select(t => new object[] { t.Name });
 
+        public static IEnumerable<object[]> PageContexts() => new[] { Theme.Ordinary, Theme.Dark }.Select(t => new object[] { t.Name });
+
         private static Theme ThemeNamed(string name) => Theme.All.Single(t => t.Name == name);
 
         [Fact]
@@ -61,6 +63,9 @@ namespace Eleven.Presentation.Tests
                 ["royal-300"] = "#6C83FF", ["grass-300"] = "#B3DB6B", ["violet-200"] = "#C6A8FF", ["sky-300"] = "#77C7D8",
                 ["gold-300"] = "#F0C95A", ["green-400"] = "#69C57A", ["red-400"] = "#DF5C6C",
                 ["night-900"] = "#141922", ["night-800"] = "#1D2430", ["slate-300"] = "#9AA3B0",
+                // Erik, 2026-11-02: buttons are darker and desaturated, with white text.
+                ["royal-700"] = "#4E60A8", ["violet-700"] = "#6E5596", ["sky-700"] = "#2F6B7C",
+                ["grass-700"] = "#4D6B2E", ["slate-700"] = "#3A4250", ["red-700"] = "#A23B4B",
             };
             Assert.Equal(expected.Keys.OrderBy(k => k), Primitives.All.Select(p => p.Name).OrderBy(k => k));
             foreach ((string name, Rgba colour) in Primitives.All) Assert.Equal(expected[name], colour.ToHex());
@@ -72,7 +77,7 @@ namespace Eleven.Presentation.Tests
         {
             Theme theme = ThemeNamed(themeName);
             var primitives = Primitives.All.Select(p => p.Colour).ToList();
-            Assert.Equal(21, Theme.Roles.Length);
+            Assert.Equal(24, Theme.Roles.Length);
             foreach (Role role in Theme.Roles)
             {
                 Rgba colour = theme[role];
@@ -100,19 +105,51 @@ namespace Eleven.Presentation.Tests
 
         [Theory]
         [MemberData(nameof(Themes))]
-        public void Text_on_every_coloured_fill_meets_AA(string themeName)
+        public void Button_text_is_white_on_every_action_fill_at_5_to_1_or_better(string themeName)
         {
+            // Erik, 2026-11-02: buttons never mix white and black text; dark fills at about 5:1.
             Theme theme = ThemeNamed(themeName);
-            Assert.NotEmpty(Theme.Fills);
-            foreach (Role fill in Theme.Fills)
+            Assert.Equal(Primitives.Paper0, theme[Role.OnAction]);
+            Assert.NotEmpty(Theme.ActionFills);
+            foreach (Role fill in Theme.ActionFills)
             {
                 double ratio = Rgba.Contrast(theme[Role.OnAction], theme[fill]);
-                Assert.True(ratio >= 4.5, $"{themeName}: OnAction on {fill} is {ratio:F2}:1");
+                Assert.True(ratio >= 5, $"{themeName}: button text on {fill} is {ratio:F2}:1");
             }
         }
 
         [Theory]
         [MemberData(nameof(Themes))]
+        public void State_colours_that_are_not_buttons_carry_ink_text_at_AA(string themeName)
+        {
+            Theme theme = ThemeNamed(themeName);
+            Assert.Equal(Primitives.Ink900, theme[Role.OnState]);
+            Assert.NotEmpty(Theme.StateFills);
+            foreach (Role fill in Theme.StateFills)
+            {
+                double ratio = Rgba.Contrast(theme[Role.OnState], theme[fill]);
+                Assert.True(ratio >= 4.5, $"{themeName}: state text on {fill} is {ratio:F2}:1");
+            }
+        }
+
+        [Fact]
+        public void The_light_button_comparison_keeps_one_text_colour_too()
+        {
+            // The specimen's comparison: light fills, all with ink text, never mixed.
+            Assert.NotEmpty(Theme.Comparisons);
+            foreach (Theme theme in Theme.Comparisons)
+            {
+                Assert.Equal(Primitives.Ink900, theme[Role.OnAction]);
+                foreach (Role fill in Theme.ActionFills)
+                {
+                    double ratio = Rgba.Contrast(theme[Role.OnAction], theme[fill]);
+                    Assert.True(ratio >= 4.5, $"{theme.Name}: button text on {fill} is {ratio:F2}:1");
+                }
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(PageContexts))]
         public void Outlines_and_the_focus_ring_meet_3_to_1_against_every_surface(string themeName)
         {
             // WCAG 1.4.11. The focus ring sits past a gap of the surface, so the surface is what it is
@@ -129,15 +166,16 @@ namespace Eleven.Presentation.Tests
             }
         }
 
-        [Theory]
-        [MemberData(nameof(Themes))]
-        public void Controls_over_the_pitch_keep_a_3_to_1_boundary(string themeName)
+        [Fact]
+        public void Controls_over_the_pitch_get_chalk_borders()
         {
-            // A HUD control's edge against the pitch is its fill or its outline, whichever reads better.
-            Theme theme = ThemeNamed(themeName);
-            double fill = Rgba.Contrast(theme[Role.SurfaceRaised], Domain.Pitch);
+            // Erik, 2026-11-02: borders carry button contrast; over the pitch, chalk borders. Dark
+            // fills are about 1:1 against the pitch, so the border is the whole boundary.
+            Theme theme = Theme.Pitch;
+            Assert.Equal(Primitives.Chalk50, theme[Role.Outline]);
             double outline = Rgba.Contrast(theme[Role.Outline], Domain.Pitch);
-            Assert.True(Math.Max(fill, outline) >= 3, $"{themeName}: fill {fill:F2}:1, outline {outline:F2}:1 against the pitch");
+            Assert.True(outline >= 3, $"chalk border {outline:F2}:1 against the pitch");
+            Assert.Contains(Theme.Pitch, Theme.All);
         }
 
         [Theory]
@@ -174,11 +212,11 @@ namespace Eleven.Presentation.Tests
         }
 
         [Fact]
-        public void The_dark_context_remaps_surfaces_and_text_but_keeps_ink_on_coloured_fills()
+        public void The_dark_context_remaps_surfaces_and_text_but_keeps_the_buttons()
         {
             Assert.NotEqual(Theme.Ordinary[Role.SurfacePage], Theme.Dark[Role.SurfacePage]);
             Assert.NotEqual(Theme.Ordinary[Role.Text], Theme.Dark[Role.Text]);
-            Assert.Equal(Primitives.Ink900, Theme.Dark[Role.OnAction]);
+            Assert.Equal(Primitives.Paper0, Theme.Dark[Role.OnAction]);
             Assert.Equal(Theme.Ordinary[Role.ActionPrimary], Theme.Dark[Role.ActionPrimary]);
         }
 

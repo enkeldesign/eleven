@@ -49,6 +49,14 @@ namespace Eleven.Presentation
         /// <summary>Dark context: muted essential text. An Opus starting value, for review with the rest.</summary>
         public static readonly Rgba Slate300 = Rgba.Hex("#9AA3B0");
 
+        // Buttons (Erik, 2026-11-02): darker and desaturated, white text at 5:1 or better.
+        public static readonly Rgba Royal700 = default;
+        public static readonly Rgba Violet700 = default;
+        public static readonly Rgba Sky700 = default;
+        public static readonly Rgba Grass700 = default;
+        public static readonly Rgba Slate700 = default;
+        public static readonly Rgba Red700 = default;
+
         /// <summary>Every primitive with its name, for tests and the specimen.</summary>
         public static readonly (string Name, Rgba Colour)[] All =
         {
