@@ -28,6 +28,9 @@ namespace Eleven.Host
             _settings.scaleMode = PanelScaleMode.ConstantPixelSize;
             _settings.scale = 1;
             _settings.sortingOrder = (int)Layer.Controls;
+            // The camera already clears depth and stencil each frame; a second full-screen clear per
+            // frame for the panel costs fill rate (#48: measured frame cost) and buys nothing here.
+            _settings.clearDepthStencil = false;
 
             var host = new GameObject("UI");
             host.SetActive(false);
