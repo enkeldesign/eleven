@@ -515,17 +515,35 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.reload();
       const again = await waitForLog(/ELEVEN host ready build=(\S+)/, 240_000, fromReload);
       check('reload boots', !!again, again ? 'host ready after reload' : 'no "ELEVEN host ready" after reload');
-      // SAVE CAPTURE is a Unity action (#53): offered once the host finds the kept capture, and
-      // pressed where the new layout line puts it.
+      // SAVE CAPTURE is a Unity action (#53): offered once the host finds the kept capture. As after
+      // the first boot, the canvas can still be resizing, so wait for the layout to match it and for
+      // SAVE CAPTURE's own fit report, then press it where the latest layout line puts it.
       const offered = !!(await waitForLog(/ELEVEN ui save visible=yes/, 10_000, fromReload));
+      let relaid = null;
+      for (let i = 0; i < 50; i++) {
+        const size = await canvas.evaluate((c) => [c.width, c.height]);
+        relaid = logs.slice(fromReload).filter((l) => layoutPattern.test(l)).pop() ?? null;
+        const m = relaid ? layoutPattern.exec(relaid) : null;
+        if (m && Number(m[1]) === size[0] && Number(m[2]) === size[1]) break;
+        await sleep(200);
+      }
+      await waitForLog(/ELEVEN ui fit name=Save_capture /, 5_000, fromReload);
       await sleep(1_500);
-      const placedAgain = capturePattern.exec(lastLog(layoutPattern)?.input ?? '');
+      relaid = logs.slice(fromReload).filter((l) => layoutPattern.test(l)).pop() ?? null;
+      const placedAgain = capturePattern.exec(relaid ?? '');
+      const boxAgain = await canvas.boundingBox();
+      const atAgain = (x, y) => ({ x: boxAgain.x + x * (boxAgain.width / n[0]), y: boxAgain.y + y * (boxAgain.height / n[1]) });
+      const fromSave = logs.length;
       const [download] = offered && placedAgain
-        ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), tap(centre(...placedAgain.slice(5, 9)))])
+        ? await Promise.all([
+          page.waitForEvent('download', { timeout: 5_000 }).catch(() => null),
+          tap(atAgain(Number(placedAgain[5]) + Number(placedAgain[7]) / 2, Number(placedAgain[6]) + Number(placedAgain[8]) / 2)),
+        ])
         : [null];
       const saves = logs.slice(fromReload).filter((l) => l.startsWith('ELEVEN page save')).map((l) => l.replace('ELEVEN page save ', ''));
+      const downs = logs.slice(fromSave).filter((l) => l.startsWith('ELEVEN ui pointer down')).map((l) => l.replace('ELEVEN ui pointer down ', ''));
       check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
-        `${!offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download'}; page: ${saves.join(' | ') || 'no save lines'}`);
+        `${!offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download'}; page: ${saves.join(' | ') || 'no save lines'}; ui: ${downs.join(' | ') || 'no pointer down'}`);
     }
   } catch (e) {
     check('ran to completion', false, e.message);
