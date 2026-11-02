@@ -130,7 +130,8 @@ The "this felt wrong" capture (#44, part of #27) is evidence, not telemetry: it 
 3. **Every tick and event.** The window replays, and every tick's hash and every event is compared. A divergence names the first tick that differs. The CLI exits 1 on any mismatch.
 
 **In CI:**
-- **The WebGL build:** the smoke test presses THIS FELT WRONG in it, and CI replays each capture with the .NET CLI.
+- **The WebGL build:** the smoke test presses THIS FELT WRONG in it, and CI replays each capture with the .NET CLI. These are the bytes a player keeps: those in `localStorage` and, on desktop, SAVE CAPTURE's download, which must be identical to them.
+- **Failures fail the build:** the replay step names any capture that doesn't decode or replay, and fails (#50).
 - **The fixture:** `FeelCaptureTests` also replays a committed fixture, `tests/Eleven.Simulation.Tests/Fixtures/spike-felt-wrong.elfc`, made by `eleven-sim capture <file>` from the scripted spike session.
 
 Like recordings, captures are version-specific (INV-7). A schema or format change makes the fixture test report the mismatch by name, and the fixture is then regenerated in its own commit.

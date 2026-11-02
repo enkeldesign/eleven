@@ -36,6 +36,22 @@ jobs:
           echo "::notice title=Simulation tests::${passed:-0} of ${total:-0} passed"
           test "${total:-0}" -gt 0
 
+      # The visual system's tokens (#48): palette, mappings, contrast and scales.
+      - name: Run presentation tests
+        run: >
+          dotnet test tests/Eleven.Presentation.Tests/Eleven.Presentation.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=presentation.trx"
+          --results-directory TestResults
+
+      - name: Check that presentation tests ran
+        run: |
+          counters=$(grep -o '<Counters [^>]*>' TestResults/presentation.trx)
+          total=$(echo "$counters" | grep -o 'total="[0-9]*"' | grep -o '[0-9]\+')
+          passed=$(echo "$counters" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]\+')
+          echo "::notice title=Presentation tests::${passed:-0} of ${total:-0} passed"
+          test "${total:-0}" -gt 0
+
       - name: Build headless harness
         run: dotnet build src/Eleven.Simulation.Cli/Eleven.Simulation.Cli.csproj --configuration Release
 

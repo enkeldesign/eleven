@@ -10,20 +10,20 @@
 //   - boot: the host reports ready, with its build id and the page's load time
 //   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
 //     (ADR-0002: cross-runtime determinism is a gate)
+//   - the HUD (#48, #53): placed actions hold their labels, the build line fits its panel and keeps
+//     its size as its values change, and no page controls remain over the canvas
 //   - Run scenario: the tap is acknowledged, and the result panel fits its text
 //   - stick: dragging it moves the player (from the host's trace lines), and the camera keeps the
 //     player and ball inside the area the HUD leaves free
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
-//   - THIS FELT WRONG (#44): a labelled page button of at least 44 x 44 px; a press asks for a note,
-//     captures the last 10 s without stopping play, keeps it in localStorage and offers SAVE CAPTURE.
-//     The capture is written to <output dir>/capture-<pass>.elfc for CI to replay with .NET.
-//     Desktop also reaches it with Tab and Enter, and after a reload still exports the kept capture
-//   - FEEL / TEST BENCH (#45): a labelled page button opens a panel of every knob the host
-//     describes, with controls of at least 44 x 44 px; opening and closing it leaves the run alone;
-//     an out-of-range value can't be applied; APPLY / RETRY starts a fresh run whose config and
-//     practice start hash as .NET's <hash log dir>/bench-candidate.txt says; the time from the press
-//     to the fresh run is reported; a capture under the candidate goes to capture-<pass>-bench.elfc
+//   - THIS FELT WRONG (#44, #53): a Unity action of at least 44 x 44 pt, placed from the HUD's
+//     layout. A press takes the capture of the last 10 s there and then, and opens a Unity sheet for
+//     an optional note, while play waits; the capture is kept in localStorage, announced, and SAVE
+//     CAPTURE (a Unity action too) offers it. Desktop types the note and saves; the keyboard reaches
+//     THIS FELT WRONG with a visible focus ring. The capture as kept in localStorage is written to
+//     <output dir>/capture-<pass>.elfc, and on desktop SAVE CAPTURE's download to
+//     capture-<pass>-saved.elfc (byte-identical), for CI to replay with .NET
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -51,6 +51,9 @@ const colours = {
 };
 
 const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
+// Where the capture actions are (#53), from the same layout line: x, y, width and height in pixels.
+const capturePattern = /feltWrong=(-?\d+),(-?\d+),(\d+),(\d+) save=(-?\d+),(-?\d+),(\d+),(\d+)/;
+const keptPattern = /ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+) note=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
 
 const results = { checks: [], notes: {} };
@@ -114,6 +117,49 @@ function serve(root, deploy = { number: 1 }) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
+// Median frame rate over the trace lines among these logs.
+function medianFps(lines) {
+  const fps = lines.map((l) => /ELEVEN trace .* fps=([\d.]+)/.exec(l)?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+  return fps.length ? fps[Math.floor(fps.length / 2)].toFixed(1) : 'none';
+}
+
+// The visual system's specimen (#48): built from the production components, it must keep every
+// interactive target at 44 x 44 pt or more and nothing wider than the page, and it is screenshotted
+// whole (tall viewports, so no scrolling) for review.
+async function runSpecimenPass(browser, url, name, contextOptions) {
+  const logs = [];
+  const check = (what, ok, detail) => {
+    results.checks.push({ name: `${name}: ${what}`, ok, detail });
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${what}: ${detail}`);
+  };
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  page.on('console', (m) => logs.push(m.text()));
+  page.on('pageerror', (e) => logs.push(`pageerror ${e.message}`));
+  try {
+    await page.goto(url);
+    const report = await waitFor(logs, /ELEVEN specimen targets=(\d+) smallest=([\d.]+) smallestName=(\S+) pageWidth=(\d+) overflow=(\S+) reducedMotion=(\w+)/, 240_000);
+    check('specimen lays out', !!report, report ? report.match[0].replace('ELEVEN specimen ', '') : 'no specimen report');
+    if (report) {
+      const m = report.match;
+      check('every interactive target is at least 44 x 44 pt', Number(m[1]) > 0 && Number(m[2]) >= 43.9, `${m[1]} targets, smallest ${m[2]} pt (${m[3]})`);
+      check('nothing is wider than the page', m[5] === 'none', `page ${m[4]} pt wide, overflow: ${m[5]}`);
+      const wantsReduced = contextOptions.reducedMotion === 'reduce';
+      check('follows the reduced-motion preference', m[6] === (wantsReduced ? 'yes' : 'no'), `preference ${wantsReduced ? 'reduce' : 'none'}, UI reducedMotion=${m[6]}`);
+    }
+    await sleep(500);
+    // The viewport, not the canvas element: no wait for the element to hold still.
+    await page.screenshot({ path: path.join(outDir, `specimen-${name}.png`), timeout: 60_000 });
+    const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+    check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+  } catch (e) {
+    check('ran to completion', false, e.message);
+  } finally {
+    fs.writeFileSync(path.join(outDir, `specimen-${name}-console.log`), logs.join('\n'));
+    await context.close();
+  }
+}
+
 async function runPass(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
@@ -122,6 +168,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
   };
   const notes = (results.notes[name] = {});
   const waitForLog = (pattern, timeoutMs, from = 0) => waitFor(logs, pattern, timeoutMs, from);
+  const keptBytes = async (captureName) => {
+    const data = await page.evaluate((n) => (JSON.parse(localStorage.getItem('eleven.captures') || '[]').find((c) => c.name === n) || {}).data || null, captureName).catch(() => null);
+    return data ? Buffer.from(data, 'base64') : null;
+  };
   const lastLog = (pattern) => {
     for (let i = logs.length - 1; i >= 0; i--) {
       const m = pattern.exec(logs[i]);
@@ -145,6 +195,32 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('boot', !!ready, ready ? `host ready in ${notes.bootSeconds.toFixed(1)} s, build ${ready.match[1]}` : 'no "ELEVEN host ready" within 240 s');
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
+
+    // Placed HUD actions hold their labels on one line, also with enlarged text (#48). The HUD may
+    // lay itself out again once it has measured its labels, so the latest report counts.
+    if (!url.includes('noui') && !url.includes('ui=')) {
+      await waitForLog(/ELEVEN ui fit name=Run_scenario /, 5_000);
+      await page.waitForTimeout(1_500);
+      // Unity's console lines end in a newline: trim it, or the verdict at the end never matches.
+      const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
+      const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
+      const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
+      check('placed actions fit their labels', latest.size >= 4 && misfits.length === 0,
+        latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
+      // The build line is HUD data in a panel (#53): its values fit their slots, also enlarged.
+      const build = lastLog(/ELEVEN hud build fits=(\w+) .*/);
+      check('the build line fits its panel', !!build && build[1] === 'yes', build ? build[0].trim().replace('ELEVEN hud build ', '') : 'no build report');
+    }
+
+    // Idle frame rate over six seconds right after boot, before any input: with ?noui the same
+    // window measures the frame without the UI, so the UI's frame cost shows as the difference (#48).
+    const idleFrom = logs.length;
+    await sleep(6_000);
+    notes.idleFps = medianFps(logs.slice(idleFrom));
+    if (url.includes('idle=1')) {
+      notes.idleOnly = true;
+      return;
+    }
     // The page's own load time, which the build shows on screen for the device session (#5).
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
@@ -214,10 +290,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(150);
     };
 
+    // The UI around the match is UI Toolkit, built from code (#48): its text must render.
+    const ui = lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
+    const text = lastLog(/ELEVEN ui text "([^"]+)" width=([\d.]+) height=([\d.]+)/);
+    check('the UI Toolkit panel lays out text', !!ui && !!text && Number(text[2]) > 0,
+      ui ? `font ${ui[1]}, ${ui[2]} px per pt, built in ${ui[3]} ms; ${text ? `"${text[1]}" ${text[2]} x ${text[3]} pt` : 'no text layout line'}` : 'no "ELEVEN ui ready" line');
+    if (ui) notes.ui = `${ui[1]}, ${ui[2]} px/pt, ${ui[3]} ms`;
+
     const fromRun = logs.length;
     await tap(at(n[2], n[3]));
     const ran = await waitForLog(/ELEVEN scenario name=\S+ digest=([0-9a-f]{16})/, 20_000, fromRun);
     check('Run scenario button', !!ran, ran ? `digest ${ran.match[1]}` : 'no scenario line after tap');
+    const runPress = logs.slice(fromRun).find((l) => l.startsWith('ELEVEN press'));
+    check('a press on the UI belongs to the UI, not to play', !!runPress && /target=ui/.test(runPress), runPress ?? 'no press logged');
     const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
     check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
@@ -263,125 +348,114 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const replay = await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromKick);
     check('recording replays to the live state', !!replay && replay.match[4] === 'match', replay ? replay.match[0].replace('ELEVEN ', '') : 'no recording check');
 
-    // THIS FELT WRONG (#44): a real page button, found by its accessible name, big enough to hit.
-    const felt = page.getByRole('button', { name: /felt wrong/i });
-    const feltBox = await felt.boundingBox().catch(() => null);
-    check('felt-wrong is a labelled button of at least 44 x 44 px', !!feltBox && feltBox.width >= 44 && feltBox.height >= 44,
-      feltBox ? `${feltBox.width.toFixed(0)} x ${feltBox.height.toFixed(0)} px at ${feltBox.x.toFixed(0)},${feltBox.y.toFixed(0)}` : 'no button named "felt wrong"');
+    // THIS FELT WRONG (#44) as a Unity action (#53): placed from the HUD's layout, at least 44 x 44
+    // pt, holding its label. No page controls are left over the canvas.
+    const pageControls = await page.evaluate(() => document.querySelectorAll('body > button, [role=status]').length);
+    check('no page controls over the canvas', pageControls === 0, `${pageControls} page button(s) or status element(s)`);
+    const placed = capturePattern.exec(lastLog(layoutPattern)?.input ?? '');
+    const centre = (x, y, w, h) => at(Number(x) + Number(w) / 2, Number(y) + Number(h) / 2);
+    const feltFit = lastLog(/ELEVEN ui fit name=Felt_wrong .* size=([\d.]+)x([\d.]+) (\w+)/);
+    check('felt-wrong is a Unity action of at least 44 x 44 pt that holds its label',
+      !!placed && !!feltFit && Number(feltFit[1]) >= 44 && Number(feltFit[2]) >= 44 && feltFit[3] === 'ok',
+      `${placed ? `placed at ${placed.slice(1, 5).join(',')} px` : 'not in the layout line'}; ${feltFit ? feltFit.input.trim().replace('ELEVEN ui fit ', '') : 'no fit report'}`);
+
+    // A press takes the capture there and then: the window ends where the player pressed. The note
+    // sheet opens over the match, and play waits until it closes.
     const fromCapture = logs.length;
-    page.once('dialog', (d) => d.accept(`smoke ${name}`));
-    if (useTouch) await felt.tap();
-    else await felt.click();
-    const captured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)(?: base64=(\S+))?/, 10_000, fromCapture);
-    check('felt-wrong captures the last seconds', !!captured && Number(captured.match[3]) > 0 && !!captured.match[6],
-      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, ${captured.match[4]} bytes, ${captured.match[5]}` : 'no capture line');
-    if (captured?.match[6]) {
-      fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), Buffer.from(captured.match[6], 'base64'));
-      notes.capture = `${captured.match[3]} steps, ${captured.match[4]} bytes`;
+    if (placed) await tap(centre(...placed.slice(1, 5)));
+    const pressed = await waitForLog(/ELEVEN capture pressed tick=(\d+)/, 10_000, fromCapture);
+    const sheet = await waitForLog(/ELEVEN ui sheet open keep=(\d+),(\d+) skip=(\d+),(\d+)/, 5_000, fromCapture);
+    check('a press opens the note sheet', !!pressed && !!sheet, sheet ? sheet.match[0].replace('ELEVEN ', '') : pressed ? 'no sheet' : 'no press');
+    await sleep(1_500);
+    const during = logs.slice(fromCapture).map((l) => tracePattern.exec(l)).filter(Boolean).map((m) => Number(m[1]));
+    check('play waits while the note sheet is open', !!pressed && during.every((t) => t <= Number(pressed.match[1])),
+      pressed ? `pressed at tick ${pressed.match[1]}; trace ticks since: ${during.join(', ') || 'none'}` : 'no press');
+
+    // Desktop types the note and keeps it with Enter; the phone keeps the capture without one.
+    const note = `smoke ${name}`;
+    if (name === 'desktop') {
+      await page.keyboard.type(note);
+      await page.keyboard.press('Enter');
+    } else if (sheet) {
+      await tap(at(Number(sheet.match[3]), Number(sheet.match[4])));
+    }
+    const captured = await waitForLog(keptPattern, 10_000, fromCapture);
+    check('the capture ends where the player pressed', !!captured && !!pressed && captured.match[2] === pressed.match[1],
+      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, pressed at ${pressed?.match[1]}` : 'no capture line');
+    // The capture as a player keeps it (#50): its bytes in localStorage, which SAVE CAPTURE exports.
+    const keptCapture = captured ? await keptBytes(captured.match[5]) : null;
+    check('felt-wrong captures the last seconds and keeps them whole',
+      !!captured && Number(captured.match[3]) > 0 && !!keptCapture && keptCapture.length === Number(captured.match[4]),
+      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, ${captured.match[4]} bytes captured, ${keptCapture ? keptCapture.length : 'none'} kept, ${captured.match[5]}` : 'no capture line');
+    if (keptCapture) {
+      fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), keptCapture);
+      notes.capture = `${captured.match[3]} steps, ${keptCapture.length} bytes`;
+    }
+    if (name === 'desktop') {
+      check('the note typed in the sheet is in the capture', !!keptCapture && keptCapture.includes(Buffer.from(note, 'utf8')),
+        captured ? `note of ${captured.match[6]} characters; "${note}" ${keptCapture?.includes(Buffer.from(note, 'utf8')) ? 'found' : 'NOT found'} in the kept bytes` : 'no capture');
     }
 
-    // Capturing doesn't stop play: the simulation runs on past the capture.
-    const afterCapture = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+    // Capturing doesn't stop play once the sheet closes: the simulation runs on past the capture.
+    // CI's software renderer runs the phone pass near 5 fps, where frames over 250 ms are dropped
+    // rather than caught up, so give play time to cover a trace interval.
+    const afterCapture = (await waitForLog(tracePattern, 20_000, logs.length))?.match ?? null;
     check('play goes on after a capture', !!captured && !!afterCapture && Number(afterCapture[1]) > Number(captured.match[2]),
       afterCapture ? `trace tick ${afterCapture[1]} after capture end ${captured?.match[2]}` : 'no trace line after the capture');
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').length).catch(() => 0);
     check('the capture is kept on the device', kept >= 1, `${kept} capture(s) in localStorage`);
-    const announced = await page.locator('#eleven-capture-status').textContent().catch(() => '');
-    check('the capture is announced', /Captured/.test(announced ?? ''), announced || 'empty status');
-    const save = page.getByRole('button', { name: /save capture/i });
+    const announced = await waitForLog(/ELEVEN ui status (.*)/, 3_000, fromCapture);
+    check('the capture is announced', !!announced && /Captured/.test(announced.match[1]), announced ? announced.match[1] : 'no status line');
+    const offered = await waitForLog(/ELEVEN ui save visible=yes/, 3_000);
     if (name === 'desktop') {
-      const [download] = await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)]);
-      check('SAVE CAPTURE downloads it', !!download && /\.elfc$/.test(download.suggestedFilename()),
-        download ? download.suggestedFilename() : 'no download');
-    } else {
-      check('SAVE CAPTURE is offered', await save.isVisible().catch(() => false), 'button visible');
-    }
-
-    // The keyboard reaches the page controls (Accessibility lens, question 4): Tab moves focus to
-    // THIS FELT WRONG and Enter presses it. Unity's WebGL player captures every key by default.
-    if (name === 'desktop') {
-      let focused = '';
-      for (let i = 0; i < 8 && focused !== 'eleven-felt-wrong'; i++) {
-        await page.keyboard.press('Tab');
-        focused = await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName || '');
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 5_000 }).catch(() => null),
+        placed ? tap(centre(...placed.slice(5, 9))) : Promise.resolve(),
+      ]);
+      // The file a player would attach: saved for CI to replay, and identical to the kept capture.
+      let same = false;
+      let detail = offered ? 'no download' : 'SAVE CAPTURE not shown';
+      if (download) {
+        const file = path.join(outDir, `capture-${name}-saved.elfc`);
+        await download.saveAs(file);
+        const saved = fs.readFileSync(file);
+        same = !!keptCapture && saved.equals(keptCapture);
+        detail = `${download.suggestedFilename()}, ${saved.length} bytes, ${same ? 'identical to the kept capture' : 'DIFFERS from the kept capture'}`;
       }
-      const ring = focused === 'eleven-felt-wrong'
-        && await page.evaluate(() => document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none');
-      check('Tab reaches felt-wrong, with a visible focus ring', focused === 'eleven-felt-wrong' && ring,
-        `focus on ${focused || 'nothing'}${focused === 'eleven-felt-wrong' ? `, ring ${ring ? 'shown' : 'not shown'}` : ''}`);
-      const fromKey = logs.length;
-      page.once('dialog', (d) => d.accept(''));
-      if (focused === 'eleven-felt-wrong') await page.keyboard.press('Enter');
-      const keyed = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+)/, 5_000, fromKey);
-      check('Enter on felt-wrong captures', !!keyed, keyed ? keyed.match[0].replace('ELEVEN ', '') : 'no capture line after Enter');
+      check('SAVE CAPTURE downloads the kept capture, byte for byte', !!download && /\.elfc$/.test(download.suggestedFilename()) && same, detail);
+    } else {
+      check('SAVE CAPTURE is offered', !!offered, offered ? 'shown' : 'not shown');
     }
 
-    // FEEL / TEST BENCH (#45): a labelled page button opens a panel of every knob; opening and
-    // closing it leaves the run alone; an out-of-range value can't be applied; APPLY / RETRY starts a
-    // fresh run whose config and practice start hash as .NET says that candidate's do.
-    const press = (locator) => (useTouch ? locator.tap() : locator.click());
-    const benchOpen = page.getByRole('button', { name: /test bench/i });
-    const benchBox = await benchOpen.boundingBox().catch(() => null);
-    check('test bench is a labelled button of at least 44 x 44 px', !!benchBox && benchBox.width >= 44 && benchBox.height >= 44,
-      benchBox ? `${benchBox.width.toFixed(0)} x ${benchBox.height.toFixed(0)} px at ${benchBox.x.toFixed(0)},${benchBox.y.toFixed(0)}` : 'no button named "test bench"');
-    const knobsLine = lastLog(/ELEVEN bench knobs=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/);
-    const fromOpen = logs.length;
-    const tickBeforeOpen = Number(lastLog(tracePattern)?.[1] ?? -1);
-    await press(benchOpen);
-    const dialog = page.getByRole('dialog', { name: /test bench/i });
-    const rows = await page.locator('#eleven-bench [role=group]').count();
-    check('the bench lists every knob the host describes', await dialog.isVisible() && !!knobsLine && rows === Number(knobsLine[1]) && rows > 0,
-      `${rows} knobs shown, host describes ${knobsLine?.[1] ?? 'none'}`);
-    const small = await page.evaluate(() => [...document.querySelectorAll('#eleven-bench button, #eleven-bench input')]
-      .map((e) => ({ name: e.getAttribute('aria-label') || e.textContent, type: e.type, r: e.getBoundingClientRect() }))
-      .filter((e) => e.r.height < 44 || (e.type !== 'range' && e.r.width < 44))
-      .map((e) => `${e.name} ${e.r.width.toFixed(0)}x${e.r.height.toFixed(0)}`));
-    check('bench controls are at least 44 x 44 px', small.length === 0, small.length ? small.slice(0, 4).join(', ') : 'all');
+    // The keyboard reaches the Unity controls (#53): the player captures keys again, Tab moves focus
+    // to THIS FELT WRONG with the two-colour focus ring, Enter presses it, and Escape keeps the
+    // capture without a note.
+    if (name === 'desktop') {
+      let focus = null;
+      for (let i = 0; i < 10 && !focus; i++) {
+        const fromTab = logs.length;
+        await page.keyboard.press('Tab');
+        const moved = await waitForLog(/ELEVEN ui focus name=(\S+) ring=(\w+)/, 1_000, fromTab);
+        if (moved && moved.match[1] === 'Felt_wrong') focus = moved.match;
+      }
+      check('Tab reaches felt-wrong, with a visible focus ring', !!focus && focus[2] === 'shown',
+        focus ? focus[0].replace('ELEVEN ui ', '') : `focus never reached Felt_wrong: ${logs.filter((l) => l.startsWith('ELEVEN ui focus')).slice(-4).join(' | ') || 'no focus lines'}`);
+      const fromKey = logs.length;
+      if (focus) await page.keyboard.press('Enter');
+      const keyedSheet = await waitForLog(/ELEVEN ui sheet open/, 5_000, fromKey);
+      if (keyedSheet) await page.keyboard.press('Escape');
+      const keyed = await waitForLog(keptPattern, 5_000, fromKey);
+      check('Enter on felt-wrong captures, and Escape keeps it without a note', !!keyedSheet && !!keyed && keyed.match[6] === '0',
+        keyed ? keyed.match[0].replace('ELEVEN ', '') : keyedSheet ? 'sheet opened, no capture after Escape' : 'no sheet after Enter');
+    }
 
-    const benchStatus = page.locator('#eleven-bench-status');
-    const benchApply = page.locator('#eleven-bench-apply');
-    const maxSpeed = page.getByRole('textbox', { name: 'Max speed, m/s' });
-    await maxSpeed.fill('20');
-    const refusedText = await page.locator('#eleven-knob-maxSpeed-state').textContent().catch(() => '');
-    check('an out-of-range value cannot be applied, and says why', await benchApply.isDisabled() && /Out of range/.test(refusedText),
-      `${refusedText} | ${await benchStatus.textContent()}`);
-    await maxSpeed.fill(useTouch ? '8,5' : '8.5'); // the phone pass types a decimal comma
-    await press(page.getByRole('button', { name: 'Increase Kick speed by 0.5' }));
-    const pendingText = await benchStatus.textContent();
-    check('edits make a pending candidate, shown in words', /^2 pending changes/.test(pendingText) && !(await benchApply.isDisabled()), pendingText);
-    await press(page.locator('#eleven-bench-close'));
-    await waitForLog(tracePattern, 3_000, logs.length);
-    const whileOpen = logs.slice(fromOpen).filter((l) => /^ELEVEN (reset|bench applied|press )/.test(l));
-    const tickAfterClose = Number(lastLog(tracePattern)?.[1] ?? -1);
-    check('opening and closing the bench leaves the run alone', whileOpen.length === 0 && tickAfterClose > tickBeforeOpen,
-      `${whileOpen.length ? whileOpen.slice(0, 3).join(' | ') : 'no reset, apply or game input'}; trace tick ${tickBeforeOpen} → ${tickAfterClose}`);
-
-    await press(benchOpen);
-    const fromApply = logs.length;
-    const tickBeforeApply = Number(lastLog(tracePattern)?.[1] ?? -1);
-    await press(benchApply);
-    const applied = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16}) hostMs=([\d.]+)/, 5_000, fromApply);
-    const pageApplied = await waitForLog(/ELEVEN bench page applied pageMs=([\d.]+|none) hostMs=([\d.]+)/, 5_000, fromApply);
-    const expectedFile = path.join(hashlogDir, 'bench-candidate.txt');
-    const expected = fs.existsSync(expectedFile) ? /config ([0-9a-f]{16})\s+practice start ([0-9a-f]{16})/.exec(fs.readFileSync(expectedFile, 'utf8')) : null;
-    check('APPLY / RETRY starts a fresh run with the candidate, hashed as in .NET',
-      !!applied && applied.match[1] === '2' && applied.match[2] === 'unsaved' && !!expected
-        && applied.match[3] === expected[1] && applied.match[4] === expected[2] && applied.match[3] !== knobsLine?.[3],
-      applied ? `${applied.match[0].replace('ELEVEN ', '')}; .NET: ${expected ? `config ${expected[1]} start ${expected[2]}` : 'no bench-candidate.txt'}` : 'no "bench applied" line');
-    if (pageApplied) notes.benchApplyMs = `page ${pageApplied.match[1]} ms, host ${pageApplied.match[2]} ms`;
-    const afterApply = applied ? (await waitForLog(tracePattern, 5_000, applied.index + 1))?.match ?? null : null;
-    const announcedApply = await page.locator('#eleven-capture-status').textContent().catch(() => '');
-    check('the fresh run starts over, the panel closes and the result is announced',
-      !!afterApply && Number(afterApply[1]) < tickBeforeApply && !(await dialog.isVisible()) && /^Applied 2 changes, fresh run in \d+ ms/.test(announcedApply ?? ''),
-      `trace tick ${tickBeforeApply} → ${afterApply?.[1]}; ${announcedApply}`);
-
-    // A capture under the candidate replays exactly under .NET in CI too.
-    const fromBenchCapture = logs.length;
-    page.once('dialog', (d) => d.accept(`smoke ${name} bench`));
-    await press(felt);
-    const benchCaptured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)(?: base64=(\S+))?/, 10_000, fromBenchCapture);
-    check('felt-wrong captures under the candidate', !!benchCaptured?.match[6], benchCaptured ? benchCaptured.match[0].slice(0, 120) : 'no capture line');
-    if (benchCaptured?.match[6]) fs.writeFileSync(path.join(outDir, `capture-${name}-bench.elfc`), Buffer.from(benchCaptured.match[6], 'base64'));
+    // Tabular HUD data doesn't jitter (#53): the build panel keeps its size while the dropped-frame
+    // count changes through play.
+    const huds = logs.map((l) => /ELEVEN trace .* dropped=(\d+) .* hud=(\d+x\d+)/.exec(l)).filter(Boolean);
+    const sizes = [...new Set(huds.slice(1).map((m) => m[2]))];
+    const droppedSeen = [...new Set(huds.map((m) => m[1]))];
+    check('the build line keeps its size as its values change', huds.length >= 3 && sizes.length === 1,
+      huds.length ? `panel ${sizes.join(' / ')} pt over ${huds.length} trace lines, dropped ${droppedSeen[0]}..${droppedSeen[droppedSeen.length - 1]}` : 'no hud size in the trace lines');
 
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
     const png = await canvas.screenshot({ path: path.join(outDir, `${name}-canvas.png`) });
@@ -405,6 +479,32 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }, { data: png.toString('base64'), colours });
     check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
+    // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
+    // white label must be on screen, so text really renders in the WebGL build, not only measures.
+    // Buttons are dark with white text (Erik, 2026-11-02).
+    const label = await page.evaluate(async ({ data, cx, cy, ui }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const c = document.createElement('canvas');
+      c.width = image.width;
+      c.height = image.height;
+      const g = c.getContext('2d');
+      g.drawImage(image, 0, 0);
+      const half = { x: Math.round(24 * ui), y: Math.round(5 * ui) };
+      const px = g.getImageData(cx - half.x, cy - half.y, half.x * 2, half.y * 2).data;
+      const near = (i, [r, gg, b]) => Math.abs(px[i] - r) + Math.abs(px[i + 1] - gg) + Math.abs(px[i + 2] - b) < 40;
+      const out = { fill: 0, text: 0, total: px.length / 4 };
+      for (let i = 0; i < px.length; i += 4) {
+        if (near(i, [0x3a, 0x42, 0x50])) out.fill++;
+        if (near(i, [0xfc, 0xfd, 0xf8])) out.text++;
+      }
+      return out;
+    }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[2] ?? 1) });
+    // White labels cover more of the sample than ink ones did: a tenth of fill is plenty.
+    check('the UI action shows its fill and its label', label.fill > label.total * 0.1 && label.text > label.total * 0.03,
+      `around Run scenario's centre: ${label.fill} slate fill, ${label.text} white text of ${label.total} pixels`);
+
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
 
@@ -415,22 +515,56 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.reload();
       const again = await waitForLog(/ELEVEN host ready build=(\S+)/, 240_000, fromReload);
       check('reload boots', !!again, again ? 'host ready after reload' : 'no "ELEVEN host ready" after reload');
-      const offered = await save.isVisible().catch(() => false);
-      const [download] = offered
-        ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)])
+      // SAVE CAPTURE is a Unity action (#53): offered once the host finds the kept capture. As after
+      // the first boot, the canvas can still be resizing, so wait for the layout to match it and for
+      // SAVE CAPTURE's own fit report, then press it where the latest layout line puts it.
+      const offered = !!(await waitForLog(/ELEVEN ui save visible=yes/, 10_000, fromReload));
+      let relaid = null;
+      for (let i = 0; i < 50; i++) {
+        const size = await canvas.evaluate((c) => [c.width, c.height]);
+        relaid = logs.slice(fromReload).filter((l) => layoutPattern.test(l)).pop() ?? null;
+        const m = relaid ? layoutPattern.exec(relaid) : null;
+        if (m && Number(m[1]) === size[0] && Number(m[2]) === size[1]) break;
+        await sleep(200);
+      }
+      await waitForLog(/ELEVEN ui fit name=Save_capture /, 5_000, fromReload);
+      await sleep(1_500);
+      relaid = logs.slice(fromReload).filter((l) => layoutPattern.test(l)).pop() ?? null;
+      const placedAgain = capturePattern.exec(relaid ?? '');
+      const boxAgain = await canvas.boundingBox();
+      const atAgain = (x, y) => ({ x: boxAgain.x + x * (boxAgain.width / n[0]), y: boxAgain.y + y * (boxAgain.height / n[1]) });
+      const fromSave = logs.length;
+      const [download] = offered && placedAgain
+        ? await Promise.all([
+          page.waitForEvent('download', { timeout: 5_000 }).catch(() => null),
+          tap(atAgain(Number(placedAgain[5]) + Number(placedAgain[7]) / 2, Number(placedAgain[6]) + Number(placedAgain[8]) / 2)),
+        ])
         : [null];
+      const saves = logs.slice(fromReload).filter((l) => l.startsWith('ELEVEN page save')).map((l) => l.replace('ELEVEN page save ', ''));
+      const downs = logs.slice(fromSave).filter((l) => l.startsWith('ELEVEN ui pointer down')).map((l) => l.replace('ELEVEN ui pointer down ', ''));
       check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
-        !offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download');
+        `${!offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download'}; page: ${saves.join(' | ') || 'no save lines'}; ui: ${downs.join(' | ') || 'no pointer down'}`);
     }
   } catch (e) {
     check('ran to completion', false, e.message);
   } finally {
     fs.writeFileSync(path.join(outDir, `${name}-console.log`), logs.join('\n'));
+    notes.fps = medianFps(logs);
     if (results.checks.some((c) => c.name.startsWith(name) && !c.ok)) {
       // Context for diagnosis without the uploaded console log.
       const presses = logs.filter((l) => l.startsWith('ELEVEN press')).slice(-8);
       const traces = logs.filter((l) => l.startsWith('ELEVEN trace')).slice(-3);
       annotate('notice', `Smoke context (${name})`, `layouts: ${(notes.layouts || []).join(' / ')}\npresses: ${presses.join(' | ') || 'none'}\ntraces: ${traces.join(' | ')}`);
+      // The most repeated other console lines (a per-frame warning shows here), and every UI line.
+      const counts = new Map();
+      for (const l of logs) {
+        if (/^ELEVEN (trace|press|event)/.test(l)) continue;
+        const key = l.slice(0, 220);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([l, c]) => `${c}x ${l}`);
+      const uiLines = logs.filter((l) => /ELEVEN ui|UIElements|UI Toolkit|PanelSettings|Theme Style|TextSettings|font/i.test(l)).slice(0, 8).map((l) => l.slice(0, 300));
+      annotate('notice', `Smoke console (${name})`, `${logs.length} lines; most repeated:\n${repeated.join('\n')}\nUI lines:\n${uiLines.join('\n') || 'none'}`);
     }
     await context.close();
   }
@@ -493,9 +627,31 @@ const browser = await chromium.launch({
   args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist'],
 });
 try {
-  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', { viewport: { width: 1280, height: 800 } }, false);
+  // The UI's frame cost (#48): idle passes without the UI before and after each full pass, so
+  // neither side gets the cold or the warm browser.
+  const desktop = { viewport: { width: 1280, height: 800 } };
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
+  // Idle-only passes for the frame cost: no UI, and an empty UI Toolkit panel.
+  const idle = (mode) => `${base}?trace=1&idle=1&${mode}`;
+  await runPass(browser, idle('noui=1'), 'desktop-noui-before', desktop, false);
+  await runPass(browser, idle('ui=empty'), 'desktop-panel-empty', desktop, false);
+  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
+  await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
+  await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
+  await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
+  await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
+  // The HUD on a 320 pt phone with text at 200 % (WCAG 1.4.4): placed actions must grow with their labels.
+  await runPass(browser, `${base}?trace=1&idle=1&textscale=2`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
+
+  // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
+  const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
+  const { defaultBrowserType: _ipad, ...tablet } = devices['iPad (gen 7)'];
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'phone-ordinary', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'phone-dark', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'tablet-ordinary', tall(tablet, 1800));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', { ...tall(tablet, 1800), reducedMotion: 'reduce' });
+  await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=2`, 'narrow-large-text', { ...tall(phone, 3600), viewport: { width: 320, height: 3600 } });
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();
@@ -506,7 +662,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, bench apply ${n.benchApplyMs ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => n.idleOnly ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

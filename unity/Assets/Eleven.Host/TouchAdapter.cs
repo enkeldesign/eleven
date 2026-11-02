@@ -68,15 +68,14 @@ namespace Eleven.Host
         public Vector2 StickKnob { get; private set; }
         public bool KickHeld { get; private set; }
 
-        public bool RunTapped { get; private set; }
-        public bool ResetTapped { get; private set; }
+        /// <summary>Whether a HUD point lands on the UI (#48): those presses belong to the UI, not to play.</summary>
+        public Func<Vector2, bool> OverUi { get; set; }
 
         /// <summary>Reads this frame's pointers. Call once per frame before generating commands.</summary>
         public void Sample(in HudLayout layout)
         {
             CollectPointers(layout.ScreenHeight);
 
-            RunTapped = ResetTapped = false;
             KickHeld = false;
             foreach (Pointer p in _pointers)
             {
@@ -87,9 +86,8 @@ namespace Eleven.Host
             {
                 Vector2 at = ToHud(press.Position, layout.ScreenHeight);
                 string target;
-                if (layout.InKick(at)) { _kickRequested = true; target = "kick"; }
-                else if (layout.RunButton.Contains(at)) { RunTapped = true; target = "run"; }
-                else if (layout.ResetButton.Contains(at)) { ResetTapped = true; target = "reset"; }
+                if (OverUi != null && OverUi(at)) target = "ui";
+                else if (layout.InKick(at)) { _kickRequested = true; target = "kick"; }
                 else if (_stickPointer == NoPointer && layout.StickZone.Contains(at))
                 {
                     _stickPointer = press.Id;

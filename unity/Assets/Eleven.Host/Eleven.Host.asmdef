@@ -4,6 +4,7 @@
     "references": [
         "Eleven.Simulation",
         "Eleven.Simulation.Harness",
+        "Eleven.Presentation",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],

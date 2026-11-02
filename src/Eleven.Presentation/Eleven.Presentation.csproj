@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ELEVEN's visual system (#48): one engine-free source of truth for colour, space, shape, type,
+    motion and layering. The Unity host reads it; .NET tests check its contrast. No engine and no
+    simulation reference: presentation only.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Eleven.Presentation</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

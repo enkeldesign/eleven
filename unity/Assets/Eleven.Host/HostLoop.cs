@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Eleven.Host
 {
@@ -28,21 +30,26 @@ namespace Eleven.Host
 
         private readonly List<Command> _commands = new List<Command>(1);
         private readonly List<SimEvent> _events = new List<SimEvent>();
-        private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
         private readonly FramePacing _pacing = new FramePacing();
 
         // The last ten seconds, for THIS FELT WRONG (#44). It only reads the simulator.
         private readonly FeelRecorder _feel = new FeelRecorder();
-
-        // The feel test bench's applied values (#45). The config and the practice start come from
-        // them; APPLY / RETRY replaces them whole and starts a fresh run.
-        private BenchCandidate _bench = BenchCandidate.Reference;
 
         private SimConfig _config;
         private Simulator _simulator;
         private CommandRecording _recording;
         private PitchView _view;
         private TouchAdapter _input;
+        private UiRoot _ui;
+        private string _uiMode = "toolkit";
+        private Specimen _specimen;
+        private Hud _hud;
+        private int _resultLines;
+
+        // THIS FELT WRONG's capture, taken at the press and kept once the note sheet closes (#53).
+        private FeelCapture _pending;
+        private Rect _saveTold;
+        private bool _saveActiveTold;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -52,11 +59,7 @@ namespace Eleven.Host
         private double _accumulator;
         private Vector2 _previousPlayer;
         private Vector3 _previousBall;
-        private GUIStyle _textStyle;
-        private GUIStyle _buildStyle;
         private GUIStyle _buttonStyle;
-        private GUIStyle _resultStyle;
-        private bool _resultFitChecked;
         private Vector2Int _styledFor;
         private int _framesSinceTrace;
         private double _lastTraceTime;
@@ -68,18 +71,35 @@ namespace Eleven.Host
             string url = Application.absoluteURL ?? "";
             _trace = url.Contains("trace");
 
-            _config = _bench.Config;
-            _simulator = new Simulator(_config, _bench.PracticeStart());
+            _config = SpikeScenario.Config();
+            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
-            AllowPageKeyboard();
-            FeltWrongInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel),
-                HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
-            BenchInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel), HostPalette.Css(HostPalette.BenchSheet),
-                HostPalette.Css(HostPalette.BenchField), HostPalette.Css(HostPalette.FocusRing), HostPalette.Css(HostPalette.BenchChanged),
-                _bench.Describe(), _bench.PresetName);
+            // The player keeps every key (WebGLInput.captureAllKeyboardInput stays at its default):
+            // keyboard focus and activation are Unity's UI's (#53). A text field raises the phone's
+            // keyboard.
+            EnableMobileKeyboard();
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
+            // ?noui: measurement only (#48), the frame without the UI.
+            // ?textscale=1.5: enlarged text, until settings exist to choose it (#48).
+            int textScaleAt = url.IndexOf("textscale=", StringComparison.Ordinal);
+            if (textScaleAt >= 0 && float.TryParse(url.Substring(textScaleAt + 10).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float textScale))
+            {
+                UiRoot.TextScale = Mathf.Clamp(textScale, 0.5f, 3f);
+            }
+
+            UiRoot.ReducedMotion = PrefersReducedMotion();
+
+            // Frame cost (#48): ?ui=empty builds the UI Toolkit panel with nothing in it.
+            _uiMode = url.Contains("ui=empty") ? "empty" : "toolkit";
+            if (!url.Contains("noui")) BuildUi();
+
+            // A capture kept on an earlier visit stays exportable: SAVE CAPTURE offers the newest one.
+            if (_hud != null && HasKeptCapture()) _hud.ShowSave();
+
+            // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
+            if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
@@ -87,7 +107,6 @@ namespace Eleven.Host
             _loadSeconds = PageSeconds();
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
-            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
 
             if (url.Contains("autorun")) RunScenario();
         }
@@ -108,22 +127,13 @@ namespace Eleven.Host
             UpdateLayout(force: false);
             _input.Sample(_layout);
 
-            if (_input.ResetTapped) ResetMatch();
-            if (_input.RunTapped) RunScenario();
-
-            // Before this frame's steps, so the window ends where the press was.
-            string feltWrong = TakeFeltWrong();
-            if (feltWrong != null) CaptureFeltWrong(feltWrong);
-
-            // Before this frame's steps, so the fresh run starts on this frame.
-            string apply = TakeBenchApply();
-            if (apply != null) ApplyBench(apply);
-
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
             _lastTime = now;
 
-            if (_paused || frame > MaxFrameSeconds) _accumulator = 0;
+            // Play waits while the note sheet is open, as it did under the browser's prompt (#44).
+            bool waiting = _hud != null && _hud.SheetOpen;
+            if (_paused || waiting || frame > MaxFrameSeconds) _accumulator = 0;
             else
             {
                 _accumulator += frame;
@@ -140,6 +150,13 @@ namespace Eleven.Host
             }
 
             if (_accumulator >= tick) _accumulator = 0;
+
+            _specimen?.Tick(_simulator.Tick);
+            if (_hud != null)
+            {
+                _hud.Tick(_buildId, _loadSeconds, _pacing.Dropped, _pacing.CoveredSeconds);
+                TellPageWhereSaveIs();
+            }
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
@@ -169,7 +186,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -192,7 +209,7 @@ namespace Eleven.Host
 
         private void ResetMatch()
         {
-            _simulator = new Simulator(_config, _bench.PracticeStart());
+            _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             _input.Clear();
@@ -201,52 +218,42 @@ namespace Eleven.Host
         }
 
         /// <summary>
-        /// THIS FELT WRONG (#44): the last ten seconds, the snapshot that starts them, this build, the
-        /// config and the note, kept on the device for SAVE CAPTURE. Only reads the simulation. In
-        /// trace mode the capture is also logged in base64, so the CI smoke test can replay it with .NET.
+        /// THIS FELT WRONG (#44, #53): the capture of the last ten seconds is taken at the press, so
+        /// the window ends where the player pressed; then the note sheet opens, and play waits.
+        /// Only reads the simulation.
         /// </summary>
-        private void CaptureFeltWrong(string note)
+        private void FeltWrongPressed()
         {
-            FeelCapture capture = _feel.Capture(_simulator, _buildId, _bench.PresetName, "none", note);
-            byte[] bytes = capture.Encode();
-            double seconds = capture.StepCount * _config.TickSeconds;
-            string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{_simulator.Tick}.elfc");
-            string summary = FormattableString.Invariant($"the last {seconds:F0} s");
-            KeepCapture(bytes, name, summary);
-
-            string line = FormattableString.Invariant(
-                $"ELEVEN capture ticks={capture.StartTick}..{capture.StartTick + capture.StepCount} steps={capture.StepCount} bytes={bytes.Length} name={name}");
-            Log(_trace ? $"{line} base64={Convert.ToBase64String(bytes)}" : line);
+            if (_pending != null) return;
+            _pending = _feel.Capture(_simulator, _buildId, "technical-reference", "none", "");
+            _input.Clear();
+            Log($"ELEVEN capture pressed tick={_simulator.Tick}");
+            _hud.OpenNote();
         }
 
         /// <summary>
-        /// APPLY / RETRY (#45): the page's candidate, every value as its bits. Refused whole with the
-        /// reason if any value is invalid; otherwise it becomes the applied values, a new immutable
-        /// config, and a fresh run from the standard practice start. Nothing here touches the running
-        /// simulation: it is replaced.
+        /// The note sheet closed: the capture, with the note if there is one, this build and the
+        /// config, is kept on the device for SAVE CAPTURE and announced. The CI smoke test replays the
+        /// kept bytes with .NET, as a player would export them (#50).
         /// </summary>
-        private void ApplyBench(string values)
+        private void KeepFeltWrong(string note)
         {
-            double started = Time.realtimeSinceStartupAsDouble;
-            if (!BenchCandidate.TryParse(values, out BenchCandidate candidate, out string problem))
-            {
-                BenchRefused(problem);
-                Log($"ELEVEN bench refused {problem}");
-                return;
-            }
-
-            int changes = candidate.ChangesFrom(_bench);
-            _bench = candidate;
-            _config = candidate.Config;
-            _view.Use(_config);
-            ResetMatch();
-            _accumulator = 0;
-            double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
-
-            string config = _config.Hash.ToString("x16");
-            BenchApplied(_bench.Describe(), _bench.PresetName, config, changes, milliseconds);
+            FeelCapture capture = _pending;
+            _pending = null;
+            if (capture == null) return;
+            capture.Note = note ?? "";
+            byte[] bytes = capture.Encode();
+            double seconds = capture.StepCount * _config.TickSeconds;
+            long end = capture.StartTick + capture.StepCount;
+            string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{end}.elfc");
+            string summary = FormattableString.Invariant($"the last {seconds:F0} s");
+            bool kept = KeepCapture(bytes, name, summary);
             Log(FormattableString.Invariant(
-                $"ELEVEN bench applied changes={changes} preset={_bench.PresetName} config={config} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
+                $"ELEVEN capture ticks={capture.StartTick}..{end} steps={capture.StepCount} bytes={bytes.Length} name={name} note={capture.Note.Length}"));
+            _hud.ShowStatus(kept
+                ? $"Captured {summary}, kept on this device."
+                : $"Captured {summary}, not kept on this device (storage unavailable): save it now.");
+            _hud.ShowSave();
         }
 
         private static string SafeName(string s)
@@ -269,41 +276,103 @@ namespace Eleven.Host
 
             ulong final = run.TickHashes[run.TickHashes.Count - 1];
             ulong digest = run.SequenceDigest();
-            _resultLines.Clear();
-            _resultLines.Add(FormattableString.Invariant($"Scenario, {milliseconds:F0} ms"));
-            _resultLines.Add($"digest {digest:x16}");
-            _resultLines.Add($"final  {final:x16}");
-
-            _resultFitChecked = false;
+            _resultLines = HudLayout.MaxResultLines;
+            _hud?.ShowResult(milliseconds, digest, final);
             UpdateLayout(force: false);
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
+        /// <summary>
+        /// The UI around the match (#48), in UI Toolkit from code. Presses on it reach the UI, not the
+        /// stick or the kick.
+        /// </summary>
+        private void BuildUi()
+        {
+            double started = Time.realtimeSinceStartupAsDouble;
+            string step = "panel";
+            try
+            {
+                // Reset and Run sit over the pitch: the pitch context gives them chalk borders.
+                _ui = new UiRoot(transform, Theme.Pitch);
+                step = "scale";
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                step = "actions";
+                if (_uiMode == "empty")
+                {
+                    Log("ELEVEN ui ready font=none pixelsPerPoint=0 ms=0 panel=empty");
+                    return;
+                }
+
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong);
+                _input.OverUi = _ui.IsOverUi;
+                if (_trace)
+                {
+                    // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
+                    _ui.Root.RegisterCallback<PointerDownEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer down at={e.position.x:F0},{e.position.y:F0} target={(e.target as VisualElement)?.name}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<PointerUpEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer up at={e.position.x:F0},{e.position.y:F0}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<ClickEvent>(e => Log($"ELEVEN ui click target={(e.target as VisualElement)?.name}"), TrickleDown.TrickleDown);
+                }
+                // The label's laid-out size once it has one: zero means the font draws nothing.
+                Label label = _hud.Run.Label;
+                EventCallback<GeometryChangedEvent> measured = null;
+                measured = _ =>
+                {
+                    label.UnregisterCallback(measured);
+                    Log(FormattableString.Invariant($"ELEVEN ui text \"{label.text}\" width={label.layout.width:F1} height={label.layout.height:F1}"));
+                };
+                label.RegisterCallback(measured);
+                double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+                string font = _ui.Font != null ? _ui.Font.name.Replace(' ', '_') : "none";
+                Log(FormattableString.Invariant(
+                    $"ELEVEN ui ready font={font} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1} panel={(_ui.Root.panel != null ? "yes" : "no")}"));
+            }
+            catch (Exception e)
+            {
+                Log($"ELEVEN ui failed at {step}: {e.GetType().Name}: {e.Message}");
+            }
+        }
+
+        // The page starts SAVE CAPTURE's share in its own release handler, where the browser's
+        // user-gesture requirement holds (ADR-0003), so it is told where the action is and whether a
+        // press there saves, whenever either changes.
+        private void TellPageWhereSaveIs()
+        {
+            Rect save = _layout.SaveCaptureButton;
+            bool active = _hud.SaveActive;
+            if (save == _saveTold && active == _saveActiveTold) return;
+            _saveTold = save;
+            _saveActiveTold = active;
+            PlaceSaveCapture(save.x, save.y, save.width, save.height, _layout.ScreenWidth, _layout.ScreenHeight, active ? 1 : 0);
+        }
+
+        // The HUD measured an element needing another size: lay out again if anything moves.
+        private void Relayout()
+        {
+            if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
+        }
+
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines, _hud?.Needs);
+
         private void UpdateLayout(bool force)
         {
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
-                && _layout.ResultLines == _resultLines.Count) return;
+                && _layout.ResultLines == _resultLines) return;
 
-            _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
-            Rect felt = _layout.FeltWrongButton;
-            FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
-            Rect bench = _layout.BenchButton;
-            BenchPlace(bench.x, bench.y, bench.width, bench.height, _layout.ScreenWidth, _layout.ScreenHeight);
+            _layout = Layout();
+            if (_ui != null && _hud != null)
+            {
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                _hud.Place(_layout);
+            }
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
+        // The match controls (#28's) are the only thing still drawn with IMGUI.
         private void OnGUI()
         {
-            if (Event.current.type != EventType.Repaint) return;
+            // Not over the note sheet: play waits while it is open.
+            if (Event.current.type != EventType.Repaint || (_hud != null && _hud.SheetOpen)) return;
             EnsureStyles();
-
-            Panel(_layout.BuildLabel);
-            GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
-
-            Button(_layout.ResetButton, "Reset");
-            Button(_layout.RunButton, "Run scenario");
-
-            if (_resultLines.Count > 0) DrawResult();
 
             // The stick's vector is measured from where the thumb landed; its base is drawn as near
             // there as fits in the stick zone, with the knob offset the same way.
@@ -319,64 +388,19 @@ namespace Eleven.Host
             GUI.Label(kickLabel, "KICK", _buttonStyle);
         }
 
-        private void DrawResult()
-        {
-            Rect panel = _layout.Result;
-            Panel(panel);
-            float pad = _layout.Padding;
-            float widest = 0;
-            float columnWidth = panel.width - 2 * pad;
-            for (int i = 0; i < _resultLines.Count; i++)
-            {
-                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
-                GUI.Label(line, _resultLines[i], _resultStyle);
-                widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
-            }
-
-            if (_resultFitChecked) return;
-            _resultFitChecked = true;
-            float needed = _resultLines.Count * _layout.ResultLineHeight + pad;
-            bool fits = widest <= columnWidth && needed <= panel.height + 0.01f && panel.yMax <= _layout.ScreenHeight
-                && !panel.Overlaps(_layout.PlayArea);
-            Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));
-        }
-
         private void EnsureStyles()
         {
             var screen = new Vector2Int(_layout.ScreenWidth, _layout.ScreenHeight);
-            if (_textStyle != null && _styledFor == screen) return;
+            if (_buttonStyle != null && _styledFor == screen) return;
 
-            int fontSize = _layout.FontSize;
-            _textStyle = new GUIStyle(GUI.skin.label)
+            _buttonStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = fontSize,
-                alignment = TextAnchor.MiddleLeft,
-                wordWrap = true,
-                padding = new RectOffset(8, 8, 4, 4),
+                fontSize = _layout.FontSize,
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
             };
-            _textStyle.normal.textColor = HostPalette.HudText;
-
-            _buildStyle = new GUIStyle(_textStyle) { fontSize = _layout.BuildFontSize, wordWrap = false, clipping = TextClipping.Clip };
-            _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _resultStyle = new GUIStyle(_textStyle) { fontSize = _layout.ResultFontSize, wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
-            _resultFitChecked = false;
+            _buttonStyle.normal.textColor = HostPalette.HudText;
             _styledFor = screen;
-        }
-
-        private void Button(Rect rect, string label)
-        {
-            Panel(rect);
-            GUI.color = HostPalette.ControlIdle;
-            GUI.DrawTexture(new Rect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(rect, label, _buttonStyle);
-        }
-
-        private static void Panel(Rect rect)
-        {
-            GUI.color = HostPalette.HudPanel;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
         }
 
         private void Disc(Vector2 centre, float radius, Color colour)
@@ -389,99 +413,74 @@ namespace Eleven.Host
             GUI.color = Color.white;
         }
 
-        /// <summary>
-        /// The build id, then the two numbers the device session reads off the screen (#5): how
-        /// long the page took to load, and dropped frames over the last minute of play.
-        /// </summary>
-        private string BuildLine() => FormattableString.Invariant(
-            $"ELEVEN {_buildId} · load {_loadSeconds:F1} s · {_pacing.Dropped} dropped in {_pacing.CoveredSeconds:F0} s");
-
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern double ElevenPageMilliseconds();
 
         [DllImport("__Internal")]
-        private static extern void ElevenFeltWrongInstall(string text, string panel, string border, string focus);
+        private static extern int ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
         [DllImport("__Internal")]
-        private static extern void ElevenFeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
+        private static extern int ElevenHasKeptCapture();
 
         [DllImport("__Internal")]
-        private static extern string ElevenTakeFeltWrong();
+        private static extern void ElevenSaveCapture();
 
         [DllImport("__Internal")]
-        private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
+        private static extern void ElevenPlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active);
 
         [DllImport("__Internal")]
-        private static extern void ElevenBenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset);
+        private static extern float ElevenCanvasCssWidth();
 
         [DllImport("__Internal")]
-        private static extern void ElevenBenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
+        private static extern int ElevenPrefersReducedMotion();
 
-        [DllImport("__Internal")]
-        private static extern string ElevenTakeBenchApply();
-
-        [DllImport("__Internal")]
-        private static extern void ElevenBenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds);
-
-        [DllImport("__Internal")]
-        private static extern void ElevenBenchRefused(string problem);
+        private static bool PrefersReducedMotion() => ElevenPrefersReducedMotion() != 0;
 
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
-        // The player captures every key on the page by default, so page controls could never be
-        // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
-        // finger), so the page keeps them.
-        private static void AllowPageKeyboard() => WebGLInput.captureAllKeyboardInput = false;
+        // Screen pixels per CSS pixel, so a UI point is a CSS pixel. Measured against Screen.width,
+        // the size Unity renders at, not the canvas element's backing size, which lags at start-up.
+        private static float PixelsPerPoint()
+        {
+            float css = ElevenCanvasCssWidth();
+            return css > 0 ? Screen.width / css : 1f;
+        }
 
-        private static void FeltWrongInstall(string text, string panel, string border, string focus) =>
-            ElevenFeltWrongInstall(text, panel, border, focus);
+        private static void EnableMobileKeyboard() => WebGLInput.mobileKeyboardSupport = true;
 
-        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
-            ElevenFeltWrongPlace(x, y, width, height, screenWidth, screenHeight);
+        // Storage and share/download are browser services with no UI (#53): the page keeps the
+        // capture, and SAVE CAPTURE hands it to the share sheet or a download.
+        private static bool KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary) != 0;
 
-        private static string TakeFeltWrong() => ElevenTakeFeltWrong();
+        private static bool HasKeptCapture() => ElevenHasKeptCapture() != 0;
 
-        private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
+        private static void SaveCapture() => ElevenSaveCapture();
 
-        private static void BenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset) =>
-            ElevenBenchInstall(text, panel, sheet, field, focus, changed, knobs, preset);
-
-        private static void BenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
-            ElevenBenchPlace(x, y, width, height, screenWidth, screenHeight);
-
-        private static string TakeBenchApply() => ElevenTakeBenchApply();
-
-        private static void BenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds) =>
-            ElevenBenchApplied(knobs, preset, config, changes, hostMilliseconds);
-
-        private static void BenchRefused(string problem) => ElevenBenchRefused(problem);
+        private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
+            ElevenPlaceSaveCapture(x, y, width, height, screenWidth, screenHeight, active);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
-        private static void AllowPageKeyboard() { }
+        private static float PixelsPerPoint() => Screen.dpi > 0 ? Screen.dpi / 96f : 1f;
 
-        // Outside the web build there is no page: no button, and captures go to persistent data.
-        private static void FeltWrongInstall(string text, string panel, string border, string focus) { }
+        private static bool PrefersReducedMotion() => false;
 
-        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
+        private static void EnableMobileKeyboard() { }
 
-        private static string TakeFeltWrong() => null;
-
-        private static void KeepCapture(byte[] bytes, string name, string summary) =>
+        // Outside the web build there is no page: captures go to persistent data, which is the save.
+        private static bool KeepCapture(byte[] bytes, string name, string summary)
+        {
             System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, name), bytes);
+            return true;
+        }
 
-        // Outside the web build there is no page, so no bench: the reference values run.
-        private static void BenchInstall(string text, string panel, string sheet, string field, string focus, string changed, string knobs, string preset) { }
+        private static bool HasKeptCapture() => false;
 
-        private static void BenchPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
+        private static void SaveCapture() { }
 
-        private static string TakeBenchApply() => null;
-
-        private static void BenchApplied(string knobs, string preset, string config, int changes, double hostMilliseconds) { }
-
-        private static void BenchRefused(string problem) { }
+        private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) { }
 #endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);
