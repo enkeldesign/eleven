@@ -369,7 +369,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // On a phone the on-screen keyboard covers the lower part of the screen (#55): the sheet sits
     // in the top half, clear of it.
     if (useTouch) {
-      const box = sheet ? /box=(\d+),(\d+),(\d+),(\d+)/.exec(sheet.input) : null;
+      const box = sheet ? /box=(\d+),(\d+),(\d+),(\d+)/.exec(sheet.match.input) : null;
       const bottom = box ? Number(box[2]) + Number(box[4]) : NaN;
       check('the note sheet sits clear of the on-screen keyboard', !!box && bottom <= n[1] * 0.5,
         box ? `sheet ${box.slice(1, 5).join(',')} px, bottom at ${(100 * bottom / n[1]).toFixed(0)} % of the screen` : 'no sheet box in the log');
