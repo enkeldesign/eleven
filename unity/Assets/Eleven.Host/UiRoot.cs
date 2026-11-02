@@ -85,16 +85,5 @@ namespace Eleven.Host
             element.style.width = Mathf.Max(Interaction.MinTarget, hudPixels.width / s);
             element.style.height = Mathf.Max(Interaction.MinTarget, hudPixels.height / s);
         }
-
-        /// <summary>How wide this text renders in a type role: zero means the font is not drawing.</summary>
-        public float MeasureText(string text, TypeStyle type)
-        {
-            var probe = new Label(text);
-            UiActions.ApplyType(probe, type);
-            Root.Add(probe);
-            Vector2 size = probe.MeasureTextSize(text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
-            probe.RemoveFromHierarchy();
-            return size.x;
-        }
     }
 }

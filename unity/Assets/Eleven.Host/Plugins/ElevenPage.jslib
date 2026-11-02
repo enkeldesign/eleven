@@ -6,10 +6,9 @@ mergeInto(LibraryManager.library, {
     return performance.now();
   },
 
-  // Canvas pixels per CSS pixel (#48), so the UI's points are CSS pixels.
-  ElevenPixelsPerPoint: function () {
-    var r = Module.canvas ? Module.canvas.getBoundingClientRect() : null;
-    return r && r.width > 0 ? Module.canvas.width / r.width : (window.devicePixelRatio || 1);
+  // The canvas's width in CSS pixels (#48), so the host can make a UI point a CSS pixel.
+  ElevenCanvasCssWidth: function () {
+    return Module.canvas ? Module.canvas.getBoundingClientRect().width : 0;
   },
 
   // THIS FELT WRONG (#44): a real page button over the canvas, so assistive technology, the keyboard

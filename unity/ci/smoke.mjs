@@ -110,6 +110,12 @@ function serve(root, deploy = { number: 1 }) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
+// Median frame rate over the trace lines among these logs.
+function medianFps(lines) {
+  const fps = lines.map((l) => /ELEVEN trace .* fps=([\d.]+)/.exec(l)?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+  return fps.length ? fps[Math.floor(fps.length / 2)].toFixed(1) : 'none';
+}
+
 async function runPass(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
@@ -145,6 +151,13 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('boot', !!ready, ready ? `host ready in ${notes.bootSeconds.toFixed(1)} s, build ${ready.match[1]}` : 'no "ELEVEN host ready" within 240 s');
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
+
+    // Idle frame rate over six seconds right after boot, before any input: with ?noui the same
+    // window measures the frame without the UI, so the UI's frame cost shows as the difference (#48).
+    const idleFrom = logs.length;
+    await sleep(6_000);
+    notes.idleFps = medianFps(logs.slice(idleFrom));
+    if (url.includes('noui')) return;
     // The page's own load time, which the build shows on screen for the device session (#5).
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
@@ -215,10 +228,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     };
 
     // The UI around the match is UI Toolkit, built from code (#48): its text must render.
-    const ui = lastLog(/ELEVEN ui ready font=(\S+) textWidth=([\d.]+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
-    check('the UI Toolkit panel draws text', !!ui && Number(ui[2]) > 0,
-      ui ? `font ${ui[1]}, "RUN SCENARIO" ${ui[2]} pt wide, ${ui[3]} px per pt, built in ${ui[4]} ms` : 'no "ELEVEN ui ready" line');
-    if (ui) notes.ui = `${ui[1]}, ${ui[4]} ms`;
+    const ui = lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
+    const text = lastLog(/ELEVEN ui text "([^"]+)" width=([\d.]+) height=([\d.]+)/);
+    check('the UI Toolkit panel lays out text', !!ui && !!text && Number(text[2]) > 0,
+      ui ? `font ${ui[1]}, ${ui[2]} px per pt, built in ${ui[3]} ms; ${text ? `"${text[1]}" ${text[2]} x ${text[3]} pt` : 'no text layout line'}` : 'no "ELEVEN ui ready" line');
+    if (ui) notes.ui = `${ui[1]}, ${ui[2]} px/pt, ${ui[3]} ms`;
 
     const fromRun = logs.length;
     await tap(at(n[2], n[3]));
@@ -403,6 +417,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('ran to completion', false, e.message);
   } finally {
     fs.writeFileSync(path.join(outDir, `${name}-console.log`), logs.join('\n'));
+    notes.fps = medianFps(logs);
     if (results.checks.some((c) => c.name.startsWith(name) && !c.ok)) {
       // Context for diagnosis without the uploaded console log.
       const presses = logs.filter((l) => l.startsWith('ELEVEN press')).slice(-8);
@@ -481,6 +496,7 @@ const browser = await chromium.launch({
 });
 try {
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', { viewport: { width: 1280, height: 800 } }, false);
+  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui', { viewport: { width: 1280, height: 800 } }, false);
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runServiceWorkerPass(browser, path.resolve(playerDir));
@@ -493,7 +509,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

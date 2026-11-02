@@ -5,6 +5,7 @@ using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Eleven.Host
 {
@@ -77,7 +78,8 @@ namespace Eleven.Host
                 HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
-            BuildUi();
+            // ?noui: measurement only (#48), the frame without the UI.
+            if (!url.Contains("noui")) BuildUi();
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
@@ -259,12 +261,26 @@ namespace Eleven.Host
                 _ui.Root.Add(_resetAction.Element);
                 _ui.Root.Add(_runAction.Element);
                 _input.OverUi = _ui.IsOverUi;
-                step = "measure";
-                float textWidth = _ui.MeasureText("RUN SCENARIO", TypeScale.Label);
+                if (_trace)
+                {
+                    // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
+                    _ui.Root.RegisterCallback<PointerDownEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer down at={e.position.x:F0},{e.position.y:F0} target={(e.target as VisualElement)?.name}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<PointerUpEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer up at={e.position.x:F0},{e.position.y:F0}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<ClickEvent>(e => Log($"ELEVEN ui click target={(e.target as VisualElement)?.name}"), TrickleDown.TrickleDown);
+                }
+                // The label's laid-out size once it has one: zero means the font draws nothing.
+                Label label = _runAction.Label;
+                EventCallback<GeometryChangedEvent> measured = null;
+                measured = _ =>
+                {
+                    label.UnregisterCallback(measured);
+                    Log(FormattableString.Invariant($"ELEVEN ui text \"{label.text}\" width={label.layout.width:F1} height={label.layout.height:F1}"));
+                };
+                label.RegisterCallback(measured);
                 double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
                 string font = _ui.Font != null ? _ui.Font.name.Replace(' ', '_') : "none";
                 Log(FormattableString.Invariant(
-                    $"ELEVEN ui ready font={font} textWidth={textWidth:F1} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1} panel={(_ui.Root.panel != null ? "yes" : "no")}"));
+                    $"ELEVEN ui ready font={font} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1} panel={(_ui.Root.panel != null ? "yes" : "no")}"));
             }
             catch (Exception e)
             {
@@ -399,13 +415,18 @@ namespace Eleven.Host
         private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
         [DllImport("__Internal")]
-        private static extern float ElevenPixelsPerPoint();
+        private static extern float ElevenCanvasCssWidth();
 
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
-        // Canvas pixels per CSS pixel, so a UI point is a CSS pixel.
-        private static float PixelsPerPoint() => ElevenPixelsPerPoint();
+        // Screen pixels per CSS pixel, so a UI point is a CSS pixel. Measured against Screen.width,
+        // the size Unity renders at, not the canvas element's backing size, which lags at start-up.
+        private static float PixelsPerPoint()
+        {
+            float css = ElevenCanvasCssWidth();
+            return css > 0 ? Screen.width / css : 1f;
+        }
 
         // The player captures every key on the page by default, so page controls could never be
         // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
