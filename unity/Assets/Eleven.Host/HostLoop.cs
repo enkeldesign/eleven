@@ -46,6 +46,8 @@ namespace Eleven.Host
         private Specimen _specimen;
         private UiKit.Action _resetAction;
         private UiKit.Action _runAction;
+        private Vector2 _resetNeeds;
+        private Vector2 _runNeeds;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -287,8 +289,8 @@ namespace Eleven.Host
                 _ui.Root.Add(_resetAction.Element);
                 _ui.Root.Add(_runAction.Element);
                 _input.OverUi = _ui.IsOverUi;
-                ReportFit(_resetAction);
-                ReportFit(_runAction);
+                Fit(_resetAction, false);
+                Fit(_runAction, true);
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
@@ -316,9 +318,11 @@ namespace Eleven.Host
             }
         }
 
-        // Whether a placed action holds its label after layout: enlarged text must not overflow a
-        // button the HUD places, nor break its label over lines (#48, Codex's accessibility finding).
-        private void ReportFit(UiKit.Action action)
+        // A placed action takes the size its label needs (#48, Codex's accessibility finding): after
+        // each layout it measures its label, and if it needs another size the HUD lays itself out
+        // again. What a label needs doesn't depend on where it is placed, so this settles within
+        // two passes. It also reports whether the label fits, for the CI smoke test.
+        private void Fit(UiKit.Action action, bool run)
         {
             action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
             {
@@ -332,15 +336,32 @@ namespace Eleven.Host
                 string verdict = needed.y > body.height + 0.5f ? "overflow" : line.x > body.width + 0.5f ? "wraps" : "ok";
                 Log(FormattableString.Invariant(
                     $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} line={line.x:F0}x{line.y:F0} needs={needed.y:F0} body={body.width:F0}x{body.height:F0} {verdict}"));
+                if (body.width <= 0 || float.IsNaN(line.x) || float.IsNaN(needed.y)) return;
+
+                // In screen pixels: the action's width with its label on one line, and its height
+                // at the width it has now. The insets are its border and padding, whatever its size.
+                Rect outer = action.Element.layout;
+                float s = _ui.PixelsPerPoint;
+                var needs = new Vector2(
+                    Mathf.Ceil((line.x + outer.width - body.width + 1) * s),
+                    Mathf.Ceil((needed.y + outer.height - body.height) * s));
+                Vector2 was = run ? _runNeeds : _resetNeeds;
+                if (Mathf.Abs(needs.x - was.x) <= 1 && Mathf.Abs(needs.y - was.y) <= 1) return;
+                if (run) _runNeeds = needs;
+                else _resetNeeds = needs;
+                HudLayout next = Layout();
+                if (next.RunButton != _layout.RunButton || next.ResetButton != _layout.ResetButton) UpdateLayout(true);
             });
         }
+
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count, _resetNeeds, _runNeeds);
 
         private void UpdateLayout(bool force)
         {
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
                 && _layout.ResultLines == _resultLines.Count) return;
 
-            _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
+            _layout = Layout();
             Rect felt = _layout.FeltWrongButton;
             FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
             if (_ui != null && _resetAction != null)
