@@ -66,9 +66,15 @@ namespace Eleven.Host
                 r.Element.Add(r.Focus);
             }
 
+            // The hard shadow is the body's shape offset down and right. Only its right and bottom
+            // strips ever show past the body, so it paints those as borders rather than filling a
+            // whole shape hidden underneath: the same look for a fraction of the pixels (#53, measured
+            // frame cost on CI's software renderer).
             r.Shadow = Stack(0, shape.Radius);
             r.Shadow.style.translate = new Translate(shape.Shadow, shape.Shadow);
-            r.Shadow.style.backgroundColor = theme[Role.Shadow].ToColor();
+            Color shadow = theme[Role.Shadow].ToColor();
+            r.Shadow.style.borderRightWidth = r.Shadow.style.borderBottomWidth = shape.Shadow;
+            r.Shadow.style.borderRightColor = r.Shadow.style.borderBottomColor = shadow;
             r.Element.Add(r.Shadow);
 
             r.Body = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -121,6 +127,9 @@ namespace Eleven.Host
         {
             public Label Label;
             public string Name;
+
+            /// <summary>What the label says when not busy: the name, or the text given for it.</summary>
+            public string Text;
             public ActionRole Role;
             public bool Enabled = true;
             public bool Busy;
@@ -128,13 +137,15 @@ namespace Eleven.Host
 
         /// <summary>
         /// An action: a strong outline, rounded geometry and a hard shadow. Its label renders in
-        /// uppercase; <paramref name="name"/> stays in natural case.
+        /// uppercase; <paramref name="name"/> stays in natural case. <paramref name="label"/> is the
+        /// label's text when it differs from the name, such as a name set over two lines.
         /// </summary>
-        public static Action MakeAction(UiRoot ui, Theme theme, ActionRole role, string name, System.Action onClick)
+        public static Action MakeAction(UiRoot ui, Theme theme, ActionRole role, string name, System.Action onClick, string label = null)
         {
             Shape shape = role == ActionRole.Primary ? Shapes.PrimaryAction : Shapes.Control;
             Action a = MakeRaised<Action>(theme, shape, ActionFill(theme, role), focusable: true);
             a.Name = name;
+            a.Text = label ?? name;
             a.Role = role;
             a.Element.name = name;
             a.Element.style.minWidth = a.Element.style.minHeight = Interaction.MinTarget;
@@ -143,7 +154,7 @@ namespace Eleven.Host
             a.Body.style.paddingLeft = a.Body.style.paddingRight = Spacing.S;
 
             // One button text colour everywhere (Erik, 2026-11-02): never black on some, white on others.
-            a.Label = Text(theme, TypeScale.Label, name, Role.OnAction);
+            a.Label = Text(theme, TypeScale.Label, a.Text, Role.OnAction);
             a.Label.style.unityTextAlign = TextAnchor.MiddleCenter;
             a.Body.Add(a.Label);
 
@@ -170,7 +181,7 @@ namespace Eleven.Host
         public static void SetBusy(Action a, bool busy, string busyLabel)
         {
             a.Busy = busy;
-            a.Label.text = Display(busy ? busyLabel + "…" : a.Name, TypeScale.Label);
+            a.Label.text = Display(busy ? busyLabel + "…" : a.Text, TypeScale.Label);
         }
 
         // ---- Text ----
@@ -186,7 +197,7 @@ namespace Eleven.Host
         }
 
         /// <summary>Size, weight, tracking and case for a type role.</summary>
-        public static void ApplyType(TextElement text, TypeStyle type)
+        public static void ApplyType(VisualElement text, TypeStyle type)
         {
             text.style.fontSize = type.Size * UiRoot.TextScale;
             text.style.unityFontStyleAndWeight = type.Weight == Weight.Regular ? FontStyle.Normal : FontStyle.Bold;
@@ -235,6 +246,66 @@ namespace Eleven.Host
             return s;
         }
 
+        /// <summary>
+        /// A HUD panel (#53): a compact raised surface for data over the match, such as the build
+        /// line and the scenario result. It shows; it takes no input.
+        /// </summary>
+        public static Surface MakeHudPanel(Theme theme)
+        {
+            Surface s = MakeSurface(theme, Shapes.Control, Role.SurfaceRaised, null, TypeScale.Body);
+            s.Element.pickingMode = s.Body.pickingMode = PickingMode.Ignore;
+            s.Body.style.paddingTop = s.Body.style.paddingBottom = Spacing.Xs;
+            s.Body.style.paddingLeft = s.Body.style.paddingRight = Spacing.S;
+            s.Actions.style.display = DisplayStyle.None;
+            return s;
+        }
+
+        // ---- Text input ----
+
+        public sealed class TextInput : Raised
+        {
+            public TextField Field;
+        }
+
+        /// <summary>
+        /// A single-line text input in a control frame (#53): the text on the raised surface, the
+        /// outline as its boundary, and the two-colour focus indicator whenever it has focus, from a
+        /// pointer or the keyboard alike, since the caret is there. It is at least a touch target tall.
+        /// </summary>
+        public static TextInput MakeTextInput(Theme theme, string name, int maxLength)
+        {
+            TextInput t = MakeRaised<TextInput>(theme, Shapes.Control, theme[Role.SurfaceRaised], focusable: true);
+            t.Element.focusable = false;
+            t.Element.style.minHeight = Interaction.MinTarget;
+            t.Body.style.justifyContent = Justify.Center;
+            t.Body.style.paddingLeft = t.Body.style.paddingRight = Spacing.S;
+
+            t.Field = new TextField { name = name, maxLength = maxLength };
+            ApplyType(t.Field, TypeScale.Body);
+            t.Field.style.color = theme[Role.Text].ToColor();
+            // There is no stylesheet to carry --unity-cursor-color and --unity-selection-color (#48:
+            // no USS assets), so the caret and selection take their colours from code.
+#pragma warning disable CS0618
+            t.Field.textSelection.cursorColor = theme[Role.Text].ToColor();
+            Color selection = theme[Role.Selection].ToColor();
+            selection.a = 0.4f;
+            t.Field.textSelection.selectionColor = selection;
+#pragma warning restore CS0618
+            VisualElement input = t.Field.Q(className: TextField.inputUssClassName);
+            if (input != null)
+            {
+                input.style.backgroundColor = Color.clear;
+                Border(input, 0);
+                input.style.paddingLeft = input.style.paddingRight = input.style.paddingTop = input.style.paddingBottom = 0;
+            }
+
+            t.Body.Add(t.Field);
+            t.Element.RegisterCallback<PointerDownEvent>(_ => t.Field.Focus());
+            t.Field.RegisterCallback<FocusInEvent>(_ => t.Focus.style.display = DisplayStyle.Flex);
+            t.Field.RegisterCallback<FocusOutEvent>(_ => t.Focus.style.display = DisplayStyle.None);
+            return t;
+        }
+
         // ---- HUD data ----
 
         public sealed class Data
@@ -256,11 +327,15 @@ namespace Eleven.Host
             d.Value.style.unityTextAlign = TextAnchor.MiddleRight;
             d.Value.style.whiteSpace = WhiteSpace.NoWrap;
             // The built-in font's figures share one advance; reserve the widest value's width.
-            d.Value.style.minWidth = widestValue.Length * TypeScale.Data.Size * 0.6f;
+            d.Value.style.minWidth = widestValue.Length * TypeScale.Data.Size * UiRoot.TextScale * 0.6f;
             d.Element.style.alignItems = Align.Center;
+            d.Element.style.flexShrink = 0;
+            d.Element.style.maxWidth = Length.Percent(100);
             d.Element.Add(d.Name);
             d.Element.Add(d.Value);
             Gaps(d.Element);
+            // Where a panel is too narrow for both (enlarged text), the value goes below its name.
+            d.Element.style.flexWrap = Wrap.Wrap;
             return d;
         }
 
@@ -377,7 +452,7 @@ namespace Eleven.Host
             v.Less = MakeAction(ui, theme, ActionRole.Utility, "−", () => Nudge(v, -1));
             v.More = MakeAction(ui, theme, ActionRole.Utility, "+", () => Nudge(v, 1));
             v.Shown = Text(theme, TypeScale.Data, "", Role.Text);
-            v.Shown.style.minWidth = 6 * TypeScale.Data.Size * 0.6f;
+            v.Shown.style.minWidth = 6 * TypeScale.Data.Size * UiRoot.TextScale * 0.6f;
             v.Shown.style.unityTextAlign = TextAnchor.MiddleCenter;
             row.Add(v.Less.Element);
             row.Add(v.Shown);
@@ -473,6 +548,8 @@ namespace Eleven.Host
             s.Title = Text(theme, TypeScale.Body, "", Role.Text);
             s.Content.Add(s.Title);
             s.Element.style.display = DisplayStyle.None;
+            // It states; presses go through it to play.
+            s.Element.pickingMode = s.Body.pickingMode = PickingMode.Ignore;
             return s;
         }
 

@@ -46,10 +46,12 @@ namespace Eleven.Host
             Font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             Root.style.unityFontDefinition = FontDefinition.FromFont(Font);
 
-            // Focus came from the keyboard until a pointer says otherwise.
-            Root.RegisterCallback<PointerDownEvent>(_ => KeyboardFocus = false, TrickleDown.TrickleDown);
-            Root.RegisterCallback<NavigationMoveEvent>(_ => KeyboardFocus = true, TrickleDown.TrickleDown);
-            Root.RegisterCallback<KeyDownEvent>(_ => KeyboardFocus = true, TrickleDown.TrickleDown);
+            // Focus comes from the keyboard after a key, from a pointer after a press. Heard on the
+            // panel's own root, so a key with nothing focused yet counts too.
+            VisualElement tree = Root.panel?.visualTree ?? Root;
+            tree.RegisterCallback<PointerDownEvent>(_ => KeyboardFocus = false, TrickleDown.TrickleDown);
+            tree.RegisterCallback<NavigationMoveEvent>(_ => KeyboardFocus = true, TrickleDown.TrickleDown);
+            tree.RegisterCallback<KeyDownEvent>(_ => KeyboardFocus = true, TrickleDown.TrickleDown);
         }
 
         /// <summary>Whether the latest input was a key or navigation, so focus rings should show.</summary>
@@ -96,6 +98,19 @@ namespace Eleven.Host
             element.style.top = hudPixels.y / s;
             element.style.width = Mathf.Max(Interaction.MinTarget, hudPixels.width / s);
             element.style.height = Mathf.Max(Interaction.MinTarget, hudPixels.height / s);
+        }
+
+        /// <summary>
+        /// A panel at a HUD position, as wide as its content up to <paramref name="maxWidthPixels"/>
+        /// and as tall as it needs: the HUD measures it and lays out around it (#53).
+        /// </summary>
+        public void PlaceAuto(VisualElement element, Vector2 hudPixels, float maxWidthPixels)
+        {
+            float s = PixelsPerPoint;
+            element.style.position = Position.Absolute;
+            element.style.left = hudPixels.x / s;
+            element.style.top = hudPixels.y / s;
+            element.style.maxWidth = Mathf.Max(0, maxWidthPixels / s);
         }
     }
 }
