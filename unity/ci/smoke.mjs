@@ -189,6 +189,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
 
+    // Placed HUD actions keep their labels inside, also with enlarged text (#48).
+    if (!url.includes('noui') && !url.includes('ui=')) {
+      await waitForLog(/ELEVEN ui fit name=Run_scenario /, 5_000);
+      const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit'));
+      const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
+      const overflow = [...latest.values()].filter((l) => l.endsWith('overflow'));
+      check('placed actions fit their labels', latest.size >= 2 && overflow.length === 0,
+        latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
+    }
+
     // Idle frame rate over six seconds right after boot, before any input: with ?noui the same
     // window measures the frame without the UI, so the UI's frame cost shows as the difference (#48).
     const idleFrom = logs.length;
@@ -553,6 +563,8 @@ try {
   await runPass(browser, idle('ui=imgui'), 'phone-imgui-recipe', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
+  // The HUD on a 320 pt phone with text at 150 %: placed actions must grow with their labels.
+  await runPass(browser, `${base}?trace=1&idle=1&textscale=1.5`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });

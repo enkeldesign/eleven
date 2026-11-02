@@ -287,6 +287,8 @@ namespace Eleven.Host
                 _ui.Root.Add(_resetAction.Element);
                 _ui.Root.Add(_runAction.Element);
                 _input.OverUi = _ui.IsOverUi;
+                ReportFit(_resetAction);
+                ReportFit(_runAction);
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
@@ -312,6 +314,20 @@ namespace Eleven.Host
             {
                 Log($"ELEVEN ui failed at {step}: {e.GetType().Name}: {e.Message}");
             }
+        }
+
+        // Whether a placed action's label fits its body after layout: enlarged text must not overflow
+        // a button the HUD places (#48, Codex's accessibility finding).
+        private void ReportFit(UiKit.Action action)
+        {
+            action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                Rect body = action.Body.contentRect;
+                Rect label = action.Label.layout;
+                bool fits = label.height <= body.height + 0.5f && label.width <= body.width + 0.5f;
+                Log(FormattableString.Invariant(
+                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} label={label.width:F0}x{label.height:F0} body={body.width:F0}x{body.height:F0} {(fits ? "ok" : "overflow")}"));
+            });
         }
 
         private void UpdateLayout(bool force)
