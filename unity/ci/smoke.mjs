@@ -205,6 +205,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
       check('placed actions fit their labels', latest.size >= 4 && misfits.length === 0,
         latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
+      // The build line is HUD data in a panel (#53): its values fit their slots, also enlarged.
+      const build = lastLog(/ELEVEN hud build fits=(\w+) .*/);
+      check('the build line fits its panel', !!build && build[1] === 'yes', build ? build[0].trim().replace('ELEVEN hud build ', '') : 'no build report');
     }
 
     // Idle frame rate over six seconds right after boot, before any input: with ?noui the same
@@ -441,6 +444,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       check('Enter on felt-wrong captures, and Escape keeps it without a note', !!keyedSheet && !!keyed && keyed.match[6] === '0',
         keyed ? keyed.match[0].replace('ELEVEN ', '') : keyedSheet ? 'sheet opened, no capture after Escape' : 'no sheet after Enter');
     }
+
+    // Tabular HUD data doesn't jitter (#53): the build panel keeps its size while the dropped-frame
+    // count changes through play.
+    const huds = logs.map((l) => /ELEVEN trace .* dropped=(\d+) .* hud=(\d+x\d+)/.exec(l)).filter(Boolean);
+    const sizes = [...new Set(huds.slice(1).map((m) => m[2]))];
+    const droppedSeen = [...new Set(huds.map((m) => m[1]))];
+    check('the build line keeps its size as its values change', huds.length >= 3 && sizes.length === 1,
+      huds.length ? `panel ${sizes.join(' / ')} pt over ${huds.length} trace lines, dropped ${droppedSeen[0]}..${droppedSeen[droppedSeen.length - 1]}` : 'no hud size in the trace lines');
 
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
     const png = await canvas.screenshot({ path: path.join(outDir, `${name}-canvas.png`) });
