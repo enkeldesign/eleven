@@ -322,11 +322,14 @@ namespace Eleven.Host
         {
             action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
             {
+                // The height the text needs at the width it has, not its laid-out height: layout
+                // squeezes a label to its parent, so an overflowing label never looks taller.
                 Rect body = action.Body.contentRect;
-                Rect label = action.Label.layout;
-                bool fits = label.height <= body.height + 0.5f && label.width <= body.width + 0.5f;
+                Label label = action.Label;
+                Vector2 needed = label.MeasureTextSize(label.text, label.layout.width, VisualElement.MeasureMode.Exactly, 0, VisualElement.MeasureMode.Undefined);
+                bool fits = needed.y <= body.height + 0.5f && label.layout.width <= body.width + 0.5f;
                 Log(FormattableString.Invariant(
-                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} label={label.width:F0}x{label.height:F0} body={body.width:F0}x{body.height:F0} {(fits ? "ok" : "overflow")}"));
+                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} label={label.layout.width:F0}x{needed.y:F0} body={body.width:F0}x{body.height:F0} {(fits ? "ok" : "overflow")}"));
             });
         }
 
