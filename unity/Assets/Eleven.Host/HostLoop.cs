@@ -303,7 +303,7 @@ namespace Eleven.Host
                     return;
                 }
 
-                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -433,6 +433,15 @@ namespace Eleven.Host
         private static extern float ElevenCanvasCssWidth();
 
         [DllImport("__Internal")]
+        private static extern float ElevenVisibleTop();
+
+        [DllImport("__Internal")]
+        private static extern float ElevenVisibleBottom();
+
+        // The part of the canvas the page shows, top and bottom in points (#55).
+        private static Vector2 VisibleRange() => new Vector2(ElevenVisibleTop(), ElevenVisibleBottom());
+
+        [DllImport("__Internal")]
         private static extern int ElevenPrefersReducedMotion();
 
         private static bool PrefersReducedMotion() => ElevenPrefersReducedMotion() != 0;
@@ -464,6 +473,9 @@ namespace Eleven.Host
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
         private static float PixelsPerPoint() => Screen.dpi > 0 ? Screen.dpi / 96f : 1f;
+
+        // Outside the web build the whole screen shows.
+        private static Vector2 VisibleRange() => new Vector2(0, Screen.height / PixelsPerPoint());
 
         private static bool PrefersReducedMotion() => false;
 

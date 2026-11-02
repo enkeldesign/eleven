@@ -16,6 +16,26 @@ mergeInto(LibraryManager.library, {
     return Module.canvas ? Module.canvas.getBoundingClientRect().width : 0;
   },
 
+  // The part of the canvas the page shows, in CSS pixels from the canvas's top (#55). On iOS the
+  // on-screen keyboard covers the canvas's lower part without resizing it; only the visual viewport
+  // says how much is still in view.
+  ElevenVisibleTop: function () {
+    var c = Module.canvas;
+    var vv = window.visualViewport;
+    if (!c || !vv) return 0;
+    var r = c.getBoundingClientRect();
+    return Math.max(0, Math.min(r.height, vv.offsetTop - r.top));
+  },
+
+  ElevenVisibleBottom: function () {
+    var c = Module.canvas;
+    if (!c) return 0;
+    var r = c.getBoundingClientRect();
+    var vv = window.visualViewport;
+    if (!vv) return r.height;
+    return Math.max(0, Math.min(r.height, vv.offsetTop + vv.height - r.top));
+  },
+
   // Captures (#44, #53) are a browser service with no UI: THIS FELT WRONG, SAVE CAPTURE and the
   // status line are Unity's. Everything stays on the device: no network.
 

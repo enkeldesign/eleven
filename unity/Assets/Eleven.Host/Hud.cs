@@ -27,6 +27,7 @@ namespace Eleven.Host
         private readonly UiRoot _ui;
         private readonly bool _trace;
         private readonly System.Action _relayout;
+        private readonly Func<Vector2> _visible;
         private readonly Action<string> _noteDone;
         private readonly List<UiKit.Action> _actions = new List<UiKit.Action>();
 
@@ -56,12 +57,13 @@ namespace Eleven.Host
         private float _buildShownAt = -1;
 
         public Hud(UiRoot ui, bool trace, System.Action relayout, System.Action reset, System.Action run,
-            System.Action feltWrong, System.Action saveCapture, Action<string> noteDone)
+            System.Action feltWrong, System.Action saveCapture, Action<string> noteDone, Func<Vector2> visible)
         {
             _ui = ui;
             _trace = trace;
             _relayout = relayout;
             _noteDone = noteDone;
+            _visible = visible;
             Theme pitch = ui.Theme;
 
             // The build id, then the two numbers the device session reads off the screen (#5): how
@@ -121,9 +123,11 @@ namespace Eleven.Host
             _scrim.style.position = Position.Absolute;
             _scrim.style.left = _scrim.style.top = _scrim.style.right = _scrim.style.bottom = 0;
             _scrim.style.backgroundColor = sheet[Role.Scrim].ToColor();
-            _scrim.style.justifyContent = Justify.Center;
+            // At the top, so a phone's on-screen keyboard rising from the bottom leaves it clear (#55).
+            _scrim.style.justifyContent = Justify.FlexStart;
             _scrim.style.alignItems = Align.Center;
             _scrim.style.paddingLeft = _scrim.style.paddingRight = Spacing.L;
+            _scrim.style.paddingTop = _scrim.style.paddingBottom = Spacing.L;
             _scrim.style.display = DisplayStyle.None;
             _sheet = UiKit.MakeSheet(sheet, "What felt wrong?");
             _sheet.Element.name = "Note sheet";
@@ -256,6 +260,7 @@ namespace Eleven.Host
                 Set(_dropped.Value, FormattableString.Invariant($"{dropped} in {coveredSeconds:F0} s"));
             }
 
+            if (SheetOpen) KeepSheetVisible();
             if (_statusUntil >= 0 && Time.realtimeSinceStartup >= _statusUntil)
             {
                 _statusUntil = -1;
@@ -329,6 +334,23 @@ namespace Eleven.Host
             _noteDone(note);
         }
 
+        // While the note sheet is open, it keeps within the safe area and the part of the canvas the
+        // page shows: on iOS the keyboard covers the canvas's lower part without resizing it (#55).
+        private void KeepSheetVisible()
+        {
+            float height = _ui.Root.layout.height;
+            if (!(height > 0)) return;
+            float s = _ui.PixelsPerPoint;
+            Rect safe = Screen.safeArea;
+            float safeTop = (Screen.height - safe.yMax) / s;
+            float safeBottom = safe.yMin / s;
+            Vector2 shown = _visible();
+            float top = Mathf.Max(safeTop, shown.x) + Spacing.L;
+            float bottom = Mathf.Max(safeBottom, height - shown.y) + Spacing.L;
+            if (Mathf.Abs(_scrim.resolvedStyle.paddingTop - top) > 1) _scrim.style.paddingTop = top;
+            if (Mathf.Abs(_scrim.resolvedStyle.paddingBottom - bottom) > 1) _scrim.style.paddingBottom = bottom;
+        }
+
         // Once the sheet has its layout: focus the note, so typing goes straight in, and say where
         // its actions are for the smoke test.
         private void SheetPlaced()
@@ -339,7 +361,9 @@ namespace Eleven.Host
             float s = _ui.PixelsPerPoint;
             Vector2 keep = _keep.Element.worldBound.center * s;
             Vector2 skip = _skip.Element.worldBound.center * s;
-            Log(FormattableString.Invariant($"ELEVEN ui sheet open keep={keep.x:F0},{keep.y:F0} skip={skip.x:F0},{skip.y:F0}"));
+            Rect box = _sheet.Element.worldBound;
+            Log(FormattableString.Invariant(
+                $"ELEVEN ui sheet open keep={keep.x:F0},{keep.y:F0} skip={skip.x:F0},{skip.y:F0} box={box.x * s:F0},{box.y * s:F0},{box.width * s:F0},{box.height * s:F0}"));
         }
 
         // The next control in order that can take focus, from the focused one.
