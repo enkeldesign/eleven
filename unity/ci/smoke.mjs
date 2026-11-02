@@ -17,7 +17,9 @@
 //   - recording: the host's command recording replays to the live state
 //   - THIS FELT WRONG (#44): a labelled page button of at least 44 x 44 px; a press asks for a note,
 //     captures the last 10 s without stopping play, keeps it in localStorage and offers SAVE CAPTURE.
-//     The capture is written to <output dir>/capture-<pass>.elfc for CI to replay with .NET
+//     The capture as kept in localStorage is written to <output dir>/capture-<pass>.elfc, and on
+//     desktop SAVE CAPTURE's download to capture-<pass>-saved.elfc (byte-identical), for CI to replay
+//     with .NET
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -116,6 +118,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
   };
   const notes = (results.notes[name] = {});
   const waitForLog = (pattern, timeoutMs, from = 0) => waitFor(logs, pattern, timeoutMs, from);
+  const keptBytes = async (captureName) => {
+    const data = await page.evaluate((n) => (JSON.parse(localStorage.getItem('eleven.captures') || '[]').find((c) => c.name === n) || {}).data || null, captureName).catch(() => null);
+    return data ? Buffer.from(data, 'base64') : null;
+  };
   const lastLog = (pattern) => {
     for (let i = logs.length - 1; i >= 0; i--) {
       const m = pattern.exec(logs[i]);
@@ -274,12 +280,15 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     page.once('dialog', (d) => d.accept(`smoke ${name}`));
     if (useTouch) await felt.tap();
     else await felt.click();
-    const captured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)(?: base64=(\S+))?/, 10_000, fromCapture);
-    check('felt-wrong captures the last seconds', !!captured && Number(captured.match[3]) > 0 && !!captured.match[6],
-      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, ${captured.match[4]} bytes, ${captured.match[5]}` : 'no capture line');
-    if (captured?.match[6]) {
-      fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), Buffer.from(captured.match[6], 'base64'));
-      notes.capture = `${captured.match[3]} steps, ${captured.match[4]} bytes`;
+    const captured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)/, 10_000, fromCapture);
+    // The capture as a player keeps it (#50): its bytes in localStorage, which SAVE CAPTURE exports.
+    const keptCapture = captured ? await keptBytes(captured.match[5]) : null;
+    check('felt-wrong captures the last seconds and keeps them whole',
+      !!captured && Number(captured.match[3]) > 0 && !!keptCapture && keptCapture.length === Number(captured.match[4]),
+      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, ${captured.match[4]} bytes captured, ${keptCapture ? keptCapture.length : 'none'} kept, ${captured.match[5]}` : 'no capture line');
+    if (keptCapture) {
+      fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), keptCapture);
+      notes.capture = `${captured.match[3]} steps, ${keptCapture.length} bytes`;
     }
 
     // Capturing doesn't stop play: the simulation runs on past the capture.
@@ -293,8 +302,17 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const save = page.getByRole('button', { name: /save capture/i });
     if (name === 'desktop') {
       const [download] = await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)]);
-      check('SAVE CAPTURE downloads it', !!download && /\.elfc$/.test(download.suggestedFilename()),
-        download ? download.suggestedFilename() : 'no download');
+      // The file a player would attach: saved for CI to replay, and identical to the kept capture.
+      let same = false;
+      let detail = 'no download';
+      if (download) {
+        const file = path.join(outDir, `capture-${name}-saved.elfc`);
+        await download.saveAs(file);
+        const saved = fs.readFileSync(file);
+        same = !!keptCapture && saved.equals(keptCapture);
+        detail = `${download.suggestedFilename()}, ${saved.length} bytes, ${same ? 'identical to the kept capture' : 'DIFFERS from the kept capture'}`;
+      }
+      check('SAVE CAPTURE downloads the kept capture, byte for byte', !!download && /\.elfc$/.test(download.suggestedFilename()) && same, detail);
     } else {
       check('SAVE CAPTURE is offered', await save.isVisible().catch(() => false), 'button visible');
     }
