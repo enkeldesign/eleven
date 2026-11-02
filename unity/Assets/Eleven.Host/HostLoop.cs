@@ -190,8 +190,8 @@ namespace Eleven.Host
 
         /// <summary>
         /// THIS FELT WRONG (#44): the last ten seconds, the snapshot that starts them, this build, the
-        /// config and the note, kept on the device for SAVE CAPTURE. Only reads the simulation. In
-        /// trace mode the capture is also logged in base64, so the CI smoke test can replay it with .NET.
+        /// config and the note, kept on the device for SAVE CAPTURE. Only reads the simulation. The
+        /// CI smoke test replays the kept bytes with .NET, as a player would export them (#50).
         /// </summary>
         private void CaptureFeltWrong(string note)
         {
@@ -204,7 +204,7 @@ namespace Eleven.Host
 
             string line = FormattableString.Invariant(
                 $"ELEVEN capture ticks={capture.StartTick}..{capture.StartTick + capture.StepCount} steps={capture.StepCount} bytes={bytes.Length} name={name}");
-            Log(_trace ? $"{line} base64={Convert.ToBase64String(bytes)}" : line);
+            Log(line);
         }
 
         private static string SafeName(string s)
