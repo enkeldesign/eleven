@@ -2,6 +2,8 @@
 
 **Purpose:** keep ELEVEN's surrounding systems accessible from the start. The match itself is not required to be playable non-visually (brief, principle 7), but menus, settings, text, colour use, readable information, remapping, motion options and feedback are.
 
+**Out of scope:** screen-reader support. Erik decided this on 2026-11-01 (#48, ADR-0003): the UI is drawn in Unity, where assistive technology can't reach it on the web. Everything else here still applies, including a visible focus treatment for keyboard use.
+
 **Trigger:** issues touching UI, text, colour, input, remapping or motion.
 
 **Applied by:** SOL or a fresh agent — never the author of the change.
