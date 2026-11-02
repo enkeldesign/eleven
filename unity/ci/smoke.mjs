@@ -24,6 +24,12 @@
 //     THIS FELT WRONG with a visible focus ring. The capture as kept in localStorage is written to
 //     <output dir>/capture-<pass>.elfc, and on desktop SAVE CAPTURE's download to
 //     capture-<pass>-saved.elfc (byte-identical), for CI to replay with .NET
+//   - FEEL / TEST BENCH (#45): a Unity action opens a sheet of every knob the host describes, in
+//     group tabs, with targets of at least 44 x 44 pt and nothing wider than the screen; opening and
+//     closing it leaves the run alone; no value goes past its valid range; edits make a pending
+//     candidate, shown in words; APPLY / RETRY starts a fresh run whose config and practice start
+//     hash as .NET's <hash log dir>/bench-candidate.txt says; the time from the press to the fresh
+//     run is reported; a capture under the candidate goes to capture-<pass>-bench.elfc
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -53,6 +59,8 @@ const colours = {
 const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
 // Where the capture actions are (#53), from the same layout line: x, y, width and height in pixels.
 const capturePattern = /feltWrong=(-?\d+),(-?\d+),(\d+),(\d+) save=(-?\d+),(-?\d+),(\d+),(\d+)/;
+// The TEST BENCH action (#45), from the same layout line.
+const benchPattern = /bench=(-?\d+),(-?\d+),(\d+),(\d+)/;
 const keptPattern = /ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+) note=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
 
@@ -205,7 +213,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
       const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
       const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
-      check('placed actions fit their labels', latest.size >= 4 && misfits.length === 0,
+      check('placed actions fit their labels', latest.size >= 5 && misfits.length === 0,
         latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
       // The build line is HUD data in a panel (#53): its values fit their slots, also enlarged.
       const build = lastLog(/ELEVEN hud build fits=(\w+) .*/);
@@ -449,6 +457,112 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         keyed ? keyed.match[0].replace('ELEVEN ', '') : keyedSheet ? 'sheet opened, no capture after Escape' : 'no sheet after Enter');
     }
 
+    // FEEL / TEST BENCH (#45) as a Unity sheet (ADR-0003): a Unity action opens it; it lists every
+    // knob in group tabs; opening and closing it leaves the run alone; no value goes past its valid
+    // range; edits make a pending candidate, shown in words; APPLY / RETRY starts a fresh run whose
+    // config and practice start hash as .NET says that candidate's do. The host says where its
+    // controls are, as it does for the HUD.
+    const point = (text) => text.split(',').map(Number);
+    const benchFit = lastLog(/ELEVEN ui fit name=Test_bench .* size=([\d.]+)x([\d.]+) (\w+)/);
+    const benchAt = benchPattern.exec(lastLog(layoutPattern)?.input ?? '');
+    check('test bench is a Unity action of at least 44 x 44 pt that holds its label',
+      !!benchAt && !!benchFit && Number(benchFit[1]) >= 44 && Number(benchFit[2]) >= 44 && benchFit[3] === 'ok',
+      `${benchAt ? `placed at ${benchAt.slice(1, 5).join(',')} px` : 'not in the layout line'}; ${benchFit ? benchFit.input.trim().replace('ELEVEN ui fit ', '') : 'no fit report'}`);
+    const knobsLine = lastLog(/ELEVEN bench knobs=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/);
+    const controlPattern = (knob) => new RegExp(`ELEVEN bench control name=${knob} value=(\\S+) less=(\\S+) more=(\\S+) track=(\\S+)`);
+    const valuePattern = (knob) => new RegExp(`ELEVEN bench value name=${knob} value=(\\S+) limit=(\\w+) pending=(\\d+)`);
+    const fromOpen = logs.length;
+    const tickBeforeOpen = Number(lastLog(tracePattern)?.[1] ?? -1);
+    if (benchAt) await tap(centre(...benchAt.slice(1, 5)));
+    const opened = await waitForLog(/ELEVEN bench open knobs=(\d+) group=(\S+) tabs=(\S+) apply=(\S+) revert=(\S+) close=(\S+)/, 8_000, fromOpen);
+    check('the bench lists every knob the host describes', !!opened && !!knobsLine && opened.match[1] === knobsLine[1] && Number(opened.match[1]) > 0,
+      opened ? `${opened.match[1]} knobs in tabs ${opened.match[3]}, host describes ${knobsLine?.[1] ?? 'none'}` : 'no "bench open" line');
+    const targets = await waitForLog(/ELEVEN bench targets=(\d+) smallest=([\d.]+) smallestName=(\S+) overflow=(\S+)/, 5_000, fromOpen);
+    check('bench controls are at least 44 x 44 pt, and nothing is wider than the screen',
+      !!targets && Number(targets.match[2]) >= 44 && targets.match[4] === 'none',
+      targets ? targets.match[0].replace('ELEVEN bench ', '') : 'no target report');
+    const tabs = Object.fromEntries((opened?.match[3] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+    const tabTo = async (group, knob) => {
+      const from = logs.length;
+      if (tabs[group]) await tap(at(...point(tabs[group])));
+      return (await waitForLog(controlPattern(knob), 5_000, from))?.match ?? null;
+    };
+    const nudge = async (where, knob) => {
+      const from = logs.length;
+      await tap(at(...point(where)));
+      return (await waitForLog(valuePattern(knob), 3_000, from))?.match ?? null;
+    };
+
+    // No value goes past its valid range: Gravity's slider pressed at its far end, then +, stays at
+    // the top of the range. Revert puts every pending edit back.
+    const gravity = (await waitForLog(controlPattern('gravity'), 3_000, fromOpen))?.match ?? null;
+    let top = null;
+    let past = null;
+    if (gravity) {
+      const [x0, x1, y] = point(gravity[4]);
+      top = await nudge(`${x1 - 1},${y}`, 'gravity');
+      past = await nudge(gravity[3], 'gravity');
+    }
+    check('no value goes past its valid range', !!top && !!past && top[2] === 'max' && past[2] === 'max' && past[1] === top[1],
+      top ? `slider at its end: ${top[1]} (${top[2]}); then +: ${past?.[1]} (${past?.[2]})` : gravity ? 'no value line' : 'no gravity control line');
+    const fromRevert = logs.length;
+    if (opened) await tap(at(...point(opened.match[5])));
+    const reverted = await waitForLog(/ELEVEN bench reverted pending=(\d+)/, 3_000, fromRevert);
+
+    // Two edits make a pending candidate, shown in words: Kick speed one step up, Max speed five.
+    const kick = await tabTo('Kick', 'kickSpeed');
+    const kickUp = kick ? await nudge(kick[3], 'kickSpeed') : null;
+    const speed = await tabTo('Player', 'maxSpeed');
+    let speedUp = null;
+    for (let i = 0; speed && i < 5; i++) speedUp = await nudge(speed[3], 'maxSpeed');
+    const pending = lastLog(/ELEVEN bench pending text=(.*)/);
+    check('edits make a pending candidate, shown in words',
+      !!reverted && reverted.match[1] === '0' && kickUp?.[1] === '18.5' && speedUp?.[1] === '7.5' && /^2 pending changes/.test(pending?.[1] ?? ''),
+      `revert: ${reverted ? reverted.match[0].replace('ELEVEN bench ', '') : 'none'}; kick speed ${kickUp?.[1] ?? 'none'}, max speed ${speedUp?.[1] ?? 'none'}; "${pending?.[1]?.trim() ?? 'no pending text'}"`);
+
+    // Closing leaves the run alone: no reset, no apply and no game input, and the run went on.
+    const fromClose = logs.length;
+    if (opened) await tap(at(...point(opened.match[6])));
+    await waitForLog(/ELEVEN bench closed/, 3_000, fromClose);
+    await waitForLog(tracePattern, 5_000, logs.length);
+    const whileOpen = logs.slice(fromOpen).filter((l) => /^ELEVEN (reset|bench applied)/.test(l) || (/^ELEVEN press /.test(l) && !/target=ui/.test(l)));
+    const tickAfterClose = Number(lastLog(tracePattern)?.[1] ?? -1);
+    check('opening and closing the bench leaves the run alone', !!opened && whileOpen.length === 0 && tickAfterClose > tickBeforeOpen,
+      `${whileOpen.length ? whileOpen.slice(0, 3).join(' | ') : 'no reset, apply or game input'}; trace tick ${tickBeforeOpen} → ${tickAfterClose}`);
+
+    // APPLY / RETRY: the pending candidate starts a fresh run, hashed as .NET hashes it.
+    const fromReopen = logs.length;
+    if (benchAt) await tap(centre(...benchAt.slice(1, 5)));
+    const reopened = await waitForLog(/ELEVEN bench open knobs=(\d+) group=(\S+) tabs=(\S+) apply=(\S+) revert=(\S+) close=(\S+)/, 8_000, fromReopen);
+    const fromApply = logs.length;
+    const tickBeforeApply = Number(lastLog(tracePattern)?.[1] ?? -1);
+    if (reopened) await tap(at(...point(reopened.match[4])));
+    const applied = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16}) hostMs=([\d.]+)/, 5_000, fromApply);
+    const expectedFile = path.join(hashlogDir, 'bench-candidate.txt');
+    const expected = fs.existsSync(expectedFile) ? /config ([0-9a-f]{16})\s+practice start ([0-9a-f]{16})/.exec(fs.readFileSync(expectedFile, 'utf8')) : null;
+    check('APPLY / RETRY starts a fresh run with the candidate, hashed as in .NET',
+      !!applied && applied.match[1] === '2' && applied.match[2] === 'unsaved' && !!expected
+        && applied.match[3] === expected[1] && applied.match[4] === expected[2] && applied.match[3] !== knobsLine?.[3],
+      applied ? `${applied.match[0].replace('ELEVEN ', '')}; .NET: ${expected ? `config ${expected[1]} start ${expected[2]}` : 'no bench-candidate.txt'}` : 'no "bench applied" line');
+    if (applied) notes.benchApplyMs = `host ${applied.match[5]} ms`;
+    const afterApply = applied ? (await waitForLog(tracePattern, 20_000, applied.index + 1))?.match ?? null : null;
+    const closedOnApply = !!(await waitForLog(/ELEVEN bench closed/, 3_000, fromApply));
+    const announcedApply = await waitForLog(/ELEVEN ui status (Applied .*)/, 3_000, fromApply);
+    check('the fresh run starts over, the sheet closes and the result is announced',
+      !!afterApply && Number(afterApply[1]) < tickBeforeApply && closedOnApply && /^Applied 2 changes, fresh run in \d+ ms/.test(announcedApply?.match[1] ?? ''),
+      `trace tick ${tickBeforeApply} → ${afterApply?.[1]}; sheet ${closedOnApply ? 'closed' : 'still open'}; ${announcedApply?.match[1]?.trim() ?? 'no status'}`);
+
+    // A capture under the candidate records it, and replays exactly under .NET in CI too.
+    const fromBenchCapture = logs.length;
+    if (placed) await tap(centre(...placed.slice(1, 5)));
+    const benchSheet = await waitForLog(/ELEVEN ui sheet open keep=(\d+),(\d+) skip=(\d+),(\d+)/, 8_000, fromBenchCapture);
+    if (benchSheet) await tap(at(Number(benchSheet.match[3]), Number(benchSheet.match[4])));
+    const benchCaptured = await waitForLog(keptPattern, 10_000, fromBenchCapture);
+    const benchBytes = benchCaptured ? await keptBytes(benchCaptured.match[5]) : null;
+    if (benchBytes) fs.writeFileSync(path.join(outDir, `capture-${name}-bench.elfc`), benchBytes);
+    check('felt-wrong captures under the candidate, which the capture names', !!benchBytes && benchBytes.includes(Buffer.from('unsaved', 'utf8')),
+      benchCaptured ? `${benchCaptured.match[0].replace('ELEVEN ', '')}; preset "unsaved" ${benchBytes?.includes(Buffer.from('unsaved', 'utf8')) ? 'recorded' : 'NOT recorded'}` : 'no capture line');
+
     // Tabular HUD data doesn't jitter (#53): the build panel keeps its size while the dropped-frame
     // count changes through play.
     const huds = logs.map((l) => /ELEVEN trace .* dropped=(\d+) .* hud=(\d+x\d+)/.exec(l)).filter(Boolean);
@@ -662,7 +776,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => n.idleOnly ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => n.idleOnly ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, bench apply ${n.benchApplyMs ?? 'none'}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);
