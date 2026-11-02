@@ -92,6 +92,18 @@ namespace Eleven.Simulation.Harness
             return true;
         }
 
+        /// <summary>
+        /// An agent's preset: always labelled a research hypothesis, never approved feel (#27).
+        /// </summary>
+        public static bool TryHypothesis(string name, BenchCandidate candidate, string hostBuild, out FeelPreset? preset, out string problem)
+        {
+            preset = null;
+            problem = NameProblem(name);
+            if (problem.Length > 0) return false;
+            preset = new FeelPreset(name.Trim(), ResearchHypothesisKind, candidate) { HostBuild = OneLine(hostBuild) };
+            return true;
+        }
+
         /// <summary>The preset as its text file. The same preset always gives the same text.</summary>
         public string Encode()
         {

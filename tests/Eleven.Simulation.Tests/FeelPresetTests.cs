@@ -147,6 +147,16 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void An_agent_s_preset_is_always_a_research_hypothesis()
+        {
+            Assert.True(FeelPreset.TryHypothesis("Retro quick", Candidate(("kickSpeed", 30)), "eleven-sim", out FeelPreset? made, out string problem), problem);
+            Assert.Equal(FeelPreset.ResearchHypothesisKind, made!.Kind);
+            Assert.Contains("kind: research-hypothesis", made.Encode().Split('\n'));
+            Assert.True(FeelPreset.TryRead(made.Encode(), false, out FeelPreset? read, out string why), why);
+            Assert.Equal(FeelPreset.ResearchHypothesisKind, read!.Kind);
+        }
+
+        [Fact]
         public void Unknown_kinds_and_garbage_are_refused()
         {
             Assert.False(FeelPreset.TryRead(Replace(Saved().Encode(), "kind:", "kind: favourite"), false, out _, out string kind));

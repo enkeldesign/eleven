@@ -28,6 +28,12 @@ using Eleven.Simulation.Harness;
 /// eleven-sim candidate [name=value ...]
 ///                              a feel test bench candidate (#45): the reference values with any knobs changed,
 ///                              its config hash and practice start hash, e.g. candidate kickSpeed=28 maxSpeed=8.5
+/// eleven-sim preset &lt;file&gt;        read a named preset (#46): its values, config hash and builds; exit 1 if it can't be used
+/// eleven-sim hypothesis &lt;file&gt; &lt;name&gt; [name=value ...]
+///                              write an agent's preset (#46): the reference values with these changes, labelled a research hypothesis
+/// eleven-sim characterise &lt;preset&gt; &lt;dir&gt; [--approved]
+///                              the ball, movement, kick and pass characterisation of a preset's values (#46),
+///                              into dir/ball, dir/movement, dir/kicks and dir/passes; --approved accepts a committed baseline
 /// eleven-sim passes &lt;dir&gt; [name=value ...]
 ///                              measure the quick pass (#38) in the practice drills under the reference profile
 ///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1
@@ -58,10 +64,16 @@ internal static class Program
                 return Replay(args[1]);
             case "candidate":
                 return Candidate(args.Skip(1));
+            case "hypothesis" when args.Length >= 3:
+                return Hypothesis(args[1], args[2], args.Skip(3));
+            case "preset" when args.Length == 2:
+                return Preset(args[1]);
+            case "characterise" when args.Length >= 3:
+                return Characterise(args[1], args[2], args.Contains("--approved"));
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> | hypothesis <file> <name> [name=value ...] | characterise <preset> <dir> [--approved]");
                 return 2;
         }
     }
@@ -216,12 +228,77 @@ internal static class Program
         return overrides;
     }
 
+    private static bool ReadPreset(string path, bool allowApproved, out FeelPreset? preset)
+    {
+        if (!FeelPreset.TryRead(File.ReadAllText(path), allowApproved, out preset, out string problem))
+        {
+            Console.Error.WriteLine($"{path}: {problem}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static int Hypothesis(string path, string name, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? changes = ParseSettings(settings);
+        if (changes == null) return 2;
+        if (!BenchCandidate.Reference.TryWith(changes, out BenchCandidate? candidate, out string problem)
+            || !FeelPreset.TryHypothesis(name, candidate!, "eleven-sim", out FeelPreset? preset, out problem))
+        {
+            Console.Error.WriteLine(problem);
+            return 1;
+        }
+
+        File.WriteAllText(path, preset!.Encode());
+        Console.WriteLine($"{preset.Name} (research hypothesis): config {candidate!.Config.Hash:x16} -> {path}");
+        return 0;
+    }
+
+    private static int Preset(string path)
+    {
+        if (!ReadPreset(path, allowApproved: true, out FeelPreset? preset)) return 1;
+        BenchCandidate c = preset!.Candidate;
+        Console.WriteLine($"{preset.Name} ({preset.Kind}): config {c.Config.Hash:x16}, practice start {c.PracticeStartHash():x16}, host {preset.HostBuild}, control {preset.ControlCandidate}");
+        Console.WriteLine($"{c.ChangesFrom(BenchCandidate.Reference)} change(s) from the technical reference:");
+        foreach (BenchKnob k in BenchCandidate.Knobs)
+        {
+            double value = c.Get(k.Name), reference = BenchCandidate.Reference.Get(k.Name);
+            if (!value.Equals(reference)) Console.WriteLine($"  {k.Label,-28} {value,10:G6} {k.Parameter.Unit,-22} (reference {reference:G6})");
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The existing characterisation tools under a preset's values (#46): what a preset is, in
+    /// curves and measurements, for its promotion to an approved feel baseline.
+    /// </summary>
+    private static int Characterise(string path, string directory, bool allowApproved)
+    {
+        if (!ReadPreset(path, allowApproved, out FeelPreset? preset)) return 1;
+        SimConfig config = preset!.Candidate.Config;
+        PlayerCapabilities profile = preset.Candidate.Capabilities;
+        var changed = BenchCandidate.Knobs.Where(k => !k.OnPlayer && !preset.Candidate.Get(k.Name).Equals(BenchCandidate.Reference.Get(k.Name))).Select(k => k.Name).ToList();
+        Console.WriteLine($"{preset.Name} ({preset.Kind}), config {config.Hash:x16}");
+        CurvesFor(Path.Combine(directory, "ball"), config, changed);
+        MovementFor(Path.Combine(directory, "movement"), config, profile);
+        KicksFor(Path.Combine(directory, "kicks"), config, profile);
+        PassesFor(Path.Combine(directory, "passes"), config, profile);
+        File.Copy(path, Path.Combine(directory, Path.GetFileName(path)), overwrite: true);
+        return 0;
+    }
+
     private static int Curves(string directory, IEnumerable<string> settings)
     {
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = new SimConfig().With(overrides);
+        return CurvesFor(directory, new SimConfig().With(overrides), overrides.Select(o => o.Key).ToList());
+    }
+
+    private static int CurvesFor(string directory, SimConfig config, List<string> changed)
+    {
         List<BallCurve> curves = BallCurves.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "ball-curves.csv")))
@@ -231,7 +308,7 @@ internal static class Program
 
         using (var summary = new StreamWriter(Path.Combine(directory, "ball-curves.txt")))
         {
-            BallCurves.WriteSummary(summary, config, overrides.Select(o => o.Key).ToList(), curves);
+            BallCurves.WriteSummary(summary, config, changed, curves);
         }
 
         Console.WriteLine($"config {config.Hash:x16}: {BallCurves.KeyNumbers(config, curves)} -> {directory}");
@@ -246,7 +323,11 @@ internal static class Program
         PlayerCapabilities profile = PlayerCapabilities.Reference;
         foreach (KeyValuePair<string, double> o in overrides) profile = profile.With(o.Key, o.Value);
 
-        var config = new SimConfig();
+        return MovementFor(directory, new SimConfig(), profile);
+    }
+
+    private static int MovementFor(string directory, SimConfig config, PlayerCapabilities profile)
+    {
         List<MovementCurve> curves = MovementCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "movement-curves.csv")))
@@ -285,7 +366,11 @@ internal static class Program
     private static int Passes(string directory, IEnumerable<string> settings)
     {
         if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
+        return PassesFor(directory, config, profile);
+    }
 
+    private static int PassesFor(string directory, SimConfig config, PlayerCapabilities profile)
+    {
         List<PassCurve> curves = PassCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "pass-curves.csv")))
@@ -305,6 +390,11 @@ internal static class Program
     private static int Kicks(string directory, IEnumerable<string> settings)
     {
         if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
+        return KicksFor(directory, config, profile);
+    }
+
+    private static int KicksFor(string directory, SimConfig config, PlayerCapabilities profile)
+    {
         List<KickCurve> curves = KickCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "kick-curves.csv")))
