@@ -52,6 +52,22 @@ jobs:
           echo "::notice title=Presentation tests::${passed:-0} of ${total:-0} passed"
           test "${total:-0}" -gt 0
 
+      # The host's engine-free pieces, compiled from unity/Assets (#55).
+      - name: Run host tests
+        run: >
+          dotnet test tests/Eleven.Host.Tests/Eleven.Host.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=host.trx"
+          --results-directory TestResults
+
+      - name: Check that host tests ran
+        run: |
+          counters=$(grep -o '<Counters [^>]*>' TestResults/host.trx)
+          total=$(echo "$counters" | grep -o 'total="[0-9]*"' | grep -o '[0-9]\+')
+          passed=$(echo "$counters" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]\+')
+          echo "::notice title=Host tests::${passed:-0} of ${total:-0} passed"
+          test "${total:-0}" -gt 0
+
       - name: Build headless harness
         run: dotnet build src/Eleven.Simulation.Cli/Eleven.Simulation.Cli.csproj --configuration Release
 

@@ -366,6 +366,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const pressed = await waitForLog(/ELEVEN capture pressed tick=(\d+)/, 10_000, fromCapture);
     const sheet = await waitForLog(/ELEVEN ui sheet open keep=(\d+),(\d+) skip=(\d+),(\d+)/, 5_000, fromCapture);
     check('a press opens the note sheet', !!pressed && !!sheet, sheet ? sheet.match[0].replace('ELEVEN ', '') : pressed ? 'no sheet' : 'no press');
+    // On a phone the on-screen keyboard covers the lower part of the screen (#55): the sheet sits
+    // in the top half, clear of it.
+    if (useTouch) {
+      const box = sheet ? /box=(\d+),(\d+),(\d+),(\d+)/.exec(sheet.input) : null;
+      const bottom = box ? Number(box[2]) + Number(box[4]) : NaN;
+      check('the note sheet sits clear of the on-screen keyboard', !!box && bottom <= n[1] * 0.5,
+        box ? `sheet ${box.slice(1, 5).join(',')} px, bottom at ${(100 * bottom / n[1]).toFixed(0)} % of the screen` : 'no sheet box in the log');
+    }
     await sleep(1_500);
     const during = logs.slice(fromCapture).map((l) => tracePattern.exec(l)).filter(Boolean).map((m) => Number(m[1]));
     check('play waits while the note sheet is open', !!pressed && during.every((t) => t <= Number(pressed.match[1])),
