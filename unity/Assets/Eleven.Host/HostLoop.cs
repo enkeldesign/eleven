@@ -30,7 +30,6 @@ namespace Eleven.Host
 
         private readonly List<Command> _commands = new List<Command>(1);
         private readonly List<SimEvent> _events = new List<SimEvent>();
-        private readonly List<string> _resultLines = new List<string>(HudLayout.MaxResultLines);
         private readonly FramePacing _pacing = new FramePacing();
 
         // The last ten seconds, for THIS FELT WRONG (#44). It only reads the simulator.
@@ -44,10 +43,11 @@ namespace Eleven.Host
         private UiRoot _ui;
         private string _uiMode = "toolkit";
         private Specimen _specimen;
-        private UiKit.Action _resetAction;
-        private UiKit.Action _runAction;
-        private Vector2 _resetNeeds;
-        private Vector2 _runNeeds;
+        private Hud _hud;
+        private int _resultLines;
+
+        // THIS FELT WRONG's capture, taken at the press and kept once the note sheet closes (#53).
+        private FeelCapture _pending;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -57,11 +57,7 @@ namespace Eleven.Host
         private double _accumulator;
         private Vector2 _previousPlayer;
         private Vector3 _previousBall;
-        private GUIStyle _textStyle;
-        private GUIStyle _buildStyle;
         private GUIStyle _buttonStyle;
-        private GUIStyle _resultStyle;
-        private bool _resultFitChecked;
         private Vector2Int _styledFor;
         private int _framesSinceTrace;
         private double _lastTraceTime;
@@ -77,9 +73,10 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, SpikeScenario.InitialState(_config));
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
-            AllowPageKeyboard();
-            FeltWrongInstall(HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.HudPanel),
-                HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
+            // The player keeps every key (WebGLInput.captureAllKeyboardInput stays at its default):
+            // keyboard focus and activation are Unity's UI's (#53). A text field raises the phone's
+            // keyboard.
+            EnableMobileKeyboard();
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             // ?noui: measurement only (#48), the frame without the UI.
@@ -92,10 +89,12 @@ namespace Eleven.Host
 
             UiRoot.ReducedMotion = PrefersReducedMotion();
 
-            // Frame-cost A/B (#48): ?ui=empty builds the UI Toolkit panel with nothing in it; ?ui=imgui
-            // draws the same action recipe with IMGUI instead of UI Toolkit.
-            _uiMode = url.Contains("ui=empty") ? "empty" : url.Contains("ui=imgui") ? "imgui" : "toolkit";
-            if (!url.Contains("noui") && _uiMode != "imgui") BuildUi();
+            // Frame cost (#48): ?ui=empty builds the UI Toolkit panel with nothing in it.
+            _uiMode = url.Contains("ui=empty") ? "empty" : "toolkit";
+            if (!url.Contains("noui")) BuildUi();
+
+            // A capture kept on an earlier visit stays exportable: SAVE CAPTURE offers the newest one.
+            if (_hud != null && HasKeptCapture()) _hud.ShowSave();
 
             // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
             if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
@@ -126,16 +125,13 @@ namespace Eleven.Host
             UpdateLayout(force: false);
             _input.Sample(_layout);
 
-
-            // Before this frame's steps, so the window ends where the press was.
-            string feltWrong = TakeFeltWrong();
-            if (feltWrong != null) CaptureFeltWrong(feltWrong);
-
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
             _lastTime = now;
 
-            if (_paused || frame > MaxFrameSeconds) _accumulator = 0;
+            // Play waits while the note sheet is open, as it did under the browser's prompt (#44).
+            bool waiting = _hud != null && _hud.SheetOpen;
+            if (_paused || waiting || frame > MaxFrameSeconds) _accumulator = 0;
             else
             {
                 _accumulator += frame;
@@ -154,6 +150,7 @@ namespace Eleven.Host
             if (_accumulator >= tick) _accumulator = 0;
 
             _specimen?.Tick(_simulator.Tick);
+            _hud?.Tick(_buildId, _loadSeconds, _pacing.Dropped, _pacing.CoveredSeconds);
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
@@ -183,7 +180,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -215,22 +212,42 @@ namespace Eleven.Host
         }
 
         /// <summary>
-        /// THIS FELT WRONG (#44): the last ten seconds, the snapshot that starts them, this build, the
-        /// config and the note, kept on the device for SAVE CAPTURE. Only reads the simulation. The
-        /// CI smoke test replays the kept bytes with .NET, as a player would export them (#50).
+        /// THIS FELT WRONG (#44, #53): the capture of the last ten seconds is taken at the press, so
+        /// the window ends where the player pressed; then the note sheet opens, and play waits.
+        /// Only reads the simulation.
         /// </summary>
-        private void CaptureFeltWrong(string note)
+        private void FeltWrongPressed()
         {
-            FeelCapture capture = _feel.Capture(_simulator, _buildId, "technical-reference", "none", note);
+            if (_pending != null) return;
+            _pending = _feel.Capture(_simulator, _buildId, "technical-reference", "none", "");
+            _input.Clear();
+            Log($"ELEVEN capture pressed tick={_simulator.Tick}");
+            _hud.OpenNote();
+        }
+
+        /// <summary>
+        /// The note sheet closed: the capture, with the note if there is one, this build and the
+        /// config, is kept on the device for SAVE CAPTURE and announced. The CI smoke test replays the
+        /// kept bytes with .NET, as a player would export them (#50).
+        /// </summary>
+        private void KeepFeltWrong(string note)
+        {
+            FeelCapture capture = _pending;
+            _pending = null;
+            if (capture == null) return;
+            capture.Note = note ?? "";
             byte[] bytes = capture.Encode();
             double seconds = capture.StepCount * _config.TickSeconds;
-            string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{_simulator.Tick}.elfc");
+            long end = capture.StartTick + capture.StepCount;
+            string name = FormattableString.Invariant($"eleven-felt-wrong-{SafeName(_buildId)}-t{end}.elfc");
             string summary = FormattableString.Invariant($"the last {seconds:F0} s");
-            KeepCapture(bytes, name, summary);
-
-            string line = FormattableString.Invariant(
-                $"ELEVEN capture ticks={capture.StartTick}..{capture.StartTick + capture.StepCount} steps={capture.StepCount} bytes={bytes.Length} name={name}");
-            Log(line);
+            bool kept = KeepCapture(bytes, name, summary);
+            Log(FormattableString.Invariant(
+                $"ELEVEN capture ticks={capture.StartTick}..{end} steps={capture.StepCount} bytes={bytes.Length} name={name} note={capture.Note.Length}"));
+            _hud.ShowStatus(kept
+                ? $"Captured {summary}, kept on this device."
+                : $"Captured {summary}, not kept on this device (storage unavailable): save it now.");
+            _hud.ShowSave();
         }
 
         private static string SafeName(string s)
@@ -253,12 +270,8 @@ namespace Eleven.Host
 
             ulong final = run.TickHashes[run.TickHashes.Count - 1];
             ulong digest = run.SequenceDigest();
-            _resultLines.Clear();
-            _resultLines.Add(FormattableString.Invariant($"Scenario, {milliseconds:F0} ms"));
-            _resultLines.Add($"digest {digest:x16}");
-            _resultLines.Add($"final  {final:x16}");
-
-            _resultFitChecked = false;
+            _resultLines = HudLayout.MaxResultLines;
+            _hud?.ShowResult(milliseconds, digest, final);
             UpdateLayout(force: false);
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
@@ -284,13 +297,8 @@ namespace Eleven.Host
                     return;
                 }
 
-                _resetAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Reset", ResetMatch);
-                _runAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Run scenario", RunScenario);
-                _ui.Root.Add(_resetAction.Element);
-                _ui.Root.Add(_runAction.Element);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, ArmSaveCapture, KeepFeltWrong);
                 _input.OverUi = _ui.IsOverUi;
-                Fit(_resetAction, false);
-                Fit(_runAction, true);
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
@@ -299,7 +307,7 @@ namespace Eleven.Host
                     _ui.Root.RegisterCallback<ClickEvent>(e => Log($"ELEVEN ui click target={(e.target as VisualElement)?.name}"), TrickleDown.TrickleDown);
                 }
                 // The label's laid-out size once it has one: zero means the font draws nothing.
-                Label label = _runAction.Label;
+                Label label = _hud.Run.Label;
                 EventCallback<GeometryChangedEvent> measured = null;
                 measured = _ =>
                 {
@@ -318,76 +326,34 @@ namespace Eleven.Host
             }
         }
 
-        // A placed action takes the size its label needs (#48, Codex's accessibility finding): after
-        // each layout it measures its label, and if it needs another size the HUD lays itself out
-        // again. What a label needs doesn't depend on where it is placed, so this settles within
-        // two passes. It also reports whether the label fits, for the CI smoke test.
-        private void Fit(UiKit.Action action, bool run)
+        // The HUD measured an element needing another size: lay out again if anything moves.
+        private void Relayout()
         {
-            action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
-            {
-                // What the text needs, not its laid-out size: layout squeezes a label to its parent,
-                // so an overflowing label never looks taller. Its width on one line, and its height
-                // at the width the body gives it.
-                Rect body = action.Body.contentRect;
-                Label label = action.Label;
-                Vector2 line = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
-                Vector2 needed = label.MeasureTextSize(label.text, body.width, VisualElement.MeasureMode.Exactly, 0, VisualElement.MeasureMode.Undefined);
-                string verdict = needed.y > body.height + 0.5f ? "overflow" : line.x > body.width + 0.5f ? "wraps" : "ok";
-                Log(FormattableString.Invariant(
-                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} line={line.x:F0}x{line.y:F0} needs={needed.y:F0} body={body.width:F0}x{body.height:F0} {verdict}"));
-                if (body.width <= 0 || float.IsNaN(line.x) || float.IsNaN(needed.y)) return;
-
-                // In screen pixels: the action's width with its label on one line, and its height
-                // at the width it has now. The insets are its border and padding, whatever its size.
-                Rect outer = action.Element.layout;
-                float s = _ui.PixelsPerPoint;
-                var needs = new Vector2(
-                    Mathf.Ceil((line.x + outer.width - body.width + 1) * s),
-                    Mathf.Ceil((needed.y + outer.height - body.height) * s));
-                Vector2 was = run ? _runNeeds : _resetNeeds;
-                if (Mathf.Abs(needs.x - was.x) <= 1 && Mathf.Abs(needs.y - was.y) <= 1) return;
-                if (run) _runNeeds = needs;
-                else _resetNeeds = needs;
-                HudLayout next = Layout();
-                if (next.RunButton != _layout.RunButton || next.ResetButton != _layout.ResetButton) UpdateLayout(true);
-            });
+            if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
         }
 
-        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count, _resetNeeds, _runNeeds);
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines, _hud?.Needs);
 
         private void UpdateLayout(bool force)
         {
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
-                && _layout.ResultLines == _resultLines.Count) return;
+                && _layout.ResultLines == _resultLines) return;
 
             _layout = Layout();
-            Rect felt = _layout.FeltWrongButton;
-            FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
-            if (_ui != null && _resetAction != null)
+            if (_ui != null && _hud != null)
             {
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
-                _ui.Place(_resetAction.Element, _layout.ResetButton);
-                _ui.Place(_runAction.Element, _layout.RunButton);
+                _hud.Place(_layout);
             }
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
+        // The match controls (#28's) are the only thing still drawn with IMGUI.
         private void OnGUI()
         {
-            if (Event.current.type != EventType.Repaint) return;
+            // Not over the note sheet: play waits while it is open.
+            if (Event.current.type != EventType.Repaint || (_hud != null && _hud.SheetOpen)) return;
             EnsureStyles();
-
-            Panel(_layout.BuildLabel);
-            GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
-            if (_uiMode == "imgui")
-            {
-                ImguiAction(_layout.ResetButton, "RESET");
-                ImguiAction(_layout.RunButton, "RUN SCENARIO");
-            }
-
-
-            if (_resultLines.Count > 0) DrawResult();
 
             // The stick's vector is measured from where the thumb landed; its base is drawn as near
             // there as fits in the stick zone, with the knob offset the same way.
@@ -403,73 +369,19 @@ namespace Eleven.Host
             GUI.Label(kickLabel, "KICK", _buttonStyle);
         }
 
-        // The action recipe drawn with IMGUI, for the frame-cost A/B only (#48): hard shadow, fill,
-        // outline, label, from the same tokens.
-        private void ImguiAction(Rect rect, string label)
-        {
-            float ppp = Mathf.Max(0.5f, PixelsPerPoint());
-            Shape shape = Shapes.Control;
-            Theme theme = Theme.Pitch;
-            float radius = shape.Radius * ppp;
-            var shadow = new Rect(rect.x + shape.Shadow * ppp, rect.y + shape.Shadow * ppp, rect.width, rect.height);
-            GUI.DrawTexture(shadow, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Shadow].ToColor(), 0, radius);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.ActionNeutral].ToColor(), 0, radius);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Outline].ToColor(), shape.Border * ppp, radius);
-            Color before = _buttonStyle.normal.textColor;
-            _buttonStyle.normal.textColor = theme[Role.OnAction].ToColor();
-            GUI.Label(rect, label, _buttonStyle);
-            _buttonStyle.normal.textColor = before;
-        }
-
-        private void DrawResult()
-        {
-            Rect panel = _layout.Result;
-            Panel(panel);
-            float pad = _layout.Padding;
-            float widest = 0;
-            float columnWidth = panel.width - 2 * pad;
-            for (int i = 0; i < _resultLines.Count; i++)
-            {
-                var line = new Rect(panel.x + pad, panel.y + pad * 0.5f + i * _layout.ResultLineHeight, columnWidth, _layout.ResultLineHeight);
-                GUI.Label(line, _resultLines[i], _resultStyle);
-                widest = Mathf.Max(widest, _resultStyle.CalcSize(new GUIContent(_resultLines[i])).x);
-            }
-
-            if (_resultFitChecked) return;
-            _resultFitChecked = true;
-            float needed = _resultLines.Count * _layout.ResultLineHeight + pad;
-            bool fits = widest <= columnWidth && needed <= panel.height + 0.01f && panel.yMax <= _layout.ScreenHeight
-                && !panel.Overlaps(_layout.PlayArea);
-            Log(FormattableString.Invariant($"ELEVEN hud result fits={(fits ? "yes" : "NO")} widest={widest:F0} panel={panel.width:F0}x{panel.height:F0} lines={_resultLines.Count} screen={_layout.ScreenWidth}x{_layout.ScreenHeight}"));
-        }
-
         private void EnsureStyles()
         {
             var screen = new Vector2Int(_layout.ScreenWidth, _layout.ScreenHeight);
-            if (_textStyle != null && _styledFor == screen) return;
+            if (_buttonStyle != null && _styledFor == screen) return;
 
-            int fontSize = _layout.FontSize;
-            _textStyle = new GUIStyle(GUI.skin.label)
+            _buttonStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = fontSize,
-                alignment = TextAnchor.MiddleLeft,
-                wordWrap = true,
-                padding = new RectOffset(8, 8, 4, 4),
+                fontSize = _layout.FontSize,
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
             };
-            _textStyle.normal.textColor = HostPalette.HudText;
-
-            _buildStyle = new GUIStyle(_textStyle) { fontSize = _layout.BuildFontSize, wordWrap = false, clipping = TextClipping.Clip };
-            _buttonStyle = new GUIStyle(_textStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _resultStyle = new GUIStyle(_textStyle) { fontSize = _layout.ResultFontSize, wordWrap = false, clipping = TextClipping.Clip, padding = new RectOffset(0, 0, 0, 0) };
-            _resultFitChecked = false;
+            _buttonStyle.normal.textColor = HostPalette.HudText;
             _styledFor = screen;
-        }
-
-        private static void Panel(Rect rect)
-        {
-            GUI.color = HostPalette.HudPanel;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
         }
 
         private void Disc(Vector2 centre, float radius, Color colour)
@@ -482,28 +394,21 @@ namespace Eleven.Host
             GUI.color = Color.white;
         }
 
-        /// <summary>
-        /// The build id, then the two numbers the device session reads off the screen (#5): how
-        /// long the page took to load, and dropped frames over the last minute of play.
-        /// </summary>
-        private string BuildLine() => FormattableString.Invariant(
-            $"ELEVEN {_buildId} · load {_loadSeconds:F1} s · {_pacing.Dropped} dropped in {_pacing.CoveredSeconds:F0} s");
-
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern double ElevenPageMilliseconds();
 
         [DllImport("__Internal")]
-        private static extern void ElevenFeltWrongInstall(string text, string panel, string border, string focus);
+        private static extern int ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
         [DllImport("__Internal")]
-        private static extern void ElevenFeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight);
+        private static extern int ElevenHasKeptCapture();
 
         [DllImport("__Internal")]
-        private static extern string ElevenTakeFeltWrong();
+        private static extern void ElevenSaveCapture();
 
         [DllImport("__Internal")]
-        private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
+        private static extern void ElevenArmSaveCapture();
 
         [DllImport("__Internal")]
         private static extern float ElevenCanvasCssWidth();
@@ -524,20 +429,17 @@ namespace Eleven.Host
             return css > 0 ? Screen.width / css : 1f;
         }
 
-        // The player captures every key on the page by default, so page controls could never be
-        // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
-        // finger), so the page keeps them.
-        private static void AllowPageKeyboard() => WebGLInput.captureAllKeyboardInput = false;
+        private static void EnableMobileKeyboard() => WebGLInput.mobileKeyboardSupport = true;
 
-        private static void FeltWrongInstall(string text, string panel, string border, string focus) =>
-            ElevenFeltWrongInstall(text, panel, border, focus);
+        // Storage and share/download are browser services with no UI (#53): the page keeps the
+        // capture, and SAVE CAPTURE hands it to the share sheet or a download.
+        private static bool KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary) != 0;
 
-        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) =>
-            ElevenFeltWrongPlace(x, y, width, height, screenWidth, screenHeight);
+        private static bool HasKeptCapture() => ElevenHasKeptCapture() != 0;
 
-        private static string TakeFeltWrong() => ElevenTakeFeltWrong();
+        private static void SaveCapture() => ElevenSaveCapture();
 
-        private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
+        private static void ArmSaveCapture() => ElevenArmSaveCapture();
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
@@ -545,17 +447,20 @@ namespace Eleven.Host
 
         private static bool PrefersReducedMotion() => false;
 
-        private static void AllowPageKeyboard() { }
+        private static void EnableMobileKeyboard() { }
 
-        // Outside the web build there is no page: no button, and captures go to persistent data.
-        private static void FeltWrongInstall(string text, string panel, string border, string focus) { }
-
-        private static void FeltWrongPlace(float x, float y, float width, float height, int screenWidth, int screenHeight) { }
-
-        private static string TakeFeltWrong() => null;
-
-        private static void KeepCapture(byte[] bytes, string name, string summary) =>
+        // Outside the web build there is no page: captures go to persistent data, which is the save.
+        private static bool KeepCapture(byte[] bytes, string name, string summary)
+        {
             System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, name), bytes);
+            return true;
+        }
+
+        private static bool HasKeptCapture() => false;
+
+        private static void SaveCapture() { }
+
+        private static void ArmSaveCapture() { }
 #endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);

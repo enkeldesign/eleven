@@ -10,6 +10,8 @@
 //   - boot: the host reports ready, with its build id and the page's load time
 //   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
 //     (ADR-0002: cross-runtime determinism is a gate)
+//   - the HUD (#48, #53): placed actions hold their labels, the build line fits its panel and keeps
+//     its size as its values change, and no page controls remain over the canvas
 //   - Run scenario: the tap is acknowledged, and the result panel fits its text
 //   - stick: dragging it moves the player (from the host's trace lines), and the camera keeps the
 //     player and ball inside the area the HUD leaves free

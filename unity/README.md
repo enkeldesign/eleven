@@ -21,16 +21,21 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
 - `HostBootstrap` creates the host after the (empty) scene loads. Camera, pitch, dot and ball are built at runtime from generated textures.
 - `HostLoop` accumulates real time and spends it in whole simulation ticks, interpolating between the last two ticks for drawing. A frame longer than 0.25 s (backgrounded tab, pause, stall) is dropped, not caught up, so the simulation never advances for unseen time. At most 8 ticks run per frame.
 - `TouchAdapter` reads touches (and the mouse, as one finger on desktop) through the Input System. It produces owned commands for controller 1: a floating stick in the left half and a kick button bottom right.
-- On screen: the build id (CI run number and commit) with the page's load time and dropped frames over the last minute of play (for the device session, #5), **Reset**, and **Run scenario** (runs the issue 1 scenario inside the build and shows its digest and final hash). Reset and Run scenario are UI Toolkit actions from the visual system's recipes (`UiRoot`, `UiKit`; [docs/ui/visual-system.md](../docs/ui/visual-system.md)), built entirely in code; presses on the UI never reach play.
-- **FELT WRONG** (#44) is a real page button (`Plugins/ElevenPage.jslib`), laid over a spot the HUD leaves free. Being a page button, it reaches assistive technology, the keyboard and touch alike, and it is at least 44 × 44 px.
-  - **A press** asks for an optional note with the browser's own prompt. No frames run while it is open, so play does not go on under it.
-  - **The capture** is the last ten seconds (`FeelRecorder`/`FeelCapture`, [determinism.md](../docs/simulation/determinism.md#feel-captures)). It is kept in the page's `localStorage` (the last five) and announced.
-  - **SAVE CAPTURE** shares or downloads it as `.elfc`, for `eleven-sim replay`. Nothing leaves the device unless it is saved.
+- **The UI around the match** (`Hud`) is UI Toolkit, from the visual system's recipes (`UiRoot`, `UiKit`; [docs/ui/visual-system.md](../docs/ui/visual-system.md)), built entirely in code. Presses on it never reach play. Only the match controls (stick and kick, #28's) are still drawn with IMGUI.
+  - **The build line** is HUD data: the build id (CI run number and commit), the page's load time and dropped frames over the last minute of play (for the device session, #5). Its slots are sized for their widest values, so it never changes size.
+  - **Reset**, and **Run scenario**, which runs the issue 1 scenario inside the build and shows its time, digest and final hash in a HUD panel.
+  - **Every placed element measures what it needs** after layout, and `HudLayout` lays out around it, so enlarged text widens actions and grows panels rather than overflowing them.
+- **THIS FELT WRONG** (#44, #53) is a Unity action just above the kick button, where the right thumb is.
+  - **A press** takes the capture there and then, so its window ends where the player pressed. A Unity sheet then asks for an optional note, and play waits until it closes. **Keep note** (or Enter) keeps the note; **No note** (or Escape) keeps the capture without one.
+  - **The capture** is the last ten seconds (`FeelRecorder`/`FeelCapture`, [determinism.md](../docs/simulation/determinism.md#feel-captures)). The page keeps it in `localStorage` (the last five), and the status line announces it.
+  - **SAVE CAPTURE**, beside or above THIS FELT WRONG, shares or downloads it as `.elfc`, for `eleven-sim replay`. Nothing leaves the device unless it is saved. Storage and share/download are browser services with no UI (`Plugins/ElevenPage.jslib`): the press arms the page, and the page's own release handler starts the share, so the browser's user-gesture requirement holds.
+- **The keyboard:** the player keeps every key (`WebGLInput.captureAllKeyboardInput` at its default). Tab moves Unity's focus, with the two-colour focus ring, and Enter activates. The note's text field raises the phone's keyboard (`WebGLInput.mobileKeyboardSupport`).
 - URL options for testing:
   - `?autorun` runs the scenario at start.
   - `?trace` logs state every 60 ticks and every event.
   - `?specimen` (or `?specimen=dark`) shows the visual system's specimen over the match.
   - `?textscale=1.5` enlarges UI text.
+  - `?ui=empty` builds an empty UI Toolkit panel, for the frame-cost passes.
   - `?noui` builds no UI, which the smoke test uses to measure the UI's frame cost. The smoke test replays each capture with .NET from the bytes kept in `localStorage` and, on desktop, SAVE CAPTURE's download (#50).
 
 ## Building
