@@ -121,17 +121,28 @@ jobs:
           node unity/ci/smoke.mjs "$player" dotnet-hashlogs smoke
 
       # #44: the smoke test pressed THIS FELT WRONG in the WebGL build. Each capture it saved must
-      # replay exactly under .NET: every tick's hash and every event (#27's done criterion).
+      # replay exactly under .NET: every tick's hash and every event (#27's done criterion). Any
+      # capture that fails to decode or replay fails the step and is named (#50). The explicit
+      # bash shell adds pipefail; the default shell has none.
       - name: Replay the build's felt-wrong captures with .NET
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           shopt -s nullglob
           captures=(smoke/capture-*.elfc)
           if [ ${#captures[@]} -eq 0 ]; then echo "::error title=Felt-wrong replay::the smoke test saved no capture"; exit 1; fi
+          failed=0
           for c in "${captures[@]}"; do
-            dotnet run --project src/Eleven.Simulation.Cli --configuration Release -- replay "$c" | tee -a replay.txt
+            if out=$(dotnet run --project src/Eleven.Simulation.Cli --configuration Release --no-build -- replay "$c" 2>&1); then
+              printf '%s\n' "$out"
+            else
+              printf '%s\n' "$out"
+              echo "::error title=Felt-wrong replay::$(printf '%s' "$out" | tail -1 | sed -e 's/%/%25/g')"
+              failed=$((failed + 1))
+            fi
           done
-          echo "::notice title=Felt-wrong replay::$(grep -c 'replayed exactly' replay.txt) WebGL capture(s) replayed exactly under .NET"
+          echo "::notice title=Felt-wrong replay::$(( ${#captures[@]} - failed )) of ${#captures[@]} WebGL capture(s) replayed exactly under .NET"
+          [ "$failed" -eq 0 ]
 
       - uses: actions/upload-artifact@v4
         if: always()
