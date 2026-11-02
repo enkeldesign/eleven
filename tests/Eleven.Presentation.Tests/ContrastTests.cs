@@ -132,22 +132,6 @@ namespace Eleven.Presentation.Tests
             }
         }
 
-        [Fact]
-        public void The_light_button_comparison_keeps_one_text_colour_too()
-        {
-            // The specimen's comparison: light fills, all with ink text, never mixed.
-            Assert.NotEmpty(Theme.Comparisons);
-            foreach (Theme theme in Theme.Comparisons)
-            {
-                Assert.Equal(Primitives.Ink900, theme[Role.OnAction]);
-                foreach (Role fill in Theme.ActionFills)
-                {
-                    double ratio = Rgba.Contrast(theme[Role.OnAction], theme[fill]);
-                    Assert.True(ratio >= 4.5, $"{theme.Name}: button text on {fill} is {ratio:F2}:1");
-                }
-            }
-        }
-
         [Theory]
         [MemberData(nameof(PageContexts))]
         public void Outlines_and_the_focus_ring_meet_3_to_1_against_every_surface(string themeName)

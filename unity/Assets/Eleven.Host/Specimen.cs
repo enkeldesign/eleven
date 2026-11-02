@@ -10,13 +10,12 @@ namespace Eleven.Host
     /// The visual system's specimen (#48), at <c>?specimen</c> (or <c>?specimen=dark</c>): a page
     /// built only from the production recipes in <see cref="UiKit"/>, in the ordinary or the dark
     /// mapping. It has no styles of its own beyond page layout, so it cannot drift from the
-    /// components it shows. The palette it shows is a hypothesis for Erik's device review.
+    /// components it shows. Erik reviewed it on device (2026-11-02): dark buttons with white text in every context.
     /// </summary>
     internal sealed class Specimen
     {
         private readonly UiRoot _ui;
         private bool _dark;
-        private bool _lightButtons;
         private VisualElement _page;
         private UiKit.Data _tick;
         private UiKit.Data _frame;
@@ -29,12 +28,7 @@ namespace Eleven.Host
             Build(Current());
         }
 
-        // The context, and the light-button comparison when chosen (Erik's review, 2026-11-02).
-        private Theme Current()
-        {
-            Theme context = _dark ? Theme.Dark : Theme.Ordinary;
-            return _lightButtons ? Theme.WithLightButtons(context) : context;
-        }
+        private Theme Current() => _dark ? Theme.Dark : Theme.Ordinary;
 
         /// <summary>Called once a frame: the HUD data changes, the layout must not move.</summary>
         public void Tick(long tick)
@@ -67,7 +61,7 @@ namespace Eleven.Host
 
             column.Add(UiKit.Text(theme, TypeScale.Display, "ELEVEN", Role.TextHeading));
             Label caption = UiKit.Text(theme, TypeScale.Small,
-                $"Visual system specimen, {theme.Name} mapping. Production components only. The palette is a hypothesis for Erik's device review.", Role.TextMuted);
+                $"Visual system specimen, {theme.Name} mapping. Production components only.", Role.TextMuted);
             caption.style.marginBottom = Spacing.L;
             column.Add(caption);
 
@@ -76,15 +70,8 @@ namespace Eleven.Host
                 _dark = i == 1;
                 Build(Current());
             });
-            context.Element.style.marginBottom = Spacing.S;
+            context.Element.style.marginBottom = Spacing.L;
             column.Add(context.Element);
-            UiKit.Segmented buttons = UiKit.MakeSegmented(_ui, theme, new[] { "Dark buttons", "Light buttons" }, _lightButtons ? 1 : 0, i =>
-            {
-                _lightButtons = i == 1;
-                Build(Current());
-            });
-            buttons.Element.style.marginBottom = Spacing.L;
-            column.Add(buttons.Element);
 
             // Cards wrap into columns where the screen is wide enough (tablets), one column on phones.
             VisualElement grid = UiKit.Row(Spacing.L);
@@ -143,7 +130,7 @@ namespace Eleven.Host
             grid.Add(Card(theme, "Over the pitch", s =>
             {
                 // The pitch context: the same buttons with chalk borders on the pitch's own colour.
-                Theme pitch = _lightButtons ? Theme.WithLightButtons(Theme.Pitch) : Theme.Pitch;
+                Theme pitch = Theme.Pitch;
                 var field = new VisualElement { pickingMode = PickingMode.Ignore };
                 field.style.backgroundColor = Domain.Pitch.ToColor();
                 UiKit.Radius(field, Shapes.Control.Radius);

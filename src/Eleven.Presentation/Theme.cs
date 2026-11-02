@@ -165,24 +165,6 @@ namespace Eleven.Presentation
 
         public static IReadOnlyList<Theme> All { get; } = new[] { Ordinary, Dark, Pitch };
 
-        /// <summary>
-        /// The specimen's comparison: the same contexts with SOL's light button fills and ink text,
-        /// so the two button palettes can be compared on a device. Not used by the game.
-        /// </summary>
-        public static IReadOnlyList<Theme> Comparisons { get; } = new[] { WithLightButtons(Ordinary), WithLightButtons(Dark) };
-
-        /// <summary>A context with light button fills and ink button text, for comparison.</summary>
-        public static Theme WithLightButtons(Theme theme) => Derive(theme.Name + ", light buttons", theme, new Dictionary<Role, Rgba>
-        {
-            [Role.ActionPrimary] = Primitives.Royal300,
-            [Role.ActionSupporting] = Primitives.Violet200,
-            [Role.ActionInformation] = Primitives.Sky300,
-            [Role.ActionNeutral] = Primitives.Paper0,
-            [Role.ActionDestructive] = Primitives.Red400,
-            [Role.Selection] = Primitives.Grass300,
-            [Role.OnAction] = Primitives.Ink900,
-        });
-
         // A mapping that differs from another in a few roles: a context, not a recolouring.
         private static Theme Derive(string name, Theme from, Dictionary<Role, Rgba> overrides)
         {

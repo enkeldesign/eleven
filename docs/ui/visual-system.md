@@ -20,7 +20,6 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
    - **`Theme.Ordinary`:** light pages, with ink text and borders.
    - **`Theme.Dark`:** navy-black pages, with chalk text and borders.
    - **`Theme.Pitch`:** controls over the pitch, with chalk borders and a chalk focus ring.
-   - **A comparison:** `Theme.WithLightButtons` gives the specimen's light-button variant (SOL's original fills with ink text). The game doesn't use it.
 4. **Component-state recipes** (`unity/Assets/Eleven.Host/UiKit.cs`) are C# functions that read roles only.
 5. **Screen composition** happens in the host: placed from `HudLayout`, or laid out by flexbox.
 
@@ -93,5 +92,6 @@ Screen-reader support is out of scope (Erik, ADR-0003). Everything else stands:
   - presses on the UI never reach play;
   - the UI's frame cost, as idle fps with and without the UI.
 - **The specimen** (`?specimen`, `?specimen=dark`) is built only from these recipes.
-  - It switches between the dark and light button palettes for comparison.
-  - It shows the pitch context on the pitch's own colour. CI renders it at phone and tablet sizes in both mappings, and on a 320 pt phone with text at 150 %. Each must keep every target at 44 × 44 pt or more, with nothing wider than the page. CI keeps the screenshots as artifacts.
+  - It shows the pitch context on the pitch's own colour.
+  - CI renders it at phone and tablet sizes in both mappings, and on a 320 pt phone with text at 200 % (WCAG 1.4.4). Each must keep every target at 44 × 44 pt or more, with nothing wider than the page. CI keeps the screenshots as artifacts.
+- **The HUD at 200 % text:** CI boots the game on a 320 pt phone with `?textscale=2`. Every placed action must hold its label on one line. The HUD measures its labels and widens its top-row actions to fit, as far as the row allows; where both no longer fit side by side, Reset goes below Run.
