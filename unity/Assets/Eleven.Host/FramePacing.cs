@@ -4,8 +4,10 @@ using System.Collections.Generic;
 namespace Eleven.Host
 {
     /// <summary>
-    /// Counts dropped frames over the last minute, for the device session's frame-pacing
-    /// measurement (#5).
+    /// Counts dropped frames over the last minute of play, for the device session's frame-pacing
+    /// measurement (#5). The minute is play, not the clock: the latest recorded frames whose times
+    /// add up to it, so time the host doesn't record (play waiting under the note sheet, a stall it
+    /// discards) never leaves a hole that keeps the window short (#55).
     ///
     /// The display's frame interval is the shortest frame time the device sustains: the 5th
     /// percentile of the window, remembered as a running minimum, and never longer than 1/60 s,
@@ -25,6 +27,7 @@ namespace Eleven.Host
         private readonly Queue<(double At, double Seconds)> _frames = new Queue<(double, double)>();
         private double[] _sorted = new double[1024];
         private double _reportedAt = double.NegativeInfinity;
+        private double _covered;
 
         /// <summary>Frames recorded in the window.</summary>
         public int Frames { get; private set; }
@@ -35,7 +38,7 @@ namespace Eleven.Host
         /// <summary>The display's frame interval, as calibrated so far.</summary>
         public double IntervalSeconds { get; private set; } = SlowestDisplayInterval;
 
-        /// <summary>Seconds of play the window covers: up to <see cref="WindowSeconds"/>.</summary>
+        /// <summary>Seconds of play the window covers: <see cref="WindowSeconds"/> once a minute has been played.</summary>
         public double CoveredSeconds { get; private set; }
 
         /// <param name="now">When the frame ended, in seconds on any steady clock.</param>
@@ -43,7 +46,8 @@ namespace Eleven.Host
         public void Record(double now, double seconds)
         {
             _frames.Enqueue((now, seconds));
-            while (_frames.Count > 0 && _frames.Peek().At <= now - WindowSeconds) _frames.Dequeue();
+            _covered += seconds;
+            while (_frames.Count > 1 && _covered - _frames.Peek().Seconds >= WindowSeconds) _covered -= _frames.Dequeue().Seconds;
             if (now - _reportedAt >= ReportEverySeconds) Report(now);
         }
 
@@ -53,6 +57,7 @@ namespace Eleven.Host
             _frames.Clear();
             Frames = Dropped = 0;
             CoveredSeconds = 0;
+            _covered = 0;
             _reportedAt = double.NegativeInfinity;
         }
 
@@ -81,6 +86,7 @@ namespace Eleven.Host
 
             Frames = count;
             Dropped = dropped;
+            _covered = covered; // the running sum, kept from drifting
             CoveredSeconds = Math.Min(WindowSeconds, covered);
         }
     }
