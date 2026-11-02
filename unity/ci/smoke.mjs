@@ -189,14 +189,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
 
-    // Placed HUD actions keep their labels inside, also with enlarged text (#48).
+    // Placed HUD actions hold their labels on one line, also with enlarged text (#48). The HUD may
+    // lay itself out again once it has measured its labels, so the latest report counts.
     if (!url.includes('noui') && !url.includes('ui=')) {
       await waitForLog(/ELEVEN ui fit name=Run_scenario /, 5_000);
+      await page.waitForTimeout(1_500);
       // Unity's console lines end in a newline: trim it, or the verdict at the end never matches.
       const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
       const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
-      const overflow = [...latest.values()].filter((l) => l.endsWith('overflow'));
-      check('placed actions fit their labels', latest.size >= 2 && overflow.length === 0,
+      const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
+      check('placed actions fit their labels', latest.size >= 2 && misfits.length === 0,
         latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
     }
 

@@ -316,20 +316,22 @@ namespace Eleven.Host
             }
         }
 
-        // Whether a placed action's label fits its body after layout: enlarged text must not overflow
-        // a button the HUD places (#48, Codex's accessibility finding).
+        // Whether a placed action holds its label after layout: enlarged text must not overflow a
+        // button the HUD places, nor break its label over lines (#48, Codex's accessibility finding).
         private void ReportFit(UiKit.Action action)
         {
             action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
             {
-                // The height the text needs at the width it has, not its laid-out height: layout
-                // squeezes a label to its parent, so an overflowing label never looks taller.
+                // What the text needs, not its laid-out size: layout squeezes a label to its parent,
+                // so an overflowing label never looks taller. Its width on one line, and its height
+                // at the width the body gives it.
                 Rect body = action.Body.contentRect;
                 Label label = action.Label;
-                Vector2 needed = label.MeasureTextSize(label.text, label.layout.width, VisualElement.MeasureMode.Exactly, 0, VisualElement.MeasureMode.Undefined);
-                bool fits = needed.y <= body.height + 0.5f && label.layout.width <= body.width + 0.5f;
+                Vector2 line = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+                Vector2 needed = label.MeasureTextSize(label.text, body.width, VisualElement.MeasureMode.Exactly, 0, VisualElement.MeasureMode.Undefined);
+                string verdict = needed.y > body.height + 0.5f ? "overflow" : line.x > body.width + 0.5f ? "wraps" : "ok";
                 Log(FormattableString.Invariant(
-                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} label={label.layout.width:F0}x{needed.y:F0} body={body.width:F0}x{body.height:F0} {(fits ? "ok" : "overflow")}"));
+                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} line={line.x:F0}x{line.y:F0} needs={needed.y:F0} body={body.width:F0}x{body.height:F0} {verdict}"));
             });
         }
 
