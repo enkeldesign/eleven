@@ -72,7 +72,7 @@ namespace Eleven.Presentation.Tests
         {
             Theme theme = ThemeNamed(themeName);
             var primitives = Primitives.All.Select(p => p.Colour).ToList();
-            Assert.Equal(19, Theme.Roles.Length);
+            Assert.Equal(20, Theme.Roles.Length);
             foreach (Role role in Theme.Roles)
             {
                 Rgba colour = theme[role];
@@ -138,8 +138,24 @@ namespace Eleven.Presentation.Tests
             double fill = Rgba.Contrast(theme[Role.SurfaceRaised], Domain.Pitch);
             double outline = Rgba.Contrast(theme[Role.Outline], Domain.Pitch);
             Assert.True(Math.Max(fill, outline) >= 3, $"{themeName}: fill {fill:F2}:1, outline {outline:F2}:1 against the pitch");
-            double ring = Rgba.Contrast(theme[Role.FocusRing], Domain.Pitch);
-            Assert.True(ring >= 3, $"{themeName}: focus ring {ring:F2}:1 against the pitch");
+        }
+
+        [Theory]
+        [MemberData(nameof(Themes))]
+        public void The_two_colour_focus_indicator_reads_on_every_background_and_against_itself(string themeName)
+        {
+            // WCAG technique C40: the ring and its gap differ by 3:1, and one of them reaches 3:1
+            // against whatever the control sits on, the pitch included.
+            Theme theme = ThemeNamed(themeName);
+            double pair = Rgba.Contrast(theme[Role.FocusRing], theme[Role.FocusGap]);
+            Assert.True(pair >= 3, $"{themeName}: focus ring on its gap is {pair:F2}:1");
+            IEnumerable<(string, Rgba)> backgrounds = Theme.Surfaces.Select(s => (s.ToString(), theme[s])).Append(("pitch", Domain.Pitch));
+            foreach ((string name, Rgba background) in backgrounds)
+            {
+                double ring = Rgba.Contrast(theme[Role.FocusRing], background);
+                double gap = Rgba.Contrast(theme[Role.FocusGap], background);
+                Assert.True(Math.Max(ring, gap) >= 3, $"{themeName}: focus indicator on {name}: ring {ring:F2}:1, gap {gap:F2}:1");
+            }
         }
 
         [Fact]
