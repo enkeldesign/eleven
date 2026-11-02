@@ -444,7 +444,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       return out;
     }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[2] ?? 1) });
-    check('the UI action shows its fill and its label', label.fill > label.total * 0.2 && label.text > label.total * 0.03,
+    // White labels cover more of the sample than ink ones did: a tenth of fill is plenty.
+    check('the UI action shows its fill and its label', label.fill > label.total * 0.1 && label.text > label.total * 0.03,
       `around Run scenario's centre: ${label.fill} slate fill, ${label.text} white text of ${label.total} pixels`);
 
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
@@ -563,8 +564,8 @@ try {
   await runPass(browser, idle('ui=imgui'), 'phone-imgui-recipe', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
-  // The HUD on a 320 pt phone with text at 150 %: placed actions must grow with their labels.
-  await runPass(browser, `${base}?trace=1&idle=1&textscale=1.5`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
+  // The HUD on a 320 pt phone with text at 200 % (WCAG 1.4.4): placed actions must grow with their labels.
+  await runPass(browser, `${base}?trace=1&idle=1&textscale=2`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
@@ -573,7 +574,7 @@ try {
   await runSpecimenPass(browser, `${base}?specimen=dark`, 'phone-dark', tall(phone, 2400));
   await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'tablet-ordinary', tall(tablet, 1800));
   await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', { ...tall(tablet, 1800), reducedMotion: 'reduce' });
-  await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=1.5`, 'narrow-large-text', { ...tall(phone, 3200), viewport: { width: 320, height: 3200 } });
+  await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=2`, 'narrow-large-text', { ...tall(phone, 3600), viewport: { width: 320, height: 3600 } });
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();
