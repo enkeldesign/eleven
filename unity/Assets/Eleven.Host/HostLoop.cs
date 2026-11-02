@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
@@ -39,6 +40,9 @@ namespace Eleven.Host
         private CommandRecording _recording;
         private PitchView _view;
         private TouchAdapter _input;
+        private UiRoot _ui;
+        private UiActions.Action _resetAction;
+        private UiActions.Action _runAction;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -73,6 +77,7 @@ namespace Eleven.Host
                 HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
+            BuildUi();
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
@@ -100,8 +105,6 @@ namespace Eleven.Host
             UpdateLayout(force: false);
             _input.Sample(_layout);
 
-            if (_input.ResetTapped) ResetMatch();
-            if (_input.RunTapped) RunScenario();
 
             // Before this frame's steps, so the window ends where the press was.
             string feltWrong = TakeFeltWrong();
@@ -237,6 +240,26 @@ namespace Eleven.Host
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
+        /// <summary>
+        /// The UI around the match (#48), in UI Toolkit from code. Presses on it reach the UI, not the
+        /// stick or the kick.
+        /// </summary>
+        private void BuildUi()
+        {
+            double started = Time.realtimeSinceStartupAsDouble;
+            _ui = new UiRoot(transform, Theme.Ordinary);
+            _ui.SetPixelsPerPoint(PixelsPerPoint());
+            _resetAction = UiActions.Make(_ui, ActionRole.Utility, "Reset", ResetMatch);
+            _runAction = UiActions.Make(_ui, ActionRole.Utility, "Run scenario", RunScenario);
+            _ui.Root.Add(_resetAction.Element);
+            _ui.Root.Add(_runAction.Element);
+            _input.OverUi = _ui.IsOverUi;
+            float textWidth = _ui.MeasureText("RUN SCENARIO", TypeScale.Label);
+            double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+            Log(FormattableString.Invariant(
+                $"ELEVEN ui ready font={(_ui.Font != null ? _ui.Font.name : "none")} textWidth={textWidth:F1} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1}"));
+        }
+
         private void UpdateLayout(bool force)
         {
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
@@ -245,6 +268,12 @@ namespace Eleven.Host
             _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
             Rect felt = _layout.FeltWrongButton;
             FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
+            if (_ui != null)
+            {
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                _ui.Place(_resetAction.Element, _layout.ResetButton);
+                _ui.Place(_runAction.Element, _layout.RunButton);
+            }
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
@@ -256,8 +285,6 @@ namespace Eleven.Host
             Panel(_layout.BuildLabel);
             GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
 
-            Button(_layout.ResetButton, "Reset");
-            Button(_layout.RunButton, "Run scenario");
 
             if (_resultLines.Count > 0) DrawResult();
 
@@ -319,15 +346,6 @@ namespace Eleven.Host
             _styledFor = screen;
         }
 
-        private void Button(Rect rect, string label)
-        {
-            Panel(rect);
-            GUI.color = HostPalette.ControlIdle;
-            GUI.DrawTexture(new Rect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(rect, label, _buttonStyle);
-        }
-
         private static void Panel(Rect rect)
         {
             GUI.color = HostPalette.HudPanel;
@@ -368,8 +386,14 @@ namespace Eleven.Host
         [DllImport("__Internal")]
         private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
+        [DllImport("__Internal")]
+        private static extern float ElevenPixelsPerPoint();
+
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
+
+        // Canvas pixels per CSS pixel, so a UI point is a CSS pixel.
+        private static float PixelsPerPoint() => ElevenPixelsPerPoint();
 
         // The player captures every key on the page by default, so page controls could never be
         // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
@@ -387,6 +411,8 @@ namespace Eleven.Host
         private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
+
+        private static float PixelsPerPoint() => Screen.dpi > 0 ? Screen.dpi / 96f : 1f;
 
         private static void AllowPageKeyboard() { }
 

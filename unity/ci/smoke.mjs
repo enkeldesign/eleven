@@ -208,10 +208,18 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(150);
     };
 
+    // The UI around the match is UI Toolkit, built from code (#48): its text must render.
+    const ui = lastLog(/ELEVEN ui ready font=(\S+) textWidth=([\d.]+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
+    check('the UI Toolkit panel draws text', !!ui && Number(ui[2]) > 0,
+      ui ? `font ${ui[1]}, "RUN SCENARIO" ${ui[2]} pt wide, ${ui[3]} px per pt, built in ${ui[4]} ms` : 'no "ELEVEN ui ready" line');
+    if (ui) notes.ui = `${ui[1]}, ${ui[4]} ms`;
+
     const fromRun = logs.length;
     await tap(at(n[2], n[3]));
     const ran = await waitForLog(/ELEVEN scenario name=\S+ digest=([0-9a-f]{16})/, 20_000, fromRun);
     check('Run scenario button', !!ran, ran ? `digest ${ran.match[1]}` : 'no scenario line after tap');
+    const runPress = logs.slice(fromRun).find((l) => l.startsWith('ELEVEN press'));
+    check('a press on the UI belongs to the UI, not to play', !!runPress && /target=ui/.test(runPress), runPress ?? 'no press logged');
     const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
     check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
@@ -332,6 +340,30 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }, { data: png.toString('base64'), colours });
     check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
+    // The Run scenario action is UI Toolkit (#48): around its centre, its Paper fill and its Ink
+    // label must be on screen, so text really renders in the WebGL build, not only measures.
+    const label = await page.evaluate(async ({ data, cx, cy, ui }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const c = document.createElement('canvas');
+      c.width = image.width;
+      c.height = image.height;
+      const g = c.getContext('2d');
+      g.drawImage(image, 0, 0);
+      const half = { x: Math.round(24 * ui), y: Math.round(5 * ui) };
+      const px = g.getImageData(cx - half.x, cy - half.y, half.x * 2, half.y * 2).data;
+      const near = (i, [r, gg, b]) => Math.abs(px[i] - r) + Math.abs(px[i + 1] - gg) + Math.abs(px[i + 2] - b) < 40;
+      const out = { paper: 0, ink: 0, total: px.length / 4 };
+      for (let i = 0; i < px.length; i += 4) {
+        if (near(i, [0xfc, 0xfd, 0xf8])) out.paper++;
+        if (near(i, [0x11, 0x15, 0x1c])) out.ink++;
+      }
+      return out;
+    }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[3] ?? 1) });
+    check('the UI action shows its fill and its label', label.paper > label.total * 0.2 && label.ink > label.total * 0.03,
+      `around Run scenario's centre: ${label.paper} paper, ${label.ink} ink of ${label.total} pixels`);
+
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
 
@@ -433,7 +465,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

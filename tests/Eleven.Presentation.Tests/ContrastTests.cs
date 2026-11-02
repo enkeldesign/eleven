@@ -201,8 +201,8 @@ namespace Eleven.Presentation.Tests
         [Fact]
         public void Spacing_is_the_family_rhythm()
         {
-            Assert.Equal(new[] { 3, 6, 9, 12, 18, 24, 36 }, Space.Steps);
-            Assert.Equal(new[] { Space.Xxs, Space.Xs, Space.S, Space.M, Space.L, Space.Xl, Space.Xxl }, Space.Steps);
+            Assert.Equal(new[] { 3, 6, 9, 12, 18, 24, 36 }, Spacing.Steps);
+            Assert.Equal(new[] { Spacing.Xxs, Spacing.Xs, Spacing.S, Spacing.M, Spacing.L, Spacing.Xl, Spacing.Xxl }, Spacing.Steps);
         }
 
         [Fact]
@@ -234,11 +234,11 @@ namespace Eleven.Presentation.Tests
         [Fact]
         public void Motion_has_two_durations_and_reduced_motion_removes_movement()
         {
-            Assert.Equal(120, Motion.FastMilliseconds);
-            Assert.Equal(180, Motion.BaseMilliseconds);
-            Assert.Equal(0, Motion.Duration(Motion.BaseMilliseconds, reducedMotion: true));
-            Assert.Equal(180, Motion.Duration(Motion.BaseMilliseconds, reducedMotion: false));
-            Assert.NotEqual(default, Motion.Easing);
+            Assert.Equal(120, MotionScale.FastMilliseconds);
+            Assert.Equal(180, MotionScale.BaseMilliseconds);
+            Assert.Equal(0, MotionScale.Duration(MotionScale.BaseMilliseconds, reducedMotion: true));
+            Assert.Equal(180, MotionScale.Duration(MotionScale.BaseMilliseconds, reducedMotion: false));
+            Assert.NotEqual(default, MotionScale.Easing);
         }
 
         [Fact]

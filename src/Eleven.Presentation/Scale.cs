@@ -3,7 +3,7 @@ namespace Eleven.Presentation
     // All lengths are points: CSS pixels on the web, and the UI's reference unit in Unity.
 
     /// <summary>The spacing rhythm (#48), named by step.</summary>
-    public static class Space
+    public static class Spacing
     {
         public const int Xxs = 3;
         public const int Xs = 6;
@@ -88,7 +88,7 @@ namespace Eleven.Presentation
     }
 
     /// <summary>UI motion (#48). Gameplay timing is not a UI token.</summary>
-    public static class Motion
+    public static class MotionScale
     {
         public const int FastMilliseconds = 120;
         public const int BaseMilliseconds = 180;

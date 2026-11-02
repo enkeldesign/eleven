@@ -6,6 +6,12 @@ mergeInto(LibraryManager.library, {
     return performance.now();
   },
 
+  // Canvas pixels per CSS pixel (#48), so the UI's points are CSS pixels.
+  ElevenPixelsPerPoint: function () {
+    var r = Module.canvas ? Module.canvas.getBoundingClientRect() : null;
+    return r && r.width > 0 ? Module.canvas.width / r.width : (window.devicePixelRatio || 1);
+  },
+
   // THIS FELT WRONG (#44): a real page button over the canvas, so assistive technology, the keyboard
   // and touch all reach it, with a status line announced politely and a SAVE CAPTURE button that
   // shares or downloads the last capture. A press asks for an optional note with the browser's own
