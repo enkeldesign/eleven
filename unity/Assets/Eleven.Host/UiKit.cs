@@ -45,6 +45,7 @@ namespace Eleven.Host
             public VisualElement Element;
             public VisualElement Shadow;
             public VisualElement Body;
+            public VisualElement InnerEdge;
             public VisualElement Focus;
             public Shape Shape;
         }
@@ -77,6 +78,17 @@ namespace Eleven.Host
             BorderColour(r.Body, theme[Role.Outline]);
             Border(r.Body, shape.Border);
             r.Element.Add(r.Body);
+
+            // Controls carry an inner edge: its own layer inside the body, so pressing, focus and
+            // elevation leave it alone.
+            if (focusable)
+            {
+                r.InnerEdge = Stack(0, Math.Max(0, shape.Radius - shape.Border));
+                r.InnerEdge.style.borderTopWidth = Interaction.InnerEdge;
+                r.InnerEdge.style.borderTopColor = theme[Role.InnerEdge].ToColor();
+                r.Body.Add(r.InnerEdge);
+            }
+
             return r;
         }
 

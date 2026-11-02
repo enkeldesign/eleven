@@ -87,6 +87,8 @@ namespace Eleven.Host
                 UiRoot.TextScale = Mathf.Clamp(textScale, 0.5f, 3f);
             }
 
+            UiRoot.ReducedMotion = PrefersReducedMotion();
+
             if (!url.Contains("noui")) BuildUi();
 
             // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
@@ -430,6 +432,11 @@ namespace Eleven.Host
         [DllImport("__Internal")]
         private static extern float ElevenCanvasCssWidth();
 
+        [DllImport("__Internal")]
+        private static extern int ElevenPrefersReducedMotion();
+
+        private static bool PrefersReducedMotion() => ElevenPrefersReducedMotion() != 0;
+
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
 
@@ -459,6 +466,8 @@ namespace Eleven.Host
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
         private static float PixelsPerPoint() => Screen.dpi > 0 ? Screen.dpi / 96f : 1f;
+
+        private static bool PrefersReducedMotion() => false;
 
         private static void AllowPageKeyboard() { }
 

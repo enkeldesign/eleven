@@ -6,6 +6,11 @@ mergeInto(LibraryManager.library, {
     return performance.now();
   },
 
+  // The player's reduced-motion preference (#48), 1 or 0.
+  ElevenPrefersReducedMotion: function () {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0;
+  },
+
   // The canvas's width in CSS pixels (#48), so the host can make a UI point a CSS pixel.
   ElevenCanvasCssWidth: function () {
     return Module.canvas ? Module.canvas.getBoundingClientRect().width : 0;

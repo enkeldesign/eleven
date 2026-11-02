@@ -39,6 +39,9 @@ namespace Eleven.Presentation
         /// <summary>The hard offset shadow under raised components.</summary>
         Shadow,
 
+        /// <summary>A control's inner edge: a light band along the inside of its top border.</summary>
+        InnerEdge,
+
         /// <summary>
         /// The keyboard focus ring: the outer part of a two-colour indicator (WCAG technique C40). It
         /// is drawn on <see cref="FocusGap"/>, so the pair reads at 3:1 on any background, the pitch
@@ -92,6 +95,7 @@ namespace Eleven.Presentation
             [Role.OnAction] = Primitives.Ink900,
             [Role.Outline] = Primitives.Ink900,
             [Role.Shadow] = Primitives.Ink900,
+            [Role.InnerEdge] = Primitives.Paper0.WithAlpha(0.55),
             [Role.FocusRing] = Primitives.Ink900,
             [Role.FocusGap] = Primitives.Paper0,
             [Role.Scrim] = Primitives.Ink900.WithAlpha(0.5),
@@ -117,6 +121,7 @@ namespace Eleven.Presentation
             [Role.OnAction] = Primitives.Ink900,
             [Role.Outline] = Primitives.Chalk50,
             [Role.Shadow] = Primitives.Ink900,
+            [Role.InnerEdge] = Primitives.Paper0.WithAlpha(0.3),
             [Role.FocusRing] = Primitives.Chalk50,
             [Role.FocusGap] = Primitives.Night900,
             [Role.Scrim] = Primitives.Ink900.WithAlpha(0.7),

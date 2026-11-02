@@ -72,7 +72,7 @@ namespace Eleven.Presentation.Tests
         {
             Theme theme = ThemeNamed(themeName);
             var primitives = Primitives.All.Select(p => p.Colour).ToList();
-            Assert.Equal(20, Theme.Roles.Length);
+            Assert.Equal(21, Theme.Roles.Length);
             foreach (Role role in Theme.Roles)
             {
                 Rgba colour = theme[role];
@@ -256,6 +256,7 @@ namespace Eleven.Presentation.Tests
             Assert.Equal(44, Interaction.MinTarget);
             Assert.InRange(Interaction.FocusGap, 2, 4);
             Assert.InRange(Interaction.FocusRing, 2, 4);
+            Assert.InRange(Interaction.InnerEdge, 1, Shapes.Control.Border);
         }
     }
 }

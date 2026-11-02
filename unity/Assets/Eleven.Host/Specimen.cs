@@ -185,7 +185,7 @@ namespace Eleven.Host
                 if (overflow == "none" && r.width > 0 && r.xMax > _page.worldBound.xMax + 0.5f) overflow = string.IsNullOrEmpty(v.name) ? v.GetType().Name : v.name;
             });
             Log(FormattableString.Invariant(
-                $"ELEVEN specimen targets={targets} smallest={(targets > 0 ? smallest : 0):F1} smallestName={smallestName.Replace(' ', '_')} pageWidth={pageWidth:F0} overflow={overflow.Replace(' ', '_')}"));
+                $"ELEVEN specimen targets={targets} smallest={(targets > 0 ? smallest : 0):F1} smallestName={smallestName.Replace(' ', '_')} pageWidth={pageWidth:F0} overflow={overflow.Replace(' ', '_')} reducedMotion={(UiRoot.ReducedMotion ? "yes" : "no")}"));
         }
 
         private static VisualElement Card(Theme theme, string title, Action<VisualElement> fill)

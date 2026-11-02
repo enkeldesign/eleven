@@ -123,5 +123,8 @@ namespace Eleven.Presentation
 
         /// <summary>The focus ring's width.</summary>
         public const int FocusRing = 3;
+
+        /// <summary>The inner edge's width, inside a control's top border.</summary>
+        public const int InnerEdge = 2;
     }
 }

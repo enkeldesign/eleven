@@ -23,7 +23,7 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
 | Type (`TypeScale`) | micro 11, small 13, body 15, title 19, heading 26, display 36; labels bold uppercase, data tabular |
 | Motion (`MotionScale`) | 120 and 180 ms, easing (0.2, 0, 0, 1); reduced motion removes movement and keeps a static cue |
 | Layers (`Layer`) | match, HUD, controls, overlay, sheet, dialog, status |
-| Interaction | 44 pt minimum target, a 2 pt focus gap, a 3 pt focus ring |
+| Interaction | 44 pt minimum target, a 2 pt focus gap, a 3 pt focus ring, a 2 pt inner edge |
 
 A point is a CSS pixel on the web: the host sets the UI's pixels per point from the canvas.
 
@@ -38,10 +38,11 @@ A point is a CSS pixel on the web: the host sets the UI's pixels per point from 
 | `MakeData` | A stable label and a tabular value in a fixed slot, so the layout doesn't jitter. |
 | `MakeStatus` | The status line. |
 
-**Layers compose instead of erasing one another.** A raised component is three elements:
+**Layers compose instead of erasing one another.** A raised component is up to four elements:
 1. the hard shadow (its elevation);
 2. the body (fill, outline and content);
-3. the two-colour focus indicator.
+3. on controls, the inner edge: a light band inside the top border, from the `InnerEdge` role;
+4. the two-colour focus indicator.
 
 How states use them:
 - **Pressed** moves the body into the shadow.
@@ -62,7 +63,7 @@ Screen-reader support is out of scope (Erik, ADR-0003). Everything else stands:
 - 44 pt targets;
 - state that isn't colour alone;
 - a visible keyboard focus;
-- reduced motion;
+- reduced motion: the device's `prefers-reduced-motion` setting, so pressed controls lose their shadow instead of moving into it;
 - reflow under enlarged text (`?textscale=` until settings exist).
 
 ## Checks

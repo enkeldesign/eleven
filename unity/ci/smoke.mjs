@@ -131,12 +131,14 @@ async function runSpecimenPass(browser, url, name, contextOptions) {
   page.on('pageerror', (e) => logs.push(`pageerror ${e.message}`));
   try {
     await page.goto(url);
-    const report = await waitFor(logs, /ELEVEN specimen targets=(\d+) smallest=([\d.]+) smallestName=(\S+) pageWidth=(\d+) overflow=(\S+)/, 240_000);
+    const report = await waitFor(logs, /ELEVEN specimen targets=(\d+) smallest=([\d.]+) smallestName=(\S+) pageWidth=(\d+) overflow=(\S+) reducedMotion=(\w+)/, 240_000);
     check('specimen lays out', !!report, report ? report.match[0].replace('ELEVEN specimen ', '') : 'no specimen report');
     if (report) {
       const m = report.match;
       check('every interactive target is at least 44 x 44 pt', Number(m[1]) > 0 && Number(m[2]) >= 43.9, `${m[1]} targets, smallest ${m[2]} pt (${m[3]})`);
       check('nothing is wider than the page', m[5] === 'none', `page ${m[4]} pt wide, overflow: ${m[5]}`);
+      const wantsReduced = contextOptions.reducedMotion === 'reduce';
+      check('follows the reduced-motion preference', m[6] === (wantsReduced ? 'yes' : 'no'), `preference ${wantsReduced ? 'reduce' : 'none'}, UI reducedMotion=${m[6]}`);
     }
     await sleep(500);
     // The viewport, not the canvas element: no wait for the element to hold still.
@@ -547,7 +549,7 @@ try {
   await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'phone-ordinary', tall(phone, 2400));
   await runSpecimenPass(browser, `${base}?specimen=dark`, 'phone-dark', tall(phone, 2400));
   await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'tablet-ordinary', tall(tablet, 1800));
-  await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', tall(tablet, 1800));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', { ...tall(tablet, 1800), reducedMotion: 'reduce' });
   await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=1.5`, 'narrow-large-text', { ...tall(phone, 3200), viewport: { width: 320, height: 3200 } });
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
