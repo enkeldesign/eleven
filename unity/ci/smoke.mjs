@@ -15,11 +15,13 @@
 //     player and ball inside the area the HUD leaves free
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
-//   - THIS FELT WRONG (#44): a labelled page button of at least 44 x 44 px; a press asks for a note,
-//     captures the last 10 s without stopping play, keeps it in localStorage and offers SAVE CAPTURE.
-//     The capture as kept in localStorage is written to <output dir>/capture-<pass>.elfc, and on
-//     desktop SAVE CAPTURE's download to capture-<pass>-saved.elfc (byte-identical), for CI to replay
-//     with .NET
+//   - THIS FELT WRONG (#44, #53): a Unity action of at least 44 x 44 pt, placed from the HUD's
+//     layout. A press takes the capture of the last 10 s there and then, and opens a Unity sheet for
+//     an optional note, while play waits; the capture is kept in localStorage, announced, and SAVE
+//     CAPTURE (a Unity action too) offers it. Desktop types the note and saves; the keyboard reaches
+//     THIS FELT WRONG with a visible focus ring. The capture as kept in localStorage is written to
+//     <output dir>/capture-<pass>.elfc, and on desktop SAVE CAPTURE's download to
+//     capture-<pass>-saved.elfc (byte-identical), for CI to replay with .NET
 //   - rendering: the screenshot contains the pitch, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
@@ -47,6 +49,9 @@ const colours = {
 };
 
 const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\d+),(\d+) kick=(\d+),(\d+) stick=(\d+),(\d+) stickRadius=(\d+)/;
+// Where the capture actions are (#53), from the same layout line: x, y, width and height in pixels.
+const capturePattern = /feltWrong=(-?\d+),(-?\d+),(\d+),(\d+) save=(-?\d+),(-?\d+),(\d+),(\d+)/;
+const keptPattern = /ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+) note=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
 
 const results = { checks: [], notes: {} };
@@ -198,7 +203,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
       const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
       const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
-      check('placed actions fit their labels', latest.size >= 2 && misfits.length === 0,
+      check('placed actions fit their labels', latest.size >= 4 && misfits.length === 0,
         latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
     }
 
@@ -338,16 +343,40 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const replay = await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromKick);
     check('recording replays to the live state', !!replay && replay.match[4] === 'match', replay ? replay.match[0].replace('ELEVEN ', '') : 'no recording check');
 
-    // THIS FELT WRONG (#44): a real page button, found by its accessible name, big enough to hit.
-    const felt = page.getByRole('button', { name: /felt wrong/i });
-    const feltBox = await felt.boundingBox().catch(() => null);
-    check('felt-wrong is a labelled button of at least 44 x 44 px', !!feltBox && feltBox.width >= 44 && feltBox.height >= 44,
-      feltBox ? `${feltBox.width.toFixed(0)} x ${feltBox.height.toFixed(0)} px at ${feltBox.x.toFixed(0)},${feltBox.y.toFixed(0)}` : 'no button named "felt wrong"');
+    // THIS FELT WRONG (#44) as a Unity action (#53): placed from the HUD's layout, at least 44 x 44
+    // pt, holding its label. No page controls are left over the canvas.
+    const pageControls = await page.evaluate(() => document.querySelectorAll('body > button, [role=status]').length);
+    check('no page controls over the canvas', pageControls === 0, `${pageControls} page button(s) or status element(s)`);
+    const placed = capturePattern.exec(lastLog(layoutPattern)?.input ?? '');
+    const centre = (x, y, w, h) => at(Number(x) + Number(w) / 2, Number(y) + Number(h) / 2);
+    const feltFit = lastLog(/ELEVEN ui fit name=Felt_wrong .* size=([\d.]+)x([\d.]+) (\w+)/);
+    check('felt-wrong is a Unity action of at least 44 x 44 pt that holds its label',
+      !!placed && !!feltFit && Number(feltFit[1]) >= 44 && Number(feltFit[2]) >= 44 && feltFit[3] === 'ok',
+      `${placed ? `placed at ${placed.slice(1, 5).join(',')} px` : 'not in the layout line'}; ${feltFit ? feltFit.input.trim().replace('ELEVEN ui fit ', '') : 'no fit report'}`);
+
+    // A press takes the capture there and then: the window ends where the player pressed. The note
+    // sheet opens over the match, and play waits until it closes.
     const fromCapture = logs.length;
-    page.once('dialog', (d) => d.accept(`smoke ${name}`));
-    if (useTouch) await felt.tap();
-    else await felt.click();
-    const captured = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+)/, 10_000, fromCapture);
+    if (placed) await tap(centre(...placed.slice(1, 5)));
+    const pressed = await waitForLog(/ELEVEN capture pressed tick=(\d+)/, 10_000, fromCapture);
+    const sheet = await waitForLog(/ELEVEN ui sheet open keep=(\d+),(\d+) skip=(\d+),(\d+)/, 5_000, fromCapture);
+    check('a press opens the note sheet', !!pressed && !!sheet, sheet ? sheet.match[0].replace('ELEVEN ', '') : pressed ? 'no sheet' : 'no press');
+    await sleep(1_500);
+    const during = logs.slice(fromCapture).map((l) => tracePattern.exec(l)).filter(Boolean).map((m) => Number(m[1]));
+    check('play waits while the note sheet is open', !!pressed && during.every((t) => t <= Number(pressed.match[1])),
+      pressed ? `pressed at tick ${pressed.match[1]}; trace ticks since: ${during.join(', ') || 'none'}` : 'no press');
+
+    // Desktop types the note and keeps it with Enter; the phone keeps the capture without one.
+    const note = `smoke ${name}`;
+    if (name === 'desktop') {
+      await page.keyboard.type(note);
+      await page.keyboard.press('Enter');
+    } else if (sheet) {
+      await tap(at(Number(sheet.match[3]), Number(sheet.match[4])));
+    }
+    const captured = await waitForLog(keptPattern, 10_000, fromCapture);
+    check('the capture ends where the player pressed', !!captured && !!pressed && captured.match[2] === pressed.match[1],
+      captured ? `ticks ${captured.match[1]}..${captured.match[2]}, pressed at ${pressed?.match[1]}` : 'no capture line');
     // The capture as a player keeps it (#50): its bytes in localStorage, which SAVE CAPTURE exports.
     const keptCapture = captured ? await keptBytes(captured.match[5]) : null;
     check('felt-wrong captures the last seconds and keeps them whole',
@@ -357,21 +386,28 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), keptCapture);
       notes.capture = `${captured.match[3]} steps, ${keptCapture.length} bytes`;
     }
+    if (name === 'desktop') {
+      check('the note typed in the sheet is in the capture', !!keptCapture && keptCapture.includes(Buffer.from(note, 'utf8')),
+        captured ? `note of ${captured.match[6]} characters; "${note}" ${keptCapture?.includes(Buffer.from(note, 'utf8')) ? 'found' : 'NOT found'} in the kept bytes` : 'no capture');
+    }
 
-    // Capturing doesn't stop play: the simulation runs on past the capture.
+    // Capturing doesn't stop play once the sheet closes: the simulation runs on past the capture.
     const afterCapture = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     check('play goes on after a capture', !!captured && !!afterCapture && Number(afterCapture[1]) > Number(captured.match[2]),
       afterCapture ? `trace tick ${afterCapture[1]} after capture end ${captured?.match[2]}` : 'no trace line after the capture');
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').length).catch(() => 0);
     check('the capture is kept on the device', kept >= 1, `${kept} capture(s) in localStorage`);
-    const announced = await page.locator('#eleven-capture-status').textContent().catch(() => '');
-    check('the capture is announced', /Captured/.test(announced ?? ''), announced || 'empty status');
-    const save = page.getByRole('button', { name: /save capture/i });
+    const announced = await waitForLog(/ELEVEN ui status (.*)/, 3_000, fromCapture);
+    check('the capture is announced', !!announced && /Captured/.test(announced.match[1]), announced ? announced.match[1] : 'no status line');
+    const offered = await waitForLog(/ELEVEN ui save visible=yes/, 3_000);
     if (name === 'desktop') {
-      const [download] = await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)]);
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 5_000 }).catch(() => null),
+        placed ? tap(centre(...placed.slice(5, 9))) : Promise.resolve(),
+      ]);
       // The file a player would attach: saved for CI to replay, and identical to the kept capture.
       let same = false;
-      let detail = 'no download';
+      let detail = offered ? 'no download' : 'SAVE CAPTURE not shown';
       if (download) {
         const file = path.join(outDir, `capture-${name}-saved.elfc`);
         await download.saveAs(file);
@@ -381,26 +417,29 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       check('SAVE CAPTURE downloads the kept capture, byte for byte', !!download && /\.elfc$/.test(download.suggestedFilename()) && same, detail);
     } else {
-      check('SAVE CAPTURE is offered', await save.isVisible().catch(() => false), 'button visible');
+      check('SAVE CAPTURE is offered', !!offered, offered ? 'shown' : 'not shown');
     }
 
-    // The keyboard reaches the page controls (Accessibility lens, question 4): Tab moves focus to
-    // THIS FELT WRONG and Enter presses it. Unity's WebGL player captures every key by default.
+    // The keyboard reaches the Unity controls (#53): the player captures keys again, Tab moves focus
+    // to THIS FELT WRONG with the two-colour focus ring, Enter presses it, and Escape keeps the
+    // capture without a note.
     if (name === 'desktop') {
-      let focused = '';
-      for (let i = 0; i < 8 && focused !== 'eleven-felt-wrong'; i++) {
+      let focus = null;
+      for (let i = 0; i < 10 && !focus; i++) {
+        const fromTab = logs.length;
         await page.keyboard.press('Tab');
-        focused = await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName || '');
+        const moved = await waitForLog(/ELEVEN ui focus name=(\S+) ring=(\w+)/, 1_000, fromTab);
+        if (moved && moved.match[1] === 'Felt_wrong') focus = moved.match;
       }
-      const ring = focused === 'eleven-felt-wrong'
-        && await page.evaluate(() => document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none');
-      check('Tab reaches felt-wrong, with a visible focus ring', focused === 'eleven-felt-wrong' && ring,
-        `focus on ${focused || 'nothing'}${focused === 'eleven-felt-wrong' ? `, ring ${ring ? 'shown' : 'not shown'}` : ''}`);
+      check('Tab reaches felt-wrong, with a visible focus ring', !!focus && focus[2] === 'shown',
+        focus ? focus[0].replace('ELEVEN ui ', '') : `focus never reached Felt_wrong: ${logs.filter((l) => l.startsWith('ELEVEN ui focus')).slice(-4).join(' | ') || 'no focus lines'}`);
       const fromKey = logs.length;
-      page.once('dialog', (d) => d.accept(''));
-      if (focused === 'eleven-felt-wrong') await page.keyboard.press('Enter');
-      const keyed = await waitForLog(/ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+)/, 5_000, fromKey);
-      check('Enter on felt-wrong captures', !!keyed, keyed ? keyed.match[0].replace('ELEVEN ', '') : 'no capture line after Enter');
+      if (focus) await page.keyboard.press('Enter');
+      const keyedSheet = await waitForLog(/ELEVEN ui sheet open/, 5_000, fromKey);
+      if (keyedSheet) await page.keyboard.press('Escape');
+      const keyed = await waitForLog(keptPattern, 5_000, fromKey);
+      check('Enter on felt-wrong captures, and Escape keeps it without a note', !!keyedSheet && !!keyed && keyed.match[6] === '0',
+        keyed ? keyed.match[0].replace('ELEVEN ', '') : keyedSheet ? 'sheet opened, no capture after Escape' : 'no sheet after Enter');
     }
 
     // Rendering: count pixels close to each palette colour in a canvas screenshot.
@@ -554,17 +593,14 @@ try {
   // neither side gets the cold or the warm browser.
   const desktop = { viewport: { width: 1280, height: 800 } };
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
-  // Idle-only passes for the A/B: no UI, an empty UI Toolkit panel, and the same action recipe drawn
-  // with IMGUI.
+  // Idle-only passes for the frame cost: no UI, and an empty UI Toolkit panel.
   const idle = (mode) => `${base}?trace=1&idle=1&${mode}`;
   await runPass(browser, idle('noui=1'), 'desktop-noui-before', desktop, false);
   await runPass(browser, idle('ui=empty'), 'desktop-panel-empty', desktop, false);
-  await runPass(browser, idle('ui=imgui'), 'desktop-imgui-recipe', desktop, false);
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
   await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
   await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
   await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
-  await runPass(browser, idle('ui=imgui'), 'phone-imgui-recipe', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
   // The HUD on a 320 pt phone with text at 200 % (WCAG 1.4.4): placed actions must grow with their labels.
