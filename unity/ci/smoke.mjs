@@ -511,9 +511,13 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.reload();
       const again = await waitForLog(/ELEVEN host ready build=(\S+)/, 240_000, fromReload);
       check('reload boots', !!again, again ? 'host ready after reload' : 'no "ELEVEN host ready" after reload');
-      const offered = await save.isVisible().catch(() => false);
-      const [download] = offered
-        ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), save.click().catch(() => null)])
+      // SAVE CAPTURE is a Unity action (#53): offered once the host finds the kept capture, and
+      // pressed where the new layout line puts it.
+      const offered = !!(await waitForLog(/ELEVEN ui save visible=yes/, 10_000, fromReload));
+      await sleep(1_500);
+      const placedAgain = capturePattern.exec(lastLog(layoutPattern)?.input ?? '');
+      const [download] = offered && placedAgain
+        ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), tap(centre(...placedAgain.slice(5, 9)))])
         : [null];
       check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
         !offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download');
