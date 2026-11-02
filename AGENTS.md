@@ -17,11 +17,13 @@ Football work (Slice 1) can start, issue by issue.
 | `docs/brief/` | The current project brief: vision, principles, reasoning |
 | `docs/adr/` | Decisions. When an accepted ADR and the brief disagree, the newer accepted ADR wins |
 | `docs/lenses/` | Review perspectives and when to apply them |
+| `docs/ui/` | The visual system: tokens, roles, scales, component recipes and the specimen (ADR-0003) |
+| `src/Eleven.Presentation/` | The engine-free visual system tokens: palette, semantic roles and mappings, domain colours, scales |
 | `src/Eleven.Simulation/` | The engine-free football simulation |
 | `src/Eleven.Simulation.Harness/`, `src/Eleven.Simulation.Cli/` | Scripted scenarios and the headless harness (hash logs, tick cost) |
 | `unity/` | The Unity 6 spike host and its build script; see `unity/README.md` |
 | `docs/simulation/` | The simulation's determinism contract: ticks, commands, encoding, hashes, maths |
-| `tests/` | .NET tests for the simulation |
+| `tests/` | .NET tests for the simulation and the visual system tokens |
 
 Current `main` is the source of truth. Issues, comments, mockups and earlier discussions explain intent and history but don't override the repository's current state.
 

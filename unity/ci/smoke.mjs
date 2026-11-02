@@ -110,6 +110,49 @@ function serve(root, deploy = { number: 1 }) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
+// Median frame rate over the trace lines among these logs.
+function medianFps(lines) {
+  const fps = lines.map((l) => /ELEVEN trace .* fps=([\d.]+)/.exec(l)?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+  return fps.length ? fps[Math.floor(fps.length / 2)].toFixed(1) : 'none';
+}
+
+// The visual system's specimen (#48): built from the production components, it must keep every
+// interactive target at 44 x 44 pt or more and nothing wider than the page, and it is screenshotted
+// whole (tall viewports, so no scrolling) for review.
+async function runSpecimenPass(browser, url, name, contextOptions) {
+  const logs = [];
+  const check = (what, ok, detail) => {
+    results.checks.push({ name: `${name}: ${what}`, ok, detail });
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${what}: ${detail}`);
+  };
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  page.on('console', (m) => logs.push(m.text()));
+  page.on('pageerror', (e) => logs.push(`pageerror ${e.message}`));
+  try {
+    await page.goto(url);
+    const report = await waitFor(logs, /ELEVEN specimen targets=(\d+) smallest=([\d.]+) smallestName=(\S+) pageWidth=(\d+) overflow=(\S+) reducedMotion=(\w+)/, 240_000);
+    check('specimen lays out', !!report, report ? report.match[0].replace('ELEVEN specimen ', '') : 'no specimen report');
+    if (report) {
+      const m = report.match;
+      check('every interactive target is at least 44 x 44 pt', Number(m[1]) > 0 && Number(m[2]) >= 43.9, `${m[1]} targets, smallest ${m[2]} pt (${m[3]})`);
+      check('nothing is wider than the page', m[5] === 'none', `page ${m[4]} pt wide, overflow: ${m[5]}`);
+      const wantsReduced = contextOptions.reducedMotion === 'reduce';
+      check('follows the reduced-motion preference', m[6] === (wantsReduced ? 'yes' : 'no'), `preference ${wantsReduced ? 'reduce' : 'none'}, UI reducedMotion=${m[6]}`);
+    }
+    await sleep(500);
+    // The viewport, not the canvas element: no wait for the element to hold still.
+    await page.screenshot({ path: path.join(outDir, `specimen-${name}.png`), timeout: 60_000 });
+    const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+    check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+  } catch (e) {
+    check('ran to completion', false, e.message);
+  } finally {
+    fs.writeFileSync(path.join(outDir, `specimen-${name}-console.log`), logs.join('\n'));
+    await context.close();
+  }
+}
+
 async function runPass(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
@@ -145,6 +188,29 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('boot', !!ready, ready ? `host ready in ${notes.bootSeconds.toFixed(1)} s, build ${ready.match[1]}` : 'no "ELEVEN host ready" within 240 s');
     if (!ready) throw new Error('player did not boot');
     notes.build = ready.match[1];
+
+    // Placed HUD actions hold their labels on one line, also with enlarged text (#48). The HUD may
+    // lay itself out again once it has measured its labels, so the latest report counts.
+    if (!url.includes('noui') && !url.includes('ui=')) {
+      await waitForLog(/ELEVEN ui fit name=Run_scenario /, 5_000);
+      await page.waitForTimeout(1_500);
+      // Unity's console lines end in a newline: trim it, or the verdict at the end never matches.
+      const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
+      const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
+      const misfits = [...latest.values()].filter((l) => !l.endsWith(' ok'));
+      check('placed actions fit their labels', latest.size >= 2 && misfits.length === 0,
+        latest.size ? [...latest.values()].map((l) => l.replace('ELEVEN ui fit ', '')).join(' | ') : 'no fit report');
+    }
+
+    // Idle frame rate over six seconds right after boot, before any input: with ?noui the same
+    // window measures the frame without the UI, so the UI's frame cost shows as the difference (#48).
+    const idleFrom = logs.length;
+    await sleep(6_000);
+    notes.idleFps = medianFps(logs.slice(idleFrom));
+    if (url.includes('idle=1')) {
+      notes.idleOnly = true;
+      return;
+    }
     // The page's own load time, which the build shows on screen for the device session (#5).
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
@@ -214,10 +280,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(150);
     };
 
+    // The UI around the match is UI Toolkit, built from code (#48): its text must render.
+    const ui = lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
+    const text = lastLog(/ELEVEN ui text "([^"]+)" width=([\d.]+) height=([\d.]+)/);
+    check('the UI Toolkit panel lays out text', !!ui && !!text && Number(text[2]) > 0,
+      ui ? `font ${ui[1]}, ${ui[2]} px per pt, built in ${ui[3]} ms; ${text ? `"${text[1]}" ${text[2]} x ${text[3]} pt` : 'no text layout line'}` : 'no "ELEVEN ui ready" line');
+    if (ui) notes.ui = `${ui[1]}, ${ui[2]} px/pt, ${ui[3]} ms`;
+
     const fromRun = logs.length;
     await tap(at(n[2], n[3]));
     const ran = await waitForLog(/ELEVEN scenario name=\S+ digest=([0-9a-f]{16})/, 20_000, fromRun);
     check('Run scenario button', !!ran, ran ? `digest ${ran.match[1]}` : 'no scenario line after tap');
+    const runPress = logs.slice(fromRun).find((l) => l.startsWith('ELEVEN press'));
+    check('a press on the UI belongs to the UI, not to play', !!runPress && /target=ui/.test(runPress), runPress ?? 'no press logged');
     const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
     check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
@@ -350,6 +425,32 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }, { data: png.toString('base64'), colours });
     check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
+    // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
+    // white label must be on screen, so text really renders in the WebGL build, not only measures.
+    // Buttons are dark with white text (Erik, 2026-11-02).
+    const label = await page.evaluate(async ({ data, cx, cy, ui }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const c = document.createElement('canvas');
+      c.width = image.width;
+      c.height = image.height;
+      const g = c.getContext('2d');
+      g.drawImage(image, 0, 0);
+      const half = { x: Math.round(24 * ui), y: Math.round(5 * ui) };
+      const px = g.getImageData(cx - half.x, cy - half.y, half.x * 2, half.y * 2).data;
+      const near = (i, [r, gg, b]) => Math.abs(px[i] - r) + Math.abs(px[i + 1] - gg) + Math.abs(px[i + 2] - b) < 40;
+      const out = { fill: 0, text: 0, total: px.length / 4 };
+      for (let i = 0; i < px.length; i += 4) {
+        if (near(i, [0x3a, 0x42, 0x50])) out.fill++;
+        if (near(i, [0xfc, 0xfd, 0xf8])) out.text++;
+      }
+      return out;
+    }, { data: png.toString('base64'), cx: n[2], cy: n[3], ui: Number(ui?.[2] ?? 1) });
+    // White labels cover more of the sample than ink ones did: a tenth of fill is plenty.
+    check('the UI action shows its fill and its label', label.fill > label.total * 0.1 && label.text > label.total * 0.03,
+      `around Run scenario's centre: ${label.fill} slate fill, ${label.text} white text of ${label.total} pixels`);
+
     const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
 
@@ -371,11 +472,22 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('ran to completion', false, e.message);
   } finally {
     fs.writeFileSync(path.join(outDir, `${name}-console.log`), logs.join('\n'));
+    notes.fps = medianFps(logs);
     if (results.checks.some((c) => c.name.startsWith(name) && !c.ok)) {
       // Context for diagnosis without the uploaded console log.
       const presses = logs.filter((l) => l.startsWith('ELEVEN press')).slice(-8);
       const traces = logs.filter((l) => l.startsWith('ELEVEN trace')).slice(-3);
       annotate('notice', `Smoke context (${name})`, `layouts: ${(notes.layouts || []).join(' / ')}\npresses: ${presses.join(' | ') || 'none'}\ntraces: ${traces.join(' | ')}`);
+      // The most repeated other console lines (a per-frame warning shows here), and every UI line.
+      const counts = new Map();
+      for (const l of logs) {
+        if (/^ELEVEN (trace|press|event)/.test(l)) continue;
+        const key = l.slice(0, 220);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([l, c]) => `${c}x ${l}`);
+      const uiLines = logs.filter((l) => /ELEVEN ui|UIElements|UI Toolkit|PanelSettings|Theme Style|TextSettings|font/i.test(l)).slice(0, 8).map((l) => l.slice(0, 300));
+      annotate('notice', `Smoke console (${name})`, `${logs.length} lines; most repeated:\n${repeated.join('\n')}\nUI lines:\n${uiLines.join('\n') || 'none'}`);
     }
     await context.close();
   }
@@ -438,9 +550,34 @@ const browser = await chromium.launch({
   args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist'],
 });
 try {
-  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', { viewport: { width: 1280, height: 800 } }, false);
+  // The UI's frame cost (#48): idle passes without the UI before and after each full pass, so
+  // neither side gets the cold or the warm browser.
+  const desktop = { viewport: { width: 1280, height: 800 } };
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
+  // Idle-only passes for the A/B: no UI, an empty UI Toolkit panel, and the same action recipe drawn
+  // with IMGUI.
+  const idle = (mode) => `${base}?trace=1&idle=1&${mode}`;
+  await runPass(browser, idle('noui=1'), 'desktop-noui-before', desktop, false);
+  await runPass(browser, idle('ui=empty'), 'desktop-panel-empty', desktop, false);
+  await runPass(browser, idle('ui=imgui'), 'desktop-imgui-recipe', desktop, false);
+  await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
+  await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
+  await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
+  await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
+  await runPass(browser, idle('ui=imgui'), 'phone-imgui-recipe', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
+  await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
+  // The HUD on a 320 pt phone with text at 200 % (WCAG 1.4.4): placed actions must grow with their labels.
+  await runPass(browser, `${base}?trace=1&idle=1&textscale=2`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
+
+  // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
+  const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
+  const { defaultBrowserType: _ipad, ...tablet } = devices['iPad (gen 7)'];
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'phone-ordinary', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'phone-dark', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'tablet-ordinary', tall(tablet, 1800));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', { ...tall(tablet, 1800), reducedMotion: 'reduce' });
+  await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=2`, 'narrow-large-text', { ...tall(phone, 3600), viewport: { width: 320, height: 3600 } });
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();
@@ -451,7 +588,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => n.idleOnly ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

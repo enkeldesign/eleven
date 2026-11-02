@@ -4,8 +4,9 @@ namespace Eleven.Host
 {
     /// <summary>
     /// Where the on-screen controls are, in screen pixels with the origin at the top left (the
-    /// IMGUI convention). Derived from the screen size, safe area and number of result lines only,
-    /// so the CI smoke test can be told the same positions through the log.
+    /// IMGUI convention). Derived from the screen size, safe area, number of result lines and what
+    /// the top row's labels need only, so the CI smoke test can be told the same positions through
+    /// the log.
     ///
     /// <see cref="PlayArea"/> is the part of the screen no HUD element covers; the camera frames the
     /// play inside it.
@@ -52,7 +53,7 @@ namespace Eleven.Host
         /// <summary>Lines the result panel was laid out for.</summary>
         public readonly int ResultLines;
 
-        private HudLayout(int width, int height, Rect safe, int resultLines)
+        private HudLayout(int width, int height, Rect safe, int resultLines, Vector2 resetNeeds, Vector2 runNeeds)
         {
             ScreenWidth = width;
             ScreenHeight = height;
@@ -63,15 +64,26 @@ namespace Eleven.Host
 
             BuildLabel = new Rect(safe.xMin + Padding, safe.yMin + Padding, safe.width - 2 * Padding, 0.7f * Unit);
             BuildFontSize = Mathf.Max(12, Mathf.Min(FontSize, FontToFit(BuildLabel.width - 16, BuildLineCharacters)));
-            RunButton = new Rect(safe.xMax - Padding - 4.5f * Unit, BuildLabel.yMax + Padding * 0.5f, 4.5f * Unit, 1.1f * Unit);
-            ResetButton = new Rect(RunButton.x - Padding - 2.6f * Unit, RunButton.y, 2.6f * Unit, RunButton.height);
+            // The top row's actions widen to hold their labels on one line, as far as the row allows,
+            // and take the height that gives: enlarged text (WCAG 1.4.4) or a longer label never
+            // overflows them (#48). Side by side where they fit, otherwise Reset goes below Run.
+            float row = safe.width - 2 * Padding;
+            float runWidth = Mathf.Min(row, Mathf.Max(4.5f * Unit, runNeeds.x));
+            float resetWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, resetNeeds.x));
+            float actionHeight = Mathf.Max(1.1f * Unit, Mathf.Max(runNeeds.y, resetNeeds.y));
+            RunButton = new Rect(safe.xMax - Padding - runWidth, BuildLabel.yMax + Padding * 0.5f, runWidth, actionHeight);
+            ResetButton = runWidth + Padding + resetWidth <= row
+                ? new Rect(RunButton.x - Padding - resetWidth, RunButton.y, resetWidth, actionHeight)
+                : new Rect(safe.xMax - Padding - resetWidth, RunButton.yMax + Padding * 0.5f, resetWidth, actionHeight);
+            float actionsLeft = Mathf.Min(RunButton.x, ResetButton.x);
+            float actionsBottom = Mathf.Max(RunButton.yMax, ResetButton.yMax);
             // Sized for the lines it shows, and empty until a scenario has run: beside the buttons
             // where it fits (landscape), with its text shrunk to no less than 60 % of the HUD font;
             // otherwise below them, across the screen.
             int lines = Mathf.Clamp(resultLines, 0, MaxResultLines);
             ResultLines = lines;
             int smallest = Mathf.Max(12, Mathf.CeilToInt(FontSize * 0.6f));
-            float besideButtons = ResetButton.x - safe.xMin - 2 * Padding;
+            float besideButtons = actionsLeft - safe.xMin - 2 * Padding;
             int fontBeside = FontToFit(besideButtons - 2 * Padding, ResultLineCharacters);
             int fontBelow = FontToFit(safe.width - 4 * Padding, ResultLineCharacters);
             bool beside = fontBeside >= smallest;
@@ -80,9 +92,9 @@ namespace Eleven.Host
             float resultHeight = lines == 0 ? 0 : lines * ResultLineHeight + Padding;
             Result = beside
                 ? new Rect(safe.xMin + Padding, RunButton.y, besideButtons, resultHeight)
-                : new Rect(safe.xMin + Padding, RunButton.yMax + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
+                : new Rect(safe.xMin + Padding, actionsBottom + Padding * 0.5f, safe.width - 2 * Padding, resultHeight);
 
-            float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, RunButton.yMax) + Padding * 0.5f;
+            float belowHud = Mathf.Max(lines == 0 ? 0 : Result.yMax, actionsBottom) + Padding * 0.5f;
             StickRadius = 1.4f * Unit;
             StickRest = new Vector2(safe.xMin + Padding + 2f * Unit, safe.yMax - Padding - 2f * Unit);
 
@@ -140,10 +152,12 @@ namespace Eleven.Host
 
         /// <param name="safeArea">Unity's <c>Screen.safeArea</c>, whose origin is the bottom left.</param>
         /// <param name="resultLines">Lines the result panel shows now.</param>
-        public static HudLayout For(int width, int height, Rect safeArea, int resultLines)
+        /// <param name="resetNeeds">What Reset needs for its label, in screen pixels: its width with the label on one line, and its height at the width it has. Zero until measured.</param>
+        /// <param name="runNeeds">The same for Run scenario.</param>
+        public static HudLayout For(int width, int height, Rect safeArea, int resultLines, Vector2 resetNeeds = default, Vector2 runNeeds = default)
         {
             var safe = new Rect(safeArea.x, height - safeArea.yMax, safeArea.width, safeArea.height);
-            return new HudLayout(width, height, safe, resultLines);
+            return new HudLayout(width, height, safe, resultLines, resetNeeds, runNeeds);
         }
 
         /// <summary>

@@ -1,0 +1,7 @@
+{
+  "name": "com.enkeldesign.eleven.presentation",
+  "version": "0.1.0",
+  "displayName": "ELEVEN Presentation",
+  "description": "ELEVEN's visual system tokens: palette, semantic roles and their mappings, domain colours, and the space, shape, type, motion and layer scales. Engine-free.",
+  "unity": "6000.3"
+}

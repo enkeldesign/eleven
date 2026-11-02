@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Eleven.Host
 {
@@ -39,6 +41,13 @@ namespace Eleven.Host
         private CommandRecording _recording;
         private PitchView _view;
         private TouchAdapter _input;
+        private UiRoot _ui;
+        private string _uiMode = "toolkit";
+        private Specimen _specimen;
+        private UiKit.Action _resetAction;
+        private UiKit.Action _runAction;
+        private Vector2 _resetNeeds;
+        private Vector2 _runNeeds;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -73,6 +82,23 @@ namespace Eleven.Host
                 HostPalette.Css(HostPalette.HudText), HostPalette.Css(HostPalette.FocusRing));
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
+            // ?noui: measurement only (#48), the frame without the UI.
+            // ?textscale=1.5: enlarged text, until settings exist to choose it (#48).
+            int textScaleAt = url.IndexOf("textscale=", StringComparison.Ordinal);
+            if (textScaleAt >= 0 && float.TryParse(url.Substring(textScaleAt + 10).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float textScale))
+            {
+                UiRoot.TextScale = Mathf.Clamp(textScale, 0.5f, 3f);
+            }
+
+            UiRoot.ReducedMotion = PrefersReducedMotion();
+
+            // Frame-cost A/B (#48): ?ui=empty builds the UI Toolkit panel with nothing in it; ?ui=imgui
+            // draws the same action recipe with IMGUI instead of UI Toolkit.
+            _uiMode = url.Contains("ui=empty") ? "empty" : url.Contains("ui=imgui") ? "imgui" : "toolkit";
+            if (!url.Contains("noui") && _uiMode != "imgui") BuildUi();
+
+            // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
+            if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
@@ -100,8 +126,6 @@ namespace Eleven.Host
             UpdateLayout(force: false);
             _input.Sample(_layout);
 
-            if (_input.ResetTapped) ResetMatch();
-            if (_input.RunTapped) RunScenario();
 
             // Before this frame's steps, so the window ends where the press was.
             string feltWrong = TakeFeltWrong();
@@ -128,6 +152,8 @@ namespace Eleven.Host
             }
 
             if (_accumulator >= tick) _accumulator = 0;
+
+            _specimen?.Tick(_simulator.Tick);
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
@@ -237,14 +263,113 @@ namespace Eleven.Host
             Log(FormattableString.Invariant($"ELEVEN scenario name={SpikeScenario.Name} digest={digest:x16} final={final:x16} hashes={run.TickHashes.Count} events={run.Events.Count} config={run.Config.Hash:x16} ms={milliseconds:F0}"));
         }
 
+        /// <summary>
+        /// The UI around the match (#48), in UI Toolkit from code. Presses on it reach the UI, not the
+        /// stick or the kick.
+        /// </summary>
+        private void BuildUi()
+        {
+            double started = Time.realtimeSinceStartupAsDouble;
+            string step = "panel";
+            try
+            {
+                // Reset and Run sit over the pitch: the pitch context gives them chalk borders.
+                _ui = new UiRoot(transform, Theme.Pitch);
+                step = "scale";
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                step = "actions";
+                if (_uiMode == "empty")
+                {
+                    Log("ELEVEN ui ready font=none pixelsPerPoint=0 ms=0 panel=empty");
+                    return;
+                }
+
+                _resetAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Reset", ResetMatch);
+                _runAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Run scenario", RunScenario);
+                _ui.Root.Add(_resetAction.Element);
+                _ui.Root.Add(_runAction.Element);
+                _input.OverUi = _ui.IsOverUi;
+                Fit(_resetAction, false);
+                Fit(_runAction, true);
+                if (_trace)
+                {
+                    // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
+                    _ui.Root.RegisterCallback<PointerDownEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer down at={e.position.x:F0},{e.position.y:F0} target={(e.target as VisualElement)?.name}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<PointerUpEvent>(e => Log(FormattableString.Invariant($"ELEVEN ui pointer up at={e.position.x:F0},{e.position.y:F0}")), TrickleDown.TrickleDown);
+                    _ui.Root.RegisterCallback<ClickEvent>(e => Log($"ELEVEN ui click target={(e.target as VisualElement)?.name}"), TrickleDown.TrickleDown);
+                }
+                // The label's laid-out size once it has one: zero means the font draws nothing.
+                Label label = _runAction.Label;
+                EventCallback<GeometryChangedEvent> measured = null;
+                measured = _ =>
+                {
+                    label.UnregisterCallback(measured);
+                    Log(FormattableString.Invariant($"ELEVEN ui text \"{label.text}\" width={label.layout.width:F1} height={label.layout.height:F1}"));
+                };
+                label.RegisterCallback(measured);
+                double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
+                string font = _ui.Font != null ? _ui.Font.name.Replace(' ', '_') : "none";
+                Log(FormattableString.Invariant(
+                    $"ELEVEN ui ready font={font} pixelsPerPoint={_ui.PixelsPerPoint:F2} ms={milliseconds:F1} panel={(_ui.Root.panel != null ? "yes" : "no")}"));
+            }
+            catch (Exception e)
+            {
+                Log($"ELEVEN ui failed at {step}: {e.GetType().Name}: {e.Message}");
+            }
+        }
+
+        // A placed action takes the size its label needs (#48, Codex's accessibility finding): after
+        // each layout it measures its label, and if it needs another size the HUD lays itself out
+        // again. What a label needs doesn't depend on where it is placed, so this settles within
+        // two passes. It also reports whether the label fits, for the CI smoke test.
+        private void Fit(UiKit.Action action, bool run)
+        {
+            action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                // What the text needs, not its laid-out size: layout squeezes a label to its parent,
+                // so an overflowing label never looks taller. Its width on one line, and its height
+                // at the width the body gives it.
+                Rect body = action.Body.contentRect;
+                Label label = action.Label;
+                Vector2 line = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+                Vector2 needed = label.MeasureTextSize(label.text, body.width, VisualElement.MeasureMode.Exactly, 0, VisualElement.MeasureMode.Undefined);
+                string verdict = needed.y > body.height + 0.5f ? "overflow" : line.x > body.width + 0.5f ? "wraps" : "ok";
+                Log(FormattableString.Invariant(
+                    $"ELEVEN ui fit name={action.Name.Replace(' ', '_')} line={line.x:F0}x{line.y:F0} needs={needed.y:F0} body={body.width:F0}x{body.height:F0} {verdict}"));
+                if (body.width <= 0 || float.IsNaN(line.x) || float.IsNaN(needed.y)) return;
+
+                // In screen pixels: the action's width with its label on one line, and its height
+                // at the width it has now. The insets are its border and padding, whatever its size.
+                Rect outer = action.Element.layout;
+                float s = _ui.PixelsPerPoint;
+                var needs = new Vector2(
+                    Mathf.Ceil((line.x + outer.width - body.width + 1) * s),
+                    Mathf.Ceil((needed.y + outer.height - body.height) * s));
+                Vector2 was = run ? _runNeeds : _resetNeeds;
+                if (Mathf.Abs(needs.x - was.x) <= 1 && Mathf.Abs(needs.y - was.y) <= 1) return;
+                if (run) _runNeeds = needs;
+                else _resetNeeds = needs;
+                HudLayout next = Layout();
+                if (next.RunButton != _layout.RunButton || next.ResetButton != _layout.ResetButton) UpdateLayout(true);
+            });
+        }
+
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count, _resetNeeds, _runNeeds);
+
         private void UpdateLayout(bool force)
         {
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
                 && _layout.ResultLines == _resultLines.Count) return;
 
-            _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
+            _layout = Layout();
             Rect felt = _layout.FeltWrongButton;
             FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
+            if (_ui != null && _resetAction != null)
+            {
+                _ui.SetPixelsPerPoint(PixelsPerPoint());
+                _ui.Place(_resetAction.Element, _layout.ResetButton);
+                _ui.Place(_runAction.Element, _layout.RunButton);
+            }
             Log($"ELEVEN layout {_layout.Describe()}");
         }
 
@@ -255,9 +380,12 @@ namespace Eleven.Host
 
             Panel(_layout.BuildLabel);
             GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
+            if (_uiMode == "imgui")
+            {
+                ImguiAction(_layout.ResetButton, "RESET");
+                ImguiAction(_layout.RunButton, "RUN SCENARIO");
+            }
 
-            Button(_layout.ResetButton, "Reset");
-            Button(_layout.RunButton, "Run scenario");
 
             if (_resultLines.Count > 0) DrawResult();
 
@@ -273,6 +401,24 @@ namespace Eleven.Host
             var kickLabel = new Rect(_layout.KickCentre.x - _layout.KickRadius, _layout.KickCentre.y - _layout.KickRadius,
                 _layout.KickRadius * 2, _layout.KickRadius * 2);
             GUI.Label(kickLabel, "KICK", _buttonStyle);
+        }
+
+        // The action recipe drawn with IMGUI, for the frame-cost A/B only (#48): hard shadow, fill,
+        // outline, label, from the same tokens.
+        private void ImguiAction(Rect rect, string label)
+        {
+            float ppp = Mathf.Max(0.5f, PixelsPerPoint());
+            Shape shape = Shapes.Control;
+            Theme theme = Theme.Pitch;
+            float radius = shape.Radius * ppp;
+            var shadow = new Rect(rect.x + shape.Shadow * ppp, rect.y + shape.Shadow * ppp, rect.width, rect.height);
+            GUI.DrawTexture(shadow, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Shadow].ToColor(), 0, radius);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.ActionNeutral].ToColor(), 0, radius);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Outline].ToColor(), shape.Border * ppp, radius);
+            Color before = _buttonStyle.normal.textColor;
+            _buttonStyle.normal.textColor = theme[Role.OnAction].ToColor();
+            GUI.Label(rect, label, _buttonStyle);
+            _buttonStyle.normal.textColor = before;
         }
 
         private void DrawResult()
@@ -319,15 +465,6 @@ namespace Eleven.Host
             _styledFor = screen;
         }
 
-        private void Button(Rect rect, string label)
-        {
-            Panel(rect);
-            GUI.color = HostPalette.ControlIdle;
-            GUI.DrawTexture(new Rect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(rect, label, _buttonStyle);
-        }
-
         private static void Panel(Rect rect)
         {
             GUI.color = HostPalette.HudPanel;
@@ -368,8 +505,24 @@ namespace Eleven.Host
         [DllImport("__Internal")]
         private static extern void ElevenKeepCapture(byte[] bytes, int length, string name, string summary);
 
+        [DllImport("__Internal")]
+        private static extern float ElevenCanvasCssWidth();
+
+        [DllImport("__Internal")]
+        private static extern int ElevenPrefersReducedMotion();
+
+        private static bool PrefersReducedMotion() => ElevenPrefersReducedMotion() != 0;
+
         // From navigation start, so a cold load includes the download and the engine's start-up.
         private static double PageSeconds() => ElevenPageMilliseconds() / 1000;
+
+        // Screen pixels per CSS pixel, so a UI point is a CSS pixel. Measured against Screen.width,
+        // the size Unity renders at, not the canvas element's backing size, which lags at start-up.
+        private static float PixelsPerPoint()
+        {
+            float css = ElevenCanvasCssWidth();
+            return css > 0 ? Screen.width / css : 1f;
+        }
 
         // The player captures every key on the page by default, so page controls could never be
         // focused or pressed from a keyboard. The host reads no keys (touch, with the mouse as a
@@ -387,6 +540,10 @@ namespace Eleven.Host
         private static void KeepCapture(byte[] bytes, string name, string summary) => ElevenKeepCapture(bytes, bytes.Length, name, summary);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
+
+        private static float PixelsPerPoint() => Screen.dpi > 0 ? Screen.dpi / 96f : 1f;
+
+        private static bool PrefersReducedMotion() => false;
 
         private static void AllowPageKeyboard() { }
 
