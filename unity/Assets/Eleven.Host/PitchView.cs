@@ -22,12 +22,12 @@ namespace Eleven.Host
         private const float HeightLift = 0.5f;
         private const float HeightGrowth = 0.08f;
 
-        private readonly SimConfig _config;
+        private SimConfig _config;
         private readonly Camera _camera;
         private readonly Transform _player;
         private readonly Transform _ball;
         private readonly Transform _ballShadow;
-        private readonly float _ballDiameter;
+        private float _ballDiameter;
         private Vector3 _ballShown;
 
         public PitchView(SimConfig config, Transform root)
@@ -60,6 +60,18 @@ namespace Eleven.Host
             _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 2, _ballDiameter);
             _player = Shape(root, disc, "Player", HostPalette.Player, 3, PlayerDiameter);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 4, _ballDiameter);
+        }
+
+        /// <summary>
+        /// Draws a run under another config (#45, APPLY / RETRY): the ball's size follows its radius.
+        /// The goal line is not tunable, so the pitch stays.
+        /// </summary>
+        public void Use(SimConfig config)
+        {
+            _config = config;
+            _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
+            _ballShadow.localScale = Vector3.one * _ballDiameter;
+            _ball.localScale = Vector3.one * _ballDiameter;
         }
 
         /// <summary>A white anti-aliased disc, also used by the HUD.</summary>

@@ -11,8 +11,9 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed class TunableParameter
     {
-        internal TunableParameter(string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
+        internal TunableParameter(string group, string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
         {
+            Group = group;
             Name = name;
             Unit = unit;
             Min = min;
@@ -26,6 +27,18 @@ namespace Eleven.Simulation
         /// or a <see cref="PlayerCapabilities"/> value, e.g. <c>maxSpeed</c>.
         /// </summary>
         public string Name { get; }
+
+        /// <summary>
+        /// Which part of the feel it belongs to, for tools that list it (#45): <see cref="BallGroup"/>,
+        /// <see cref="KickGroup"/>, <see cref="PassGroup"/> or <see cref="PlayerGroup"/>. Metadata only;
+        /// no config value or hash depends on it.
+        /// </summary>
+        public string Group { get; }
+
+        public const string BallGroup = "Ball";
+        public const string KickGroup = "Kick";
+        public const string PassGroup = "Pass";
+        public const string PlayerGroup = "Player";
 
         public string Unit { get; }
 
@@ -60,28 +73,28 @@ namespace Eleven.Simulation
         /// </summary>
         public static readonly ReadOnlyCollection<TunableParameter> Tunables = Array.AsReadOnly(new[]
         {
-            new TunableParameter("gravity", "m/s²", 0.1, 50),
-            new TunableParameter("ballRadius", "m", 0.05, 0.5),
-            new TunableParameter("bounceRestitution", "fraction", 0, 1, 0.5, 0.75),
-            new TunableParameter("bounceTangentialRetention", "fraction", 0, 1, 0.45, 0.85),
-            new TunableParameter("bounceSpinRetention", "fraction", 0, 1, 0.15, 0.35),
-            new TunableParameter("settleSpeed", "m/s", 0, 5),
-            new TunableParameter("rollingFriction", "fraction of g", 0, 2, 0.05, 0.3),
-            new TunableParameter("stopSpeed", "m/s", 0, 2),
-            new TunableParameter("magnusCoefficient", "1/rad", 0, 0.05, 0.004, 0.008),
-            new TunableParameter("airSpinDecay", "1/s", 0, 60),
-            new TunableParameter("groundSpinDecay", "1/s", 0, 60),
-            new TunableParameter("kickSpeed", "m/s", 0, 60, 15, 32),
-            new TunableParameter("kickLoft", "rad", 0, 1.5, 0, 1.05),
-            new TunableParameter("kickSideSpin", "rad/s", 0, 100, 0, 40),
-            new TunableParameter("kickWindUpSeconds", "s", 0, 0.5),
-            new TunableParameter("aftertouchSeconds", "s", 0, 1, 0.15, 0.30),
-            new TunableParameter("aftertouchBend", "rad", 0, 0.5),
-            new TunableParameter("aftertouchLift", "m/s", 0, 10),
-            new TunableParameter("passMaxRange", "m", 5, 60),
-            new TunableParameter("passArrivalSpeed", "m/s", 0, 15),
-            new TunableParameter("passBackWeight", "factor", 0, 10),
-            new TunableParameter("passFreeDistance", "m", 1, 40),
+            new TunableParameter(TunableParameter.BallGroup, "gravity", "m/s²", 0.1, 50),
+            new TunableParameter(TunableParameter.BallGroup, "ballRadius", "m", 0.05, 0.5),
+            new TunableParameter(TunableParameter.BallGroup, "bounceRestitution", "fraction", 0, 1, 0.5, 0.75),
+            new TunableParameter(TunableParameter.BallGroup, "bounceTangentialRetention", "fraction", 0, 1, 0.45, 0.85),
+            new TunableParameter(TunableParameter.BallGroup, "bounceSpinRetention", "fraction", 0, 1, 0.15, 0.35),
+            new TunableParameter(TunableParameter.BallGroup, "settleSpeed", "m/s", 0, 5),
+            new TunableParameter(TunableParameter.BallGroup, "rollingFriction", "fraction of g", 0, 2, 0.05, 0.3),
+            new TunableParameter(TunableParameter.BallGroup, "stopSpeed", "m/s", 0, 2),
+            new TunableParameter(TunableParameter.BallGroup, "magnusCoefficient", "1/rad", 0, 0.05, 0.004, 0.008),
+            new TunableParameter(TunableParameter.BallGroup, "airSpinDecay", "1/s", 0, 60),
+            new TunableParameter(TunableParameter.BallGroup, "groundSpinDecay", "1/s", 0, 60),
+            new TunableParameter(TunableParameter.KickGroup, "kickSpeed", "m/s", 0, 60, 15, 32),
+            new TunableParameter(TunableParameter.KickGroup, "kickLoft", "rad", 0, 1.5, 0, 1.05),
+            new TunableParameter(TunableParameter.KickGroup, "kickSideSpin", "rad/s", 0, 100, 0, 40),
+            new TunableParameter(TunableParameter.KickGroup, "kickWindUpSeconds", "s", 0, 0.5),
+            new TunableParameter(TunableParameter.KickGroup, "aftertouchSeconds", "s", 0, 1, 0.15, 0.30),
+            new TunableParameter(TunableParameter.KickGroup, "aftertouchBend", "rad", 0, 0.5),
+            new TunableParameter(TunableParameter.KickGroup, "aftertouchLift", "m/s", 0, 10),
+            new TunableParameter(TunableParameter.PassGroup, "passMaxRange", "m", 5, 60),
+            new TunableParameter(TunableParameter.PassGroup, "passArrivalSpeed", "m/s", 0, 15),
+            new TunableParameter(TunableParameter.PassGroup, "passBackWeight", "factor", 0, 10),
+            new TunableParameter(TunableParameter.PassGroup, "passFreeDistance", "m", 1, 40),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>

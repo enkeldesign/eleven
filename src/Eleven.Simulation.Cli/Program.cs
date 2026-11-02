@@ -25,6 +25,9 @@ using Eleven.Simulation.Harness;
 /// eleven-sim capture &lt;file&gt; [seconds]
 ///                              capture the last 10 s of the scripted spike session at `seconds` (default 20),
 ///                              through the host's FeelRecorder: the committed fixture
+/// eleven-sim candidate [name=value ...]
+///                              a feel test bench candidate (#45): the reference values with any knobs changed,
+///                              its config hash and practice start hash, e.g. candidate kickSpeed=28 maxSpeed=8.5
 /// eleven-sim passes &lt;dir&gt; [name=value ...]
 ///                              measure the quick pass (#38) in the practice drills under the reference profile
 ///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1
@@ -53,12 +56,53 @@ internal static class Program
                 return Passes(args[1], args.Skip(2));
             case "replay" when args.Length == 2:
                 return Replay(args[1]);
+            case "candidate":
+                return Candidate(args.Skip(1));
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | replay <capture> | capture <file> [seconds]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
                 return 2;
         }
+    }
+
+    /// <summary>
+    /// The candidate the test bench would apply for these changes, and the hashes that identify its
+    /// run: the same values give the same hashes in every runtime.
+    /// </summary>
+    private static int Candidate(IEnumerable<string> assignments)
+    {
+        var changes = new List<KeyValuePair<string, double>>();
+        foreach (string a in assignments)
+        {
+            int equals = a.IndexOf('=');
+            if (equals <= 0 || !double.TryParse(a.Substring(equals + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            {
+                Console.Error.WriteLine($"not name=value: {a}");
+                return 2;
+            }
+
+            changes.Add(new KeyValuePair<string, double>(a.Substring(0, equals), value));
+        }
+
+        if (!BenchCandidate.Reference.TryWith(changes, out BenchCandidate? candidate, out string problem))
+        {
+            Console.Error.WriteLine(problem);
+            return 1;
+        }
+
+        Console.WriteLine($"config {candidate!.Config.Hash:x16}  practice start {candidate.PracticeStartHash():x16}  preset {candidate.PresetName}  {candidate.ChangesFrom(BenchCandidate.Reference)} change(s) from the technical reference");
+        string group = "";
+        foreach (BenchKnob k in BenchCandidate.Knobs)
+        {
+            if (k.Group != group) Console.WriteLine($"{(group = k.Group)}:");
+            TunableParameter p = k.Parameter;
+            string start = p.StartMin.HasValue ? $"research start {p.StartMin:G6}–{p.StartMax:G6}" : "technical reference";
+            string changed = candidate.Get(k.Name).Equals(BenchCandidate.Reference.Get(k.Name)) ? "" : $"  (was {BenchCandidate.Reference.Get(k.Name):G6})";
+            Console.WriteLine($"  {k.Label,-28} {candidate.Get(k.Name),10:G6} {p.Unit,-22} valid {p.Min:G6}–{p.Max:G6}, {start}, step {k.Step:G6}{changed}");
+        }
+
+        return 0;
     }
 
     private static int WriteHashLogs(string directory)
