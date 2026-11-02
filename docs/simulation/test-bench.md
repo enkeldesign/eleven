@@ -53,6 +53,35 @@ Precise tuning never needs a drag. Every control is at least 44 × 44 px.
 
 **What isn't kept yet:** the applied values last for the page's life, and a reload returns to the technical reference. Named presets that persist come with #46. Until then a capture records the active preset as `technical-reference` for the reference values and `unsaved` for anything else.
 
+## Presets
+
+A preset (#46, `FeelPreset`) is a named set of every bench value, kept as a small text file. It can be kept on a device, attached to an issue or committed.
+
+**The file records:**
+- every value as bits, with its decimal and unit as a comment;
+- the config hash those values make;
+- the host and simulation builds;
+- the tick convention, state schema and config format;
+- the control candidate.
+
+**Reading checks everything before anything is applied.** Each of these refuses the whole preset, with the reason:
+- another build's versions;
+- a missing, repeated or invalid value;
+- values that don't rebuild the recorded config hash.
+
+**Kinds:**
+
+| Kind | Meaning |
+| --- | --- |
+| `technical-reference` | Built in: the untuned reference values (TECHNICAL REFERENCE). |
+| `saved` | Saved by Erik on the bench. His, but not approved feel. |
+| `research-hypothesis` | An agent's starting point (`eleven-sim hypothesis`). Always labelled. |
+| `approved` | Promoted by Erik on the owning issue and committed under `presets/approved/`. Nothing on a device can make one. |
+
+**On the command line:**
+- `eleven-sim preset <file>` reads a preset and lists what it changes.
+- `eleven-sim characterise <file> <dir>` writes its ball, movement, kick and pass characterisation. This is what a promotion is based on (see [presets/approved/README.md](../../presets/approved/README.md)).
+
 ## Measured
 
 **What is measured:**
