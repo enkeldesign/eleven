@@ -88,7 +88,9 @@ mergeInto(LibraryManager.library, {
       setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
     };
     var active = !navigator.userActivation || navigator.userActivation.isActive;
-    if (active && navigator.canShare && navigator.canShare({ files: [file] })) {
+    var share = active && navigator.canShare && navigator.canShare({ files: [file] });
+    console.log('ELEVEN page save ' + (share ? 'share' : 'download') + ' name=' + last.name + ' activation=' + (active ? 'yes' : 'no'));
+    if (share) {
       navigator.share({ files: [file], title: 'ELEVEN capture' }).catch(function (e) {
         // A dismissed share sheet is the player's choice, not a failure.
         if (!e || e.name !== 'AbortError') download();
@@ -105,6 +107,7 @@ mergeInto(LibraryManager.library, {
   ElevenPlaceSaveCapture__deps: ['$ElevenShareCapture'],
   ElevenPlaceSaveCapture: function (x, y, w, h, screenWidth, screenHeight, active) {
     window.__elevenSaveRect = active ? { x: x, y: y, w: w, h: h, sw: screenWidth, sh: screenHeight } : null;
+    console.log('ELEVEN page save target ' + (active ? Math.round(x) + ',' + Math.round(y) + ',' + Math.round(w) + ',' + Math.round(h) + ' of ' + screenWidth + 'x' + screenHeight : 'none'));
     if (window.__elevenSaveWatching) return;
     window.__elevenSaveWatching = true;
     var inside = function (e) {
@@ -119,6 +122,7 @@ mergeInto(LibraryManager.library, {
     window.addEventListener('pointerdown', function (e) { pressed = inside(e); }, true);
     window.addEventListener('pointerup', function (e) {
       var release = pressed && inside(e);
+      if (pressed) console.log('ELEVEN page save release ' + (release ? 'on' : 'off') + ' the target');
       pressed = false;
       if (release) ElevenShareCapture();
     }, true);
@@ -129,7 +133,9 @@ mergeInto(LibraryManager.library, {
   // transient activation still holds.
   ElevenSaveCapture__deps: ['$ElevenShareCapture'],
   ElevenSaveCapture: function () {
-    if (window.__elevenSavedAt && performance.now() - window.__elevenSavedAt < 1000) return;
+    var handled = window.__elevenSavedAt && performance.now() - window.__elevenSavedAt < 1000;
+    console.log('ELEVEN page save activation ' + (handled ? 'already saved by the release' : 'saves now'));
+    if (handled) return;
     ElevenShareCapture();
   },
 });

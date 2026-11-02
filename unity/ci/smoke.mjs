@@ -397,7 +397,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     }
 
     // Capturing doesn't stop play once the sheet closes: the simulation runs on past the capture.
-    const afterCapture = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+    // CI's software renderer runs the phone pass near 5 fps, where frames over 250 ms are dropped
+    // rather than caught up, so give play time to cover a trace interval.
+    const afterCapture = (await waitForLog(tracePattern, 20_000, logs.length))?.match ?? null;
     check('play goes on after a capture', !!captured && !!afterCapture && Number(afterCapture[1]) > Number(captured.match[2]),
       afterCapture ? `trace tick ${afterCapture[1]} after capture end ${captured?.match[2]}` : 'no trace line after the capture');
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').length).catch(() => 0);
@@ -521,8 +523,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const [download] = offered && placedAgain
         ? await Promise.all([page.waitForEvent('download', { timeout: 5_000 }).catch(() => null), tap(centre(...placedAgain.slice(5, 9)))])
         : [null];
+      const saves = logs.slice(fromReload).filter((l) => l.startsWith('ELEVEN page save')).map((l) => l.replace('ELEVEN page save ', ''));
       check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
-        !offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download');
+        `${!offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download'}; page: ${saves.join(' | ') || 'no save lines'}`);
     }
   } catch (e) {
     check('ran to completion', false, e.message);
