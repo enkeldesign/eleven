@@ -192,7 +192,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // Placed HUD actions keep their labels inside, also with enlarged text (#48).
     if (!url.includes('noui') && !url.includes('ui=')) {
       await waitForLog(/ELEVEN ui fit name=Run_scenario /, 5_000);
-      const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit'));
+      // Unity's console lines end in a newline: trim it, or the verdict at the end never matches.
+      const fits = logs.filter((l) => l.startsWith('ELEVEN ui fit')).map((l) => l.trimEnd());
       const latest = new Map(fits.map((l) => [/name=(\S+)/.exec(l)[1], l]));
       const overflow = [...latest.values()].filter((l) => l.endsWith('overflow'));
       check('placed actions fit their labels', latest.size >= 2 && overflow.length === 0,
