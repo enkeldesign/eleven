@@ -116,6 +116,40 @@ function medianFps(lines) {
   return fps.length ? fps[Math.floor(fps.length / 2)].toFixed(1) : 'none';
 }
 
+// The visual system's specimen (#48): built from the production components, it must keep every
+// interactive target at 44 x 44 pt or more and nothing wider than the page, and it is screenshotted
+// whole (tall viewports, so no scrolling) for review.
+async function runSpecimenPass(browser, url, name, contextOptions) {
+  const logs = [];
+  const check = (what, ok, detail) => {
+    results.checks.push({ name: `${name}: ${what}`, ok, detail });
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${what}: ${detail}`);
+  };
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  page.on('console', (m) => logs.push(m.text()));
+  page.on('pageerror', (e) => logs.push(`pageerror ${e.message}`));
+  try {
+    await page.goto(url);
+    const report = await waitFor(logs, /ELEVEN specimen targets=(\d+) smallest=([\d.]+) smallestName=(\S+) pageWidth=(\d+) overflow=(\S+)/, 240_000);
+    check('specimen lays out', !!report, report ? report.match[0].replace('ELEVEN specimen ', '') : 'no specimen report');
+    if (report) {
+      const m = report.match;
+      check('every interactive target is at least 44 x 44 pt', Number(m[1]) > 0 && Number(m[2]) >= 43.9, `${m[1]} targets, smallest ${m[2]} pt (${m[3]})`);
+      check('nothing is wider than the page', m[5] === 'none', `page ${m[4]} pt wide, overflow: ${m[5]}`);
+    }
+    await sleep(500);
+    await page.locator('#unity-canvas').screenshot({ path: path.join(outDir, `specimen-${name}.png`) });
+    const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+    check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+  } catch (e) {
+    check('ran to completion', false, e.message);
+  } finally {
+    fs.writeFileSync(path.join(outDir, `specimen-${name}-console.log`), logs.join('\n'));
+    await context.close();
+  }
+}
+
 async function runPass(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
@@ -505,6 +539,15 @@ try {
   await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-before', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-after', phone, true);
+
+  // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
+  const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
+  const { defaultBrowserType: _ipad, ...tablet } = devices['iPad (gen 7)'];
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'phone-ordinary', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'phone-dark', tall(phone, 2400));
+  await runSpecimenPass(browser, `${base}?specimen=ordinary`, 'tablet-ordinary', tall(tablet, 1800));
+  await runSpecimenPass(browser, `${base}?specimen=dark`, 'tablet-dark', tall(tablet, 1800));
+  await runSpecimenPass(browser, `${base}?specimen=ordinary&textscale=1.5`, 'narrow-large-text', { ...tall(phone, 3200), viewport: { width: 320, height: 3200 } });
   await runServiceWorkerPass(browser, path.resolve(playerDir));
 } finally {
   await browser.close();

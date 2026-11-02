@@ -9,7 +9,7 @@ namespace Eleven.Host
     /// The UI around the match (#48): one UI Toolkit panel, built entirely from code. Its
     /// PanelSettings and an empty theme are created at runtime, so there are no UXML or USS assets
     /// and no Editor state. Components style themselves from <see cref="Theme"/> roles through the
-    /// recipes in <see cref="UiActions"/>.
+    /// recipes in <see cref="UiKit"/>.
     ///
     /// Lengths are points; <see cref="SetPixelsPerPoint"/> keeps a point the size of a CSS pixel on
     /// the web. Input reaches the panel through Unity 6's InputForUI from the Input System, so there is
@@ -53,6 +53,15 @@ namespace Eleven.Host
         public bool KeyboardFocus { get; private set; }
 
         public Theme Theme { get; }
+
+        /// <summary>
+        /// The player's reduced-motion preference: movement is removed and a static cue stays
+        /// (pressed controls lose their shadow instead of moving into it).
+        /// </summary>
+        public static bool ReducedMotion { get; set; }
+
+        /// <summary>The player's text size, as a multiple of the type scale (enlarged text reflows; targets never shrink).</summary>
+        public static float TextScale { get; set; } = 1;
 
         public UIDocument Document { get; }
 

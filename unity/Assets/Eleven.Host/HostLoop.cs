@@ -42,8 +42,9 @@ namespace Eleven.Host
         private PitchView _view;
         private TouchAdapter _input;
         private UiRoot _ui;
-        private UiActions.Action _resetAction;
-        private UiActions.Action _runAction;
+        private Specimen _specimen;
+        private UiKit.Action _resetAction;
+        private UiKit.Action _runAction;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -79,7 +80,17 @@ namespace Eleven.Host
             _view = new PitchView(_config, transform);
             _input = new TouchAdapter(SpikeScenario.ControllerId);
             // ?noui: measurement only (#48), the frame without the UI.
+            // ?textscale=1.5: enlarged text, until settings exist to choose it (#48).
+            int textScaleAt = url.IndexOf("textscale=", StringComparison.Ordinal);
+            if (textScaleAt >= 0 && float.TryParse(url.Substring(textScaleAt + 10).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float textScale))
+            {
+                UiRoot.TextScale = Mathf.Clamp(textScale, 0.5f, 3f);
+            }
+
             if (!url.Contains("noui")) BuildUi();
+
+            // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
+            if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
             if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
             RememberPrevious();
             UpdateLayout(force: true);
@@ -133,6 +144,8 @@ namespace Eleven.Host
             }
 
             if (_accumulator >= tick) _accumulator = 0;
+
+            _specimen?.Tick(_simulator.Tick);
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
@@ -256,8 +269,8 @@ namespace Eleven.Host
                 step = "scale";
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
                 step = "actions";
-                _resetAction = UiActions.Make(_ui, ActionRole.Utility, "Reset", ResetMatch);
-                _runAction = UiActions.Make(_ui, ActionRole.Utility, "Run scenario", RunScenario);
+                _resetAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Reset", ResetMatch);
+                _runAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Run scenario", RunScenario);
                 _ui.Root.Add(_resetAction.Element);
                 _ui.Root.Add(_runAction.Element);
                 _input.OverUi = _ui.IsOverUi;
