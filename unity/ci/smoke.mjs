@@ -194,7 +194,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const idleFrom = logs.length;
     await sleep(6_000);
     notes.idleFps = medianFps(logs.slice(idleFrom));
-    if (url.includes('noui')) return;
+    if (url.includes('idle=1')) {
+      notes.idleOnly = true;
+      return;
+    }
     // The page's own load time, which the build shows on screen for the device session (#5).
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
@@ -536,12 +539,19 @@ try {
   // neither side gets the cold or the warm browser.
   const desktop = { viewport: { width: 1280, height: 800 } };
   const { defaultBrowserType, ...phone } = devices['iPhone 13'];
-  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui-before', desktop, false);
+  // Idle-only passes for the A/B: no UI, an empty UI Toolkit panel, and the same action recipe drawn
+  // with IMGUI.
+  const idle = (mode) => `${base}?trace=1&idle=1&${mode}`;
+  await runPass(browser, idle('noui=1'), 'desktop-noui-before', desktop, false);
+  await runPass(browser, idle('ui=empty'), 'desktop-panel-empty', desktop, false);
+  await runPass(browser, idle('ui=imgui'), 'desktop-imgui-recipe', desktop, false);
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
-  await runPass(browser, `${base}?trace=1&noui=1`, 'desktop-noui-after', desktop, false);
-  await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-before', phone, true);
+  await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
+  await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
+  await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
+  await runPass(browser, idle('ui=imgui'), 'phone-imgui-recipe', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
-  await runPass(browser, `${base}?trace=1&noui=1`, 'phone-noui-after', phone, true);
+  await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
@@ -561,7 +571,7 @@ fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 
 const failed = results.checks.filter((c) => !c.ok);
 for (const c of failed) annotate('error', `Smoke: ${c.name}`, c.detail);
 const summary = Object.entries(results.notes)
-  .map(([pass, n]) => pass.includes('noui') ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
+  .map(([pass, n]) => n.idleOnly ? `${pass}: idle fps ${n.idleFps ?? 'none'}` : `${pass}: boot ${n.bootSeconds?.toFixed?.(1)} s, load ${n.loadSeconds?.toFixed?.(1)} s, dropped ${n.dropped}, stick ${Number(n.stickMovedMetres).toFixed(1)} m, layout ${(n.layouts || []).slice(-1)[0]?.split(' ')[0]}, ui ${n.ui ?? 'none'}, idle fps ${n.idleFps ?? 'none'}, median fps ${n.fps ?? 'none'}, pixels ${JSON.stringify(n.pixels)}`)
   .join('; ');
 annotate('notice', 'WebGL smoke test', `${results.checks.length - failed.length}/${results.checks.length} checks passed; build ${results.notes.desktop?.build}; scenario digest ${results.notes.desktop?.digest ?? 'none'}; ${summary}`);
 process.exit(failed.length ? 1 : 0);

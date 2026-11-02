@@ -42,6 +42,7 @@ namespace Eleven.Host
         private PitchView _view;
         private TouchAdapter _input;
         private UiRoot _ui;
+        private string _uiMode = "toolkit";
         private Specimen _specimen;
         private UiKit.Action _resetAction;
         private UiKit.Action _runAction;
@@ -89,7 +90,10 @@ namespace Eleven.Host
 
             UiRoot.ReducedMotion = PrefersReducedMotion();
 
-            if (!url.Contains("noui")) BuildUi();
+            // Frame-cost A/B (#48): ?ui=empty builds the UI Toolkit panel with nothing in it; ?ui=imgui
+            // draws the same action recipe with IMGUI instead of UI Toolkit.
+            _uiMode = url.Contains("ui=empty") ? "empty" : url.Contains("ui=imgui") ? "imgui" : "toolkit";
+            if (!url.Contains("noui") && _uiMode != "imgui") BuildUi();
 
             // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
             if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
@@ -271,6 +275,12 @@ namespace Eleven.Host
                 step = "scale";
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
                 step = "actions";
+                if (_uiMode == "empty")
+                {
+                    Log("ELEVEN ui ready font=none pixelsPerPoint=0 ms=0 panel=empty");
+                    return;
+                }
+
                 _resetAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Reset", ResetMatch);
                 _runAction = UiKit.MakeAction(_ui, _ui.Theme, ActionRole.Utility, "Run scenario", RunScenario);
                 _ui.Root.Add(_resetAction.Element);
@@ -311,7 +321,7 @@ namespace Eleven.Host
             _layout = HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines.Count);
             Rect felt = _layout.FeltWrongButton;
             FeltWrongPlace(felt.x, felt.y, felt.width, felt.height, _layout.ScreenWidth, _layout.ScreenHeight);
-            if (_ui != null)
+            if (_ui != null && _resetAction != null)
             {
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
                 _ui.Place(_resetAction.Element, _layout.ResetButton);
@@ -327,6 +337,11 @@ namespace Eleven.Host
 
             Panel(_layout.BuildLabel);
             GUI.Label(_layout.BuildLabel, BuildLine(), _buildStyle);
+            if (_uiMode == "imgui")
+            {
+                ImguiAction(_layout.ResetButton, "RESET");
+                ImguiAction(_layout.RunButton, "RUN SCENARIO");
+            }
 
 
             if (_resultLines.Count > 0) DrawResult();
@@ -343,6 +358,24 @@ namespace Eleven.Host
             var kickLabel = new Rect(_layout.KickCentre.x - _layout.KickRadius, _layout.KickCentre.y - _layout.KickRadius,
                 _layout.KickRadius * 2, _layout.KickRadius * 2);
             GUI.Label(kickLabel, "KICK", _buttonStyle);
+        }
+
+        // The action recipe drawn with IMGUI, for the frame-cost A/B only (#48): hard shadow, fill,
+        // outline, label, from the same tokens.
+        private void ImguiAction(Rect rect, string label)
+        {
+            float ppp = Mathf.Max(0.5f, PixelsPerPoint());
+            Shape shape = Shapes.Control;
+            Theme theme = Theme.Ordinary;
+            float radius = shape.Radius * ppp;
+            var shadow = new Rect(rect.x + shape.Shadow * ppp, rect.y + shape.Shadow * ppp, rect.width, rect.height);
+            GUI.DrawTexture(shadow, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Shadow].ToColor(), 0, radius);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.SurfaceRaised].ToColor(), 0, radius);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, theme[Role.Outline].ToColor(), shape.Border * ppp, radius);
+            Color before = _buttonStyle.normal.textColor;
+            _buttonStyle.normal.textColor = theme[Role.Text].ToColor();
+            GUI.Label(rect, label, _buttonStyle);
+            _buttonStyle.normal.textColor = before;
         }
 
         private void DrawResult()
