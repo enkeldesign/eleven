@@ -26,7 +26,7 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
   - **A press** asks for an optional note with the browser's own prompt. No frames run while it is open, so play does not go on under it.
   - **The capture** is the last ten seconds (`FeelRecorder`/`FeelCapture`, [determinism.md](../docs/simulation/determinism.md#feel-captures)). It is kept in the page's `localStorage` (the last five) and announced.
   - **SAVE CAPTURE** shares or downloads it as `.elfc`, for `eleven-sim replay`. Nothing leaves the device unless it is saved.
-- URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event, and each capture in base64 (the smoke test replays them with .NET).
+- URL options for testing: `?autorun` runs the scenario at start; `?trace` logs state every 60 ticks and every event. The smoke test replays each capture with .NET from the bytes kept in `localStorage` and, on desktop, SAVE CAPTURE's download (#50).
 
 ## Building
 
