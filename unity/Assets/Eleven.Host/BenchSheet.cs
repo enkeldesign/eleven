@@ -94,6 +94,11 @@ namespace Eleven.Host
 
             _list = UiKit.MakeScroll();
             _list.style.flexShrink = 1;
+            // A knob's control reached with Tab scrolls into view.
+            _list.RegisterCallback<FocusInEvent>(e =>
+            {
+                if (e.target is VisualElement focused && _list.contentContainer.Contains(focused)) _list.ScrollTo(focused);
+            });
             _list.style.minHeight = 0;
             _sheet.Content.Add(_list);
 
@@ -134,15 +139,27 @@ namespace Eleven.Host
             _closed();
         }
 
-        /// <summary>The sheet's controls in order, for Tab while it is open.</summary>
+        /// <summary>
+        /// The sheet's controls in order, for Tab while it is open: the group tabs, each shown knob's
+        /// − and +, then Close, Revert and APPLY / RETRY. Built from the controls themselves, not from
+        /// every focusable element underneath, which would include the scroll list's hidden scroller
+        /// (Codex on #49). Disabled controls are skipped.
+        /// </summary>
         public List<VisualElement> FocusOrder()
         {
             var order = new List<VisualElement>();
-            _sheet.Element.Query<VisualElement>().ForEach(v =>
+            foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
+            foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[_group]))
             {
-                if (v.focusable && v.resolvedStyle.display != DisplayStyle.None) order.Add(v);
-            });
-            return order;
+                if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
+                order.Add(v.Less.Element);
+                order.Add(v.More.Element);
+            }
+
+            order.Add(_close.Element);
+            order.Add(_revert.Element);
+            order.Add(_applyAction.Element);
+            return order.Where(e => e.focusable && e.enabledInHierarchy).ToList();
         }
 
         private void ShowGroup(int index)
