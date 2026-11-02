@@ -98,33 +98,37 @@ mergeInto(LibraryManager.library, {
     }
   },
 
-  // SAVE CAPTURE's press began in Unity (ADR-0003): arm the page, so the release runs the share in
-  // the page's own gesture handler, where the browser's user-gesture requirement holds. Disarmed
-  // after two seconds or once used.
-  ElevenArmSaveCapture__deps: ['$ElevenShareCapture'],
-  ElevenArmSaveCapture: function () {
-    var release = function () {
-      disarm();
-      ElevenShareCapture();
+  // Where SAVE CAPTURE is, in the canvas's backing pixels, and whether a press there saves now
+  // (ADR-0003, #53). The page's own handlers watch for a press that starts and ends there, and start
+  // the share in the release's handler, where the browser's user-gesture requirement holds, whatever
+  // the frame timing. Unity's own activation of SAVE CAPTURE then finds it already saved.
+  ElevenPlaceSaveCapture__deps: ['$ElevenShareCapture'],
+  ElevenPlaceSaveCapture: function (x, y, w, h, screenWidth, screenHeight, active) {
+    window.__elevenSaveRect = active ? { x: x, y: y, w: w, h: h, sw: screenWidth, sh: screenHeight } : null;
+    if (window.__elevenSaveWatching) return;
+    window.__elevenSaveWatching = true;
+    var inside = function (e) {
+      var s = window.__elevenSaveRect;
+      if (!s || !Module.canvas) return false;
+      var r = Module.canvas.getBoundingClientRect();
+      var px = (e.clientX - r.left) * s.sw / r.width;
+      var py = (e.clientY - r.top) * s.sh / r.height;
+      return px >= s.x && px <= s.x + s.w && py >= s.y && py <= s.y + s.h;
     };
-    var disarm = function () {
-      window.removeEventListener('pointerup', release, true);
-      window.removeEventListener('touchend', release, true);
-      clearTimeout(window.__elevenSaveArmTimer);
-    };
-    if (window.__elevenSaveDisarm) window.__elevenSaveDisarm();
-    window.__elevenSaveDisarm = disarm;
-    window.addEventListener('pointerup', release, true);
-    window.addEventListener('touchend', release, true);
-    window.__elevenSaveArmTimer = setTimeout(disarm, 2000);
+    var pressed = false;
+    window.addEventListener('pointerdown', function (e) { pressed = inside(e); }, true);
+    window.addEventListener('pointerup', function (e) {
+      var release = pressed && inside(e);
+      pressed = false;
+      if (release) ElevenShareCapture();
+    }, true);
   },
 
-  // SAVE CAPTURE was activated in Unity (a click or a key). If the armed release already saved this
-  // press, there is nothing to do; otherwise (the whole tap fell in one frame, or a key) it saves now,
-  // while the press's transient activation still holds.
+  // SAVE CAPTURE was activated in Unity (a press or a key). If the page's release handler already
+  // saved this press, there is nothing to do; otherwise (a key) it saves now, while the key's
+  // transient activation still holds.
   ElevenSaveCapture__deps: ['$ElevenShareCapture'],
   ElevenSaveCapture: function () {
-    if (window.__elevenSaveDisarm) window.__elevenSaveDisarm();
     if (window.__elevenSavedAt && performance.now() - window.__elevenSavedAt < 1000) return;
     ElevenShareCapture();
   },

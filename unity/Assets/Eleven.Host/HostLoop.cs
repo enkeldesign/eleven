@@ -48,6 +48,8 @@ namespace Eleven.Host
 
         // THIS FELT WRONG's capture, taken at the press and kept once the note sheet closes (#53).
         private FeelCapture _pending;
+        private Rect _saveTold;
+        private bool _saveActiveTold;
         private HudLayout _layout;
         private string _buildId;
         private double _loadSeconds;
@@ -150,7 +152,11 @@ namespace Eleven.Host
             if (_accumulator >= tick) _accumulator = 0;
 
             _specimen?.Tick(_simulator.Tick);
-            _hud?.Tick(_buildId, _loadSeconds, _pacing.Dropped, _pacing.CoveredSeconds);
+            if (_hud != null)
+            {
+                _hud.Tick(_buildId, _loadSeconds, _pacing.Dropped, _pacing.CoveredSeconds);
+                TellPageWhereSaveIs();
+            }
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
@@ -297,7 +303,7 @@ namespace Eleven.Host
                     return;
                 }
 
-                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, ArmSaveCapture, KeepFeltWrong);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -324,6 +330,19 @@ namespace Eleven.Host
             {
                 Log($"ELEVEN ui failed at {step}: {e.GetType().Name}: {e.Message}");
             }
+        }
+
+        // The page starts SAVE CAPTURE's share in its own release handler, where the browser's
+        // user-gesture requirement holds (ADR-0003), so it is told where the action is and whether a
+        // press there saves, whenever either changes.
+        private void TellPageWhereSaveIs()
+        {
+            Rect save = _layout.SaveCaptureButton;
+            bool active = _hud.SaveActive;
+            if (save == _saveTold && active == _saveActiveTold) return;
+            _saveTold = save;
+            _saveActiveTold = active;
+            PlaceSaveCapture(save.x, save.y, save.width, save.height, _layout.ScreenWidth, _layout.ScreenHeight, active ? 1 : 0);
         }
 
         // The HUD measured an element needing another size: lay out again if anything moves.
@@ -408,7 +427,7 @@ namespace Eleven.Host
         private static extern void ElevenSaveCapture();
 
         [DllImport("__Internal")]
-        private static extern void ElevenArmSaveCapture();
+        private static extern void ElevenPlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active);
 
         [DllImport("__Internal")]
         private static extern float ElevenCanvasCssWidth();
@@ -439,7 +458,8 @@ namespace Eleven.Host
 
         private static void SaveCapture() => ElevenSaveCapture();
 
-        private static void ArmSaveCapture() => ElevenArmSaveCapture();
+        private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
+            ElevenPlaceSaveCapture(x, y, width, height, screenWidth, screenHeight, active);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
@@ -460,7 +480,7 @@ namespace Eleven.Host
 
         private static void SaveCapture() { }
 
-        private static void ArmSaveCapture() { }
+        private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) { }
 #endif
 
         private static Vector2 ToVector(Vec2 v) => new Vector2((float)v.X, (float)v.Y);

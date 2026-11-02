@@ -20,6 +20,10 @@ namespace Eleven.Host
     {
         private const float StatusSeconds = 6f;
 
+        // The build line's values change every frame where frames drop; a few updates a second read
+        // the same and spare the text from being laid out again each frame.
+        private const float BuildEverySeconds = 0.5f;
+
         private readonly UiRoot _ui;
         private readonly bool _trace;
         private readonly System.Action _relayout;
@@ -49,9 +53,10 @@ namespace Eleven.Host
         private int _closedFrame = -10;
         private bool _reportBuild;
         private bool _reportResult;
+        private float _buildShownAt = -1;
 
         public Hud(UiRoot ui, bool trace, System.Action relayout, System.Action reset, System.Action run,
-            System.Action feltWrong, System.Action saveCapture, System.Action armSave, Action<string> noteDone)
+            System.Action feltWrong, System.Action saveCapture, Action<string> noteDone)
         {
             _ui = ui;
             _trace = trace;
@@ -65,7 +70,6 @@ namespace Eleven.Host
             _build = UiKit.MakeHudPanel(pitch);
             _build.Element.name = "Build";
             VisualElement buildRow = UiKit.Row(Spacing.M);
-            buildRow.style.flexWrap = Wrap.Wrap;
             buildRow.style.alignItems = Align.Center;
             _buildId = UiKit.MakeData(pitch, "ELEVEN", Application.version);
             _load = UiKit.MakeData(pitch, "LOAD", "99.9 s");
@@ -74,6 +78,7 @@ namespace Eleven.Host
             buildRow.Add(_load.Element);
             buildRow.Add(_dropped.Element);
             UiKit.Gaps(buildRow);
+            buildRow.style.flexWrap = Wrap.Wrap;
             _build.Content.Add(buildRow);
             ui.Root.Add(_build.Element);
             Measure(_build, n => n.Build, (n, v) => n.Build = v);
@@ -102,11 +107,6 @@ namespace Eleven.Host
             SaveCapture = Action(ActionRole.Supporting, "Save capture", saveCapture, "Save\ncapture", (n, v) => n.SaveCapture = v, n => n.SaveCapture);
             SaveCapture.Element.style.visibility = Visibility.Hidden;
             SaveCapture.Element.focusable = false;
-            // The page runs the share on the press's release, inside its own gesture handler (ADR-0003).
-            SaveCapture.Element.RegisterCallback<PointerDownEvent>(_ =>
-            {
-                if (_saveShown && !SheetOpen) armSave();
-            }, TrickleDown.TrickleDown);
 
             _status = UiKit.MakeStatus(pitch);
             _status.Element.name = "Status";
@@ -144,9 +144,29 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
+            // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
+            // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel
+            // turning Tab into navigation, which the smoke test found it doesn't here (#53).
+            VisualElement tree = ui.Root.panel?.visualTree ?? ui.Root;
+            tree.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (_trace) Log($"ELEVEN ui key code={e.keyCode} char={(int)e.character}");
+                if (e.keyCode != KeyCode.Tab && e.character != '\t') return;
+                // The key moves focus; its character, which may come as a separate event, goes nowhere.
+                if (e.keyCode == KeyCode.Tab) MoveFocus(e.shiftKey ? -1 : 1);
+                e.StopPropagation();
+                ui.Root.focusController?.IgnoreEvent(e);
+            }, TrickleDown.TrickleDown);
+            tree.RegisterCallback<NavigationMoveEvent>(e =>
+            {
+                if (_trace) Log($"ELEVEN ui navigate direction={e.direction}");
+                if (e.direction != NavigationMoveEvent.Direction.Next && e.direction != NavigationMoveEvent.Direction.Previous) return;
+                e.StopPropagation();
+                ui.Root.focusController?.IgnoreEvent(e);
+            }, TrickleDown.TrickleDown);
+
             // Enter keeps the note and Escape keeps the capture without one, wherever focus is while
             // the sheet is open; not the key that opened it.
-            VisualElement tree = ui.Root.panel?.visualTree ?? ui.Root;
             tree.RegisterCallback<KeyDownEvent>(e =>
             {
                 if (!SheetOpen || Time.frameCount == _openedFrame) return;
@@ -203,6 +223,9 @@ namespace Eleven.Host
         /// <summary>Whether the note sheet is open: play waits, as it did under the browser's prompt (#44).</summary>
         public bool SheetOpen { get; private set; }
 
+        /// <summary>Whether a press on SAVE CAPTURE would save now: shown, and not behind the sheet.</summary>
+        public bool SaveActive => _saveShown && !SheetOpen;
+
         /// <summary>The build panel's laid-out size in points, for the trace line (it must not jitter).</summary>
         public string BuildSize => FormattableString.Invariant($"{_build.Element.layout.width:F0}x{_build.Element.layout.height:F0}");
 
@@ -224,9 +247,15 @@ namespace Eleven.Host
         /// <summary>Called once a frame: the build line's values, and the status line's time.</summary>
         public void Tick(string build, double loadSeconds, int dropped, double coveredSeconds)
         {
-            Set(_buildId.Value, build);
-            Set(_load.Value, FormattableString.Invariant($"{loadSeconds:F1} s"));
-            Set(_dropped.Value, FormattableString.Invariant($"{dropped} in {coveredSeconds:F0} s"));
+            float now = Time.realtimeSinceStartup;
+            if (_buildShownAt < 0 || now - _buildShownAt >= BuildEverySeconds)
+            {
+                _buildShownAt = now;
+                Set(_buildId.Value, build);
+                Set(_load.Value, FormattableString.Invariant($"{loadSeconds:F1} s"));
+                Set(_dropped.Value, FormattableString.Invariant($"{dropped} in {coveredSeconds:F0} s"));
+            }
+
             if (_statusUntil >= 0 && Time.realtimeSinceStartup >= _statusUntil)
             {
                 _statusUntil = -1;
@@ -311,6 +340,36 @@ namespace Eleven.Host
             Vector2 keep = _keep.Element.worldBound.center * s;
             Vector2 skip = _skip.Element.worldBound.center * s;
             Log(FormattableString.Invariant($"ELEVEN ui sheet open keep={keep.x:F0},{keep.y:F0} skip={skip.x:F0},{skip.y:F0}"));
+        }
+
+        // The next control in order that can take focus, from the focused one.
+        private void MoveFocus(int step)
+        {
+            var order = new List<VisualElement>();
+            if (SheetOpen)
+            {
+                order.Add(_note.Field);
+                order.Add(_skip.Element);
+                order.Add(_keep.Element);
+            }
+            else
+            {
+                foreach (UiKit.Action a in _actions)
+                {
+                    if (a.Element.focusable && a.Element.resolvedStyle.visibility == Visibility.Visible) order.Add(a.Element);
+                }
+            }
+
+            if (order.Count == 0) return;
+            Focusable focused = _ui.Root.focusController?.focusedElement;
+            int at = -1;
+            for (int i = 0; i < order.Count; i++)
+            {
+                if (focused is VisualElement v && (v == order[i] || order[i].Contains(v))) at = i;
+            }
+
+            int next = at < 0 ? (step > 0 ? 0 : order.Count - 1) : (at + step + order.Count) % order.Count;
+            order[next].Focus();
         }
 
         private UiKit.Action Action(ActionRole role, string name, System.Action onClick, string label,

@@ -66,9 +66,15 @@ namespace Eleven.Host
                 r.Element.Add(r.Focus);
             }
 
+            // The hard shadow is the body's shape offset down and right. Only its right and bottom
+            // strips ever show past the body, so it paints those as borders rather than filling a
+            // whole shape hidden underneath: the same look for a fraction of the pixels (#53, measured
+            // frame cost on CI's software renderer).
             r.Shadow = Stack(0, shape.Radius);
             r.Shadow.style.translate = new Translate(shape.Shadow, shape.Shadow);
-            r.Shadow.style.backgroundColor = theme[Role.Shadow].ToColor();
+            Color shadow = theme[Role.Shadow].ToColor();
+            r.Shadow.style.borderRightWidth = r.Shadow.style.borderBottomWidth = shape.Shadow;
+            r.Shadow.style.borderRightColor = r.Shadow.style.borderBottomColor = shadow;
             r.Element.Add(r.Shadow);
 
             r.Body = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -323,11 +329,13 @@ namespace Eleven.Host
             // The built-in font's figures share one advance; reserve the widest value's width.
             d.Value.style.minWidth = widestValue.Length * TypeScale.Data.Size * UiRoot.TextScale * 0.6f;
             d.Element.style.alignItems = Align.Center;
-            // Where a panel is too narrow for both (enlarged text), the value goes below its name.
-            d.Element.style.flexWrap = Wrap.Wrap;
+            d.Element.style.flexShrink = 0;
+            d.Element.style.maxWidth = Length.Percent(100);
             d.Element.Add(d.Name);
             d.Element.Add(d.Value);
             Gaps(d.Element);
+            // Where a panel is too narrow for both (enlarged text), the value goes below its name.
+            d.Element.style.flexWrap = Wrap.Wrap;
             return d;
         }
 
