@@ -192,15 +192,7 @@ namespace Eleven.Simulation
             // The stick asks for a velocity; the player's own capabilities decide how fast they
             // run and how quickly they get there, whether speeding up, braking or turning (#36).
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
-            Vec2 change = move * player.Capabilities.MaxSpeed - player.Velocity;
-            double maxChange = player.Capabilities.Acceleration * dt;
-            double changeSquared = change.LengthSquared;
-            if (changeSquared > maxChange * maxChange)
-            {
-                change = change * (maxChange / SimMath.Sqrt(changeSquared));
-            }
-
-            player.Velocity += change;
+            player.Velocity = Accelerate(player.Velocity, move, player.Capabilities, dt);
             player.Position += player.Velocity * dt;
 
             // Below a millimetre per second the player counts as stopped and keeps its last heading.
@@ -208,6 +200,24 @@ namespace Eleven.Simulation
             {
                 player.Heading = SimMath.Atan2(player.Velocity.Y, player.Velocity.X);
             }
+        }
+
+        /// <summary>
+        /// One step of a player's velocity toward what the stick asks for (#36): limited by the
+        /// player's acceleration, whether speeding up, braking or turning. Static so the touch can
+        /// predict where the player will be with the simulation's own movement (INV-13).
+        /// </summary>
+        private static Vec2 Accelerate(Vec2 velocity, Vec2 move, in PlayerCapabilities capabilities, double dt)
+        {
+            Vec2 change = move * capabilities.MaxSpeed - velocity;
+            double maxChange = capabilities.Acceleration * dt;
+            double changeSquared = change.LengthSquared;
+            if (changeSquared > maxChange * maxChange)
+            {
+                change = change * (maxChange / SimMath.Sqrt(changeSquared));
+            }
+
+            return velocity + change;
         }
 
         // Aftertouch (#37): while the window is open, the owner's input shapes the ball they kicked,
@@ -467,9 +477,156 @@ namespace Eleven.Simulation
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
 
-        // Ball control in possession (#59). Stub until the FREE model is implemented.
+        // ---- Ball control in possession (#59, docs/simulation/dribble.md) ---------------------------
+
+        // m/s. A player slower than this traps the ball rather than pushing it on: a technical
+        // constant of the model, not a feel value.
+        private const double TrapSpeed = 0.5;
+
+        /// <summary>
+        /// Under <see cref="ControlModel.Free"/>, at most one player touches the ball on a step: the
+        /// nearest eligible one, the lower id on a tie. Eligible means in control this step (an
+        /// accepted command), not winding up a kick or in its cooldown, past the last touch's
+        /// interval, and with the ball within reach and low enough. A ball beyond reach is never
+        /// touched, so nothing reattaches it. It runs after kicks, so a kick's own step and its
+        /// cooldown keep the ball free.
+        /// </summary>
         private void StepControl(long tick, List<SimEvent> events)
         {
+            if (Config.ControlModel != ControlModel.Free) return;
+            if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
+
+            double reachSquared = Config.ControlReach * Config.ControlReach;
+            double nearest = double.MaxValue;
+            int toucher = -1;
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                PlayerState p = _state.Players[i];
+                if (p.WindUpTicks > 0 || p.KickCooldown > 0 || p.TouchCooldown > 0) continue;
+                if (!FindAccepted(p.OwnerControllerId).HasValue) continue;
+                double distanceSquared = (_state.Ball.Position.Horizontal - p.Position).LengthSquared;
+                if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
+                nearest = distanceSquared;
+                toucher = i;
+            }
+
+            if (toucher >= 0 && Touch(toucher, tick)) events.Add(new SimEvent(tick, SimEventKind.Touched, _state.Players[toucher].Id));
+        }
+
+        /// <summary>
+        /// One touch (#59): a bounded impulse toward the lead point. The touch predicts, with the
+        /// simulation's own movement (INV-13), where the player will be at their next touch under
+        /// this step's stick, and sends the ball to arrive the speed-dependent lead ahead of that,
+        /// along their direction of travel, under its own rolling physics. So it pushes the ball on
+        /// when the player runs, follows a turn, and settles it in front of the feet when they stop
+        /// or receive. The change of velocity is capped, cushioning by receive strength and
+        /// redirecting by touch strength, both scaled by ball control, so a fast ball or a sharp
+        /// turn at speed is only partly redirected, and the touch's direction
+        /// error grows with the turn and the overload and shrinks with ball control. Returns false
+        /// when there is nothing to do: a standing player, not moving off, with the ball at rest.
+        /// </summary>
+        private bool Touch(int index, long tick)
+        {
+            ref PlayerState player = ref _state.Players[index];
+            ref BallState ball = ref _state.Ball;
+            double dt = Config.TickSeconds;
+            Command? command = FindAccepted(player.OwnerControllerId);
+            Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
+            Vec2 ballVelocity = ball.Velocity.Horizontal;
+
+            bool standing = player.Velocity.LengthSquared < TrapSpeed * TrapSpeed && move.LengthSquared == 0;
+            if (standing && (ballVelocity - player.Velocity).LengthSquared <= Config.StopSpeed * Config.StopSpeed) return false;
+
+            // Where the player will be by their next touch: the ball moves `steps` times before that
+            // touch looks at it, the player `steps - 1` times more as the state is drawn, so the lead
+            // is what is seen and the ball stays within reach for the touch.
+            int steps = Config.TouchIntervalTicks;
+            double interval = steps * dt;
+            Vec2 velocity = player.Velocity, position = player.Position;
+            for (int k = 1; k < steps; k++)
+            {
+                velocity = Accelerate(velocity, move, player.Capabilities, dt);
+                position += velocity * dt;
+            }
+
+            double speed = SimMath.Sqrt(velocity.LengthSquared);
+            double fraction = speed / player.Capabilities.MaxSpeed;
+            if (fraction > 1) fraction = 1;
+            Vec2 along = speed >= TrapSpeed
+                ? velocity * (1 / speed)
+                : new Vec2(SimMath.Cos(player.Heading), SimMath.Sin(player.Heading));
+            double lead = Config.DribbleLeadSlow + (Config.DribbleLeadFast - Config.DribbleLeadSlow) * fraction;
+
+            // The velocity that rolls the ball there by then, or stops it there sooner.
+            Vec2 to = position + along * lead - ball.Position.Horizontal;
+            double distance = SimMath.Sqrt(to.LengthSquared);
+            double rolling = Config.RollingFriction * Config.Gravity;
+            Vec2 wanted = Vec2.Zero;
+            if (distance > 0)
+            {
+                double launch = distance >= 0.5 * rolling * interval * interval
+                    ? distance / interval + 0.5 * rolling * interval
+                    : SimMath.Sqrt(2 * rolling * distance);
+                wanted = to * (launch / distance);
+            }
+
+            // How far the ball's own direction is from where the touch sends it.
+            double turn = 0;
+            if (ballVelocity.LengthSquared > TrapSpeed * TrapSpeed && wanted.LengthSquared > 0)
+            {
+                double cross = ballVelocity.X * wanted.Y - ballVelocity.Y * wanted.X;
+                double dot = ballVelocity.X * wanted.X + ballVelocity.Y * wanted.Y;
+                turn = Math.Abs(SimMath.Atan2(cross, dot));
+            }
+
+            // Bounded. For a ball coming at the player, the part of the change that cushions it,
+            // taking off its speed relative to the player, is capped by receive strength: the first
+            // touch. The rest, which redirects or pushes it, as on a turn, is capped by touch
+            // strength. Both scale with ball control. A touch that needs more only partly reaches
+            // what it wanted.
+            double control = player.Capabilities.BallControl;
+            double scale = 0.5 + 0.5 * control;
+            Vec2 change = wanted - ballVelocity;
+            Vec2 cushion = Vec2.Zero;
+            Vec2 relative = ballVelocity - player.Velocity;
+            Vec2 apart = ball.Position.Horizontal - player.Position;
+            double relativeSpeed = SimMath.Sqrt(relative.LengthSquared);
+            bool incoming = apart.X * relative.X + apart.Y * relative.Y < 0;
+            if (incoming && relativeSpeed > 0)
+            {
+                Vec2 back = relative * (-1 / relativeSpeed);
+                double taken = change.X * back.X + change.Y * back.Y;
+                if (taken > relativeSpeed) taken = relativeSpeed;
+                if (taken > 0) cushion = back * taken;
+            }
+
+            double overload = 0;
+            Vec2 Bounded(Vec2 part, double cap)
+            {
+                double length = SimMath.Sqrt(part.LengthSquared);
+                if (length <= cap) return part;
+                double over = length / cap - 1;
+                if (over > overload) overload = over > 1 ? 1 : over;
+                return part * (cap / length);
+            }
+
+            change = Bounded(cushion, Config.ReceiveStrength * scale) + Bounded(change - cushion, Config.TouchStrength * scale);
+
+            // The footballer's execution error: bounded, seeded and contextual (INV-6).
+            Vec2 sent = ballVelocity + change;
+            double error = Config.TouchError * (1 - control) * (1 + turn / (Math.PI / 2) + overload);
+            if (error > 0)
+            {
+                var draws = new StreamDraws(_state.Seed, tick, RandomStream.Touch, player.Id);
+                double angle = (2 * draws.NextUniform() - 1) * error;
+                double c = SimMath.Cos(angle), s = SimMath.Sin(angle);
+                sent = new Vec2(sent.X * c - sent.Y * s, sent.X * s + sent.Y * c);
+            }
+
+            ball.Velocity = new Vec3(sent.X, sent.Y, ball.Velocity.Z);
+            ball.Spin = Vec3.Zero;
+            player.TouchCooldown = Config.TouchIntervalTicks;
+            return true;
         }
 
         private void StepBall(long tick, double dt, List<SimEvent> events)

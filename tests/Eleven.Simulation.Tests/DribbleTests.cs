@@ -96,15 +96,15 @@ namespace Eleven.Simulation.Tests
             Assert.True(run > jog + 0.05, $"lead at full stick {run:F3} m, at 0.4 stick {jog:F3} m");
         }
 
-        // Runs with the ball along +x at full stick, then turns the stick by `degrees`; returns the
-        // largest separation over the second after the turn.
-        private static double SeparationAfterTurn(SimConfig config, double degrees, double ballControl)
+        // Runs with the ball along +x, then turns the stick by `degrees`; returns the largest
+        // separation over the two seconds after the turn.
+        private static double SeparationAfterTurn(SimConfig config, double degrees, double ballControl, double stick = 1)
         {
             double r = degrees * Math.PI / 180;
             Run run = Play(config, AtFeet(config, ballControl), tick => new[]
             {
-                new Command(A, tick, tick < 2 * config.TickRate ? new Vec2(1, 0) : new Vec2(Math.Cos(r), Math.Sin(r))),
-            }, 3);
+                new Command(A, tick, (tick < 2 * config.TickRate ? new Vec2(1, 0) : new Vec2(Math.Cos(r), Math.Sin(r))) * stick),
+            }, 4);
 
             SimState atTurn = run.Before[2 * config.TickRate];
             Assert.True(Separation(atTurn) <= config.ControlReach + 0.3, $"not in control before the turn: {Separation(atTurn):F2} m");
@@ -112,19 +112,27 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void A_ninety_degree_turn_separates_the_ball_more_than_forty_five()
+        public void A_sharper_turn_at_speed_separates_the_ball_more()
         {
             SimConfig config = Free();
-            double at45 = SeparationAfterTurn(config, 45, 0.7), at90 = SeparationAfterTurn(config, 90, 0.7);
-            Assert.True(at90 > at45 + 0.1, $"after 90°: {at90:F2} m; after 45°: {at45:F2} m");
+            double at45 = SeparationAfterTurn(config, 45, 0.3), at90 = SeparationAfterTurn(config, 90, 0.3);
+            Assert.True(at90 > at45 + 0.1, $"control 0.3, after 90°: {at90:F2} m; after 45°: {at45:F2} m");
+        }
+
+        [Fact]
+        public void The_same_turn_is_harder_at_speed()
+        {
+            SimConfig config = Free();
+            double jog = SeparationAfterTurn(config, 90, 0.3, 0.5), sprint = SeparationAfterTurn(config, 90, 0.3);
+            Assert.True(sprint > jog + 0.1, $"control 0.3, 90° at full stick: {sprint:F2} m; at half stick: {jog:F2} m");
         }
 
         [Fact]
         public void Better_ball_control_keeps_a_sharp_turn_tighter()
         {
             SimConfig config = Free();
-            double good = SeparationAfterTurn(config, 90, 0.95), poor = SeparationAfterTurn(config, 90, 0.1);
-            Assert.True(poor > good + 0.1, $"control 0.1: {poor:F2} m; control 0.95: {good:F2} m");
+            double good = SeparationAfterTurn(config, 90, 0.9), poor = SeparationAfterTurn(config, 90, 0.3);
+            Assert.True(poor > good + 0.1, $"control 0.3: {poor:F2} m; control 0.9: {good:F2} m");
         }
 
         [Fact]
@@ -138,8 +146,9 @@ namespace Eleven.Simulation.Tests
             Assert.True(Separation(slow.After) <= config.ControlReach, $"slow ball {Separation(slow.After):F2} m away");
             Assert.True(Math.Sqrt(slow.After.Ball.Velocity.LengthSquared) < 0.5, $"slow ball still moving at {Math.Sqrt(slow.After.Ball.Velocity.LengthSquared):F2} m/s");
 
-            // Fast, the first touch can't kill it: it gets away and isn't reattached beyond reach.
-            Run fast = Play(config, AtFeet(config, ballAt: new Vec2(6, 0), ballVelocity: new Vec3(-16, 0, 0)), Stick(0, 0), 2);
+            // Fast, head-on at a player jogging on to it, the first touch can't kill it: it gets away
+            // and isn't reattached beyond reach.
+            Run fast = Play(config, AtFeet(config, ballAt: new Vec2(10, 0), ballVelocity: new Vec3(-16, 0, 0)), Stick(0.5, 0), 3);
             Assert.True(fast.Touches() > 0, "no touch on the fast ball");
             Assert.True(Separation(fast.After) > config.ControlReach + 1, $"fast ball only {Separation(fast.After):F2} m away");
         }

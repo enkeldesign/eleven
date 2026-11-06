@@ -56,8 +56,9 @@ namespace Eleven.Simulation
             double dribbleLeadSlow = 0.5,
             double dribbleLeadFast = 0.85,
             double touchInterval = 0.25,
-            double touchStrength = 7,
-            double touchError = 0.3)
+            double touchStrength = 5,
+            double touchError = 0.3,
+            double receiveStrength = 12)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -97,6 +98,7 @@ namespace Eleven.Simulation
             TouchInterval = touchInterval;
             TouchStrength = touchStrength;
             TouchError = touchError;
+            ReceiveStrength = receiveStrength;
 
             CheckTunableRanges();
 
@@ -241,11 +243,18 @@ namespace Eleven.Simulation
         public double TouchInterval { get; }
 
         /// <summary>
-        /// m/s. The largest change of the ball's velocity one touch can make, at full ball control
-        /// (#59); half of it at none. A touch that needs more, a fast ball or a sharp turn at speed,
-        /// redirects the ball only partly.
+        /// m/s. The largest change one touch can make to the ball's velocity, beyond cushioning it,
+        /// at full ball control (#59); half of it at none. A turn at speed that needs more redirects
+        /// the ball only partly.
         /// </summary>
         public double TouchStrength { get; }
+
+        /// <summary>
+        /// m/s. How much of the ball's speed relative to the player one touch can take off, its
+        /// cushioning first touch, at full ball control (#59); half of it at none. A ball arriving
+        /// faster than this is only partly controlled.
+        /// </summary>
+        public double ReceiveStrength { get; }
 
         /// <summary>
         /// rad. A touch's largest direction error at no ball control on an easy touch (#59). It
@@ -304,7 +313,8 @@ namespace Eleven.Simulation
                 dribbleLeadFast: r.ReadDouble(nameof(DribbleLeadFast)),
                 touchInterval: r.ReadDouble(nameof(TouchInterval)),
                 touchStrength: r.ReadDouble(nameof(TouchStrength)),
-                touchError: r.ReadDouble(nameof(TouchError)));
+                touchError: r.ReadDouble(nameof(TouchError)),
+                receiveStrength: r.ReadDouble(nameof(ReceiveStrength)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -349,6 +359,7 @@ namespace Eleven.Simulation
             w.WriteDouble(TouchInterval, nameof(TouchInterval));
             w.WriteDouble(TouchStrength, nameof(TouchStrength));
             w.WriteDouble(TouchError, nameof(TouchError));
+            w.WriteDouble(ReceiveStrength, nameof(ReceiveStrength));
             return w.ToArray();
         }
 

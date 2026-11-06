@@ -108,6 +108,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "touchInterval", "s", 0.05, 1),
             new TunableParameter(TunableParameter.ControlGroup, "touchStrength", "m/s", 1, 20),
             new TunableParameter(TunableParameter.ControlGroup, "touchError", "rad", 0, 0.6),
+            new TunableParameter(TunableParameter.ControlGroup, "receiveStrength", "m/s", 1, 30),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -141,6 +142,7 @@ namespace Eleven.Simulation
             "touchInterval" => TouchInterval,
             "touchStrength" => TouchStrength,
             "touchError" => TouchError,
+            "receiveStrength" => ReceiveStrength,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -163,6 +165,7 @@ namespace Eleven.Simulation
             double passBackWeight = PassBackWeight, passFreeDistance = PassFreeDistance;
             double controlReach = ControlReach, dribbleLeadSlow = DribbleLeadSlow, dribbleLeadFast = DribbleLeadFast;
             double touchInterval = TouchInterval, touchStrength = TouchStrength, touchError = TouchError;
+            double receiveStrength = ReceiveStrength;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -196,6 +199,7 @@ namespace Eleven.Simulation
                     case "touchInterval": touchInterval = o.Value; break;
                     case "touchStrength": touchStrength = o.Value; break;
                     case "touchError": touchError = o.Value; break;
+                    case "receiveStrength": receiveStrength = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -234,7 +238,8 @@ namespace Eleven.Simulation
                 dribbleLeadFast: dribbleLeadFast,
                 touchInterval: touchInterval,
                 touchStrength: touchStrength,
-                touchError: touchError);
+                touchError: touchError,
+                receiveStrength: receiveStrength);
         }
 
         /// <summary>This config under another ball control model (#59), every other value kept.</summary>
@@ -272,7 +277,8 @@ namespace Eleven.Simulation
             dribbleLeadFast: DribbleLeadFast,
             touchInterval: TouchInterval,
             touchStrength: TouchStrength,
-            touchError: TouchError);
+            touchError: TouchError,
+            receiveStrength: ReceiveStrength);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.
