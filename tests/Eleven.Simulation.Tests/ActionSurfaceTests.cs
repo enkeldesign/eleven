@@ -202,6 +202,23 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_repeated_begin_for_a_finger_already_down_changes_nothing()
+        {
+            // Platforms can report a held finger's press again when another finger lands.
+            ActionSurfaceAdapter adapter = Adapter();
+            adapter.Feed(Down(1, 100, 200, 0));
+            adapter.Feed(To(1, 150, 200, 0.01));
+            adapter.Feed(Down(2, 300, 200, 0.02));
+
+            Assert.Equal(TouchRole.Stick, adapter.Feed(Down(1, 150, 200, 0.03)));
+            Assert.Equal(TouchRole.Action, adapter.Feed(Down(2, 300, 200, 0.04)));
+            Command c = Feed(adapter, 0, Up(2, 340, 200, 0.06));
+            Assert.Equal(new Vec2(1, 0), c.Move);
+            Assert.True(c.Kick.HasValue);
+            Assert.Equal(new Vec2(40, 0), c.Kick!.Value.Direction); // from the first press, not the repeat
+        }
+
+        [Fact]
         public void Finger_order_does_not_change_the_commands()
         {
             // The same two touches, the stick's finger landing first or second.

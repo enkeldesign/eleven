@@ -357,8 +357,18 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       zone ? `${zone.join(',')} px, ${(zone[2] / pointPx).toFixed(0)} x ${(zone[3] / pointPx).toFixed(0)} pt` : 'no action= in the layout line');
     const actionCentre = zone ? at(zone[0] + zone[2] / 2, zone[1] + zone[3] / 2) : at(n[6], n[7]);
 
+    // Gestures on ACTION are timed from their own events, so in the touch pass each gesture's events
+    // go out in one burst: awaited one by one, every DevTools touch event costs a frame, and at this
+    // runner's 3-7 fps that makes any tap a quarter-second hold. A real tap is far shorter than the
+    // hold threshold; the burst keeps it so.
+    const burst = (...events) => Promise.all(events.map(([type, touchPoints]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints })));
+    const one = (p, id = 1) => [{ x: p.x, y: p.y, id }];
+
     // A tap asks the footballer for the quick pass, delivered at once: no waiting for the hold.
-    await tap(actionCentre);
+    if (useTouch) {
+      await burst(['touchStart', one(actionCentre)], ['touchEnd', []]);
+      await sleep(150);
+    } else await tap(actionCentre);
     const tapped = await waitForLog(actionPattern, 5_000, fromKick);
     const tapPress = logs.slice(fromKick).find((l) => l.startsWith('ELEVEN press'));
     const resolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 5_000, fromKick);
@@ -373,9 +383,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const flickTo = { x: actionCentre.x + 60 * pointPx * sx, y: actionCentre.y - 30 * pointPx * sy };
     const flickAt = (f) => ({ x: actionCentre.x + (flickTo.x - actionCentre.x) * f, y: actionCentre.y + (flickTo.y - actionCentre.y) * f });
     if (useTouch) {
-      await touch('touchStart', actionCentre);
-      for (const f of [0.34, 0.67, 1]) await touch('touchMove', flickAt(f));
-      await touch('touchEnd');
+      await burst(['touchStart', one(actionCentre)], ...[0.34, 0.67, 1].map((f) => ['touchMove', one(flickAt(f))]), ['touchEnd', []]);
     } else {
       await page.mouse.move(actionCentre.x, actionCentre.y);
       await page.mouse.down();
@@ -401,16 +409,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         await sleep(20);
       }
       const beforeBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
-      // A touch point left out of the next event is a finger lifted.
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points([s1, 1], [actionCentre, 2]) });
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points([s1, 1]) });
+      // A touch point left out of the next event is a finger lifted: the right thumb taps.
+      await burst(['touchMove', points([s1, 1], [actionCentre, 2])], ['touchMove', points([s1, 1])]);
       const both = await waitForLog(actionPattern, 5_000, fromBoth);
       const afterBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      const targets = logs.slice(fromBoth).filter((l) => l.startsWith('ELEVEN press')).map((l) => /target=(\w+)/.exec(l)?.[1]);
+      const presses = logs.slice(fromBoth).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
+      const targets = presses.map((l) => /target=(\w+)/.exec(l)?.[1]);
       const moved = beforeBoth && afterBoth ? Number(afterBoth[2]) - Number(beforeBoth[2]) : NaN;
       check('the stick and ACTION work at the same time', !!both && both.match[1] === 'tap' && targets.includes('stick') && targets.includes('action') && moved > 1,
-        `presses ${targets.join(',') || 'none'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
+        `presses ${presses.join(' | ') || 'none'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
     }
 
     const kickErrors = logs.slice(fromKick).filter((l) => /error|exception/i.test(l));
