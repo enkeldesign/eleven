@@ -37,6 +37,7 @@ namespace Eleven.Host
         private readonly InputAction _pressAction;
         private readonly InputAction _moveAction;
         private readonly List<int> _onUi = new List<int>(4);
+        private readonly Dictionary<int, double> _pressedAt = new Dictionary<int, double>(4);
         private int _screenHeight;
         private bool _touchSeen;
 
@@ -61,6 +62,9 @@ namespace Eleven.Host
 
         /// <summary>Raised once per press as it arrives: where it landed and what it was given.</summary>
         public event Action<string> PressLogged;
+
+        /// <summary>Raised once per lift of a finger the controls took: its role and how long it was down.</summary>
+        public event Action<string> ReleaseLogged;
 
         /// <summary>Raised when a gesture's command is delivered to a tick.</summary>
         public event Action<ActionReport> Delivered
@@ -139,7 +143,14 @@ namespace Eleven.Host
             Vector2 at = ToHud(position);
             if (!down)
             {
-                if (!_onUi.Remove(id)) _gestures.Feed(new TouchSample(id, end, at.x, at.y, context.time));
+                if (_onUi.Remove(id)) return;
+                TouchRole role = _gestures.Feed(new TouchSample(id, end, at.x, at.y, context.time));
+                if (role != TouchRole.None && _pressedAt.TryGetValue(id, out double pressed))
+                {
+                    ReleaseLogged?.Invoke(FormattableString.Invariant($"pointer={id} at={at.x:F0},{at.y:F0} role={Target(role)} phase={end} held={(context.time - pressed) * 1000:F0}ms"));
+                }
+
+                _pressedAt.Remove(id);
                 return;
             }
 
@@ -153,6 +164,7 @@ namespace Eleven.Host
             {
                 _onUi.Remove(id);
                 target = Target(_gestures.Feed(new TouchSample(id, GesturePhase.Began, at.x, at.y, context.time)));
+                if (!_pressedAt.ContainsKey(id)) _pressedAt[id] = context.time;
             }
 
             PressLogged?.Invoke(FormattableString.Invariant($"pointer={id} at={at.x:F0},{at.y:F0} target={target}"));

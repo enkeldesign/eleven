@@ -395,8 +395,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       !!flicked && flicked.match[1] === 'flick' && Number(flicked.match[3]) > 0 && Number(flicked.match[4]) > 0,
       flicked ? flicked.match[0].replace('ELEVEN action ', '') : 'no action line after the flick');
 
-    // Both thumbs at once: the stick held right while the right thumb taps ACTION. The tap still
-    // asks for the pass and the stick still moves the player. Touch only: a mouse is one pointer.
+    // Both thumbs at once: the stick held right while the right thumb flicks ACTION and lifts. The
+    // flick still kicks and the stick still moves the player. Touch only: a mouse is one pointer.
+    // A flick rather than a tap: when a DevTools event lifts one finger of two, the lift can land a
+    // frame late here, and a flick kicks however long it was held, so the check is about the lift.
     if (useTouch) {
       await sleep(1_500);
       const fromBoth = logs.length;
@@ -409,16 +411,18 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         await sleep(20);
       }
       const beforeBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
-      // A touch point left out of the next event is a finger lifted: the right thumb taps.
-      await burst(['touchMove', points([s1, 1], [actionCentre, 2])], ['touchMove', points([s1, 1])]);
+      // A touch point left out of the next event is a finger lifted: the right thumb flicks.
+      await burst(['touchMove', points([s1, 1], [actionCentre, 2])],
+        ...[0.34, 0.67, 1].map((f) => ['touchMove', points([s1, 1], [flickAt(f), 2])]),
+        ['touchMove', points([s1, 1])]);
       const both = await waitForLog(actionPattern, 5_000, fromBoth);
       const afterBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      const presses = logs.slice(fromBoth).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
-      const targets = presses.map((l) => /target=(\w+)/.exec(l)?.[1]);
+      const presses = logs.slice(fromBoth).filter((l) => /^ELEVEN (press|release) /.test(l)).map((l) => l.trim().replace('ELEVEN ', ''));
+      const targets = presses.map((l) => /target=(\w+)/.exec(l)?.[1]).filter(Boolean);
       const moved = beforeBoth && afterBoth ? Number(afterBoth[2]) - Number(beforeBoth[2]) : NaN;
-      check('the stick and ACTION work at the same time', !!both && both.match[1] === 'tap' && targets.includes('stick') && targets.includes('action') && moved > 1,
-        `presses ${presses.join(' | ') || 'none'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
+      check('the stick and ACTION work at the same time', !!both && /^(hold)?flick$/.test(both.match[1]) && targets.includes('stick') && targets.includes('action') && moved > 1,
+        `${presses.join(' | ') || 'no presses'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
     }
 
     const kickErrors = logs.slice(fromKick).filter((l) => /error|exception/i.test(l));

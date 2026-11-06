@@ -110,7 +110,11 @@ namespace Eleven.Host
 
             // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
             if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
-            if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
+            if (_trace)
+            {
+                _input.PressLogged += press => Log($"ELEVEN press {press}");
+                _input.ReleaseLogged += release => Log($"ELEVEN release {release}");
+            }
             RememberPrevious();
             UpdateLayout(force: true);
             _lastTime = Time.realtimeSinceStartupAsDouble;
