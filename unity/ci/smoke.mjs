@@ -886,6 +886,9 @@ try {
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
   await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
   await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
+  // The mown pattern's frame cost (#58): the same idle pass on the plain pitch, right after the
+  // cross-cut one, on the same runner. The software renderer exaggerates fill cost; a phone's GPU doesn't.
+  await runPass(browser, idle('noui=1&pitch=plain'), 'phone-noui-plain-pitch', phone, true);
   await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
