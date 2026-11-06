@@ -1,3 +1,4 @@
+using Eleven.Presentation;
 using UnityEngine;
 
 namespace Eleven.Host
@@ -9,6 +10,8 @@ namespace Eleven.Host
     internal static class HostPalette
     {
         public static readonly Color Pitch = new Color32(0x2E, 0x6B, 0x3A, 0xFF);
+        // The pitch's mown shade (#58), straight from the domain tokens.
+        public static readonly Color PitchMown = Domain.PitchMown.ToColor();
         public static readonly Color PitchLine = new Color32(0xF2, 0xF2, 0xF2, 0xFF);
         public static readonly Color Ball = new Color32(0xF7, 0xE2, 0x6B, 0xFF);
         public static readonly Color BallShadow = new Color(0f, 0f, 0f, 0.35f);

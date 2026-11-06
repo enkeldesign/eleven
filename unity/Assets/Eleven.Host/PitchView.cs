@@ -9,9 +9,28 @@ namespace Eleven.Host
     ///
     /// Presentation only: it reads interpolated positions and never feeds anything back into the
     /// simulation (INV-12).
+    ///
+    /// The grass is mown (#58): two shades in a pattern fixed to the pitch, so movement reads under
+    /// the following camera wherever it is, not only when a line is in view.
     /// </summary>
     internal sealed class PitchView
     {
+        /// <summary>How the grass is mown (#58).</summary>
+        public enum Mowing
+        {
+            /// <summary>Squares, mown both ways: movement reads in every direction. The default.</summary>
+            Crosscut,
+
+            /// <summary>Bands parallel to the goal lines, as in SWOS and Kick Off 2: goal-to-goal movement reads.</summary>
+            Stripes,
+
+            /// <summary>One shade, as before #58, for comparison.</summary>
+            Plain,
+        }
+
+        /// <summary>The width of one mown band, in metres: a technical reference (real pitches are mown in 5–6 m bands).</summary>
+        public const float MownBand = 5.5f;
+
         // Presentation constants, not simulation config.
         private const float MinHalfExtent = 7f;
         private const float FramingMargin = 3f;
@@ -30,8 +49,9 @@ namespace Eleven.Host
         private float _ballDiameter;
         private Vector3 _ballShown;
 
-        public PitchView(SimConfig config, Transform root)
+        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut)
         {
+            Grass = mowing;
             _config = config;
             Disc = MakeDiscTexture(64);
             Sprite disc = Sprite.Create(Disc, new Rect(0, 0, Disc.width, Disc.height), new Vector2(0.5f, 0.5f), Disc.width);
@@ -50,6 +70,7 @@ namespace Eleven.Host
 
             float goalLine = (float)config.GoalLineX;
             float length = goalLine * 2;
+            if (mowing != Mowing.Plain) Mow(root, mowing, new Vector2(length, PitchHalfWidth * 2));
             Line(root, square, "Goal line", new Vector2(goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Far goal line", new Vector2(-goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Halfway line", Vector2.zero, new Vector2(LineWidth, PitchHalfWidth * 2));
@@ -76,6 +97,9 @@ namespace Eleven.Host
 
         /// <summary>A white anti-aliased disc, also used by the HUD.</summary>
         public Texture2D Disc { get; }
+
+        /// <summary>How the grass is mown.</summary>
+        public Mowing Grass { get; }
 
         /// <param name="ball">x, y on the pitch and z, the height of the ball's centre.</param>
         /// <param name="layout">The HUD, whose <see cref="HudLayout.PlayArea"/> the play is framed in.</param>
@@ -126,6 +150,34 @@ namespace Eleven.Host
         {
             Vector3 screen = _camera.WorldToScreenPoint(world);
             return layout.PlayArea.Contains(new Vector2(screen.x, layout.ScreenHeight - screen.y));
+        }
+
+        // The mown pattern under the lines: one texel per band, point-sampled so the bands keep crisp
+        // edges, tiled across the playing area. Cross-cut alternates both ways, stripes along x only,
+        // so their bands run parallel to the goal lines. The halfway line falls on a band edge.
+        private static void Mow(Transform root, Mowing mowing, Vector2 size)
+        {
+            int rows = mowing == Mowing.Crosscut ? 2 : 1;
+            var texture = new Texture2D(2, rows, TextureFormat.RGBA32, false)
+            {
+                name = "Mown grass",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Repeat,
+            };
+            Color32 pitch = HostPalette.Pitch;
+            Color32 mown = HostPalette.PitchMown;
+            texture.SetPixels32(rows == 2 ? new[] { mown, pitch, pitch, mown } : new[] { mown, pitch });
+            texture.Apply(false, true);
+
+            Sprite tile = Sprite.Create(texture, new Rect(0, 0, 2, rows), new Vector2(0.5f, 0.5f), 1f / MownBand, 0, SpriteMeshType.FullRect);
+            var grass = new GameObject("Mown grass");
+            grass.transform.SetParent(root, false);
+            var renderer = grass.AddComponent<SpriteRenderer>();
+            renderer.sprite = tile;
+            renderer.drawMode = SpriteDrawMode.Tiled;
+            renderer.tileMode = SpriteTileMode.Continuous;
+            renderer.size = size;
+            renderer.sortingOrder = 0;
         }
 
         private static void Line(Transform root, Sprite square, string name, Vector2 centre, Vector2 size)
