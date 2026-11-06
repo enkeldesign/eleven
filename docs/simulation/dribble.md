@@ -53,8 +53,11 @@ A **standing player** (slower than 0.5 m/s, stick released) with the ball at res
    - The rest, which **redirects or pushes**, as on a turn, is capped by `touchStrength`.
    - A touch that needs more only partly reaches what it wanted, so the ball separates.
 5. **Execution error.** The direction error is uniform within ±`touchError` · (1 − ballControl) · (1 + turn / 90° + overload). It is drawn from the counter-based stream `RandomStream.Touch` (INV-6).
-   - The turn is the angle between the ball's current direction and where the touch sends it.
+   - The turn is the angle between the ball's current direction and where the touch sends it, 0–180°.
    - The overload is how far a cap was exceeded, as a fraction of 0–1.
+   - **The context multiplier is bounded: 1 to 4.** It is 1 for an easy touch, up to 3 for a full reversal, and up to 4 with a cap overloaded too. So `touchError` is the largest error at zero control on an easy touch, and the largest at all is 4 × `touchError` × (1 − ballControl).
+     - At the reference 0.3 rad, ballControl 0.7 reaches ±0.09 rad (5°) on an easy touch and ±0.36 rad (21°) at the most.
+     - ballControl 0.3 reaches ±0.21 rad (12°) and ±0.84 rad (48°).
    - The error depends on the capability and the context: there is no universal randomness.
 6. **Clean-up.** A touch clears the ball's spin and sets `TouchCooldown`. `SimEventKind.Touched` names the player.
 
@@ -62,19 +65,21 @@ A **standing player** (slower than 0.5 m/s, stick released) with the ball at res
 
 These are in the bench's Control tab, with `ballControl` on the Player tab.
 
-| Knob | Unit | Valid | #29 start | Reference |
-| --- | --- | --- | --- | --- |
-| `controlReach` | m | 0.3–2 | 0.7–1.2 | 0.9, the kick reach |
-| `dribbleLeadSlow` | m | 0.2–1.5 | 0.35–0.9 | 0.5 |
-| `dribbleLeadFast` | m | 0.3–3 | 0.8–2.0 | 0.85 |
-| `touchInterval` | s | 0.05–1 | — | 0.25 |
-| `touchStrength` | m/s | 1–20 | — | 5 |
-| `receiveStrength` | m/s | 1–30 | — | 12 |
-| `touchError` | rad | 0–0.6 | — | 0.3 |
-| `ballControl` | fraction | 0–1 | — | 0.7 |
+| Knob | Unit | Valid | #29 start | SOL's exploration band | Reference |
+| --- | --- | --- | --- | --- | --- |
+| `controlReach` | m | 0.3–2 | 0.7–1.2 | — | 0.9, the kick reach |
+| `dribbleLeadSlow` | m | 0.2–1.5 | 0.35–0.9 | — | 0.5 |
+| `dribbleLeadFast` | m | 0.3–3 | 0.8–2.0 | 0.85; 1.2–2.0 for push-and-chase | 0.85 |
+| `touchInterval` | s | 0.05–1 | — | 0.15–0.45 (try 0.20, 0.30, 0.40) | 0.25 |
+| `touchStrength` | m/s | 1–20 | — | 3–10 | 5 |
+| `receiveStrength` | m/s | 1–30 | — | 6–18 | 12 |
+| `touchError` | rad | 0–0.6 | — | 0.10–0.40 | 0.3 |
+| `ballControl` | fraction | 0–1 | — | — | 0.7 |
+
+**SOL's bands** (research note on #59) are engineering hypotheses from the mechanics and the genre, not measured SWOS or Kick Off 2 constants. The valid ranges stay wider, so the bench can go past them.
 
 **Why the references sit where they do:**
-- **`dribbleLeadFast` 0.85 m.** A kick connects only within the 0.9 m kick reach. A sprint lead beyond reach makes a sprinting player's kick miss unless it is timed, which is Kick Off 2's push-and-chase. The reference keeps the playable loop SOL names (control, run, turn, lose and recover, flick a kick), and the bench reaches 2.0 m for the push-ahead style.
+- **`dribbleLeadFast` 0.85 m: the safe, playable reference, not a preferred feel** (SOL on #59). A kick connects only within the 0.9 m kick reach, so the reference keeps the loop SOL names playable: control, run, turn, lose and recover, flick a kick. Push-and-chase, 1.2–2.0 m, is the second experiment; see [The sprint lead](#the-sprint-lead).
 - **`touchStrength` 5 m/s.** The reference player keeps 45° and 90° turns at sprint. A poorer one loses a 45° turn at sprint and a 90° turn even at half speed.
 - **`receiveStrength` 12 m/s.** A good player settles an 8 m/s head-on pass at once, a poor one in half a second. A 16 m/s ball beats both.
 
@@ -92,9 +97,11 @@ There are seven cases, each under a good profile (`ballControl` 0.9) and a poor 
 | `receive-and-go` | an 8 m/s ball head-on at a player jogging on to it | settle time and distance: from the first touch until the ball is within reach and moving with the player |
 | `difficult-first-touch` | the same at 16 m/s | the same, or "not settled" with the final separation |
 | `kick-release` | a 0.6-strength kick along the heading while dribbling | the release speed, and touches through the kick cooldown (always 0) |
+| `sprint-flick` | a 0.6-strength flick after 2 s of sprinting with the ball, started once at each step of a touch interval (15 starts) | the share that connect: the ball rolls on, untouched, through the wind-up |
 
 **At the references:**
 - **Leads:** 0.68 m at a jog and 0.85 m at a sprint.
+- **Every flick at a sprint connects**, at both profiles.
 - **The good profile** keeps 45° and 90° turns, settles the 8 m/s pass at once, and loses the 16 m/s ball.
 - **The poor profile** loses a 45° turn for 1.75 s and a 90° turn entirely, settles the 8 m/s pass in 0.5 s over 1.6 m, and loses the 16 m/s ball.
 
@@ -111,7 +118,30 @@ The tests pin relationships, not values:
 - 90° loses more than 45° at the poor profile;
 - the same turn is harder at speed;
 - better control keeps a sharp turn tighter;
-- a slow ball is settled, and a fast one beats the first touch.
+- a slow ball is settled, and a fast one beats the first touch;
+- a sprint flick connects at the reference lead, and less often with the lead beyond the kick reach.
+
+## The sprint lead
+
+SOL asked (#59) for evidence across sprint leads of 0.85, 1.2, 1.5 and 2.0 m, all from `eleven-sim dribble <dir> dribbleLeadFast=… [controlReach=…]`.
+
+**Beyond the control reach, the dribble is lost; it doesn't become push-and-chase.**
+- With `controlReach` at 0.9 m, a lead of 1.2 m or more sends the ball beyond reach at every touch.
+- It rolls on faster than the sprinting player, and rolling friction (0.78 m/s²) takes seconds to bring it back.
+- At 1.2 m the sprint is beyond reach for the whole 3 s measured, with the ball 5.1 m away at most for good control and 8.7 m for poor. At 2.0 m it is 11.6 m and 14.2 m.
+
+**With `controlReach` raised to match, the ball is held at the longer lead, and no sprint flick connects.**
+- At 1.2 m (reach 1.3), 1.5 m (reach 1.6) and 2.0 m (reach 2.0), the ball runs that far ahead, and 0% of sprint flicks connect against the 0.9 m kick reach.
+- At 1.2 and 1.5 m, turns behave as at the reference: good control keeps them, poor control loses them. At 2.0 m the ball sits at the edge of a 2.0 m reach and is counted beyond it for much of the run, even straight ahead.
+
+**Sprint flicks fall off a cliff at the kick reach**, measured with `controlReach` 1.1 or 1.25 so the dribble holds:
+
+| `dribbleLeadFast` | 0.85–0.95 m | 1.0 m | 1.05 m and more |
+| --- | --- | --- | --- |
+| good (0.9), flicks connecting | 100% | 100% | 0% |
+| poor (0.3) | 100% | 93% | 0% |
+
+So in this model a flick at a sprint is all or nothing by lead. Kick Off 2's timed push-and-chase, where the ball runs out of reach and the player catches it, isn't a setting of these knobs. It would take a different touch target: one that pushes the ball out and lets it come back into reach. That is a design question for SOL and Erik, not for this issue.
 
 ## For Erik on device
 
@@ -119,7 +149,7 @@ The tests pin relationships, not values:
 
 On the bench, try:
 - `ballControl` 0.3 and 0.9;
-- `dribbleLeadFast` towards 2.0, the push-and-chase style;
+- `dribbleLeadFast` towards 2.0, with `controlReach` raised to match or the ball is lost: the ball runs further ahead, and sprint flicks stop connecting (see [The sprint lead](#the-sprint-lead));
 - `touchStrength` and `receiveStrength`.
 
 None of the defaults is chosen as feel.

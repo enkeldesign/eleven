@@ -61,6 +61,25 @@ namespace Eleven.Simulation.Tests
             Assert.True(double.IsNaN(Of("difficult-first-touch", "poor").SettleSeconds));
         }
 
+        // SOL on #59: the reference lead keeps a flick at a sprint playable, and a lead beyond the
+        // kick reach makes it miss. The share itself is a technical reference.
+        [Fact]
+        public void A_sprint_flick_connects_at_the_reference_lead_and_not_far_beyond_kick_reach()
+        {
+            foreach (string profile in new[] { "good", "poor" })
+            {
+                DribbleCurve c = Of("sprint-flick", profile);
+                Assert.True(c.Touches > 0, $"{profile}: not dribbling before the flick");
+                Assert.True(c.FlickConnectShare > 0.5, $"{profile}: {c.FlickConnectShare:P0} of sprint flicks connect");
+            }
+
+            SimConfig far = Config.With("dribbleLeadFast", 1.2).With("controlReach", 1.3);
+            DribbleCurve beyond = DribbleCurves.Characterise(far).Single(c => c.Case == "sprint-flick" && c.Profile == "good");
+            Assert.True(beyond.Touches > 0, "not dribbling at the far lead");
+            Assert.True(beyond.FlickConnectShare < Of("sprint-flick", "good").FlickConnectShare,
+                $"lead 1.2 m: {beyond.FlickConnectShare:P0}; reference: {Of("sprint-flick", "good").FlickConnectShare:P0}");
+        }
+
         [Fact]
         public void A_kick_releases_the_ball()
         {

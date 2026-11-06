@@ -13,7 +13,7 @@ namespace Eleven.Simulation.Harness
     {
         /// <summary>
         /// <c>straight-jog</c>, <c>sprint</c>, <c>turn-45</c>, <c>turn-90</c>, <c>receive-and-go</c>,
-        /// <c>difficult-first-touch</c> or <c>kick-release</c>.
+        /// <c>difficult-first-touch</c>, <c>kick-release</c> or <c>sprint-flick</c>.
         /// </summary>
         public string Case = "";
 
@@ -47,12 +47,19 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>kick-release: touches from contact through the kick cooldown; must be 0.</summary>
         public int TouchesAfterKick;
+
+        /// <summary>
+        /// sprint-flick: the share of flicks that connect, of one started at each step of a touch
+        /// interval while sprinting with the ball. Being within reach when the flick starts doesn't
+        /// guarantee contact: the ball rolls on, untouched, through the wind-up.
+        /// </summary>
+        public double FlickConnectShare = double.NaN;
     }
 
     /// <summary>
     /// The FREE model's characterisation (#59): straight dribbling at a jog and a sprint, 45° and
-    /// 90° turns at a sprint, receive-and-go, a difficult first touch and the release on a kick,
-    /// each under a good and a poor ball-control profile. Technical references for the bench, not
+    /// 90° turns at a sprint, receive-and-go, a difficult first touch, the release on a kick and
+    /// flicks while sprinting, each under a good and a poor ball-control profile. Technical references for the bench, not
     /// feel; docs/simulation/dribble.md says what each measures.
     /// </summary>
     public static class DribbleCurves
@@ -74,6 +81,7 @@ namespace Eleven.Simulation.Harness
                 curves.Add(Receive(config, "receive-and-go", profile, control, 8));
                 curves.Add(Receive(config, "difficult-first-touch", profile, control, 16));
                 curves.Add(KickRelease(config, profile, control));
+                curves.Add(SprintFlick(config, profile, control));
             }
 
             return curves;
@@ -219,16 +227,52 @@ namespace Eleven.Simulation.Harness
             return curve;
         }
 
+        // Flicks while sprinting with the ball (SOL on #59): one started at each step of a touch
+        // interval, from 2 s of sprinting, each in its own run, so every phase of the touch cycle is
+        // tried once.
+        private static DribbleCurve SprintFlick(SimConfig config, string profile, double control)
+        {
+            var curve = new DribbleCurve { Case = "sprint-flick", Profile = profile, BallControl = control };
+            int attempts = Math.Max(1, config.TouchIntervalTicks);
+            long first = 2 * config.TickRate;
+            var step = new List<Command>(1);
+            var events = new List<SimEvent>();
+            int connected = 0;
+            for (int k = 0; k < attempts; k++)
+            {
+                long kickAt = first + k;
+                var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+                bool resolved = false;
+                for (long t = 0; !resolved && t <= kickAt + config.KickWindUpTicks + 2; t++)
+                {
+                    step.Clear();
+                    step.Add(new Command(Controller, sim.Tick, new Vec2(1, 0), t == kickAt ? KickIntent.AlongHeading(0.6, 0) : (KickIntent?)null));
+                    events.Clear();
+                    sim.Step(step, events);
+                    foreach (SimEvent e in events)
+                    {
+                        if (e.Kind == SimEventKind.Kicked) connected++;
+                        if (e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.KickMissed) resolved = true;
+                        if (e.Kind == SimEventKind.Touched && k == 0 && t < first) curve.Touches++;
+                    }
+                }
+            }
+
+            curve.FlickConnectShare = (double)connected / attempts;
+            curve.MeanLeadMetres = curve.MaxLeadMetres = curve.MaxSeparationMetres = double.NaN;
+            return curve;
+        }
+
         public static void WriteCsv(TextWriter w, SimConfig config, IReadOnlyList<DribbleCurve> curves)
         {
-            w.Write("config_hash,case,profile,ball_control,touches,mean_lead_m,max_lead_m,max_separation_m,lost_s,settle_s,settle_m,release_mps,touches_after_kick\n");
+            w.Write("config_hash,case,profile,ball_control,touches,mean_lead_m,max_lead_m,max_separation_m,lost_s,settle_s,settle_m,release_mps,touches_after_kick,flick_connect\n");
             foreach (DribbleCurve c in curves)
             {
                 w.Write(string.Join(",",
                     config.Hash.ToString("x16", CultureInfo.InvariantCulture), c.Case, c.Profile, F(c.BallControl),
                     c.Touches.ToString(CultureInfo.InvariantCulture), F(c.MeanLeadMetres), F(c.MaxLeadMetres), F(c.MaxSeparationMetres),
                     F(c.LostSeconds), F(c.SettleSeconds), F(c.SettleMetres), F(c.ReleaseSpeedMps),
-                    c.TouchesAfterKick.ToString(CultureInfo.InvariantCulture)));
+                    c.TouchesAfterKick.ToString(CultureInfo.InvariantCulture), F(c.FlickConnectShare)));
                 w.Write('\n');
             }
         }
@@ -244,6 +288,7 @@ namespace Eleven.Simulation.Harness
                     "straight-jog" or "sprint" => FormattableString.Invariant($"lead {c.MeanLeadMetres:F2} m (max {c.MaxLeadMetres:F2}), lost {c.LostSeconds:F2} s"),
                     "turn-45" or "turn-90" => FormattableString.Invariant($"max separation {c.MaxSeparationMetres:F2} m, lost {c.LostSeconds:F2} s"),
                     "kick-release" => FormattableString.Invariant($"released at {c.ReleaseSpeedMps:F1} m/s, {c.TouchesAfterKick} touches after"),
+                    "sprint-flick" => FormattableString.Invariant($"{c.FlickConnectShare * 100:F0}% of flicks connect"),
                     _ => double.IsNaN(c.SettleSeconds)
                         ? FormattableString.Invariant($"not settled, {c.MaxSeparationMetres:F1} m away after 4 s")
                         : FormattableString.Invariant($"settled in {c.SettleSeconds:F2} s over {c.SettleMetres:F2} m"),
