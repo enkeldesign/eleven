@@ -36,6 +36,7 @@ The simulation's assembly definition (`src/Eleven.Simulation/Eleven.Simulation.a
   - `?trace` logs state every 60 ticks and every event.
   - `?specimen` (or `?specimen=dark`) shows the visual system's specimen over the match.
   - `?textscale=1.5` enlarges UI text.
+  - `?pitch=stripes` or `?pitch=plain` replaces the default cross-cut mown pattern for comparison (#58).
   - `?ui=empty` builds an empty UI Toolkit panel, for the frame-cost passes.
   - `?noui` builds no UI, which the smoke test uses to measure the UI's frame cost. The smoke test replays each capture with .NET from the bytes kept in `localStorage` and, on desktop, SAVE CAPTURE's download (#50).
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Eleven.Simulation;
 using UnityEngine;
 
@@ -9,9 +10,28 @@ namespace Eleven.Host
     ///
     /// Presentation only: it reads interpolated positions and never feeds anything back into the
     /// simulation (INV-12).
+    ///
+    /// The grass is mown (#58): two shades in a pattern fixed to the pitch, so movement reads under
+    /// the following camera wherever it is, not only when a line is in view.
     /// </summary>
     internal sealed class PitchView
     {
+        /// <summary>How the grass is mown (#58).</summary>
+        public enum Mowing
+        {
+            /// <summary>Squares, mown both ways: movement reads in every direction. The default.</summary>
+            Crosscut,
+
+            /// <summary>Bands parallel to the goal lines, as in SWOS and Kick Off 2: goal-to-goal movement reads.</summary>
+            Stripes,
+
+            /// <summary>One shade, as before #58, for comparison.</summary>
+            Plain,
+        }
+
+        /// <summary>The width of one mown band, in metres: a technical reference (real pitches are mown in 5–6 m bands).</summary>
+        public const float MownBand = 5.5f;
+
         // Presentation constants, not simulation config.
         private const float MinHalfExtent = 7f;
         private const float FramingMargin = 3f;
@@ -30,8 +50,9 @@ namespace Eleven.Host
         private float _ballDiameter;
         private Vector3 _ballShown;
 
-        public PitchView(SimConfig config, Transform root)
+        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut)
         {
+            Grass = mowing;
             _config = config;
             Disc = MakeDiscTexture(64);
             Sprite disc = Sprite.Create(Disc, new Rect(0, 0, Disc.width, Disc.height), new Vector2(0.5f, 0.5f), Disc.width);
@@ -50,6 +71,7 @@ namespace Eleven.Host
 
             float goalLine = (float)config.GoalLineX;
             float length = goalLine * 2;
+            if (mowing != Mowing.Plain) Mow(root, mowing, new Vector2(length, PitchHalfWidth * 2));
             Line(root, square, "Goal line", new Vector2(goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Far goal line", new Vector2(-goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Halfway line", Vector2.zero, new Vector2(LineWidth, PitchHalfWidth * 2));
@@ -76,6 +98,9 @@ namespace Eleven.Host
 
         /// <summary>A white anti-aliased disc, also used by the HUD.</summary>
         public Texture2D Disc { get; }
+
+        /// <summary>How the grass is mown.</summary>
+        public Mowing Grass { get; }
 
         /// <param name="ball">x, y on the pitch and z, the height of the ball's centre.</param>
         /// <param name="layout">The HUD, whose <see cref="HudLayout.PlayArea"/> the play is framed in.</param>
@@ -126,6 +151,79 @@ namespace Eleven.Host
         {
             Vector3 screen = _camera.WorldToScreenPoint(world);
             return layout.PlayArea.Contains(new Vector2(screen.x, layout.ScreenHeight - screen.y));
+        }
+
+        // The mown pattern under the lines (#58): only the mown squares (or bands) are drawn, in the
+        // mown shade over the pitch's own colour, which the camera clears to. One mesh, one draw,
+        // vertex colours and no texture of its own, so the grass costs half the screen's fill rather
+        // than all of it: the CI's software renderer showed a full-screen tiled sprite costing a
+        // third of the phone pass's frame rate. Cross-cut alternates both ways; stripes run along x
+        // only, so their bands are parallel to the goal lines. The halfway line falls on a band edge.
+        private static void Mow(Transform root, Mowing mowing, Vector2 size)
+        {
+            float halfX = size.x * 0.5f, halfY = size.y * 0.5f;
+            int columns = Mathf.CeilToInt(halfX / MownBand), rows = Mathf.CeilToInt(halfY / MownBand);
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            for (int i = -columns; i < columns; i++)
+            {
+                if (mowing == Mowing.Stripes)
+                {
+                    if ((i & 1) == 0) Quad(vertices, triangles, i * MownBand, (i + 1) * MownBand, -halfY, halfY, halfX, halfY);
+                    continue;
+                }
+
+                for (int j = -rows; j < rows; j++)
+                {
+                    if (((i + j) & 1) == 0) Quad(vertices, triangles, i * MownBand, (i + 1) * MownBand, j * MownBand, (j + 1) * MownBand, halfX, halfY);
+                }
+            }
+
+            var mesh = new Mesh { name = "Mown grass" };
+            mesh.SetVertices(vertices);
+            var colours = new Color32[vertices.Count];
+            for (int k = 0; k < colours.Length; k++) colours[k] = HostPalette.PitchMown;
+            mesh.colors32 = colours;
+            mesh.SetTriangles(triangles, 0);
+
+            var grass = new GameObject("Mown grass");
+            grass.transform.SetParent(root, false);
+            grass.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = grass.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = SpriteMaterial();
+            renderer.sortingOrder = 0;
+        }
+
+        // The built-in sprite material every SpriteRenderer starts with: vertex colour times a white
+        // texture, and always in the build, unlike a shader looked up by name.
+        private static Material SpriteMaterial()
+        {
+            var probe = new GameObject("Sprite material probe");
+            Material material = probe.AddComponent<SpriteRenderer>().sharedMaterial;
+            Object.Destroy(probe);
+            return material;
+        }
+
+        // One square of the pattern, clipped to the playing area.
+        private static void Quad(List<Vector3> vertices, List<int> triangles, float x0, float x1, float y0, float y1, float halfX, float halfY)
+        {
+            x0 = Mathf.Max(x0, -halfX);
+            x1 = Mathf.Min(x1, halfX);
+            y0 = Mathf.Max(y0, -halfY);
+            y1 = Mathf.Min(y1, halfY);
+            if (x1 <= x0 || y1 <= y0) return;
+
+            int first = vertices.Count;
+            vertices.Add(new Vector3(x0, y0, 0));
+            vertices.Add(new Vector3(x0, y1, 0));
+            vertices.Add(new Vector3(x1, y1, 0));
+            vertices.Add(new Vector3(x1, y0, 0));
+            triangles.Add(first);
+            triangles.Add(first + 1);
+            triangles.Add(first + 2);
+            triangles.Add(first);
+            triangles.Add(first + 2);
+            triangles.Add(first + 3);
         }
 
         private static void Line(Transform root, Sprite square, string name, Vector2 centre, Vector2 size)

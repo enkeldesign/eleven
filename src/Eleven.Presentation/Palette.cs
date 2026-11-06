@@ -77,6 +77,13 @@ namespace Eleven.Presentation
     public static class Domain
     {
         public static readonly Rgba Pitch = Rgba.Hex("#2E6B3A");
+
+        /// <summary>
+        /// The pitch's second, mown shade (#58): with <see cref="Pitch"/> it draws the mown pattern
+        /// that makes movement readable under a following camera. 1.23:1 against the pitch, quiet
+        /// enough never to compete with the play, which reads at 3:1 or more on both shades.
+        /// </summary>
+        public static readonly Rgba PitchMown = Rgba.Hex("#275C32");
         public static readonly Rgba PitchLine = Rgba.Hex("#F2F2F2");
         public static readonly Rgba Ball = Rgba.Hex("#F7E26B");
         public static readonly Rgba BallShadow = Rgba.Hex("#00000059");
@@ -86,7 +93,7 @@ namespace Eleven.Presentation
 
         public static readonly (string Name, Rgba Colour)[] All =
         {
-            ("Pitch", Pitch), ("PitchLine", PitchLine), ("Ball", Ball), ("BallShadow", BallShadow), ("Player", Player),
+            ("Pitch", Pitch), ("PitchMown", PitchMown), ("PitchLine", PitchLine), ("Ball", Ball), ("BallShadow", BallShadow), ("Player", Player),
         };
     }
 }

@@ -25,6 +25,12 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
 
 **Domain colours** (`Domain`: pitch, lines, ball, players) are a separate set. No role uses them, and no theme redefines them.
 
+**The pitch is mown** (#58) in two shades, `Pitch` and `PitchMown`, so movement reads under the following camera wherever it is.
+- **Cross-cut is the default:** squares mown both ways, so movement reads in every direction.
+- **`?pitch=stripes`** draws bands parallel to the goal lines, as in SWOS and Kick Off 2. **`?pitch=plain`** draws one shade. Both are there for comparison.
+- **Bands are 5.5 m**, a technical reference.
+- **The shades differ quietly**, by 1.10–1.35:1, so the pattern never competes with the play. The player, the ball, the lines and the HUD's pitch-context borders and focus pair read at 3:1 on both shades.
+
 ## Scales, defined once
 
 | Scale | Values |
