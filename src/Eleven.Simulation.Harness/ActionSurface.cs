@@ -423,14 +423,14 @@ namespace Eleven.Simulation.Harness
 
         private TouchRole Begin(in TouchSample sample)
         {
-            // A finger already down that is reported pressed again (some platforms do when another
-            // finger lands) keeps its role and its press.
+            // A finger already down that is reported pressed again (Unity does whenever its phase
+            // changes) keeps its role and its press, and one held across a cancel stays ignored
+            // until it lifts. Platforms give every touch a fresh id, so a repeated id is the same
+            // finger.
             if (sample.Pointer == _stickPointer) return TouchRole.Stick;
             if (sample.Pointer == _actionPointer) return TouchRole.Action;
             if (sample.Pointer == _shapingPointer) return TouchRole.Shaping;
-
-            // An id the platform reuses after a lift we never saw is a new finger.
-            _ignored.Remove(sample.Pointer);
+            if (_ignored.Contains(sample.Pointer)) return TouchRole.None;
 
             if (_stickZone.Contains(sample.X, sample.Y))
             {

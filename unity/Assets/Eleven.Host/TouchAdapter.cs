@@ -36,6 +36,8 @@ namespace Eleven.Host
         private readonly ActionSurfaceAdapter _gestures;
         private readonly InputAction _pressAction;
         private readonly InputAction _moveAction;
+        // Who owns each finger that is down, fixed at its press until it lifts: the UI's, or the
+        // controls' (with when it was pressed).
         private readonly List<int> _onUi = new List<int>(4);
         private readonly Dictionary<int, double> _pressedAt = new Dictionary<int, double>(4);
         private int _screenHeight;
@@ -154,17 +156,21 @@ namespace Eleven.Host
                 return;
             }
 
+            // Unity reports a held finger pressed again whenever its phase changes. The repeat keeps
+            // the owner the press gave it: a stick finger that has moved over a UI action stays the
+            // stick's, and a finger that began on the UI never becomes a gesture (Codex on #57).
+            if (_onUi.Contains(id) || _pressedAt.ContainsKey(id)) return;
+
             string target;
             if (OverUi != null && OverUi(at))
             {
-                if (!_onUi.Contains(id)) _onUi.Add(id);
+                _onUi.Add(id);
                 target = "ui";
             }
             else
             {
-                _onUi.Remove(id);
                 target = Target(_gestures.Feed(new TouchSample(id, GesturePhase.Began, at.x, at.y, context.time)));
-                if (!_pressedAt.ContainsKey(id)) _pressedAt[id] = context.time;
+                _pressedAt[id] = context.time;
             }
 
             PressLogged?.Invoke(FormattableString.Invariant($"pointer={id} at={at.x:F0},{at.y:F0} target={target}"));

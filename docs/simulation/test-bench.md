@@ -70,6 +70,10 @@ Candidate A from #28, playable and tunable here; Candidates B and C are not buil
   - or, while the controlled player's kick winds up, its aftertouch window is open, or a gesture waits for its tick, it starts **shaping**.
 
 Each control belongs to its first finger, and a second finger on it is ignored. Roles depend only on where each finger began, so the order fingers land in never changes the commands.
+- **Owners last from press to lift.** Unity reports a held finger as pressed again whenever its phase changes. Such a repeat changes nothing:
+  - a stick finger that moves over a UI action stays the stick's;
+  - a finger that began on the UI never becomes a gesture;
+  - a finger held across a cancel stays ignored until it lifts.
 
 **A gesture**, from press p₀ at t₀ to release p₁ at t₁. Distances are in points, d = |p₁ − p₀|.
 
