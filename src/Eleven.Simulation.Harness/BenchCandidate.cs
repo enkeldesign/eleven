@@ -11,10 +11,11 @@ namespace Eleven.Simulation.Harness
     /// <summary>One knob on the feel test bench (#45): a tunable from the supported metadata.</summary>
     public sealed class BenchKnob
     {
-        internal BenchKnob(TunableParameter parameter, bool onPlayer)
+        internal BenchKnob(TunableParameter parameter, bool onPlayer, bool onAdapter = false)
         {
             Parameter = parameter;
             OnPlayer = onPlayer;
+            OnAdapter = onAdapter;
             Label = LabelFor(parameter.Name);
             int exponent;
             Step = StepFor(parameter, out exponent);
@@ -28,7 +29,7 @@ namespace Eleven.Simulation.Harness
         public bool OnPlayer { get; }
 
         /// <summary>A touch adapter value (<see cref="ActionSurfaceSettings"/>): how gestures read, never how the football behaves.</summary>
-        public bool OnAdapter => false;
+        public bool OnAdapter { get; }
 
         public string Name => Parameter.Name;
 
@@ -90,11 +91,14 @@ namespace Eleven.Simulation.Harness
     }
 
     /// <summary>
-    /// A complete set of feel test bench values (#45): every <see cref="SimConfig.Tunables"/> value and
-    /// every <see cref="PlayerCapabilities.Parameters"/> value of the controlled player. It is built
-    /// only through the supported surface (<see cref="SimConfig.With(IEnumerable{KeyValuePair{string, double}})"/>
-    /// and <see cref="PlayerCapabilities.With"/>), so a candidate is an ordinary immutable config plus
-    /// a player, never a change to a running simulation.
+    /// A complete set of feel test bench values (#45): every <see cref="SimConfig.Tunables"/> value,
+    /// every <see cref="PlayerCapabilities.Parameters"/> value of the controlled player, and every
+    /// touch gesture value of Candidate A (<see cref="ActionSurfaceSettings.Parameters"/>, #28). It is
+    /// built only through the supported surface (<see cref="SimConfig.With(IEnumerable{KeyValuePair{string, double}})"/>,
+    /// <see cref="PlayerCapabilities.With"/> and <see cref="ActionSurfaceSettings.With"/>), so a
+    /// candidate is an ordinary immutable config plus a player and an adapter's settings, never a
+    /// change to a running simulation. The touch values decide which commands gestures become; they
+    /// are in no config or state hash.
     ///
     /// The page and the host exchange values as their IEEE-754 bits, so the same values are the same
     /// doubles in every runtime; decimal is for display only.
@@ -107,22 +111,24 @@ namespace Eleven.Simulation.Harness
         /// <summary>The active preset a capture records for any other values, until presets have names (#46).</summary>
         public const string UnsavedPreset = "unsaved";
 
-        /// <summary>The config tunables, then the player capabilities, in metadata order.</summary>
+        /// <summary>The config tunables, then the player capabilities, then the touch gestures, in metadata order.</summary>
         public static readonly ReadOnlyCollection<BenchKnob> Knobs = Array.AsReadOnly(MakeKnobs());
 
-        private static readonly BenchCandidate s_reference = new BenchCandidate(SpikeScenario.Config(), PlayerCapabilities.Reference);
+        private static readonly BenchCandidate s_reference = new BenchCandidate(SpikeScenario.Config(), PlayerCapabilities.Reference, ActionSurfaceSettings.Reference);
 
-        private BenchCandidate(SimConfig config, PlayerCapabilities capabilities)
+        private BenchCandidate(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings actionSurface)
         {
             Config = config;
             Capabilities = capabilities;
+            ActionSurface = actionSurface;
         }
 
-        /// <summary>The technical reference: the spike's config and <see cref="PlayerCapabilities.Reference"/>.</summary>
+        /// <summary>The technical reference: the spike's config, <see cref="PlayerCapabilities.Reference"/> and <see cref="ActionSurfaceSettings.Reference"/>.</summary>
         public static BenchCandidate Reference => s_reference;
 
-        /// <summary>The values of an existing config and player.</summary>
-        public static BenchCandidate From(SimConfig config, PlayerCapabilities capabilities) => new BenchCandidate(config, capabilities);
+        /// <summary>The values of an existing config and player, with the reference touch settings unless given.</summary>
+        public static BenchCandidate From(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings? actionSurface = null) =>
+            new BenchCandidate(config, capabilities, actionSurface ?? ActionSurfaceSettings.Reference);
 
         /// <summary>The immutable config these values make.</summary>
         public SimConfig Config { get; }
@@ -131,13 +137,13 @@ namespace Eleven.Simulation.Harness
         public PlayerCapabilities Capabilities { get; }
 
         /// <summary>Candidate A's gesture settings these values make (#28).</summary>
-        public ActionSurfaceSettings ActionSurface => ActionSurfaceSettings.Reference;
+        public ActionSurfaceSettings ActionSurface { get; }
 
         /// <summary>A knob's value, by name.</summary>
         public double Get(string name)
         {
             BenchKnob knob = Find(name) ?? throw new ArgumentException($"'{name}' is not a bench knob.", nameof(name));
-            return knob.OnPlayer ? Capabilities.Get(name) : Config.Get(name);
+            return knob.OnAdapter ? ActionSurface.Get(name) : knob.OnPlayer ? Capabilities.Get(name) : Config.Get(name);
         }
 
         /// <summary>The standard practice start under these values: the spike's start with this player.</summary>
@@ -167,6 +173,7 @@ namespace Eleven.Simulation.Harness
             result = null;
             var config = new List<KeyValuePair<string, double>>();
             PlayerCapabilities capabilities = Capabilities;
+            ActionSurfaceSettings actionSurface = ActionSurface;
             foreach (KeyValuePair<string, double> change in changes)
             {
                 BenchKnob? knob = Find(change.Key);
@@ -178,7 +185,8 @@ namespace Eleven.Simulation.Harness
 
                 problem = RangeProblem(knob, change.Value);
                 if (problem.Length > 0) return false;
-                if (knob.OnPlayer) capabilities = capabilities.With(knob.Name, change.Value);
+                if (knob.OnAdapter) actionSurface = actionSurface.With(knob.Name, change.Value);
+                else if (knob.OnPlayer) capabilities = capabilities.With(knob.Name, change.Value);
                 else config.Add(change);
             }
 
@@ -193,7 +201,7 @@ namespace Eleven.Simulation.Harness
                 return false;
             }
 
-            result = new BenchCandidate(made, capabilities);
+            result = new BenchCandidate(made, capabilities, actionSurface);
             problem = "";
             return true;
         }
@@ -314,9 +322,10 @@ namespace Eleven.Simulation.Harness
 
         private static BenchKnob[] MakeKnobs()
         {
-            var knobs = new List<BenchKnob>(SimConfig.Tunables.Count + PlayerCapabilities.Parameters.Count);
+            var knobs = new List<BenchKnob>(SimConfig.Tunables.Count + PlayerCapabilities.Parameters.Count + ActionSurfaceSettings.Parameters.Count);
             foreach (TunableParameter p in SimConfig.Tunables) knobs.Add(new BenchKnob(p, onPlayer: false));
             foreach (TunableParameter p in PlayerCapabilities.Parameters) knobs.Add(new BenchKnob(p, onPlayer: true));
+            foreach (TunableParameter p in ActionSurfaceSettings.Parameters) knobs.Add(new BenchKnob(p, onPlayer: false, onAdapter: true));
             return knobs.ToArray();
         }
     }

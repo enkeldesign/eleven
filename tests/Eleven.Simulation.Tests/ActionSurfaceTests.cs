@@ -230,19 +230,25 @@ namespace Eleven.Simulation.Tests
         {
             ActionSurfaceAdapter adapter = Adapter();
             adapter.Feed(Down(1, 100, 200, 0));
-            adapter.Feed(To(1, 150, 200, 0.01));
+            adapter.Feed(To(1, 150, 200, 0.01));  // the stick held full right
             adapter.Feed(Down(2, 300, 200, 0));
-            adapter.Feed(Up(2, 301, 200, 0.05)); // a tap, not yet delivered
+            adapter.Feed(Up(2, 301, 200, 0.05));  // a tap, not yet delivered
 
             adapter.Cancel(); // reset, retry or new settings
 
-            Command after = Feed(adapter, 0, To(1, 100, 250, 0.1), Down(3, 300, 200, 0.1), To(3, 340, 200, 0.12));
-            Assert.True(Neutral(after), "the pending tap is gone and the held action finger is ignored");
-            Assert.Equal(Vec2.Zero, after.Move); // the stick's finger is ignored until it lifts
-            Assert.True(Neutral(Feed(adapter, 1, Up(3, 360, 200, 0.14), Up(1, 100, 250, 0.15))));
+            Command first = adapter.CommandFor(0);
+            Assert.True(Neutral(first), "the pending tap is gone");
+            Assert.Equal(Vec2.Zero, first.Move); // the stick's finger is ignored until it lifts
+
+            adapter.Feed(Down(3, 300, 200, 0.1)); // a hold on ACTION...
+            adapter.Cancel();                      // ...cancelled before it flicks
+            Command held = Feed(adapter, 1, To(1, 100, 250, 0.11), To(3, 340, 200, 0.12), Up(3, 360, 200, 0.14), Up(1, 100, 250, 0.15));
+            Assert.True(Neutral(held), "a finger down at the cancel never ends as a kick");
+            Assert.Equal(Vec2.Zero, held.Move);
 
             // Fresh touches after the cancelled ones lift work again.
             Assert.True(Feed(adapter, 2, Down(4, 300, 200, 0.3), Up(4, 300, 200, 0.33)).QuickPass);
+            Assert.Equal(TouchRole.Stick, adapter.Feed(Down(5, 100, 200, 0.34)));
         }
 
         [Fact]
