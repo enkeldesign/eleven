@@ -88,7 +88,10 @@ namespace Eleven.Host
             // keyboard focus and activation are Unity's UI's (#53). A text field raises the phone's
             // keyboard.
             EnableMobileKeyboard();
-            _view = new PitchView(_config, transform);
+            // ?pitch=stripes or ?pitch=plain: the comparators for the mown pattern (#58).
+            PitchView.Mowing mowing = url.Contains("pitch=stripes") ? PitchView.Mowing.Stripes
+                : url.Contains("pitch=plain") ? PitchView.Mowing.Plain : PitchView.Mowing.Crosscut;
+            _view = new PitchView(_config, transform, mowing);
             _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface);
             _input.Delivered += GestureDelivered;
             // ?noui: measurement only (#48), the frame without the UI.
@@ -122,6 +125,7 @@ namespace Eleven.Host
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
             Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
+            Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m"));
 
             if (url.Contains("autorun")) RunScenario();
         }

@@ -30,7 +30,7 @@
 //     candidate, shown in words; APPLY / RETRY starts a fresh run whose config and practice start
 //     hash as .NET's <hash log dir>/bench-candidate.txt says; the time from the press to the fresh
 //     run is reported; a capture under the candidate goes to capture-<pass>-bench.elfc
-//   - rendering: the screenshot contains the pitch, line, player and ball colours
+//   - rendering: the screenshot contains the pitch's two mown shades, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
 // server stopped the player still boots from the cache.
@@ -51,6 +51,8 @@ fs.mkdirSync(outDir, { recursive: true });
 // Colours from HostPalette.cs.
 const colours = {
   pitch: [0x2e, 0x6b, 0x3a],
+  // The pitch's mown shade (#58): the pattern that makes movement readable.
+  mown: [0x27, 0x5c, 0x32],
   line: [0xf2, 0xf2, 0xf2],
   player: [0x99, 0xcc, 0x44],
   ball: [0xf7, 0xe2, 0x6b],
@@ -716,7 +718,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       return out;
     }, { data: png.toString('base64'), colours });
-    check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
+    check('pitch, line, player and ball are drawn', ['pitch', 'line', 'player', 'ball'].every((k) => notes.pixels[k] > 20), JSON.stringify(notes.pixels));
+    // The mown pattern (#58) covers about half the grass. Edges blended near the pitch's colour
+    // count as the mown shade too (about 0.5 % of the grass without any pattern), so the check is a
+    // share of the grass, not a count.
+    const grass = notes.pixels.pitch + notes.pixels.mown;
+    const mownShare = grass > 0 ? notes.pixels.mown / grass : 0;
+    check('the pitch is mown in two shades', mownShare >= 0.2 && mownShare <= 0.8,
+      `${(mownShare * 100).toFixed(1)} % of the grass is the mown shade (${notes.pixels.mown} of ${grass} pixels)`);
 
     // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
     // white label must be on screen, so text really renders in the WebGL build, not only measures.
@@ -877,6 +886,9 @@ try {
   await runPass(browser, `${base}?trace=1&autorun=1`, 'desktop', desktop, false);
   await runPass(browser, idle('noui=1'), 'desktop-noui-after', desktop, false);
   await runPass(browser, idle('noui=1'), 'phone-noui-before', phone, true);
+  // The mown pattern's frame cost (#58): the same idle pass on the plain pitch, right after the
+  // cross-cut one, on the same runner. The software renderer exaggerates fill cost; a phone's GPU doesn't.
+  await runPass(browser, idle('noui=1&pitch=plain'), 'phone-noui-plain-pitch', phone, true);
   await runPass(browser, idle('ui=empty'), 'phone-panel-empty', phone, true);
   await runPass(browser, `${base}?trace=1`, 'phone', phone, true);
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);

@@ -171,12 +171,30 @@ namespace Eleven.Presentation.Tests
             Theme theme = ThemeNamed(themeName);
             double pair = Rgba.Contrast(theme[Role.FocusRing], theme[Role.FocusGap]);
             Assert.True(pair >= 3, $"{themeName}: focus ring on its gap is {pair:F2}:1");
-            IEnumerable<(string, Rgba)> backgrounds = Theme.Surfaces.Select(s => (s.ToString(), theme[s])).Append(("pitch", Domain.Pitch));
+            IEnumerable<(string, Rgba)> backgrounds = Theme.Surfaces.Select(s => (s.ToString(), theme[s]))
+                .Append(("pitch", Domain.Pitch)).Append(("mown pitch", Domain.PitchMown));
             foreach ((string name, Rgba background) in backgrounds)
             {
                 double ring = Rgba.Contrast(theme[Role.FocusRing], background);
                 double gap = Rgba.Contrast(theme[Role.FocusGap], background);
                 Assert.True(Math.Max(ring, gap) >= 3, $"{themeName}: focus indicator on {name}: ring {ring:F2}:1, gap {gap:F2}:1");
+            }
+        }
+
+        [Fact]
+        public void The_mown_pattern_is_quiet_and_everything_on_the_pitch_reads_on_both_shades()
+        {
+            // #58: two grass shades make movement readable. They differ only quietly, so the pattern
+            // never competes with the play, and the play reads at 3:1 (WCAG 1.4.11) on either.
+            double shades = Rgba.Contrast(Domain.Pitch, Domain.PitchMown);
+            Assert.InRange(shades, 1.10, 1.35);
+            foreach (Rgba grass in new[] { Domain.Pitch, Domain.PitchMown })
+            {
+                foreach ((string name, Rgba colour) in new[] { ("player", Domain.Player), ("ball", Domain.Ball), ("lines", Domain.PitchLine), ("HUD border", Theme.Pitch[Role.Outline]) })
+                {
+                    double ratio = Rgba.Contrast(colour, grass);
+                    Assert.True(ratio >= 3, $"{name} {ratio:F2}:1 against {grass.ToHex()}");
+                }
             }
         }
 
@@ -191,7 +209,7 @@ namespace Eleven.Presentation.Tests
             }
 
             Assert.DoesNotContain(Theme.Roles, r => r.ToString().IndexOf("football", StringComparison.OrdinalIgnoreCase) >= 0);
-            Assert.Equal(new[] { "Pitch", "PitchLine", "Ball", "BallShadow", "Player" }, Domain.All.Select(d => d.Name));
+            Assert.Equal(new[] { "Pitch", "PitchMown", "PitchLine", "Ball", "BallShadow", "Player" }, Domain.All.Select(d => d.Name));
             Assert.Equal("#2E6B3A", Domain.Pitch.ToHex());
         }
 
