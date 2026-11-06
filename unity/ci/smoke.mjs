@@ -718,7 +718,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       return out;
     }, { data: png.toString('base64'), colours });
-    check('pitch (both mown shades), line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
+    check('pitch, line, player and ball are drawn', ['pitch', 'line', 'player', 'ball'].every((k) => notes.pixels[k] > 20), JSON.stringify(notes.pixels));
+    // The mown pattern (#58) covers about half the grass. Edges blended near the pitch's colour
+    // count as the mown shade too (about 0.5 % of the grass without any pattern), so the check is a
+    // share of the grass, not a count.
+    const grass = notes.pixels.pitch + notes.pixels.mown;
+    const mownShare = grass > 0 ? notes.pixels.mown / grass : 0;
+    check('the pitch is mown in two shades', mownShare >= 0.2 && mownShare <= 0.8,
+      `${(mownShare * 100).toFixed(1)} % of the grass is the mown shade (${notes.pixels.mown} of ${grass} pixels)`);
 
     // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
     // white label must be on screen, so text really renders in the WebGL build, not only measures.
