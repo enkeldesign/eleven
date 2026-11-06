@@ -91,6 +91,9 @@ namespace Eleven.Host
 
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
+            // The tabs wrap onto a second row on a phone. They must never shrink: squeezed to one
+            // row's height, the second row overflows under the knob list, which takes its presses.
+            _tabs.Element.style.flexShrink = 0;
             _sheet.Content.Add(_tabs.Element);
 
             _list = UiKit.MakeScroll();
