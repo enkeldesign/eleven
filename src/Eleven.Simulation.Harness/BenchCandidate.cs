@@ -27,6 +27,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>A <see cref="PlayerCapabilities"/> value of the controlled player, rather than a <see cref="SimConfig"/> value.</summary>
         public bool OnPlayer { get; }
 
+        /// <summary>A touch adapter value (<see cref="ActionSurfaceSettings"/>): how gestures read, never how the football behaves.</summary>
+        public bool OnAdapter => false;
+
         public string Name => Parameter.Name;
 
         public string Group => Parameter.Group;
@@ -126,6 +129,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>The controlled player's capabilities these values make.</summary>
         public PlayerCapabilities Capabilities { get; }
+
+        /// <summary>Candidate A's gesture settings these values make (#28).</summary>
+        public ActionSurfaceSettings ActionSurface => ActionSurfaceSettings.Reference;
 
         /// <summary>A knob's value, by name.</summary>
         public double Get(string name)

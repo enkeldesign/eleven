@@ -61,6 +61,9 @@ const layoutPattern = /ELEVEN layout screen=(\d+)x(\d+) run=(\d+),(\d+) reset=(\
 const capturePattern = /feltWrong=(-?\d+),(-?\d+),(\d+),(\d+) save=(-?\d+),(-?\d+),(\d+),(\d+)/;
 // The TEST BENCH action (#45), from the same layout line.
 const benchPattern = /bench=(-?\d+),(-?\d+),(\d+),(\d+)/;
+// Candidate A's ACTION surface (#28), from the same layout line, and what a gesture on it became.
+const actionZonePattern = /action=(-?\d+),(-?\d+),(\d+),(\d+)/;
+const actionPattern = /ELEVEN action gesture=(\w+) strength=([\d.]+) direction=(-?[\d.]+),(-?[\d.]+) latency=(-?[\d.]+)ms/;
 const keptPattern = /ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+) note=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
 
@@ -345,12 +348,73 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
     check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
-    // Kick button: a tap must be taken without errors (whether it connects depends on position).
+    // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.
     const fromKick = logs.length;
-    await tap(at(n[6], n[7]));
-    await sleep(500);
+    const pointPx = Number(ui?.[2] ?? 1);
+    const zone = actionZonePattern.exec(lastLog(layoutPattern)?.input ?? '')?.slice(1, 5).map(Number) ?? null;
+    check('the ACTION surface is a large right-thumb surface of at least 44 x 44 pt',
+      !!zone && zone[2] / pointPx >= 44 && zone[3] / pointPx >= 44 && zone[0] + zone[2] / 2 > n[0] / 2,
+      zone ? `${zone.join(',')} px, ${(zone[2] / pointPx).toFixed(0)} x ${(zone[3] / pointPx).toFixed(0)} pt` : 'no action= in the layout line');
+    const actionCentre = zone ? at(zone[0] + zone[2] / 2, zone[1] + zone[3] / 2) : at(n[6], n[7]);
+
+    // A tap asks the footballer for the quick pass, delivered at once: no waiting for the hold.
+    await tap(actionCentre);
+    const tapped = await waitForLog(actionPattern, 5_000, fromKick);
+    const tapPress = logs.slice(fromKick).find((l) => l.startsWith('ELEVEN press'));
+    const resolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 5_000, fromKick);
+    notes.tapLatencyMs = tapped ? Number(tapped.match[5]) : NaN;
+    check('a tap on ACTION asks for the quick pass', !!tapped && tapped.match[1] === 'tap' && /target=action/.test(tapPress ?? '') && !!resolved,
+      `${tapPress ?? 'no press logged'}; ${tapped ? tapped.match[0].replace('ELEVEN action ', '') : 'no action line'}; ${resolved ? resolved.match[0].replace('ELEVEN event ', '') : 'no QuickPassResolved event'}`);
+
+    // An immediate flick is a manual kick along the gesture: right and up the screen is +x, +y on
+    // the pitch. Wait for the quick pass's wind-up and window to pass first, so ACTION starts a gesture.
+    await sleep(1_500);
+    const fromFlick = logs.length;
+    const flickTo = { x: actionCentre.x + 60 * pointPx * sx, y: actionCentre.y - 30 * pointPx * sy };
+    const flickAt = (f) => ({ x: actionCentre.x + (flickTo.x - actionCentre.x) * f, y: actionCentre.y + (flickTo.y - actionCentre.y) * f });
+    if (useTouch) {
+      await touch('touchStart', actionCentre);
+      for (const f of [0.34, 0.67, 1]) await touch('touchMove', flickAt(f));
+      await touch('touchEnd');
+    } else {
+      await page.mouse.move(actionCentre.x, actionCentre.y);
+      await page.mouse.down();
+      for (const f of [0.34, 0.67, 1]) await page.mouse.move(flickAt(f).x, flickAt(f).y);
+      await page.mouse.up();
+    }
+    const flicked = await waitForLog(actionPattern, 5_000, fromFlick);
+    check('an immediate flick on ACTION is a manual kick along the gesture',
+      !!flicked && flicked.match[1] === 'flick' && Number(flicked.match[3]) > 0 && Number(flicked.match[4]) > 0,
+      flicked ? flicked.match[0].replace('ELEVEN action ', '') : 'no action line after the flick');
+
+    // Both thumbs at once: the stick held right while the right thumb taps ACTION. The tap still
+    // asks for the pass and the stick still moves the player. Touch only: a mouse is one pointer.
+    if (useTouch) {
+      await sleep(1_500);
+      const fromBoth = logs.length;
+      const s0 = at(n[8], n[9]);
+      const s1 = { x: s0.x + reach, y: s0.y };
+      const points = (...p) => p.map(([q, id]) => ({ x: q.x, y: q.y, id }));
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points([s0, 1]) });
+      for (let i = 1; i <= 5; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points([{ x: s0.x + (reach * i) / 5, y: s0.y }, 1]) });
+        await sleep(20);
+      }
+      const beforeBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+      // A touch point left out of the next event is a finger lifted.
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points([s1, 1], [actionCentre, 2]) });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points([s1, 1]) });
+      const both = await waitForLog(actionPattern, 5_000, fromBoth);
+      const afterBoth = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const targets = logs.slice(fromBoth).filter((l) => l.startsWith('ELEVEN press')).map((l) => /target=(\w+)/.exec(l)?.[1]);
+      const moved = beforeBoth && afterBoth ? Number(afterBoth[2]) - Number(beforeBoth[2]) : NaN;
+      check('the stick and ACTION work at the same time', !!both && both.match[1] === 'tap' && targets.includes('stick') && targets.includes('action') && moved > 1,
+        `presses ${targets.join(',') || 'none'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
+    }
+
     const kickErrors = logs.slice(fromKick).filter((l) => /error|exception/i.test(l));
-    check('kick button tap', kickErrors.length === 0, kickErrors.length ? kickErrors.join(' | ') : 'no errors');
+    check('ACTION gestures are taken without errors', kickErrors.length === 0, kickErrors.length ? kickErrors.join(' | ') : 'no errors');
 
     // The live session's command recording replays headlessly in the build to the same state.
     const replay = await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromKick);

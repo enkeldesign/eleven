@@ -24,26 +24,30 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void The_knobs_are_the_config_tunables_then_the_player_capabilities()
+        public void The_knobs_are_the_config_tunables_then_the_player_capabilities_then_the_touch_gestures()
         {
-            var expected = SimConfig.Tunables.Concat(PlayerCapabilities.Parameters).ToList();
+            var expected = SimConfig.Tunables.Concat(PlayerCapabilities.Parameters).Concat(ActionSurfaceSettings.Parameters).ToList();
+            int players = SimConfig.Tunables.Count;
+            int touch = players + PlayerCapabilities.Parameters.Count;
             Assert.Equal(expected.Count, BenchCandidate.Knobs.Count);
             for (int i = 0; i < expected.Count; i++)
             {
                 Assert.Same(expected[i], BenchCandidate.Knobs[i].Parameter);
-                Assert.Equal(i >= SimConfig.Tunables.Count, BenchCandidate.Knobs[i].OnPlayer);
+                Assert.Equal(i >= players && i < touch, BenchCandidate.Knobs[i].OnPlayer);
+                Assert.Equal(i >= touch, BenchCandidate.Knobs[i].OnAdapter);
             }
         }
 
         [Fact]
         public void Every_knob_has_a_group_a_label_and_a_step_inside_its_range()
         {
-            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.PlayerGroup };
+            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
             Assert.NotEmpty(BenchCandidate.Knobs);
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
                 Assert.Contains(k.Group, groups);
                 Assert.Equal(k.OnPlayer, k.Group == TunableParameter.PlayerGroup);
+                Assert.Equal(k.OnAdapter, k.Group == ActionSurfaceSettings.Group);
                 Assert.False(string.IsNullOrWhiteSpace(k.Label), k.Name);
                 Assert.True(char.IsUpper(k.Label[0]), k.Label);
                 Assert.True(k.Step > 0 && k.Step <= k.Parameter.Max - k.Parameter.Min, $"{k.Name} step {k.Step}");
@@ -64,6 +68,8 @@ namespace Eleven.Simulation.Tests
         [InlineData("aftertouchSeconds", "Aftertouch seconds", 0.005)] // 0.15–0.30 s
         [InlineData("gravity", "Gravity", 2)]                 // no starting range: valid 0.1–50
         [InlineData("passVision", "Pass vision", 0.1)]        // valid 0–π
+        [InlineData("actionHoldSeconds", "Action hold seconds", 0.005)] // 0.12–0.25 s
+        [InlineData("actionFlickDistance", "Action flick distance", 1)] // 12–32 pt
         public void Labels_come_from_the_names_and_steps_fit_twenty_times_into_the_starting_range(string name, string label, double step)
         {
             BenchKnob knob = BenchCandidate.Knobs.SingleOrDefault(k => k.Name == name)
@@ -81,11 +87,31 @@ namespace Eleven.Simulation.Tests
             var spike = new Simulator(SpikeScenario.Config(), SpikeScenario.InitialState(SpikeScenario.Config()));
             Assert.Equal(spike.StateHash(), reference.PracticeStartHash());
             Assert.Equal(BenchCandidate.ReferencePreset, reference.PresetName);
+            Assert.Equal(ActionSurfaceSettings.Reference.Describe(), reference.ActionSurface.Describe());
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
-                double expected = k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
+                double expected = k.OnAdapter ? ActionSurfaceSettings.Reference.Get(k.Name)
+                    : k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
                 Assert.Equal(expected, reference.Get(k.Name));
             }
+        }
+
+        [Fact]
+        public void A_touch_knob_changes_the_adapter_and_never_the_config_or_practice_start()
+        {
+            BenchCandidate touch = Changed(Set("actionHoldSeconds", 0.2), Set("actionAftertouchRange", 60));
+
+            Assert.Equal(0.2, touch.ActionSurface.HoldSeconds);
+            Assert.Equal(60, touch.ActionSurface.AftertouchRange);
+            Assert.Equal(0.2, touch.Get("actionHoldSeconds"));
+            Assert.Equal(BenchCandidate.Reference.Config.Hash, touch.Config.Hash);
+            Assert.Equal(BenchCandidate.Reference.PracticeStartHash(), touch.PracticeStartHash());
+            Assert.Equal(2, touch.ChangesFrom(BenchCandidate.Reference));
+            Assert.Equal(BenchCandidate.UnsavedPreset, touch.PresetName);
+
+            Assert.True(BenchCandidate.TryParse(touch.Values(), out BenchCandidate? parsed, out string problem), problem);
+            Assert.Equal(touch.ActionSurface.Describe(), parsed!.ActionSurface.Describe());
+            Assert.Equal(0, parsed.ChangesFrom(touch));
         }
 
         [Fact]
