@@ -30,7 +30,7 @@
 //     candidate, shown in words; APPLY / RETRY starts a fresh run whose config and practice start
 //     hash as .NET's <hash log dir>/bench-candidate.txt says; the time from the press to the fresh
 //     run is reported; a capture under the candidate goes to capture-<pass>-bench.elfc
-//   - rendering: the screenshot contains the pitch, line, player and ball colours
+//   - rendering: the screenshot contains the pitch's two mown shades, line, player and ball colours
 //   - icons (desktop): the home-screen icon and every manifest icon are ELEVEN's and load
 // A third pass checks the service worker: a second deploy is served on reload, and with the
 // server stopped the player still boots from the cache.
@@ -51,6 +51,8 @@ fs.mkdirSync(outDir, { recursive: true });
 // Colours from HostPalette.cs.
 const colours = {
   pitch: [0x2e, 0x6b, 0x3a],
+  // The pitch's mown shade (#58): the pattern that makes movement readable.
+  mown: [0x27, 0x5c, 0x32],
   line: [0xf2, 0xf2, 0xf2],
   player: [0x99, 0xcc, 0x44],
   ball: [0xf7, 0xe2, 0x6b],
@@ -716,7 +718,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       return out;
     }, { data: png.toString('base64'), colours });
-    check('pitch, line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
+    check('pitch (both mown shades), line, player and ball are drawn', Object.values(notes.pixels).every((v) => v > 20), JSON.stringify(notes.pixels));
 
     // The Run scenario action is UI Toolkit (#48): around its centre, its dark neutral fill and its
     // white label must be on screen, so text really renders in the WebGL build, not only measures.

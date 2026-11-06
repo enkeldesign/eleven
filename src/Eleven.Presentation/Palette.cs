@@ -77,6 +77,9 @@ namespace Eleven.Presentation
     public static class Domain
     {
         public static readonly Rgba Pitch = Rgba.Hex("#2E6B3A");
+
+        /// <summary>The pitch's second, mown shade (#58). Stub until the pattern is implemented.</summary>
+        public static readonly Rgba PitchMown = Pitch;
         public static readonly Rgba PitchLine = Rgba.Hex("#F2F2F2");
         public static readonly Rgba Ball = Rgba.Hex("#F7E26B");
         public static readonly Rgba BallShadow = Rgba.Hex("#00000059");
