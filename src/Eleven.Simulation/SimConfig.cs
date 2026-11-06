@@ -14,13 +14,14 @@ namespace Eleven.Simulation
     /// the manual kick's wind-up and aftertouch, made <see cref="KickLoft"/> and <see cref="KickSideSpin"/>
     /// maxima, and moved the kick's direction error to the player (#37). Version 5 added
     /// <see cref="BounceSpinRetention"/> (#40). Version 6 added the quick pass's range and weight (#38).
+    /// Version 7 added the ball control model and its touches (#59).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 6;
+        public const int FormatVersion = 7;
 
         public SimConfig(
             int tickRate = 60,
@@ -49,10 +50,18 @@ namespace Eleven.Simulation
             double passBackWeight = 2,
             double passFreeDistance = 10,
             int kickCooldownTicks = 30,
-            double goalLineX = 52.5)
+            double goalLineX = 52.5,
+            ControlModel controlModel = ControlModel.Off,
+            double controlReach = 0.9,
+            double dribbleLeadSlow = 0.5,
+            double dribbleLeadFast = 0.85,
+            double touchInterval = 0.25,
+            double touchStrength = 7,
+            double touchError = 0.3)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
+            if (controlModel != ControlModel.Off && controlModel != ControlModel.Free) throw new ArgumentOutOfRangeException(nameof(controlModel));
 
             TickRate = tickRate;
             Gravity = gravity;
@@ -81,6 +90,13 @@ namespace Eleven.Simulation
             PassFreeDistance = passFreeDistance;
             KickCooldownTicks = kickCooldownTicks;
             GoalLineX = goalLineX;
+            ControlModel = controlModel;
+            ControlReach = controlReach;
+            DribbleLeadSlow = dribbleLeadSlow;
+            DribbleLeadFast = dribbleLeadFast;
+            TouchInterval = touchInterval;
+            TouchStrength = touchStrength;
+            TouchError = touchError;
 
             CheckTunableRanges();
 
@@ -90,6 +106,7 @@ namespace Eleven.Simulation
             // Whole steps, nearest. Math.Round is exact, so every runtime agrees.
             KickWindUpTicks = (int)Math.Round(KickWindUpSeconds * TickRate);
             AftertouchTicks = (int)Math.Round(AftertouchSeconds * TickRate);
+            TouchIntervalTicks = Math.Max(1, (int)Math.Round(TouchInterval * TickRate));
         }
 
         /// <summary>Fixed steps per simulated second.</summary>
@@ -208,6 +225,37 @@ namespace Eleven.Simulation
         /// <summary>m. x of the goal line; the ball crosses it when wholly beyond, x − radius &gt; this.</summary>
         public double GoalLineX { get; }
 
+        /// <summary>How players control the ball in possession (#29, #59).</summary>
+        public ControlModel ControlModel { get; }
+
+        /// <summary>m. Horizontal distance from player to ball centre within which a touch can control the ball (#59).</summary>
+        public double ControlReach { get; }
+
+        /// <summary>m. How far ahead of a slow player a touch places the ball, at the next touch (#59).</summary>
+        public double DribbleLeadSlow { get; }
+
+        /// <summary>m. How far ahead of a player at full speed a touch places the ball; between the two it follows speed (#59).</summary>
+        public double DribbleLeadFast { get; }
+
+        /// <summary>s. From a touch to the next one the same player can make (#59).</summary>
+        public double TouchInterval { get; }
+
+        /// <summary>
+        /// m/s. The largest change of the ball's velocity one touch can make, at full ball control
+        /// (#59); half of it at none. A touch that needs more, a fast ball or a sharp turn at speed,
+        /// redirects the ball only partly.
+        /// </summary>
+        public double TouchStrength { get; }
+
+        /// <summary>
+        /// rad. A touch's largest direction error at no ball control on an easy touch (#59). It
+        /// shrinks with the player's ball control and grows with the turn and the overload.
+        /// </summary>
+        public double TouchError { get; }
+
+        /// <summary><see cref="TouchInterval"/> in whole steps, nearest, at least one.</summary>
+        public int TouchIntervalTicks { get; }
+
         /// <summary>FNV-1a 64 of <see cref="Encode"/>. Stable across runs, processes and platforms.</summary>
         public ulong Hash { get; }
 
@@ -249,7 +297,14 @@ namespace Eleven.Simulation
                 passBackWeight: r.ReadDouble(nameof(PassBackWeight)),
                 passFreeDistance: r.ReadDouble(nameof(PassFreeDistance)),
                 kickCooldownTicks: r.ReadInt32(),
-                goalLineX: r.ReadDouble(nameof(GoalLineX)));
+                goalLineX: r.ReadDouble(nameof(GoalLineX)),
+                controlModel: ReadControlModel(r.ReadInt32()),
+                controlReach: r.ReadDouble(nameof(ControlReach)),
+                dribbleLeadSlow: r.ReadDouble(nameof(DribbleLeadSlow)),
+                dribbleLeadFast: r.ReadDouble(nameof(DribbleLeadFast)),
+                touchInterval: r.ReadDouble(nameof(TouchInterval)),
+                touchStrength: r.ReadDouble(nameof(TouchStrength)),
+                touchError: r.ReadDouble(nameof(TouchError)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -287,7 +342,19 @@ namespace Eleven.Simulation
             w.WriteDouble(PassFreeDistance, nameof(PassFreeDistance));
             w.WriteInt32(KickCooldownTicks);
             w.WriteDouble(GoalLineX, nameof(GoalLineX));
+            w.WriteInt32((int)ControlModel);
+            w.WriteDouble(ControlReach, nameof(ControlReach));
+            w.WriteDouble(DribbleLeadSlow, nameof(DribbleLeadSlow));
+            w.WriteDouble(DribbleLeadFast, nameof(DribbleLeadFast));
+            w.WriteDouble(TouchInterval, nameof(TouchInterval));
+            w.WriteDouble(TouchStrength, nameof(TouchStrength));
+            w.WriteDouble(TouchError, nameof(TouchError));
             return w.ToArray();
         }
+
+        private static ControlModel ReadControlModel(int value) =>
+            value == (int)ControlModel.Off || value == (int)ControlModel.Free
+                ? (ControlModel)value
+                : throw new FormatException($"Unknown ball control model {value}.");
     }
 }

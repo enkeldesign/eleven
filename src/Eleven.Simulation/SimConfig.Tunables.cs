@@ -34,14 +34,17 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Which part of the feel it belongs to, for tools that list it (#45): <see cref="BallGroup"/>,
-        /// <see cref="KickGroup"/>, <see cref="PassGroup"/> or <see cref="PlayerGroup"/>. Metadata only;
-        /// no config value or hash depends on it.
+        /// <see cref="KickGroup"/>, <see cref="PassGroup"/>, <see cref="ControlGroup"/> or
+        /// <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
         /// </summary>
         public string Group { get; }
 
         public const string BallGroup = "Ball";
         public const string KickGroup = "Kick";
         public const string PassGroup = "Pass";
+
+        /// <summary>Ball control in possession (#59): touches, reach and lead.</summary>
+        public const string ControlGroup = "Control";
         public const string PlayerGroup = "Player";
 
         public string Unit { get; }
@@ -62,7 +65,7 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The ball-, kick- and pass-feel surface (#24, #37, #38): the supported way for tools, presets and the later
+    /// The ball-, kick-, pass- and ball-control-feel surface (#24, #37, #38, #59): the supported way for tools, presets and the later
     /// tuning panel to read and vary config. Values change only by building a new config with <see cref="With(string, double)"/>,
     /// so every variant is validated and hashed like any other config.
     /// </summary>
@@ -99,6 +102,12 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.PassGroup, "passArrivalSpeed", "m/s", 0, 15),
             new TunableParameter(TunableParameter.PassGroup, "passBackWeight", "factor", 0, 10),
             new TunableParameter(TunableParameter.PassGroup, "passFreeDistance", "m", 1, 40),
+            new TunableParameter(TunableParameter.ControlGroup, "controlReach", "m", 0.3, 2, 0.7, 1.2),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleLeadSlow", "m", 0.2, 1.5, 0.35, 0.9),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleLeadFast", "m", 0.3, 3, 0.8, 2.0),
+            new TunableParameter(TunableParameter.ControlGroup, "touchInterval", "s", 0.05, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "touchStrength", "m/s", 1, 20),
+            new TunableParameter(TunableParameter.ControlGroup, "touchError", "rad", 0, 0.6),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -126,6 +135,12 @@ namespace Eleven.Simulation
             "passArrivalSpeed" => PassArrivalSpeed,
             "passBackWeight" => PassBackWeight,
             "passFreeDistance" => PassFreeDistance,
+            "controlReach" => ControlReach,
+            "dribbleLeadSlow" => DribbleLeadSlow,
+            "dribbleLeadFast" => DribbleLeadFast,
+            "touchInterval" => TouchInterval,
+            "touchStrength" => TouchStrength,
+            "touchError" => TouchError,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -146,6 +161,8 @@ namespace Eleven.Simulation
             double aftertouchBend = AftertouchBend, aftertouchLift = AftertouchLift;
             double passMaxRange = PassMaxRange, passArrivalSpeed = PassArrivalSpeed;
             double passBackWeight = PassBackWeight, passFreeDistance = PassFreeDistance;
+            double controlReach = ControlReach, dribbleLeadSlow = DribbleLeadSlow, dribbleLeadFast = DribbleLeadFast;
+            double touchInterval = TouchInterval, touchStrength = TouchStrength, touchError = TouchError;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -173,6 +190,12 @@ namespace Eleven.Simulation
                     case "passArrivalSpeed": passArrivalSpeed = o.Value; break;
                     case "passBackWeight": passBackWeight = o.Value; break;
                     case "passFreeDistance": passFreeDistance = o.Value; break;
+                    case "controlReach": controlReach = o.Value; break;
+                    case "dribbleLeadSlow": dribbleLeadSlow = o.Value; break;
+                    case "dribbleLeadFast": dribbleLeadFast = o.Value; break;
+                    case "touchInterval": touchInterval = o.Value; break;
+                    case "touchStrength": touchStrength = o.Value; break;
+                    case "touchError": touchError = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -204,8 +227,52 @@ namespace Eleven.Simulation
                 passBackWeight: passBackWeight,
                 passFreeDistance: passFreeDistance,
                 kickCooldownTicks: KickCooldownTicks,
-                goalLineX: GoalLineX);
+                goalLineX: GoalLineX,
+                controlModel: ControlModel,
+                controlReach: controlReach,
+                dribbleLeadSlow: dribbleLeadSlow,
+                dribbleLeadFast: dribbleLeadFast,
+                touchInterval: touchInterval,
+                touchStrength: touchStrength,
+                touchError: touchError);
         }
+
+        /// <summary>This config under another ball control model (#59), every other value kept.</summary>
+        public SimConfig WithControlModel(ControlModel model) => new SimConfig(
+            tickRate: TickRate,
+            gravity: Gravity,
+            ballRadius: BallRadius,
+            bounceRestitution: BounceRestitution,
+            bounceTangentialRetention: BounceTangentialRetention,
+            bounceSpinRetention: BounceSpinRetention,
+            settleSpeed: SettleSpeed,
+            rollingFriction: RollingFriction,
+            stopSpeed: StopSpeed,
+            magnusCoefficient: MagnusCoefficient,
+            airSpinDecay: AirSpinDecay,
+            groundSpinDecay: GroundSpinDecay,
+            kickReach: KickReach,
+            kickMaxBallHeight: KickMaxBallHeight,
+            kickSpeed: KickSpeed,
+            kickLoft: KickLoft,
+            kickSideSpin: KickSideSpin,
+            kickWindUpSeconds: KickWindUpSeconds,
+            aftertouchSeconds: AftertouchSeconds,
+            aftertouchBend: AftertouchBend,
+            aftertouchLift: AftertouchLift,
+            passMaxRange: PassMaxRange,
+            passArrivalSpeed: PassArrivalSpeed,
+            passBackWeight: PassBackWeight,
+            passFreeDistance: PassFreeDistance,
+            kickCooldownTicks: KickCooldownTicks,
+            goalLineX: GoalLineX,
+            controlModel: model,
+            controlReach: ControlReach,
+            dribbleLeadSlow: DribbleLeadSlow,
+            dribbleLeadFast: DribbleLeadFast,
+            touchInterval: TouchInterval,
+            touchStrength: TouchStrength,
+            touchError: TouchError);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

@@ -31,7 +31,7 @@ namespace Eleven.Simulation.Harness
 
         public static string Name => $"{Id}/v{Version}";
 
-        public static SimConfig Config() => new SimConfig();
+        public static SimConfig Config() => new SimConfig(controlModel: ControlModel.Free);
 
         public static int DurationTicks(SimConfig config) => DurationSeconds * config.TickRate;
 

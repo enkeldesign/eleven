@@ -41,7 +41,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Every_knob_has_a_group_a_label_and_a_step_inside_its_range()
         {
-            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
+            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
             Assert.NotEmpty(BenchCandidate.Knobs);
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {

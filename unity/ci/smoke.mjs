@@ -348,6 +348,44 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
     check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
+    // Running with the ball (#59, FREE): the stick steers the player onto the resting ball, and
+    // touches carry it on. Positions come from the latest trace line, so the drag aims at the ball.
+    {
+      const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+)/;
+      const fromDribble = logs.length;
+      const start = ballPattern.exec(lastLog(ballPattern)?.input ?? '') ?? null;
+      let carried = null;
+      let touched = null;
+      if (start) {
+        const [px, py, bx, by] = start.slice(2, 6).map(Number);
+        const length = Math.hypot(bx - px, by - py) || 1;
+        const aim = { x: (bx - px) / length, y: (by - py) / length };
+        const held = { x: origin.x + aim.x * reach, y: origin.y - aim.y * reach };
+        if (useTouch) {
+          await touch('touchStart', origin);
+          await touch('touchMove', held);
+        } else {
+          await page.mouse.move(origin.x, origin.y);
+          await page.mouse.down();
+          await page.mouse.move(held.x, held.y);
+        }
+        touched = await waitForLog(/ELEVEN event (\d+) Touched 1/, 30_000, fromDribble);
+        const from = touched ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
+        const to = from ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
+        if (useTouch) await touch('touchEnd');
+        else await page.mouse.up();
+        if (from && to) {
+          const moved = Math.hypot(Number(to[4]) - Number(from[4]), Number(to[5]) - Number(from[5]));
+          const apart = Math.hypot(Number(to[4]) - Number(to[2]), Number(to[5]) - Number(to[3]));
+          carried = { moved, apart };
+        }
+      }
+      const touches = logs.slice(fromDribble).filter((l) => /ELEVEN event \d+ Touched 1/.test(l)).length;
+      notes.dribble = carried ? `${touches} touches, ball carried ${carried.moved.toFixed(1)} m, ${carried.apart.toFixed(2)} m from the player` : 'none';
+      check('running onto the ball carries it with touches', !!carried && touches >= 2 && carried.moved > 3 && carried.apart < 2,
+        start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}`) : 'no trace line with the ball');
+    }
+
     // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.
     const fromKick = logs.length;
     const pointPx = Number(ui?.[2] ?? 1);

@@ -77,6 +77,9 @@ namespace Eleven.Simulation
                 StepKick(i, FindAccepted(_state.Players[i].OwnerControllerId), tick, events);
             }
 
+            // After kicks, so a kick's own step and its cooldown keep the ball free (#59).
+            StepControl(tick, events);
+
             StepBall(tick, dt, events);
             CheckGoalLine(tick, events);
 
@@ -184,6 +187,7 @@ namespace Eleven.Simulation
         private void StepPlayer(ref PlayerState player, Command? command, double dt)
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
+            if (player.TouchCooldown > 0) player.TouchCooldown--;
 
             // The stick asks for a velocity; the player's own capabilities decide how fast they
             // run and how quickly they get there, whether speeding up, braking or turning (#36).
@@ -463,6 +467,11 @@ namespace Eleven.Simulation
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
 
+        // Ball control in possession (#59). Stub until the FREE model is implemented.
+        private void StepControl(long tick, List<SimEvent> events)
+        {
+        }
+
         private void StepBall(long tick, double dt, List<SimEvent> events)
         {
             if (IntegrateBall(ref _state.Ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, _state.Ball.Id));
@@ -560,6 +569,7 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.KickCooldown), p.KickCooldown, config.KickCooldownTicks);
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
+                InRange(owner, nameof(p.TouchCooldown), p.TouchCooldown, config.TouchIntervalTicks);
                 if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
                 {
                     throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");
