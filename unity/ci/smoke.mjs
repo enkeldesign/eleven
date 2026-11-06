@@ -642,6 +642,22 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       !!focusOrder && focusOrder.match[3] === '0' && /Close,Revert,Apply_\/_Retry$/.test(focusOrder.match[1]),
       focusOrder ? `${focusOrder.match[2]} stops, ${focusOrder.match[3]} hidden; ends ${focusOrder.match[1].split(',').slice(-4).join(',')}` : 'no focus order line');
     const tabs = Object.fromEntries((opened?.match[3] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+    // Every tab opens its group, also where the tabs wrap onto a second row (a phone).
+    const reached = [];
+    for (const [group, where] of Object.entries(tabs)) {
+      const from = logs.length;
+      await tap(at(...point(where)));
+      if (await waitForLog(new RegExp(`ELEVEN bench group name=${group}\\b`), 5_000, from)) reached.push(group);
+    }
+    check('every bench tab opens its group', Object.keys(tabs).length > 0 && reached.length === Object.keys(tabs).length,
+      `${reached.length} of ${Object.keys(tabs).length} tabs opened their group: ${reached.join(', ') || 'none'} (tabs ${opened?.match[3] ?? 'none'})`);
+    // Back to the first tab, where the sheet opened, for the checks that follow.
+    const [firstGroup, firstAt] = Object.entries(tabs)[0] ?? [];
+    if (firstGroup) {
+      const from = logs.length;
+      await tap(at(...point(firstAt)));
+      await waitForLog(new RegExp(`ELEVEN bench group name=${firstGroup}\\b`), 5_000, from);
+    }
     const tabTo = async (group, knob) => {
       const from = logs.length;
       if (tabs[group]) await tap(at(...point(tabs[group])));
