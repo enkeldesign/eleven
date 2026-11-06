@@ -4,12 +4,12 @@ The test bench (#45, part of #27) is how values are tuned by playing. Research s
 
 ## Knobs
 
-`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick and pass), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
+`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick, pass and ball control), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
 
 Each knob shows what its metadata holds:
 - its unit and valid range;
 - its research starting range, where docs/simulation/ball.md, kick.md, movement.md or pass.md gives one, or "technical reference" otherwise;
-- its group (`TunableParameter.Group`: Ball, Kick, Pass, Player or Touch).
+- its group (`TunableParameter.Group`: Ball, Kick, Pass, Control, Player or Touch).
 
 Each knob also has:
 - **a label** derived from its name (`kickSpeed` becomes "Kick speed");
@@ -32,7 +32,7 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 
 **TEST BENCH** is a Unity action from the visual system (`Hud`, `BenchSheet`; ADR-0003). It sits in the top row with Reset and Run scenario, away from the thumbs. On a narrow phone it starts the row below. It opens **Test bench**, a sheet over a scrim, so presses don't reach play. Play goes on under it.
 
-**Group tabs:** Ball, Kick, Pass, Player and Touch. Each tab lists its knobs, and the list scrolls, so the sheet's actions stay in reach.
+**Group tabs:** Ball, Kick, Pass, Control, Player and Touch. Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)); its player value, `ballControl`, is on the Player tab. Each tab lists its knobs, and the list scrolls, so the sheet's actions stay in reach.
 
 **Each knob** is the recipes' value control:
 - its name and unit;

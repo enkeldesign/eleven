@@ -135,6 +135,19 @@ jobs:
           path: pass-curves/
           if-no-files-found: error
 
+      # Technical reference dribbling: the FREE model's cases under two ball-control profiles (#59).
+      - name: Characterise dribbling
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll dribble dribble-curves | tee dribble.txt
+          echo "::notice title=Dribble curves::$(sed 's| -> .*||' dribble.txt)"
+
+      - name: Publish dribble curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: dribble-curves
+          path: dribble-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |
