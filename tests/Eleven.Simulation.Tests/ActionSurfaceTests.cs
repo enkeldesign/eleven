@@ -269,6 +269,29 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_finger_held_across_a_cancel_stays_ignored_when_reported_pressed_again()
+        {
+            // Unity reports a held finger pressed again when its phase changes (Codex on #57): a
+            // finger down at the cancel must stay ignored until it lifts, repeat or not.
+            ActionSurfaceAdapter adapter = Adapter();
+            adapter.Feed(Down(1, 100, 200, 0));
+            adapter.Feed(To(1, 150, 200, 0.01));
+            adapter.Feed(Down(2, 300, 200, 0.02));
+            adapter.Cancel();
+
+            Assert.Equal(TouchRole.None, adapter.Feed(Down(1, 150, 200, 0.03)));
+            Assert.Equal(TouchRole.None, adapter.Feed(Down(2, 300, 200, 0.04)));
+            Command c = Feed(adapter, 0, To(1, 160, 200, 0.05), To(2, 340, 200, 0.06), Up(2, 360, 200, 0.07));
+            Assert.True(Neutral(c), "no phantom kick from a finger held across the cancel");
+            Assert.Equal(Vec2.Zero, c.Move);
+
+            // Once lifted, the same ids are new fingers.
+            adapter.Feed(Up(1, 160, 200, 0.08));
+            Assert.Equal(TouchRole.Stick, adapter.Feed(Down(1, 100, 200, 0.1)));
+            Assert.Equal(TouchRole.Action, adapter.Feed(Down(2, 300, 200, 0.1)));
+        }
+
+        [Fact]
         public void New_settings_cancel_a_gesture_in_progress()
         {
             ActionSurfaceAdapter adapter = Adapter();
