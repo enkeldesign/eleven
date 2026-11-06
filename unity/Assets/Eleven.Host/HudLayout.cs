@@ -53,9 +53,17 @@ namespace Eleven.Host
         public readonly Rect StickZone;
         public readonly Vector2 StickRest;
         public readonly float StickRadius;
+        /// <summary>Where the ACTION disc is drawn: the right thumb's resting place, inside <see cref="ActionZone"/>.</summary>
         public readonly Vector2 KickCentre;
         public readonly float KickRadius;
         public readonly Rect PlayArea;
+
+        /// <summary>
+        /// Candidate A's ACTION surface (#28): the whole of the screen's right-hand control area, the
+        /// stick zone's mirror, so the right thumb needn't find a button. A press on a UI action
+        /// inside it (THIS FELT WRONG, SAVE CAPTURE) belongs to the UI.
+        /// </summary>
+        public readonly Rect ActionZone;
 
         /// <summary>
         /// THIS FELT WRONG (#44, #53): just above the kick button, where the right thumb is, outside
@@ -159,10 +167,12 @@ namespace Eleven.Host
                 if (FeltWrongButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, FeltWrongButton.yMax + Padding * 0.5f);
                 if (SaveCaptureButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SaveCaptureButton.yMax + Padding * 0.5f);
                 StickZone = new Rect(safe.xMin, zoneTop, safe.width * 0.5f, safe.yMax - zoneTop);
+                ActionZone = new Rect(zoneRight, PlayArea.yMax, safe.xMax - zoneRight, safe.yMax - PlayArea.yMax);
             }
             else
             {
                 StickZone = new Rect(safe.xMin, belowHud, PlayArea.xMin - safe.xMin, safe.yMax - belowHud);
+                ActionZone = new Rect(PlayArea.xMax, belowHud, safe.xMax - PlayArea.xMax, safe.yMax - belowHud);
             }
 
             // The status line states what just happened over the top of the play area, as wide as
@@ -216,7 +226,7 @@ namespace Eleven.Host
         public bool SamePlaces(in HudLayout other) =>
             BuildLabel == other.BuildLabel && ResetButton == other.ResetButton && RunButton == other.RunButton && BenchButton == other.BenchButton
             && Result == other.Result && FeltWrongButton == other.FeltWrongButton && SaveCaptureButton == other.SaveCaptureButton
-            && StatusArea == other.StatusArea && PlayArea == other.PlayArea && StickZone == other.StickZone;
+            && StatusArea == other.StatusArea && PlayArea == other.PlayArea && StickZone == other.StickZone && ActionZone == other.ActionZone;
 
         /// <summary>
         /// Where to draw the stick's base: as near <paramref name="centre"/> as fits inside the stick
@@ -231,11 +241,9 @@ namespace Eleven.Host
                 Mathf.Clamp(centre.y, StickZone.yMin + r, StickZone.yMax - r));
         }
 
-        public bool InKick(Vector2 point) => (point - KickCentre).sqrMagnitude <= KickRadius * KickRadius;
-
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)}");
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 

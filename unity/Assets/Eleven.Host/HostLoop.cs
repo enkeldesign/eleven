@@ -67,6 +67,11 @@ namespace Eleven.Host
         private Vector2Int _styledFor;
         private int _framesSinceTrace;
         private double _lastTraceTime;
+        private bool _modalWasOpen;
+
+        // What the last ACTION gesture became, shown on the disc for a moment (#28).
+        private string _lastGesture = "";
+        private double _lastGestureUntil;
 
         private void Awake()
         {
@@ -84,7 +89,8 @@ namespace Eleven.Host
             // keyboard.
             EnableMobileKeyboard();
             _view = new PitchView(_config, transform);
-            _input = new TouchAdapter(SpikeScenario.ControllerId);
+            _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface);
+            _input.Delivered += GestureDelivered;
             // ?noui: measurement only (#48), the frame without the UI.
             // ?textscale=1.5: enlarged text, until settings exist to choose it (#48).
             int textScaleAt = url.IndexOf("textscale=", StringComparison.Ordinal);
@@ -104,7 +110,11 @@ namespace Eleven.Host
 
             // ?specimen (or ?specimen=dark): the visual system's specimen over the match (#48).
             if (_ui != null && url.Contains("specimen")) _specimen = new Specimen(_ui, url.Contains("specimen=dark"));
-            if (_trace) _input.PressLogged += press => Log($"ELEVEN press {press}");
+            if (_trace)
+            {
+                _input.PressLogged += press => Log($"ELEVEN press {press}");
+                _input.ReleaseLogged += release => Log($"ELEVEN release {release}");
+            }
             RememberPrevious();
             UpdateLayout(force: true);
             _lastTime = Time.realtimeSinceStartupAsDouble;
@@ -130,7 +140,12 @@ namespace Eleven.Host
         {
             _framesSinceTrace++;
             UpdateLayout(force: false);
-            _input.Sample(_layout);
+
+            // A sheet opening cancels a gesture in progress, so none ends as a phantom command when
+            // it closes (#28).
+            bool modal = _hud != null && _hud.ModalOpen;
+            if (modal && !_modalWasOpen) _input.Clear();
+            _modalWasOpen = modal;
 
             double now = Time.realtimeSinceStartupAsDouble;
             double frame = now - _lastTime;
@@ -155,6 +170,11 @@ namespace Eleven.Host
             }
 
             if (_accumulator >= tick) _accumulator = 0;
+
+            // A press on ACTION shapes the ball while the controlled player's kick winds up or its
+            // aftertouch window is open: the simulation's window, not a second duration (#28).
+            PlayerState controlled = _simulator.PeekState().Players[0];
+            _input.ShapingOpen = controlled.WindUpTicks > 0 || controlled.AftertouchTicks > 0;
 
             _specimen?.Tick(_simulator.Tick);
             if (_hud != null)
@@ -197,6 +217,22 @@ namespace Eleven.Host
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
         }
 
+        /// <summary>
+        /// A gesture's command went to a tick (#28): shown on the ACTION disc for a moment, with the
+        /// time from the finger lifting to the command, and traced for the smoke test.
+        /// </summary>
+        private void GestureDelivered(ActionReport report)
+        {
+            double latency = (TouchAdapter.Now - report.ReleaseTime) * 1000;
+            _lastGesture = report.Gesture == ActionGesture.Tap
+                ? FormattableString.Invariant($"PASS\n{latency:F0} ms")
+                : FormattableString.Invariant($"KICK {report.Strength * 100:F0}%\n{latency:F0} ms");
+            _lastGestureUntil = Time.realtimeSinceStartupAsDouble + 1.2;
+            if (!_trace) return;
+            Log(FormattableString.Invariant(
+                $"ELEVEN action gesture={report.Gesture.ToString().ToLowerInvariant()} strength={report.Strength:F3} direction={report.Direction.X:F2},{report.Direction.Y:F2} latency={latency:F1}ms tick={_simulator.Tick}"));
+        }
+
         /// <summary>Trace mode: replays the session's recording headlessly and compares it with the live state.</summary>
         private void CheckReplay()
         {
@@ -230,7 +266,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, "none", "");
+            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, _input.Settings.Describe(), "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -273,6 +309,7 @@ namespace Eleven.Host
             _bench = candidate;
             _config = candidate.Config;
             _view.Use(_config);
+            _input.Use(candidate.ActionSurface);
             ResetMatch();
             _accumulator = 0;
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
@@ -310,7 +347,7 @@ namespace Eleven.Host
 
         /// <summary>
         /// The UI around the match (#48), in UI Toolkit from code. Presses on it reach the UI, not the
-        /// stick or the kick.
+        /// stick or the ACTION surface.
         /// </summary>
         private void BuildUi()
         {
@@ -385,6 +422,7 @@ namespace Eleven.Host
                 && _layout.ResultLines == _resultLines) return;
 
             _layout = Layout();
+            _input.Place(_layout, PixelsPerPoint());
             if (_ui != null && _hud != null)
             {
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
@@ -408,10 +446,18 @@ namespace Eleven.Host
             Disc(stickCentre, _layout.StickRadius, HostPalette.ControlIdle);
             Disc(knob, _layout.StickRadius * 0.45f, HostPalette.ControlActive);
 
-            Disc(_layout.KickCentre, _layout.KickRadius, _input.KickHeld ? HostPalette.ControlActive : HostPalette.ControlIdle);
-            var kickLabel = new Rect(_layout.KickCentre.x - _layout.KickRadius, _layout.KickCentre.y - _layout.KickRadius,
+            // ACTION (#28): the whole right-hand area takes the gestures; the disc marks where the
+            // thumb rests and says what the surface is doing.
+            bool active = _input.ActionHeld || _input.Shaping;
+            Disc(_layout.KickCentre, _layout.KickRadius, active ? HostPalette.ControlActive : HostPalette.ControlIdle);
+            var actionLabel = new Rect(_layout.KickCentre.x - _layout.KickRadius, _layout.KickCentre.y - _layout.KickRadius,
                 _layout.KickRadius * 2, _layout.KickRadius * 2);
-            GUI.Label(kickLabel, "KICK", _buttonStyle);
+            double charge = _input.Charge;
+            string label = _input.Shaping ? "SHAPE"
+                : _input.ActionHeld && charge > 0 ? FormattableString.Invariant($"HOLD\n{charge * 100:F0}%")
+                : Time.realtimeSinceStartupAsDouble < _lastGestureUntil ? _lastGesture
+                : "ACTION";
+            GUI.Label(actionLabel, label, _buttonStyle);
         }
 
         private void EnsureStyles()

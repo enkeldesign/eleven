@@ -11,7 +11,11 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed class TunableParameter
     {
-        internal TunableParameter(string group, string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
+        /// <summary>
+        /// Public so tools outside the simulation can describe their own knobs the same way, such as
+        /// a touch adapter's gesture parameters (#28). Metadata only: no config or state depends on it.
+        /// </summary>
+        public TunableParameter(string group, string name, string unit, double min, double max, double? startMin = null, double? startMax = null)
         {
             Group = group;
             Name = name;

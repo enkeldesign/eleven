@@ -25,6 +25,7 @@ namespace Eleven.Host
         private static readonly string[] Groups =
         {
             TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.PlayerGroup,
+            ActionSurfaceSettings.Group,
         };
 
         private readonly UiRoot _ui;
