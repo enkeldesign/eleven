@@ -232,6 +232,31 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void Only_a_player_whose_controller_sent_an_accepted_command_touches_the_ball()
+        {
+            SimConfig config = Free();
+            SimState Start()
+            {
+                SimState state = AtFeet(config, ballAt: new Vec2(0.8, 0), ballVelocity: new Vec3(-2, 0, 0));
+                state.Players = new[]
+                {
+                    state.Players[0],
+                    new PlayerState { Id = 2, OwnerControllerId = B, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(20, 0) },
+                };
+                return state;
+            }
+
+            // Only B commands, and B's player is far away: A's player, the ball rolling through their
+            // feet, has no command this step and so no touch (INV-10).
+            Run others = Play(config, Start(), tick => new[] { new Command(B, tick, new Vec2(1, 0)) }, 1);
+            Assert.Equal(0, others.Touches());
+
+            // The same ball with A's own command: A's player touches it.
+            Run own = Play(config, Start(), tick => new[] { new Command(A, tick, new Vec2(0.5, 0)), new Command(B, tick, new Vec2(1, 0)) }, 1);
+            Assert.True(own.Touches() > 0, "no touch with the owner's command");
+        }
+
+        [Fact]
         public void A_standing_player_with_the_ball_at_rest_leaves_it_alone()
         {
             SimConfig config = Free();
