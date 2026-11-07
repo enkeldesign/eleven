@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <g fill-rule="evenodd">
+    <path d="M0 0h1000v250H0z" fill="#7a2"/>
+    <path d="M0 250h1000v250H0zm0 500h1000v250H0z" fill="#8b3"/>
+    <path d="M0 500h1000v250H0z" fill="#7a2"/>
+  </g>
+  <path d="M875 500c0 207.107-167.893 375-375 375S125 707.107 125 500s167.893-375 375-375 375 167.893 375 375" stroke="#fff" stroke-width="50" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
+  <path d="M0 475h1000v50H0z" fill-rule="evenodd" fill="#fff"/>
+  <path d="M385.1 671.7h-33v-49.8h91.8v226.2h-58.8zm204 0h-33v-49.8h91.8v226.2h-58.8zm25.8-343.4h33v49.8h-91.8V151.9h58.8zm-204 0h33v49.8h-91.8V151.9h58.8z" fill="#fff"/>
+</svg>
