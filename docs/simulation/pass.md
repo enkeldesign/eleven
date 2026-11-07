@@ -59,7 +59,11 @@ Resolved in the kick stage of the step that accepts the intent, after every play
    - `run` is the read run's speed along the pass, never below 0. So a standing receiver gets `passArrivalSpeed`, and a runner a ball `passArrivalSpeed` faster than their run, which they can take in stride.
    - It is capped by the passer's kick power × `kickSpeed`.
    - **Why relative to the run.** At a fixed 4 m/s, a pass to a runner going away at 5 m/s is slower than him at the end. The search then met him 51 m out after 7.5 s, and the ball overtook him a metre to the side on the way. The drill measured this, and the rule changed before the PR.
-5. **No candidate:** a free pass along the heading, weighted the same way for `passFreeDistance`.
+5. **No candidate:** a free pass along the heading, weighted the same way for `passFreeDistance`, with the passer as the runner (#65).
+   - `run` is the passer's own velocity along the pass line, read when the tap is accepted, never below 0.
+   - So a sprinting passer's tap goes ahead of them, at about `passArrivalSpeed` faster than their run at `passFreeDistance`, instead of being caught.
+   - A standing passer's free pass is unchanged.
+   - **The heading is the direction of travel,** set every movement step, and the free pass goes along it. So the passer's run along the line is their speed, and the clamp at 0 is only a safeguard: braking, reversing or turning when tapping shrinks the boost, never below a standing passer's.
 
 **Then it is an ordinary kick.** The resolved line, strength and loft go into the same wind-up and launch as a manual kick, so the passer's `kickError` shapes the execution of assisted passes too, and aftertouch can shape them.
 
@@ -126,6 +130,29 @@ None has a research range; the ranges are open questions for SOL on #38. They ar
 | `closest_m`, `closest_s`, `arrival_speed_mps` | The ball's closest approach to the receiver's centre, when, and its speed then. Empty for a free pass. |
 
 [`pass-reference.csv`](pass-reference.csv) is the default output. `PassCurvesTests` fails if the code produces different curves. It is golden data and a technical reference, not approved feel.
+
+### The free pass (#65)
+
+`eleven-sim passes` also writes `free-pass-curves.csv`: a quick pass with no team-mate in view.
+- **The cases:** tapped while standing, walking, jogging, sprinting, and turning (a sprint, then the stick at 90°, tapped 3 steps on).
+- **Under:** FREE and ATTACHED, by the reference player and a weak kicker (`kickPower` 0.5).
+- **The columns:**
+  - the passer's speed;
+  - the launch speed;
+  - the ball's lead over the passer along the line at contact and at 0.25, 0.5 and 1 s after it;
+  - any touch or take of the ball in that second, which is always 0: the pass is released.
+
+[`free-pass-reference.csv`](free-pass-reference.csv) is its reference, checked by `FreePassCurvesTests`.
+
+| Passer (reference) | Speed | Launch | Lead at contact → 1 s, FREE | ATTACHED |
+| --- | --- | --- | --- | --- |
+| standing | 0 m/s | 5.6 m/s | 0.69 → 5.9 m | 0.69 → 5.9 m |
+| walking | 2.1 | 7.3 | 0.69 → 5.5 | 0.65 → 5.4 |
+| jogging | 3.5 | 8.5 | 0.76 → 5.3 | 0.61 → 5.2 |
+| sprinting | 7.0 | 11.7 | 0.92 → 5.2 | 0.79 → 5.1 |
+| turning | 5.9 | 10.7 | 0.79 → 9.6 | 0.89 → 9.7 |
+
+The weak kicker is held to 9.0 m/s, so a sprinting tap still pulls away, from 0.88 m to 2.5 m in a second. Before #65, every free pass launched at 5.6 m/s, and a sprinting passer caught it within half a second.
 
 ### Findings for the test bench
 
