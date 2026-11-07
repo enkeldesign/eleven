@@ -351,18 +351,25 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
     // Running with the ball (#59, FREE): the stick steers the player onto the resting ball, and
-    // touches carry it on. Positions come from the latest trace line, so the drag aims at the ball.
+    // touches carry it on. Like a player, it re-aims at the ball from each trace line (once a
+    // simulated second) until the first touch, then holds its line.
     {
       const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+)/;
+      const touchPattern = /ELEVEN event (\d+) Touched 1/;
       const fromDribble = logs.length;
       const start = ballPattern.exec(lastLog(ballPattern)?.input ?? '') ?? null;
       let carried = null;
       let touched = null;
+      let closest = Infinity;
+      let last = start;
       if (start) {
-        const [px, py, bx, by] = start.slice(2, 6).map(Number);
-        const length = Math.hypot(bx - px, by - py) || 1;
-        const aim = { x: (bx - px) / length, y: (by - py) / length };
-        const held = { x: origin.x + aim.x * reach, y: origin.y - aim.y * reach };
+        const aimAt = (m) => {
+          const [px, py, bx, by] = m.slice(2, 6).map(Number);
+          closest = Math.min(closest, Math.hypot(bx - px, by - py));
+          const length = Math.hypot(bx - px, by - py) || 1;
+          return { x: origin.x + ((bx - px) / length) * reach, y: origin.y - ((by - py) / length) * reach };
+        };
+        const held = aimAt(start);
         if (useTouch) {
           await touch('touchStart', origin);
           await touch('touchMove', held);
@@ -371,7 +378,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           await page.mouse.down();
           await page.mouse.move(held.x, held.y);
         }
-        touched = await waitForLog(/ELEVEN event (\d+) Touched 1/, 30_000, fromDribble);
+        const until = Date.now() + 30_000;
+        while (!touched && Date.now() < until) {
+          const seen = logs.length;
+          touched = await waitForLog(touchPattern, 0, fromDribble);
+          if (touched) break;
+          const fresh = (await waitForLog(ballPattern, Math.max(1, until - Date.now()), seen))?.match ?? null;
+          touched = await waitForLog(touchPattern, 0, fromDribble);
+          if (!fresh || touched) continue;
+          last = fresh;
+          const steer = aimAt(fresh);
+          if (useTouch) await touch('touchMove', steer);
+          else await page.mouse.move(steer.x, steer.y);
+        }
         const from = touched ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
         const to = from ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
         if (useTouch) await touch('touchEnd');
@@ -384,8 +403,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       const touches = logs.slice(fromDribble).filter((l) => /ELEVEN event \d+ Touched 1/.test(l)).length;
       notes.dribble = carried ? `${touches} touches, ball carried ${carried.moved.toFixed(1)} m, ${carried.apart.toFixed(2)} m from the player` : 'none';
+      const approach = Number.isFinite(closest) && last
+        ? `; closest ${closest.toFixed(2)} m; last trace tick ${last[1]} player ${last[2]},${last[3]} ball ${last[4]},${last[5]}`
+        : '';
       check('running onto the ball carries it with touches', !!carried && touches >= 2 && carried.moved > 3 && carried.apart < 2,
-        start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}`) : 'no trace line with the ball');
+        start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}${approach}`) : 'no trace line with the ball');
     }
 
     // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.
