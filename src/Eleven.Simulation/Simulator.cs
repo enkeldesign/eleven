@@ -344,9 +344,12 @@ namespace Eleven.Simulation
                 : origin + new Vec2(cos, sin) * Config.PassFreeDistance;
             int targetId = chosen ? _state.Players[target].Id : 0;
 
+            // Weighted for the run onto it: the receiver's as the passer reads it, or, for a free
+            // pass, the passer's own, so a pass into space from a sprint goes ahead of them (#65).
+            // Never negative, so running away from the line adds nothing.
             Vec2 line = aim - origin;
             double length = SimMath.Sqrt(line.LengthSquared);
-            double speed = PassSpeed(length, RunAlong(read, line, length));
+            double speed = PassSpeed(length, RunAlong(chosen ? read : passer.Velocity, line, length));
             StartWindUp(ref passer,
                 length > 0 ? SimMath.Atan2(line.Y, line.X) : passer.Heading,
                 hardest > 0 ? Clamp01(speed / hardest) : 1,

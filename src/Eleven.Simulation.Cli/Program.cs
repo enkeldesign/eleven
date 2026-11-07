@@ -317,7 +317,14 @@ internal static class Program
             PassCurves.WriteSummary(summary, config, profile, curves);
         }
 
-        Console.WriteLine($"config {config.Hash:x16}, {PassCurves.KeyNumbers(curves)} -> {directory}");
+        // The free pass with no receiver (#65), beside the drills.
+        List<FreePassCurve> free = FreePassCurves.Characterise(config, profile);
+        using (var csv = new StreamWriter(Path.Combine(directory, "free-pass-curves.csv")))
+        {
+            FreePassCurves.WriteCsv(csv, config, free);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {PassCurves.KeyNumbers(curves)}; free passes: {FreePassCurves.KeyNumbers(free)} -> {directory}");
         return 0;
     }
 
