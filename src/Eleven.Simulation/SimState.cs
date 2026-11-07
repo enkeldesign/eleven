@@ -32,7 +32,7 @@ namespace Eleven.Simulation
         }
 
         /// <summary>
-        /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball, player count (int32),
+        /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
         /// each player. Field order within the ball and players is as declared, a player's
         /// capabilities in their own declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Eleven.Simulation
             WriteVec3(w, Ball.Position, "Ball.Position");
             WriteVec3(w, Ball.Velocity, "Ball.Velocity");
             WriteVec3(w, Ball.Spin, "Ball.Spin");
-            w.WriteBool(Ball.BeyondGoalLine);
+            w.WriteByte((byte)Ball.Line);
             w.WriteInt32(Ball.AttachedTo);
 
             w.WriteInt32(Players.Length);
@@ -88,7 +88,7 @@ namespace Eleven.Simulation
             state.Ball.Position = ReadVec3(r, "Ball.Position");
             state.Ball.Velocity = ReadVec3(r, "Ball.Velocity");
             state.Ball.Spin = ReadVec3(r, "Ball.Spin");
-            state.Ball.BeyondGoalLine = r.ReadBool();
+            state.Ball.Line = ReadLine(r.ReadByte());
             state.Ball.AttachedTo = r.ReadInt32();
 
             int count = r.ReadInt32();
@@ -137,6 +137,9 @@ namespace Eleven.Simulation
             return scratch.Hash();
         }
 
+        private static LineState ReadLine(byte value) =>
+            value <= (byte)LineState.CrossingWide ? (LineState)value : throw new FormatException($"Unknown goal-line state {value}.");
+
         private static void WriteVec3(CanonicalWriter w, Vec3 v, string field)
         {
             w.WriteDouble(v.X, field);
@@ -175,10 +178,12 @@ namespace Eleven.Simulation
         public Vec3 Spin;
 
         /// <summary>
-        /// Whether the ball was wholly beyond the goal line after the previous step. Needed so a
-        /// crossing emits one event, not one per tick spent beyond the line.
+        /// Where the ball stood against the goal line after the previous step (#68): in play, its
+        /// centre over the line through the mouth or wide of it, or wholly beyond as a goal or out.
+        /// Needed so a crossing emits its events once, and so a goal is judged where the ball's
+        /// centre crossed the line. docs/simulation/goal.md.
         /// </summary>
-        public bool BeyondGoalLine;
+        public LineState Line;
 
         /// <summary>
         /// Under ATTACHED (#60), the id of the player the ball is attached to; 0 when it is free.

@@ -851,12 +851,12 @@ namespace Eleven.Simulation
         {
             ref BallState ball = ref _state.Ball;
             bool beyond = ball.Position.X - Config.BallRadius > Config.GoalLineX;
-            if (beyond && !ball.BeyondGoalLine)
+            if (beyond && ball.Line != LineState.Out)
             {
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
             }
 
-            ball.BeyondGoalLine = beyond;
+            ball.Line = beyond ? LineState.Out : LineState.InPlay;
         }
 
         private static double Decay(double perSecond, double dt)
@@ -909,6 +909,9 @@ namespace Eleven.Simulation
                     }
                 }
             }
+
+            // A goal-line state the encoding knows (#68).
+            if (state.Ball.Line > LineState.CrossingWide) throw new ArgumentException($"Unknown goal-line state {(byte)state.Ball.Line}.", nameof(state));
 
             // The ball is attached to no one (0) or to a player who exists (#60).
             if (state.Ball.AttachedTo != 0)

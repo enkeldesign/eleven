@@ -69,7 +69,7 @@ namespace Eleven.Simulation.Tests
             var config = Config();
             SimState state = State(config, ballPosition: new Vec3(1.5, -2.25, 3), ballVelocity: new Vec3(4, 5, 6), ballSpin: new Vec3(0, 0, 7));
             state.Tick = 1234;
-            state.Ball.BeyondGoalLine = true;
+            state.Ball.Line = LineState.Out;
             state.Players[0].Heading = -1.25;
             state.Players[0].KickCooldown = 3;
             state.Players[0].Capabilities = new PlayerCapabilities { MaxSpeed = 9.5, Acceleration = 13.25, KickPower = 0.75, KickError = 0.125 };
@@ -112,7 +112,7 @@ namespace Eleven.Simulation.Tests
             Differs(s => s.Ball.Position = new Vec3(0, 20, 1));
             Differs(s => s.Ball.Velocity = new Vec3(0, 0, 1));
             Differs(s => s.Ball.Spin = new Vec3(1, 0, 0));
-            Differs(s => s.Ball.BeyondGoalLine = true);
+            Differs(s => s.Ball.Line = LineState.Out);
             Differs(s => s.Players[0].Id = 2);
             Differs(s => s.Players[0].OwnerControllerId = 2);
             Differs(s => s.Players[0].Capabilities.MaxSpeed = 8);

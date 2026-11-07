@@ -10,9 +10,11 @@ namespace Eleven.Simulation
         /// Version 2 dropped the maths backend from the header (ADR-0002). Version 3 added each
         /// player's capabilities (#36). Version 4 added kick capabilities and the kick's wind-up and
         /// aftertouch phases (#37). Version 5 added each player's team, pass capabilities and quick-pass
-        /// target (#38).
+        /// target (#38). Version 6 added the touch cooldown (#59), version 7 the ball's attachment
+        /// (#60), and version 8 replaced the ball's beyond-the-goal-line flag with its goal-line
+        /// state (#68).
         /// </summary>
-        public const int StateSchemaVersion = 7;
+        public const int StateSchemaVersion = 8;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

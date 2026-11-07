@@ -14,14 +14,16 @@ namespace Eleven.Simulation
     /// the manual kick's wind-up and aftertouch, made <see cref="KickLoft"/> and <see cref="KickSideSpin"/>
     /// maxima, and moved the kick's direction error to the player (#37). Version 5 added
     /// <see cref="BounceSpinRetention"/> (#40). Version 6 added the quick pass's range and weight (#38).
-    /// Version 7 added the ball control model and its touches (#59).
+    /// Version 7 added the ball control model and its touches (#59). Version 8 added ATTACHED's
+    /// values (#60). Version 9 added the goal: its mouth, its posts and crossbar, and how the frame
+    /// returns the ball (#68).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 8;
+        public const int FormatVersion = 9;
 
         public SimConfig(
             int tickRate = 60,
@@ -51,6 +53,10 @@ namespace Eleven.Simulation
             double passFreeDistance = 10,
             int kickCooldownTicks = 30,
             double goalLineX = 52.5,
+            double goalWidth = 7.32,
+            double goalHeight = 2.44,
+            double postWidth = 0.12,
+            double frameRestitution = 0.7,
             ControlModel controlModel = ControlModel.Off,
             double controlReach = 0.9,
             double dribbleLeadSlow = 0.5,
@@ -97,6 +103,10 @@ namespace Eleven.Simulation
             PassFreeDistance = passFreeDistance;
             KickCooldownTicks = kickCooldownTicks;
             GoalLineX = goalLineX;
+            GoalWidth = goalWidth;
+            GoalHeight = goalHeight;
+            PostWidth = postWidth;
+            FrameRestitution = frameRestitution;
             ControlModel = controlModel;
             ControlReach = controlReach;
             DribbleLeadSlow = dribbleLeadSlow;
@@ -236,8 +246,38 @@ namespace Eleven.Simulation
         /// <summary>Ticks after a kick connects before the same player can start another.</summary>
         public int KickCooldownTicks { get; }
 
-        /// <summary>m. x of the goal line; the ball crosses it when wholly beyond, x − radius &gt; this.</summary>
+        /// <summary>
+        /// m. x of the goal line's outer edge; the ball crosses it when wholly beyond, x − radius &gt;
+        /// this. The goal stands on it (#68): docs/simulation/goal.md.
+        /// </summary>
         public double GoalLineX { get; }
+
+        /// <summary>m. The goal mouth's width between the posts' inner faces (Law 1: 7.32 m), centred on y = 0.</summary>
+        public double GoalWidth { get; }
+
+        /// <summary>m. The goal mouth's height from the ground to the crossbar's underside (Law 1: 2.44 m).</summary>
+        public double GoalHeight { get; }
+
+        /// <summary>
+        /// m. The posts' and crossbar's width (Law 1: the same for both, at most 12 cm, and the goal
+        /// line's width). They are round, and their back faces stand on <see cref="GoalLineX"/>.
+        /// </summary>
+        public double PostWidth { get; }
+
+        /// <summary>
+        /// Fraction of the ball's speed along the contact normal the frame returns (#68). The rest of
+        /// its velocity, and its spin, are kept, so a contact never adds speed.
+        /// </summary>
+        public double FrameRestitution { get; }
+
+        /// <summary>m. x of the posts' and crossbar's axes: <see cref="GoalLineX"/> − <see cref="PostWidth"/> / 2.</summary>
+        public double FrameAxisX => GoalLineX - PostWidth / 2;
+
+        /// <summary>m. |y| of the posts' axes: (<see cref="GoalWidth"/> + <see cref="PostWidth"/>) / 2.</summary>
+        public double PostAxisY => (GoalWidth + PostWidth) / 2;
+
+        /// <summary>m. z of the crossbar's axis: <see cref="GoalHeight"/> + <see cref="PostWidth"/> / 2.</summary>
+        public double CrossbarAxisZ => GoalHeight + PostWidth / 2;
 
         /// <summary>How players control the ball in possession (#29, #59).</summary>
         public ControlModel ControlModel { get; }
@@ -348,6 +388,10 @@ namespace Eleven.Simulation
                 passFreeDistance: r.ReadDouble(nameof(PassFreeDistance)),
                 kickCooldownTicks: r.ReadInt32(),
                 goalLineX: r.ReadDouble(nameof(GoalLineX)),
+                goalWidth: r.ReadDouble(nameof(GoalWidth)),
+                goalHeight: r.ReadDouble(nameof(GoalHeight)),
+                postWidth: r.ReadDouble(nameof(PostWidth)),
+                frameRestitution: r.ReadDouble(nameof(FrameRestitution)),
                 controlModel: ReadControlModel(r.ReadInt32()),
                 controlReach: r.ReadDouble(nameof(ControlReach)),
                 dribbleLeadSlow: r.ReadDouble(nameof(DribbleLeadSlow)),
@@ -399,6 +443,10 @@ namespace Eleven.Simulation
             w.WriteDouble(PassFreeDistance, nameof(PassFreeDistance));
             w.WriteInt32(KickCooldownTicks);
             w.WriteDouble(GoalLineX, nameof(GoalLineX));
+            w.WriteDouble(GoalWidth, nameof(GoalWidth));
+            w.WriteDouble(GoalHeight, nameof(GoalHeight));
+            w.WriteDouble(PostWidth, nameof(PostWidth));
+            w.WriteDouble(FrameRestitution, nameof(FrameRestitution));
             w.WriteInt32((int)ControlModel);
             w.WriteDouble(ControlReach, nameof(ControlReach));
             w.WriteDouble(DribbleLeadSlow, nameof(DribbleLeadSlow));
