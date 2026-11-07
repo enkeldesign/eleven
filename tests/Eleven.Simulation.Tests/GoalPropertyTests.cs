@@ -12,8 +12,10 @@ namespace Eleven.Simulation.Tests
     ///
     /// Each property has a companion test that feeds its check a deliberately broken trajectory and
     /// shows the check catches it, so a passing property means something. The energy allowance on a
-    /// step the ball hits the frame is the bounce's (docs/simulation/ball.md): the contact stops the
-    /// ball on the step's path, as the ground puts it back at its height.
+    /// step the ball hits the frame is derived in docs/simulation/goal.md: the bounce's
+    /// (docs/simulation/ball.md), since a contact stops the ball on the step's path as the ground
+    /// puts it back at its height, plus 2·g·dt·(|v| + (|m| + g)·dt) for a ball that starts the step
+    /// touching the frame and moves the whole step along its turned velocity.
     /// </summary>
     public class GoalPropertyTests
     {
@@ -147,8 +149,10 @@ namespace Eleven.Simulation.Tests
             double before = Energy(c, s.Before), after = Energy(c, s.After);
             double dt = c.TickSeconds, g = c.Gravity;
             double magnus = Math.Sqrt(Vec3.Cross(s.Before.Spin, s.Before.Velocity).LengthSquared) * c.MagnusCoefficient;
-            double contact = g * dt * (Math.Abs(s.Before.Velocity.Z) + (magnus + g) * dt);
-            double allowed = dt * dt * magnus * magnus + contact * (s.Has(SimEventKind.Bounced) ? 2 : 1) + 1e-9 * (1 + before);
+            double step = (magnus + g) * dt;
+            double bounce = g * dt * (Math.Abs(s.Before.Velocity.Z) + step);
+            double turned = 2 * g * dt * (Math.Sqrt(s.Before.Velocity.LengthSquared) + step);
+            double allowed = dt * dt * magnus * magnus + bounce * (s.Has(SimEventKind.Bounced) ? 2 : 1) + turned + 1e-9 * (1 + before);
             return after - before > allowed ? $"energy {before} -> {after} (+{after - before}, allowed {allowed})" : null;
         }
 
