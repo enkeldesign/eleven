@@ -185,7 +185,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(1, slow.After.Ball.AttachedTo);
             Assert.True(Separation(slow.After) <= config.ControlReach, $"8 m/s ball {Separation(slow.After):F2} m away");
 
-            Run fast = Play(config, AtFeet(config, ballAt: new Vec2(10, 0), ballVelocity: new Vec3(-16, 0, 0)), Stick(0.5, 0), 3);
+            // A 16 m/s ball beats a poor first touch; a good one may hold it (the characterisation).
+            Run fast = Play(config, AtFeet(config, 0.3, ballAt: new Vec2(10, 0), ballVelocity: new Vec3(-16, 0, 0)), Stick(0.5, 0), 3);
             Assert.Equal(0, fast.After.Ball.AttachedTo);
             Assert.True(Separation(fast.After) > config.AttachedLossReach + 1, $"16 m/s ball only {Separation(fast.After):F2} m away");
         }
@@ -295,14 +296,15 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(2, run.After.Ball.AttachedTo);
         }
 
-        // A sprint that turns steadily, 1.2 rad/s: hard enough to load the correction.
+        // A sprint that turns steadily, 2.1 rad/s: hard enough to load the correction at the
+        // reference (25 m/s²), where gentler weaves are held equally at both profiles.
         [Fact]
         public void Better_control_drifts_less_at_the_same_speed()
         {
             SimConfig config = Attached();
             double Drift(double ballControl)
             {
-                Func<long, Command[]> weave = tick => new[] { new Command(A, tick, new Vec2(Math.Cos(tick * 0.02), Math.Sin(tick * 0.02))) };
+                Func<long, Command[]> weave = tick => new[] { new Command(A, tick, new Vec2(Math.Cos(tick * 0.035), Math.Sin(tick * 0.035))) };
                 Run run = Play(config, AtFeet(config, ballControl), weave, 6);
                 return run.Before.Skip(2 * config.TickRate).Average(Separation);
             }

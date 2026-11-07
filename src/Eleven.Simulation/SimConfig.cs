@@ -61,7 +61,7 @@ namespace Eleven.Simulation
             double receiveStrength = 12,
             double attachedLeadSlow = 0.5,
             double attachedLeadFast = 0.8,
-            double attachedAcceleration = 15,
+            double attachedAcceleration = 25,
             double attachedSpeedCap = 3,
             double attachedDeadband = 0.2,
             double attachedReleaseReach = 1.35)

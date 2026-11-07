@@ -9,7 +9,7 @@ SOL's handoff on #60, from #29's sources ([SWOS](https://files.swos.eu/manual/SW
 - **Bounded correction.** The correction is damped and capped every step, with a deadband. A ball 1–2 m out can't snap back in one step.
 - **Failure is real.** Control fails credibly under overload: on a fast turn, against a hard incoming ball, or when the player stops dead from a sprint.
 - **Ball control matters.** Ball control reduces drift and recovery time.
-- **Hysteresis.** The ball is gained within a smaller reach than the one it is lost beyond.
+- **Hysteresis.** The ball is gained within a smaller reach than the one it is lost beyond. At the references that is 0.9 m against 1.35 m (see [Tunables](#tunables) for when it holds).
 
 ## State
 
@@ -47,7 +47,7 @@ Under ATTACHED, the ball-control slot does this:
    - **The closing speed:** min(`attachedSpeedCap` · s, √(2 · `attachedAcceleration` · s · (*d* − `attachedDeadband`))), where *d* is the ball's distance from the target. It is the speed the capped acceleration could stop from at the deadband's edge, so the ball doesn't overshoot.
    - **The wanted velocity** is the holder's velocity plus the closing speed toward the target.
    - **Inside the deadband** the ball only keeps pace with the holder, so a held ball sits up to a deadband from its target.
-   - **The cap.** The change is capped at `attachedAcceleration` · s · dt per step: 0.21 m/s at the reference and ballControl 0.7.
+   - **The cap.** The change is capped at `attachedAcceleration` · s · dt per step: 0.35 m/s at the reference and ballControl 0.7.
 
 ATTACHED draws no random numbers. Its failures come from the caps.
 
@@ -59,12 +59,18 @@ These are on the bench's Attached tab. The capture radius is `controlReach` on t
 | --- | --- | --- | --- | --- |
 | `attachedLeadSlow` | m | 0.2–1.5 | 0.4–0.7 | 0.5 |
 | `attachedLeadFast` | m | 0.3–2 | 0.7–1.1 | 0.8 |
-| `attachedAcceleration` | m/s² | 1–60 | 8–30 | 15 |
+| `attachedAcceleration` | m/s² | 1–60 | 8–30 | 25 |
 | `attachedSpeedCap` | m/s | 0.5–10 | 2–4 | 3 |
 | `attachedDeadband` | m | 0–0.6 | 0.1–0.3 | 0.2 |
 | `attachedReleaseReach` | m | 0.5–3 | 1.1–1.7 | 1.35 |
 
-Every value in each range is valid on its own. A release reach below the control reach simply means the ball is lost beyond the control reach (`SimConfig.AttachedLossReach`).
+Every value in each range is valid on its own. The ball is lost beyond the larger of `attachedReleaseReach` and `controlReach` (`SimConfig.AttachedLossReach`).
+- **Strict hysteresis holds only while `attachedReleaseReach` is greater than `controlReach`.** At or below it, the ball is gained and lost at the same reach, with none.
+
+**`attachedAcceleration`'s reference is 25 m/s².** SOL's review on #64 moved it from the first reference, 15, which is kept for comparison.
+- At 15, even good control lost a dead stop and a 90° turn from a sprint, where FREE keeps both. That made ATTACHED less forgiving than FREE in the very cases it is meant to soften.
+- At 25, good control keeps every turn and stop, and poor control still loses the 90° turn.
+- It is a more informative comparator, not approved feel.
 
 ## The live switch
 
@@ -93,34 +99,37 @@ Candidate A is the only touch candidate (#28). The switch depends on nothing in 
 - **`sprint-stop`**: full stick for 2 s, then the stick released.
 - **`switch-in`**: a sprint dribble switched into the model at 2 s.
 
-**At the references** (good 0.9, poor 0.3):
+**At the references** (good 0.9, poor 0.3; ATTACHED at 25 m/s²):
 
 | Case | FREE good | FREE poor | ATTACHED good | ATTACHED poor |
 | --- | --- | --- | --- | --- |
 | sprint lead | 0.85 m | 0.82 m | 0.72 m | 0.72 m |
-| sprint-stop | kept | lost 1.7 s | lost 1.6 s | lost 1.7 s |
-| turn-45 at sprint | kept | lost 1.75 s | kept, 1.09 m at most | lost 1.5 s |
-| turn-90 at sprint | kept | lost | lost 1.65 s | lost |
-| receive 8 m/s | settled at once | 0.50 s | settled at once | 0.22 s |
-| first touch 16 m/s | not settled | not settled | settled in 0.47 s | lost |
+| sprint-stop | kept | lost 1.7 s | kept, 0.75 m at most | kept, 1.17 m at most |
+| turn-45 at sprint | kept | lost 1.75 s | kept, 0.90 m at most | kept, 1.00 m at most |
+| turn-90 at sprint | kept | lost | kept, 1.04 m at most | lost 1.62 s |
+| receive 8 m/s | settled at once | 0.50 s | settled at once | 0.12 s |
+| first touch 16 m/s | not settled | not settled | settled in 0.27 s | lost |
 | kick-release | released, 0 touches after | the same | released, 0 after | the same |
 | sprint flicks | 100% | 100% | 100% | 100% |
 | switch-in | control on the first step | the same | the same | the same |
 
 **What the references show:**
-- **Turns and stops.** ATTACHED at 15 m/s² is weaker than FREE on sharp turns and on a dead stop from a sprint. The player brakes at about 25 m/s², harder than the correction can stop the ball.
-- **Reception.** It is stronger at taking a hard ball: the first touch plus continuous correction holds a 16 m/s ball at good control.
+- **Good control.** It keeps every turn and stop under both models.
+- **Poor control.** It is more forgiving under ATTACHED, which loses only the 90° turn. FREE loses the stop and both turns.
+- **Reception.** ATTACHED is stronger at taking a hard ball: the first touch plus the continuous correction holds a 16 m/s ball at good control.
+
+**Settled is model-specific.** FREE settles within its control reach, and ATTACHED once the ball is held, possibly out to the loss reach. So equal `settle_s` values are not equal kick-ready control (SOL on #64). On device, watch the separation, and whether a kick connects after a reception.
 
 **The correction's effect, by `attachedAcceleration`** (time lost; – means kept):
 
 | `attachedAcceleration` | sprint-stop good / poor | turn-45 good / poor | turn-90 good / poor |
 | --- | --- | --- | --- |
-| 15 (reference) | 1.57 s / 1.70 s | – / 1.53 s | 1.65 s / 1.70 s |
+| 15 (the first reference) | 1.57 s / 1.70 s | – / 1.53 s | 1.65 s / 1.70 s |
 | 20 | – / 1.65 s | – / – | 1.57 s / 1.67 s |
-| 25 | – / – | – / – | – / 1.62 s |
+| 25 (reference) | – / – | – / – | – / 1.62 s |
 | 30 | – / – | – / – | – / 1.50 s |
 
-From about 25 m/s², the good profile keeps every turn and stop, as FREE's does. That is a feel question for the bench, not decided here.
+The good-and-poor contrast at 25 comes from these turn and stop cases only. It doesn't show that the controller is never over-forgiving elsewhere in play.
 
 **The properties tested** (`AttachedTests`, `ControlSwitchTests`):
 - finite state;
@@ -154,7 +163,7 @@ From about 25 m/s², the good profile keeps every turn and stop, as FREE's does.
 - flick a kick with Candidate A.
 
 **On the bench, try:**
-- `attachedAcceleration` 15 against 25;
+- `attachedAcceleration` 25 against 15, the first reference;
 - `ballControl` 0.3 against 0.9;
 - `attachedDeadband` and `attachedLeadFast`.
 

@@ -59,7 +59,7 @@ namespace Eleven.Simulation.Tests
         public void Under_attached_a_sharper_turn_and_poorer_control_lose_more()
         {
             Assert.True(Of("turn-90", "poor", "attached").MaxSeparationMetres > Of("turn-45", "poor", "attached").MaxSeparationMetres);
-            Assert.True(Of("turn-45", "poor", "attached").LostSeconds > Of("turn-45", "good", "attached").LostSeconds);
+            Assert.True(Of("turn-90", "poor", "attached").LostSeconds > Of("turn-90", "good", "attached").LostSeconds);
         }
 
         [Fact]
