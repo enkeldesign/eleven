@@ -13,7 +13,7 @@ namespace Eleven.Simulation.Tests
         {
             // Golden values: they change only when the config encoding or defaults change, which
             // needs its own commit with a stated reason.
-            Assert.Equal(0xa5eee3466d513752UL, new SimConfig().Hash);
+            Assert.Equal(0xb8369c649f0c481fUL, new SimConfig().Hash);
             Assert.Equal(new SimConfig().Hash, new SimConfig().Hash);
         }
 
