@@ -37,6 +37,12 @@ namespace Eleven.Simulation
 
         /// <summary>Subject: the player whose touch controlled the ball (#59). Presentation can show it.</summary>
         Touched = 7,
+
+        /// <summary>Subject: the player who has taken the ball under ATTACHED (#60).</summary>
+        Attached = 8,
+
+        /// <summary>Subject: the player who has lost the ball under ATTACHED (#60): to a kick, beyond reach, or to a nearer player.</summary>
+        Released = 9,
     }
 
     /// <summary>

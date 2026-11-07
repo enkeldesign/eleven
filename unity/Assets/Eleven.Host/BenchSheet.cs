@@ -24,7 +24,7 @@ namespace Eleven.Host
     {
         private static readonly string[] Groups =
         {
-            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup,
+            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup,
             TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
         };
 

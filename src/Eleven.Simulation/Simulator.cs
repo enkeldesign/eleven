@@ -499,6 +499,12 @@ namespace Eleven.Simulation
         /// </summary>
         private void StepControl(long tick, List<SimEvent> events)
         {
+            if (Config.ControlModel == ControlModel.Attached)
+            {
+                StepAttached(tick, events);
+                return;
+            }
+
             if (Config.ControlModel != ControlModel.Free) return;
             if (_kickConnected) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
@@ -518,6 +524,14 @@ namespace Eleven.Simulation
             }
 
             if (toucher >= 0 && Touch(toucher, tick)) events.Add(new SimEvent(tick, SimEventKind.Touched, _state.Players[toucher].Id));
+        }
+
+        /// <summary>
+        /// ATTACHED (#60): the holder keeps the ball under a bounded correction until a kick, the
+        /// release reach or a nearer eligible player takes it. A stub until the model is implemented.
+        /// </summary>
+        private void StepAttached(long tick, List<SimEvent> events)
+        {
         }
 
         /// <summary>
@@ -756,6 +770,18 @@ namespace Eleven.Simulation
                         throw new ArgumentException($"{owner}: pass target {p.WindUpTarget} must be a teammate, during a wind-up.", nameof(state));
                     }
                 }
+            }
+
+            // The ball is attached to no one (0) or to a player who exists (#60).
+            if (state.Ball.AttachedTo != 0)
+            {
+                bool exists = false;
+                foreach (PlayerState p in state.Players)
+                {
+                    if (p.Id == state.Ball.AttachedTo) exists = true;
+                }
+
+                if (!exists) throw new ArgumentException($"The ball is attached to player {state.Ball.AttachedTo}, who isn't in the state.", nameof(state));
             }
 
             return state;

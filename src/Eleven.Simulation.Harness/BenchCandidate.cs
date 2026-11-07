@@ -133,6 +133,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>The immutable config these values make.</summary>
         public SimConfig Config { get; }
 
+        /// <summary>These values under another ball control model (#60), the live switch's applied candidate; every knob is kept.</summary>
+        public BenchCandidate WithControlModel(ControlModel model) => new BenchCandidate(Config.WithControlModel(model), Capabilities, ActionSurface);
+
         /// <summary>The controlled player's capabilities these values make.</summary>
         public PlayerCapabilities Capabilities { get; }
 

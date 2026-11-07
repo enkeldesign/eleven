@@ -688,6 +688,23 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await tap(at(...point(firstAt)));
       await waitForLog(new RegExp(`ELEVEN bench group name=${firstGroup}\\b`), 5_000, from);
     }
+    // The live FREE ↔ ATTACHED switch (#60), at the top of the sheet: it switches at once, the
+    // run goes on from where it was, and the state is the same either side of the switch.
+    const models = Object.fromEntries((opened?.match.input.match(/ models=(\S+)/)?.[1] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+    const switched = [];
+    for (const model of ['Attached', 'Free']) {
+      const from = logs.length;
+      if (models[model]) await tap(at(...point(models[model])));
+      const line = await waitForLog(new RegExp(`ELEVEN model switched to=${model.toLowerCase()} tick=(\\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16})`), 5_000, from);
+      const next = line ? await waitForLog(tracePattern, 5_000, line.index + 1) : null;
+      switched.push({ model, line: line?.match ?? null, next: next ? Number(next.match[1]) : NaN });
+    }
+    check('the ball control model switches live, keeping the run and its state',
+      switched.every((w) => w.line && w.line[2] === w.line[3] && w.next >= Number(w.line[1])),
+      Object.keys(models).length
+        ? switched.map((w) => (w.line ? `${w.model} at tick ${w.line[1]}, state ${w.line[2]} → ${w.line[3]}, next trace tick ${w.next}` : `${w.model}: no switch line`)).join('; ')
+        : `no model control in the bench (open line: ${opened?.match.input ?? 'none'})`);
+
     const tabTo = async (group, knob) => {
       const from = logs.length;
       if (tabs[group]) await tap(at(...point(tabs[group])));
