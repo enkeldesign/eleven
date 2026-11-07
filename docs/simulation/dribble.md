@@ -33,7 +33,7 @@ The step order is: commands → movement → aftertouch → kicks (wind-up, cont
 - they aren't winding up a kick, and their `KickCooldown` and `TouchCooldown` are 0;
 - the ball is within `controlReach` horizontally and no higher than `kickMaxBallHeight`.
 
-Touches run after kicks. So a kick's own step and its cooldown always leave the ball free, and nothing redirects a kicked ball.
+Touches run after kicks, and **no one touches the ball on the step a kick connects**, whatever the kick cooldown. The kicker can't touch it through their cooldown either. So a kick always leaves the ball free, and nothing redirects it before it has moved. From the next step, another player within reach can touch it: that is how a pass is received. (Codex on #62: the kicker with no cooldown, or a team-mate within reach, used to redirect a kick on its own step.)
 
 A **standing player** (slower than 0.5 m/s, stick released) with the ball at rest within reach leaves it alone.
 

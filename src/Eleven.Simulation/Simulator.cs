@@ -31,6 +31,9 @@ namespace Eleven.Simulation
         // Per-step scratch, cleared every step. Not state: nothing in it survives a step.
         private readonly List<Command> _accepted = new List<Command>();
 
+        // Whether a kick connected on this step: then no one touches the ball on it (#59).
+        private bool _kickConnected;
+
         /// <param name="initial">Copied, so the caller's object is never mutated.</param>
         public Simulator(SimConfig config, SimState initial)
         {
@@ -58,6 +61,7 @@ namespace Eleven.Simulation
         public void Step(IReadOnlyList<Command> commands, List<SimEvent> events)
         {
             long tick = _state.Tick;
+            _kickConnected = false;
             ResolveCommands(tick, commands, events);
 
             double dt = Config.TickSeconds;
@@ -77,7 +81,8 @@ namespace Eleven.Simulation
                 StepKick(i, FindAccepted(_state.Players[i].OwnerControllerId), tick, events);
             }
 
-            // After kicks, so a kick's own step and its cooldown keep the ball free (#59).
+            // After kicks, so a kick's own step and its cooldown keep the ball free (#59): no one
+            // touches on the step a kick connects, whatever the cooldown, and the kicker not through it.
             StepControl(tick, events);
 
             StepBall(tick, dt, events);
@@ -474,6 +479,7 @@ namespace Eleven.Simulation
             player.AftertouchTicks = Config.AftertouchTicks;
             player.AftertouchDirection = line;
             player.KickCooldown = Config.KickCooldownTicks;
+            _kickConnected = true;
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
 
@@ -494,6 +500,7 @@ namespace Eleven.Simulation
         private void StepControl(long tick, List<SimEvent> events)
         {
             if (Config.ControlModel != ControlModel.Free) return;
+            if (_kickConnected) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
 
             double reachSquared = Config.ControlReach * Config.ControlReach;
