@@ -125,7 +125,7 @@ namespace Eleven.Host
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
             Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
-            Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m"));
+            Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m goal={_view.Goal}"));
 
             if (url.Contains("autorun")) RunScenario();
         }
