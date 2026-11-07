@@ -167,8 +167,13 @@ namespace Eleven.Simulation.Harness
             return curve;
         }
 
+        // m. Each ball flies this far to the side of the pitch, where no goal stands (#68), so the
+        // curves describe the ball in open space. Distances are measured from its start.
+        private const double ClearOfTheGoal = 1000;
+
         private static BallCurve Run(SimConfig config, BallState ball)
         {
+            ball.Position = new Vec3(ball.Position.X, ball.Position.Y + ClearOfTheGoal, ball.Position.Z);
             var sim = new Simulator(config, new SimState { Ball = ball });
             var commands = new List<Command>();
             var events = new List<SimEvent>();
