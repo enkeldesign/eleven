@@ -78,25 +78,30 @@ namespace Eleven.Simulation.Tests
             Assert.True(Math.Abs(Speed(after!.Ball.Velocity) - rolled) < 0.02, $"launched at {Speed(after.Ball.Velocity):F3} m/s; the standing weighting gives {rolled:F3}");
         }
 
-        [Fact]
-        public void A_passer_moving_against_the_pass_line_gets_no_negative_boost()
+        // The free pass goes along the heading, and the heading is the direction of travel, so a
+        // passer never runs against the line: braking, reversing or turning when tapping can only
+        // shrink the boost toward a standing passer's weighting, never below it.
+        [Theory]
+        [InlineData("braking", 0.0, 0.0)]
+        [InlineData("reversing", -1.0, 0.0)]
+        [InlineData("turning", 0.0, 1.0)]
+        public void A_free_pass_is_never_slower_than_a_standing_passers(string motion, double x, double y)
         {
-            var config = new SimConfig();
-            SimState state = AtFeet(config, new Vec2(-0.3, 0));
-            state.Players[0].Velocity = new Vec2(5, 0);
-            state.Players[0].Heading = Math.PI;
-            var sim = new Simulator(config, state);
+            var config = new SimConfig(controlModel: ControlModel.Free);
+            var sim = new Simulator(config, AtFeet(config));
+            int changeAt = 2 * config.TickRate;
             SimState? after = null;
-            for (int t = 0; t < config.TickRate && after == null; t++)
+            for (int t = 0; t < 4 * config.TickRate && after == null; t++)
             {
+                Vec2 move = t < changeAt ? new Vec2(1, 0) : new Vec2(x, y);
                 var step = new List<SimEvent>();
-                sim.Step(new[] { new Command(A, sim.Tick, new Vec2(-1, 0), quickPass: t == 0) }, step);
-                if (step.Any(x => x.Kind == SimEventKind.Kicked)) after = sim.PeekState();
+                sim.Step(new[] { new Command(A, sim.Tick, move, quickPass: t == changeAt + 3) }, step);
+                if (step.Any(e => e.Kind == SimEventKind.Kicked)) after = sim.PeekState();
             }
 
             Assert.NotNull(after);
-            double rolled = Launch(config, 0) - config.RollingFriction * config.Gravity * config.TickSeconds;
-            Assert.True(Math.Abs(Speed(after!.Ball.Velocity) - rolled) < 0.02, $"launched at {Speed(after.Ball.Velocity):F3} m/s against the passer's run; the standing weighting gives {rolled:F3}");
+            double standing = Launch(config, 0) - config.RollingFriction * config.Gravity * config.TickSeconds;
+            Assert.True(Speed(after!.Ball.Velocity) >= standing - 0.02, $"{motion}: launched at {Speed(after.Ball.Velocity):F3} m/s; a standing passer's free pass is {standing:F3}");
         }
     }
 }
