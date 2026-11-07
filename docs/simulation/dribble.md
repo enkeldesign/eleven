@@ -141,7 +141,9 @@ SOL asked (#59) for evidence across sprint leads of 0.85, 1.2, 1.5 and 2.0 m, al
 | good (0.9), flicks connecting | 100% | 100% | 0% |
 | poor (0.3) | 100% | 93% | 0% |
 
-So in this model a flick at a sprint is all or nothing by lead. Kick Off 2's timed push-and-chase, where the ball runs out of reach and the player catches it, isn't a setting of these knobs. It would take a different touch target: one that pushes the ball out and lets it come back into reach. That is a design question for SOL and Erik, not for this issue.
+So in this model a flick at a sprint is all or nothing by lead. Kick Off 2's timed push-and-chase, where the ball runs out of reach and the player catches it, isn't a setting of these knobs. It would take a different touch target: one that pushes the ball out and lets it come back into reach.
+
+**This is a known limitation of FREE v1.** SOL's decision on #62: the sweep shows a missing push-and-recovery rule, not a lead to tune. #63 is a separate push-and-chase experiment, with catch-up physics and timing-dependent kick windows. The 0.85 m lead and its 100% sprint flicks remain a technical reference, not approved feel.
 
 ## For Erik on device
 
