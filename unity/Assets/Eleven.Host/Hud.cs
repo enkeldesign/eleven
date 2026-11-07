@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Eleven.Presentation;
+using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -59,7 +60,7 @@ namespace Eleven.Host
 
         public Hud(UiRoot ui, bool trace, System.Action relayout, System.Action reset, System.Action run,
             System.Action feltWrong, System.Action saveCapture, Action<string> noteDone, Func<Vector2> visible,
-            Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply)
+            Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel)
         {
             _ui = ui;
             _trace = trace;
@@ -152,7 +153,7 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
-            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, BenchClosed);
+            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, BenchClosed);
 
             // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
             // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel
