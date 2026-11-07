@@ -169,6 +169,34 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(0, run.Touches(kickAt, kicked + config.KickCooldownTicks + 1));
         }
 
+        // Codex on #62: the kicker with no kick cooldown, or a team-mate within reach of the ball,
+        // would redirect the kick on its own step, before the ball has moved.
+        [Fact]
+        public void No_one_touches_the_ball_on_the_step_a_kick_connects()
+        {
+            foreach (SimConfig config in new[] { new SimConfig(controlModel: ControlModel.Free, kickCooldownTicks: 0), Free() })
+            {
+                SimState state = AtFeet(config);
+                state.Players = new[]
+                {
+                    state.Players[0],
+                    new PlayerState { Id = 2, OwnerControllerId = B, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(1.2, 0.3) },
+                };
+
+                Run run = Play(config, state, tick => new[]
+                {
+                    tick == 1 ? new Command(A, tick, Vec2.Zero, KickIntent.AlongHeading(0.6, 0)) : new Command(A, tick, Vec2.Zero),
+                    new Command(B, tick, Vec2.Zero),
+                }, 1);
+
+                int kicked = run.Events.FindIndex(e => e.Any(x => x.Kind == SimEventKind.Kicked));
+                Assert.True(kicked > 0, $"kick cooldown {config.KickCooldownTicks}: the kick didn't connect");
+                Assert.DoesNotContain(run.Events[kicked], x => x.Kind == SimEventKind.Touched);
+                double speed = Math.Sqrt(run.Before[kicked + 1].Ball.Velocity.LengthSquared);
+                Assert.True(speed > 8, $"kick cooldown {config.KickCooldownTicks}: the ball left at {speed:F1} m/s");
+            }
+        }
+
         [Fact]
         public void Touches_are_deterministic_and_survive_snapshot_and_restore()
         {
