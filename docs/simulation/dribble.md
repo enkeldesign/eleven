@@ -1,6 +1,6 @@
 # Ball control: the FREE model
 
-How a player runs with the ball under `ControlModel.Free`: #59, part 1 of #29. This is a research-backed starting hypothesis, not approved feel. The values are technical references for the test bench.
+How a player runs with the ball under `ControlModel.Free`: #59, part 1 of #29. This is a research-backed starting hypothesis, not approved feel. The values are technical references for the test bench. Its comparator, ATTACHED, and the live switch between the two are in [attached.md](attached.md) (#60).
 
 ## The research starting answer
 
@@ -88,7 +88,12 @@ These are in the bench's Control tab, with `ballControl` on the Player tab.
 
 `eleven-sim dribble <dir> [name=value ...]` writes `dribble-curves.csv`, and CI publishes it. `docs/simulation/dribble-reference.csv` is the recorded technical reference, checked by `DribbleCurvesTests`.
 
-There are seven cases, each under a good profile (`ballControl` 0.9) and a poor one (0.3):
+Every case runs under FREE and under ATTACHED (#60), each under a good profile (`ballControl` 0.9) and a poor one (0.3).
+- Each row names its model and carries that model's config hash.
+- `lost_s` is time beyond the control reach under FREE, and time not attached under ATTACHED. It is measured only in the straight, stop, turn and switch cases.
+- ATTACHED's own columns are in [attached.md](attached.md#the-characterisation).
+
+The cases:
 
 | Case | What happens | Measured |
 | --- | --- | --- |
@@ -99,12 +104,16 @@ There are seven cases, each under a good profile (`ballControl` 0.9) and a poor 
 | `difficult-first-touch` | the same at 16 m/s | the same, or "not settled" with the final separation |
 | `kick-release` | a 0.6-strength kick along the heading while dribbling | the release speed, and touches through the kick cooldown (always 0) |
 | `sprint-flick` | a 0.6-strength flick after 2 s of sprinting with the ball, started once at each step of a touch interval (15 starts) | the share that connect: the ball rolls on, untouched, through the wind-up |
+| `sprint-stop` | full stick for 2 s, then the stick released (#60) | max separation and time without control over the next 2 s |
+| `switch-in` | a sprint dribble under the other model, switched into this one at 2 s (#60) | the time to this model's first control |
 
 **At the references:**
 - **Leads:** 0.68 m at a jog and 0.85 m at a sprint.
 - **Every flick at a sprint connects**, at both profiles.
 - **The good profile** keeps 45° and 90° turns, settles the 8 m/s pass at once, and loses the 16 m/s ball.
 - **The poor profile** loses a 45° turn for 1.75 s and a 90° turn entirely, settles the 8 m/s pass in 0.5 s over 1.6 m, and loses the 16 m/s ball.
+- **A stop from a sprint** keeps the ball at good control; poor control loses it for 1.7 s.
+- **Switched into mid-dribble,** FREE touches on its first step.
 
 **The properties tested** (`DribbleTests`):
 - finite state;

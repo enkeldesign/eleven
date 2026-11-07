@@ -9,7 +9,7 @@ The test bench (#45, part of #27) is how values are tuned by playing. Research s
 Each knob shows what its metadata holds:
 - its unit and valid range;
 - its research starting range, where docs/simulation/ball.md, kick.md, movement.md or pass.md gives one, or "technical reference" otherwise;
-- its group (`TunableParameter.Group`: Ball, Kick, Pass, Control, Player or Touch).
+- its group (`TunableParameter.Group`: Ball, Kick, Pass, Control, Attached, Player or Touch).
 
 Each knob also has:
 - **a label** derived from its name (`kickSpeed` becomes "Kick speed");
@@ -32,7 +32,17 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 
 **TEST BENCH** is a Unity action from the visual system (`Hud`, `BenchSheet`; ADR-0003). It sits in the top row with Reset and Run scenario, away from the thumbs. On a narrow phone it starts the row below. It opens **Test bench**, a sheet over a scrim, so presses don't reach play. Play goes on under it.
 
-**Group tabs:** Ball, Kick, Pass, Control, Player and Touch. Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)); its player value, `ballControl`, is on the Player tab. Each tab lists its knobs, and the list scrolls, so the sheet's actions stay in reach.
+**Ball control (#60):**
+- "Free / Attached" sits at the top of the sheet, above the tabs, and switches the model at once ([attached.md](attached.md#the-live-switch)).
+- The run goes on from the same state, so it isn't a pending edit.
+- Only the model changes in the applied values; pending edits stay pending.
+
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Player and Touch.
+- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)) and the capture reach both models share.
+- Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
+- Their player value, `ballControl`, is on the Player tab.
+- Each tab lists its knobs, and the list scrolls, so the sheet's actions stay in reach.
+- The sheet keeps its height whichever tab is shown, so the tabs stay put (#59).
 
 **Each knob** is the recipes' value control:
 - its name and unit;

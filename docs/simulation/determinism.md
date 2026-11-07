@@ -21,7 +21,7 @@ The rules the engine-free simulation follows so that the same code, config, seed
 
 `tick-v1`: state N is the state after N steps. Step N applies the commands whose tick is N and turns state N into state N+1. Hash N is the hash of state N, so a 60-second run at 60 Hz has 3601 hashes, ticks 0 to 3600.
 
-Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball-control touches under the FREE model, at most one a step ([dribble.md](dribble.md)) → integrate the ball → check the goal line → advance the tick. The kick's timers are described in [kick.md](kick.md).
+Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball control: touches under FREE, at most one a step ([dribble.md](dribble.md)), or ATTACHED's release, take and bounded correction ([attached.md](attached.md)); nothing takes the ball on the step a kick connects → integrate the ball → check the goal line → advance the tick. The kick's timers are described in [kick.md](kick.md).
 
 The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`.
 
@@ -61,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 7`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, and version 7 added the ball control model and its touch values, #59). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 8`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, version 7 added the ball control model and its touch values, #59, and version 8 added the ATTACHED model and its six values, #60). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
 
 ## Canonical encoding
 
@@ -72,7 +72,7 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 - Booleans: one byte, 0 or 1.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line, attached-to), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation, ball control), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction, touch cooldown).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.
@@ -84,7 +84,7 @@ All future-affecting state is in `SimState`; anything else that affects the next
 
 ## Snapshots
 
-Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, version 3 added player capabilities, version 4 added kick capabilities and the kick's wind-up and aftertouch phases, and version 5 added each player's team, pass capabilities and quick-pass target), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
+Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, version 3 added player capabilities, version 4 added kick capabilities and the kick's wind-up and aftertouch phases, version 5 added each player's team, pass capabilities and quick-pass target, version 6 added ball control and the touch cooldown (#59), and version 7 the ball's attachment (#60)), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
 
 Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`, which refuses kick state the config couldn't have produced: a wind-up, window or cooldown longer than the config's, or a pass target outside a wind-up or off the team. Player ids are positive, because a target of 0 means none. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
 
