@@ -69,12 +69,16 @@ namespace Eleven.Host
             _scrim.style.display = DisplayStyle.None;
 
             // The sheet takes the height it is given and scrolls its knobs, so its actions stay in reach.
+            // It takes all of it, whichever group is shown: sized to its group, a short group (Pass)
+            // shrank it, and centred on the screen it moved the tabs and actions from under the finger.
             _sheet = UiKit.MakeSheet(_theme, "Test bench");
             _sheet.Element.name = "Bench sheet";
             _sheet.Element.style.width = Length.Percent(100);
             _sheet.Element.style.maxWidth = 560;
+            _sheet.Element.style.height = Length.Percent(100);
             _sheet.Element.style.maxHeight = Length.Percent(100);
             _sheet.Body.style.flexShrink = 1;
+            _sheet.Content.style.flexGrow = 1;
             _sheet.Content.style.flexShrink = 1;
             _sheet.Content.style.minHeight = 0;
 
@@ -97,6 +101,7 @@ namespace Eleven.Host
             _sheet.Content.Add(_tabs.Element);
 
             _list = UiKit.MakeScroll();
+            _list.style.flexGrow = 1;
             _list.style.flexShrink = 1;
             // A knob's control reached with Tab scrolls into view.
             _list.RegisterCallback<FocusInEvent>(e =>
