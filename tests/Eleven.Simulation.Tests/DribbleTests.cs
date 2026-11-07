@@ -197,6 +197,43 @@ namespace Eleven.Simulation.Tests
             }
         }
 
+        // Codex on #62: a receiver who controls a short pass inside the passer's aftertouch window has
+        // the ball; the passer's input must no longer shape it.
+        [Fact]
+        public void A_touch_closes_the_kickers_aftertouch_window()
+        {
+            SimConfig config = Free();
+            SimState Start()
+            {
+                SimState state = AtFeet(config);
+                state.Players = new[]
+                {
+                    state.Players[0],
+                    new PlayerState { Id = 2, OwnerControllerId = B, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(2.0, 0) },
+                };
+                return state;
+            }
+
+            // A passes along the ground to B, 1.4 m from the ball, and holds aftertouch to the left.
+            Func<long, Command[]> Pass(long aftertouchUntil) => tick => new[]
+            {
+                new Command(A, tick, Vec2.Zero, tick == 1 ? KickIntent.AlongHeading(0.6, 0) : (KickIntent?)null, tick <= aftertouchUntil ? new Vec2(0, 1) : Vec2.Zero),
+                new Command(B, tick, Vec2.Zero),
+            };
+
+            Run held = Play(config, Start(), Pass(long.MaxValue), 1);
+            int kicked = held.Events.FindIndex(e => e.Any(x => x.Kind == SimEventKind.Kicked));
+            int received = held.Events.FindIndex(e => e.Any(x => x.Kind == SimEventKind.Touched && x.Subject == 2));
+            Assert.True(kicked > 0 && received > kicked, $"kicked on step {kicked}, received on step {received}");
+            Assert.True(received - kicked < config.AftertouchTicks, $"received {received - kicked} steps after contact, the window is {config.AftertouchTicks}");
+
+            Assert.Equal(0, held.Before[received + 1].Players[0].AftertouchTicks);
+
+            // Releasing aftertouch at the touch changes nothing after it.
+            Run released = Play(config, Start(), Pass(received), 1);
+            Assert.Equal(released.Sim.StateHash(), held.Sim.StateHash());
+        }
+
         [Fact]
         public void Touches_are_deterministic_and_survive_snapshot_and_restore()
         {
