@@ -24,8 +24,8 @@ namespace Eleven.Host
     {
         private static readonly string[] Groups =
         {
-            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.PlayerGroup,
-            ActionSurfaceSettings.Group,
+            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup,
+            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
         };
 
         private readonly UiRoot _ui;
@@ -69,12 +69,16 @@ namespace Eleven.Host
             _scrim.style.display = DisplayStyle.None;
 
             // The sheet takes the height it is given and scrolls its knobs, so its actions stay in reach.
+            // It takes all of it, whichever group is shown: sized to its group, a short group (Pass)
+            // shrank it, and centred on the screen it moved the tabs and actions from under the finger.
             _sheet = UiKit.MakeSheet(_theme, "Test bench");
             _sheet.Element.name = "Bench sheet";
             _sheet.Element.style.width = Length.Percent(100);
             _sheet.Element.style.maxWidth = 560;
+            _sheet.Element.style.height = Length.Percent(100);
             _sheet.Element.style.maxHeight = Length.Percent(100);
             _sheet.Body.style.flexShrink = 1;
+            _sheet.Content.style.flexGrow = 1;
             _sheet.Content.style.flexShrink = 1;
             _sheet.Content.style.minHeight = 0;
 
@@ -91,9 +95,13 @@ namespace Eleven.Host
 
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
+            // The tabs wrap onto a second row on a phone. They must never shrink: squeezed to one
+            // row's height, the second row overflows under the knob list, which takes its presses.
+            _tabs.Element.style.flexShrink = 0;
             _sheet.Content.Add(_tabs.Element);
 
             _list = UiKit.MakeScroll();
+            _list.style.flexGrow = 1;
             _list.style.flexShrink = 1;
             // A knob's control reached with Tab scrolls into view.
             _list.RegisterCallback<FocusInEvent>(e =>

@@ -350,6 +350,72 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
     check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
 
+    // Running with the ball (#59, FREE): the stick steers the player onto the resting ball, and
+    // touches carry it on. Like a player, it re-aims at the ball from each trace line (once a
+    // simulated second) until the first touch, then holds its line.
+    {
+      const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+)/;
+      const touchPattern = /ELEVEN event (\d+) Touched 1/;
+      const fromDribble = logs.length;
+      const start = ballPattern.exec(lastLog(ballPattern)?.input ?? '') ?? null;
+      let carried = null;
+      let touched = null;
+      let closest = Infinity;
+      let last = start;
+      if (start) {
+        const aimAt = (m) => {
+          const [px, py, bx, by] = m.slice(2, 6).map(Number);
+          closest = Math.min(closest, Math.hypot(bx - px, by - py));
+          const length = Math.hypot(bx - px, by - py) || 1;
+          return { x: origin.x + ((bx - px) / length) * reach, y: origin.y - ((by - py) / length) * reach };
+        };
+        // Pressed and dragged out in steps, as the stick check above does: on desktop, a press
+        // followed at once by one long move left the player standing (ce241fa).
+        const held = aimAt(start);
+        if (useTouch) await touch('touchStart', origin);
+        else {
+          await page.mouse.move(origin.x, origin.y);
+          await page.mouse.down();
+        }
+        for (let i = 1; i <= 10; i++) {
+          const p = { x: origin.x + ((held.x - origin.x) * i) / 10, y: origin.y + ((held.y - origin.y) * i) / 10 };
+          if (useTouch) await touch('touchMove', p);
+          else await page.mouse.move(p.x, p.y);
+          await sleep(20);
+        }
+        const until = Date.now() + 30_000;
+        while (!touched && Date.now() < until) {
+          const seen = logs.length;
+          touched = await waitForLog(touchPattern, 0, fromDribble);
+          if (touched) break;
+          const fresh = (await waitForLog(ballPattern, Math.max(1, until - Date.now()), seen))?.match ?? null;
+          touched = await waitForLog(touchPattern, 0, fromDribble);
+          if (!fresh || touched) continue;
+          last = fresh;
+          const steer = aimAt(fresh);
+          if (useTouch) await touch('touchMove', steer);
+          else await page.mouse.move(steer.x, steer.y);
+        }
+        const from = touched ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
+        const to = from ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
+        if (useTouch) await touch('touchEnd');
+        else await page.mouse.up();
+        if (from && to) {
+          const moved = Math.hypot(Number(to[4]) - Number(from[4]), Number(to[5]) - Number(from[5]));
+          const apart = Math.hypot(Number(to[4]) - Number(to[2]), Number(to[5]) - Number(to[3]));
+          carried = { moved, apart };
+        }
+      }
+      const touches = logs.slice(fromDribble).filter((l) => /ELEVEN event \d+ Touched 1/.test(l)).length;
+      notes.dribble = carried ? `${touches} touches, ball carried ${carried.moved.toFixed(1)} m, ${carried.apart.toFixed(2)} m from the player` : 'none';
+      const presses = logs.slice(fromDribble).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.replace('ELEVEN press ', ''));
+      const approach = Number.isFinite(closest) && last
+        ? `; closest ${closest.toFixed(2)} m; last trace tick ${last[1]} player ${last[2]},${last[3]} ball ${last[4]},${last[5]}; presses: ${presses.join(' | ') || 'none'}`
+        : '';
+      check('running onto the ball carries it with touches', !!carried && touches >= 2 && carried.moved > 3 && carried.apart < 2,
+        start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}${approach}`) : 'no trace line with the ball');
+    }
+
     // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.
     const fromKick = logs.length;
     const pointPx = Number(ui?.[2] ?? 1);
@@ -606,6 +672,22 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       !!focusOrder && focusOrder.match[3] === '0' && /Close,Revert,Apply_\/_Retry$/.test(focusOrder.match[1]),
       focusOrder ? `${focusOrder.match[2]} stops, ${focusOrder.match[3]} hidden; ends ${focusOrder.match[1].split(',').slice(-4).join(',')}` : 'no focus order line');
     const tabs = Object.fromEntries((opened?.match[3] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+    // Every tab opens its group, also where the tabs wrap onto a second row (a phone).
+    const reached = [];
+    for (const [group, where] of Object.entries(tabs)) {
+      const from = logs.length;
+      await tap(at(...point(where)));
+      if (await waitForLog(new RegExp(`ELEVEN bench group name=${group}\\b`), 5_000, from)) reached.push(group);
+    }
+    check('every bench tab opens its group', Object.keys(tabs).length > 0 && reached.length === Object.keys(tabs).length,
+      `${reached.length} of ${Object.keys(tabs).length} tabs opened their group: ${reached.join(', ') || 'none'} (tabs ${opened?.match[3] ?? 'none'})`);
+    // Back to the first tab, where the sheet opened, for the checks that follow.
+    const [firstGroup, firstAt] = Object.entries(tabs)[0] ?? [];
+    if (firstGroup) {
+      const from = logs.length;
+      await tap(at(...point(firstAt)));
+      await waitForLog(new RegExp(`ELEVEN bench group name=${firstGroup}\\b`), 5_000, from);
+    }
     const tabTo = async (group, knob) => {
       const from = logs.length;
       if (tabs[group]) await tap(at(...point(tabs[group])));

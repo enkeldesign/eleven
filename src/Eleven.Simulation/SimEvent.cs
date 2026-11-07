@@ -34,6 +34,9 @@ namespace Eleven.Simulation
         /// is the chosen receiver's id, or 0 for a free pass. Presentation can show the receiver.
         /// </summary>
         QuickPassResolved = 6,
+
+        /// <summary>Subject: the player whose touch controlled the ball (#59). Presentation can show it.</summary>
+        Touched = 7,
     }
 
     /// <summary>

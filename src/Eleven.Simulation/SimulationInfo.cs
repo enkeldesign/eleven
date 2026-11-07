@@ -12,7 +12,7 @@ namespace Eleven.Simulation
         /// aftertouch phases (#37). Version 5 added each player's team, pass capabilities and quick-pass
         /// target (#38).
         /// </summary>
-        public const int StateSchemaVersion = 5;
+        public const int StateSchemaVersion = 6;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

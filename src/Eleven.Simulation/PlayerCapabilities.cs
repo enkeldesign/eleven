@@ -6,7 +6,8 @@ namespace Eleven.Simulation
     /// <summary>
     /// What one footballer can do (#26): the smallest per-player capability surface the current
     /// mechanics need, explicitly not the final attribute taxonomy. #36 added movement, #37 the
-    /// manual kick and #38 the quick pass's perception; later mechanics add only what they need.
+    /// manual kick, #38 the quick pass's perception and #59 ball control; later mechanics add only
+    /// what they need.
     ///
     /// It lives in <see cref="PlayerState"/>, not in <see cref="SimConfig"/>, so every player can
     /// differ and snapshots, hashes and replays carry it. The simulation reads it and never changes
@@ -46,6 +47,13 @@ namespace Eleven.Simulation
         public double PassAnticipation;
 
         /// <summary>
+        /// 0–1. This player's touch on the ball in possession (#59): the smallest technique input, not
+        /// a final attribute. More control makes each touch more accurate and able to change the
+        /// ball's velocity further, so fast balls and sharp turns are kept more often.
+        /// </summary>
+        public double BallControl;
+
+        /// <summary>
         /// The capability values, with their valid ranges and, where the research on #26 gives one,
         /// a starting range (docs/simulation/movement.md, kick.md). The valid ranges are wide enough
         /// for the test bench to explore past the starting ranges; neither is a feel target.
@@ -58,6 +66,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.PlayerGroup, "kickError", "rad", 0, 0.5),
             new TunableParameter(TunableParameter.PlayerGroup, "passVision", "rad", 0, Math.PI),
             new TunableParameter(TunableParameter.PlayerGroup, "passAnticipation", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.PlayerGroup, "ballControl", "fraction", 0, 1),
         });
 
         /// <summary>
@@ -67,6 +76,7 @@ namespace Eleven.Simulation
         public static PlayerCapabilities Reference => new PlayerCapabilities
         {
             MaxSpeed = 7, Acceleration = 25, KickPower = 1, KickError = 0.05, PassVision = 1.05, PassAnticipation = 0.75,
+            BallControl = 0.7,
         };
 
         /// <summary>A capability value by its name in <see cref="Parameters"/>.</summary>
@@ -78,6 +88,7 @@ namespace Eleven.Simulation
             "kickError" => KickError,
             "passVision" => PassVision,
             "passAnticipation" => PassAnticipation,
+            "ballControl" => BallControl,
             _ => throw new ArgumentException($"'{name}' is not a player capability.", nameof(name)),
         };
 
@@ -93,6 +104,7 @@ namespace Eleven.Simulation
                 case "kickError": copy.KickError = value; break;
                 case "passVision": copy.PassVision = value; break;
                 case "passAnticipation": copy.PassAnticipation = value; break;
+                case "ballControl": copy.BallControl = value; break;
                 default: throw new ArgumentException($"'{name}' is not a player capability.", nameof(name));
             }
 

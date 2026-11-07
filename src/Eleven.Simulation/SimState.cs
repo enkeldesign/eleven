@@ -59,6 +59,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.KickError, "Player.Capabilities.KickError");
                 w.WriteDouble(player.Capabilities.PassVision, "Player.Capabilities.PassVision");
                 w.WriteDouble(player.Capabilities.PassAnticipation, "Player.Capabilities.PassAnticipation");
+                w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -70,6 +71,7 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.WindUpTarget);
                 w.WriteInt32(player.AftertouchTicks);
                 w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
+                w.WriteInt32(player.TouchCooldown);
             }
         }
 
@@ -105,6 +107,7 @@ namespace Eleven.Simulation
                         KickError = r.ReadDouble("Player.Capabilities.KickError"),
                         PassVision = r.ReadDouble("Player.Capabilities.PassVision"),
                         PassAnticipation = r.ReadDouble("Player.Capabilities.PassAnticipation"),
+                        BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -117,6 +120,7 @@ namespace Eleven.Simulation
                     WindUpTarget = r.ReadInt32(),
                     AftertouchTicks = r.ReadInt32(),
                     AftertouchDirection = r.ReadDouble("Player.AftertouchDirection"),
+                    TouchCooldown = r.ReadInt32(),
                 };
             }
 
@@ -238,5 +242,11 @@ namespace Eleven.Simulation
 
         /// <summary>rad. The intended line of the kick being shaped: aftertouch is measured against it.</summary>
         public double AftertouchDirection;
+
+        /// <summary>
+        /// Touch cooldown (#59): ticks left before this player can touch the ball again. Set to the
+        /// configured touch interval by a touch, decreased by one at the start of each later step.
+        /// </summary>
+        public int TouchCooldown;
     }
 }

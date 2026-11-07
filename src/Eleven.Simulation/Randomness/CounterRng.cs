@@ -11,6 +11,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>Reserved: the spike's random kick sidespin, no longer drawn since #37. Not reused.</summary>
         KickSpin = 2,
+
+        /// <summary>A ball-control touch's direction error (#59), bounded by the toucher's ball control and the touch's difficulty.</summary>
+        Touch = 3,
     }
 
     /// <summary>
