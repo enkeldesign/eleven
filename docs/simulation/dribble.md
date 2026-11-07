@@ -26,7 +26,7 @@ How a player runs with the ball under `ControlModel.Free`: #59, part 1 of #29. T
 
 ## Within a step
 
-The step order is: commands → movement → aftertouch → kicks (wind-up, contact) → **touches** → ball integration → goal line.
+The step order is: commands → movement → aftertouch → kicks (wind-up, contact) → **touches** → ball integration and the goal's frame → goal line.
 
 **At most one player touches the ball on a step**: the nearest eligible one, the lower id on a tie. A player is eligible when:
 - they have an accepted command this step;
