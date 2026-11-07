@@ -505,6 +505,10 @@ namespace Eleven.Simulation
                 return;
             }
 
+            // Only ATTACHED holds the ball: any other model ends an attachment on its first step,
+            // which is how a switch away from ATTACHED stops its correction at once (#60).
+            _state.Ball.AttachedTo = 0;
+
             if (Config.ControlModel != ControlModel.Free) return;
             if (_kickConnected) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
@@ -527,11 +531,142 @@ namespace Eleven.Simulation
         }
 
         /// <summary>
-        /// ATTACHED (#60): the holder keeps the ball under a bounded correction until a kick, the
-        /// release reach or a nearer eligible player takes it. A stub until the model is implemented.
+        /// ATTACHED (#60). The holder keeps the ball under a bounded correction until a kick, the
+        /// loss reach or a nearer eligible player takes it; a loose ball is taken by the nearest
+        /// eligible player within the control reach. Gained within <see cref="SimConfig.ControlReach"/>
+        /// and lost beyond <see cref="SimConfig.AttachedLossReach"/>, so control has hysteresis.
+        /// docs/simulation/attached.md has the rule.
         /// </summary>
         private void StepAttached(long tick, List<SimEvent> events)
         {
+            ref BallState ball = ref _state.Ball;
+
+            // A kick released it, and nothing takes it on the kick's own step.
+            if (_kickConnected)
+            {
+                Release(tick, events);
+                return;
+            }
+
+            bool high = ball.Position.Z > Config.KickMaxBallHeight;
+            int holder = IndexOfPlayer(ball.AttachedTo);
+            if (holder >= 0)
+            {
+                PlayerState h = _state.Players[holder];
+                double loss = Config.AttachedLossReach;
+                bool beyond = (ball.Position.Horizontal - h.Position).LengthSquared > loss * loss;
+                if (high || beyond || !FindAccepted(h.OwnerControllerId).HasValue)
+                {
+                    Release(tick, events);
+                    holder = -1;
+                }
+            }
+
+            // The nearest eligible player takes a loose ball, or one strictly nearer than its holder
+            // takes it over; the lower id on a tie.
+            if (!high)
+            {
+                double reachSquared = Config.ControlReach * Config.ControlReach;
+                double nearest = holder >= 0 ? (ball.Position.Horizontal - _state.Players[holder].Position).LengthSquared : double.MaxValue;
+                int taker = -1;
+                for (int i = 0; i < _state.Players.Length; i++)
+                {
+                    if (i == holder) continue;
+                    PlayerState p = _state.Players[i];
+                    if (p.WindUpTicks > 0 || p.KickCooldown > 0) continue;
+                    if (!FindAccepted(p.OwnerControllerId).HasValue) continue;
+                    double distanceSquared = (ball.Position.Horizontal - p.Position).LengthSquared;
+                    if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
+                    nearest = distanceSquared;
+                    taker = i;
+                }
+
+                if (taker >= 0)
+                {
+                    if (holder >= 0) Release(tick, events);
+                    Take(taker, tick, events);
+                    holder = taker;
+                }
+            }
+
+            if (holder >= 0) Steer(holder);
+        }
+
+        private int IndexOfPlayer(int id)
+        {
+            if (id == 0) return -1;
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                if (_state.Players[i].Id == id) return i;
+            }
+
+            return -1;
+        }
+
+        private void Release(long tick, List<SimEvent> events)
+        {
+            if (_state.Ball.AttachedTo == 0) return;
+            events.Add(new SimEvent(tick, SimEventKind.Released, _state.Ball.AttachedTo));
+            _state.Ball.AttachedTo = 0;
+        }
+
+        // Taking control is a first touch, as under FREE: it cushions the ball's speed relative to the
+        // taker by at most the receive strength, scaled by ball control. A ball arriving faster than
+        // that is only partly slowed, and the correction may not hold it. It clears spin, and closes
+        // every aftertouch window, since the ball has a new controller.
+        private void Take(int index, long tick, List<SimEvent> events)
+        {
+            ref BallState ball = ref _state.Ball;
+            PlayerState taker = _state.Players[index];
+            Vec2 relative = ball.Velocity.Horizontal - taker.Velocity;
+            double speed = SimMath.Sqrt(relative.LengthSquared);
+            double cushion = Config.ReceiveStrength * (0.5 + 0.5 * taker.Capabilities.BallControl);
+            Vec2 kept = speed > cushion ? relative * ((speed - cushion) / speed) : Vec2.Zero;
+            Vec2 velocity = taker.Velocity + kept;
+            ball.Velocity = new Vec3(velocity.X, velocity.Y, ball.Velocity.Z);
+            ball.Spin = Vec3.Zero;
+            ball.AttachedTo = taker.Id;
+            for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
+            events.Add(new SimEvent(tick, SimEventKind.Attached, taker.Id));
+        }
+
+        // The bounded correction: the ball's horizontal velocity, never its position, is steered
+        // toward the lead point ahead of the holder. It closes at the speed from which the capped
+        // acceleration could stop it at the deadband's edge, so it doesn't overshoot, and inside the
+        // deadband it only keeps pace with the holder. Every step's change is capped, so a ball far
+        // from its target can't snap back. Both caps scale with ball control.
+        private void Steer(int index)
+        {
+            ref BallState ball = ref _state.Ball;
+            PlayerState holder = _state.Players[index];
+            double dt = Config.TickSeconds;
+            double scale = 0.5 + 0.5 * holder.Capabilities.BallControl;
+            double acceleration = Config.AttachedAcceleration * scale;
+
+            double speed = SimMath.Sqrt(holder.Velocity.LengthSquared);
+            double fraction = speed / holder.Capabilities.MaxSpeed;
+            if (fraction > 1) fraction = 1;
+            Vec2 along = speed >= TrapSpeed
+                ? holder.Velocity * (1 / speed)
+                : new Vec2(SimMath.Cos(holder.Heading), SimMath.Sin(holder.Heading));
+            double lead = Config.AttachedLeadSlow + (Config.AttachedLeadFast - Config.AttachedLeadSlow) * fraction;
+
+            Vec2 error = holder.Position + along * lead - ball.Position.Horizontal;
+            double distance = SimMath.Sqrt(error.LengthSquared);
+            double closing = 0;
+            if (distance > Config.AttachedDeadband)
+            {
+                closing = SimMath.Sqrt(2 * acceleration * (distance - Config.AttachedDeadband));
+                double cap = Config.AttachedSpeedCap * scale;
+                if (closing > cap) closing = cap;
+            }
+
+            Vec2 wanted = closing > 0 ? holder.Velocity + error * (closing / distance) : holder.Velocity;
+            Vec2 change = wanted - ball.Velocity.Horizontal;
+            double length = SimMath.Sqrt(change.LengthSquared);
+            double most = acceleration * dt;
+            if (length > most) change = change * (most / length);
+            ball.Velocity = new Vec3(ball.Velocity.X + change.X, ball.Velocity.Y + change.Y, ball.Velocity.Z);
         }
 
         /// <summary>

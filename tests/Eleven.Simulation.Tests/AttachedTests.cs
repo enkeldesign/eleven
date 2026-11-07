@@ -218,11 +218,13 @@ namespace Eleven.Simulation.Tests
             Assert.True(Math.Sqrt(run.After.Ball.Velocity.LengthSquared) < 0.2, $"the ball still moving at {Math.Sqrt(run.After.Ball.Velocity.LengthSquared):F2} m/s");
         }
 
+        // SOL's handoff: losing stick input alone doesn't dump a settled ball. A dead stop from a
+        // sprint isn't settled: the player brakes harder than the correction can stop the ball.
         [Fact]
-        public void Releasing_the_stick_alone_keeps_the_ball()
+        public void Releasing_the_stick_alone_keeps_a_settled_ball()
         {
             SimConfig config = Attached();
-            Run run = Play(config, AtFeet(config), tick => new[] { new Command(A, tick, tick < 2 * config.TickRate ? new Vec2(1, 0) : Vec2.Zero) }, 4);
+            Run run = Play(config, AtFeet(config), tick => new[] { new Command(A, tick, tick < 2 * config.TickRate ? new Vec2(0.5, 0) : Vec2.Zero) }, 4);
             Assert.Equal(0, run.Count(SimEventKind.Released));
             Assert.Equal(1, run.After.Ball.AttachedTo);
             Assert.True(Separation(run.After) <= config.ControlReach, $"the ball {Separation(run.After):F2} m away");
@@ -293,13 +295,14 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(2, run.After.Ball.AttachedTo);
         }
 
+        // A sprint that turns steadily, 1.2 rad/s: hard enough to load the correction.
         [Fact]
         public void Better_control_drifts_less_at_the_same_speed()
         {
             SimConfig config = Attached();
             double Drift(double ballControl)
             {
-                Func<long, Command[]> weave = tick => new[] { new Command(A, tick, new Vec2(Math.Cos(tick * 0.04), Math.Sin(tick * 0.04))) };
+                Func<long, Command[]> weave = tick => new[] { new Command(A, tick, new Vec2(Math.Cos(tick * 0.02), Math.Sin(tick * 0.02))) };
                 Run run = Play(config, AtFeet(config, ballControl), weave, 6);
                 return run.Before.Skip(2 * config.TickRate).Average(Separation);
             }
