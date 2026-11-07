@@ -60,6 +60,7 @@ A **standing player** (slower than 0.5 m/s, stick released) with the ball at res
      - ballControl 0.3 reaches ±0.21 rad (12°) and ±0.84 rad (48°).
    - The error depends on the capability and the context: there is no universal randomness.
 6. **Clean-up.** A touch clears the ball's spin and sets `TouchCooldown`. `SimEventKind.Touched` names the player.
+   - It also closes every open aftertouch window, as a new kick does. A receiver who controls a short pass inside the passer's window has the ball, and the passer's input no longer shapes it (Codex on #62).
 
 ## Tunables
 

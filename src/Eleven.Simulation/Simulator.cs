@@ -633,6 +633,9 @@ namespace Eleven.Simulation
             ball.Velocity = new Vec3(sent.X, sent.Y, ball.Velocity.Z);
             ball.Spin = Vec3.Zero;
             player.TouchCooldown = Config.TouchIntervalTicks;
+
+            // The ball has a new controller, so no earlier kicker shapes it now, as on a new kick.
+            for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
             return true;
         }
 
