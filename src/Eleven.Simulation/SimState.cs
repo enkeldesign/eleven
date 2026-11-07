@@ -46,6 +46,7 @@ namespace Eleven.Simulation
             WriteVec3(w, Ball.Velocity, "Ball.Velocity");
             WriteVec3(w, Ball.Spin, "Ball.Spin");
             w.WriteBool(Ball.BeyondGoalLine);
+            w.WriteInt32(Ball.AttachedTo);
 
             w.WriteInt32(Players.Length);
             foreach (PlayerState player in Players)
@@ -88,6 +89,7 @@ namespace Eleven.Simulation
             state.Ball.Velocity = ReadVec3(r, "Ball.Velocity");
             state.Ball.Spin = ReadVec3(r, "Ball.Spin");
             state.Ball.BeyondGoalLine = r.ReadBool();
+            state.Ball.AttachedTo = r.ReadInt32();
 
             int count = r.ReadInt32();
             if (count < 0 || count > 1024) throw new FormatException($"Implausible player count {count}.");
@@ -177,6 +179,12 @@ namespace Eleven.Simulation
         /// crossing emits one event, not one per tick spent beyond the line.
         /// </summary>
         public bool BeyondGoalLine;
+
+        /// <summary>
+        /// Under ATTACHED (#60), the id of the player the ball is attached to; 0 when it is free.
+        /// Any other model clears it on its first step.
+        /// </summary>
+        public int AttachedTo;
     }
 
     public struct PlayerState

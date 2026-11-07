@@ -34,8 +34,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Which part of the feel it belongs to, for tools that list it (#45): <see cref="BallGroup"/>,
-        /// <see cref="KickGroup"/>, <see cref="PassGroup"/>, <see cref="ControlGroup"/> or
-        /// <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
+        /// <see cref="KickGroup"/>, <see cref="PassGroup"/>, <see cref="ControlGroup"/>,
+        /// <see cref="AttachedGroup"/> or <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
         /// </summary>
         public string Group { get; }
 
@@ -45,6 +45,9 @@ namespace Eleven.Simulation
 
         /// <summary>Ball control in possession (#59): touches, reach and lead.</summary>
         public const string ControlGroup = "Control";
+
+        /// <summary>The attached comparator (#60): its lead, correction and release reach.</summary>
+        public const string AttachedGroup = "Attached";
         public const string PlayerGroup = "Player";
 
         public string Unit { get; }
@@ -109,6 +112,12 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "touchStrength", "m/s", 1, 20),
             new TunableParameter(TunableParameter.ControlGroup, "touchError", "rad", 0, 0.6),
             new TunableParameter(TunableParameter.ControlGroup, "receiveStrength", "m/s", 1, 30),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedSpeedCap", "m/s", 0.5, 10, 2, 4),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedDeadband", "m", 0, 0.6, 0.1, 0.3),
+            new TunableParameter(TunableParameter.AttachedGroup, "attachedReleaseReach", "m", 0.5, 3, 1.1, 1.7),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -143,6 +152,12 @@ namespace Eleven.Simulation
             "touchStrength" => TouchStrength,
             "touchError" => TouchError,
             "receiveStrength" => ReceiveStrength,
+            "attachedLeadSlow" => AttachedLeadSlow,
+            "attachedLeadFast" => AttachedLeadFast,
+            "attachedAcceleration" => AttachedAcceleration,
+            "attachedSpeedCap" => AttachedSpeedCap,
+            "attachedDeadband" => AttachedDeadband,
+            "attachedReleaseReach" => AttachedReleaseReach,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -166,6 +181,9 @@ namespace Eleven.Simulation
             double controlReach = ControlReach, dribbleLeadSlow = DribbleLeadSlow, dribbleLeadFast = DribbleLeadFast;
             double touchInterval = TouchInterval, touchStrength = TouchStrength, touchError = TouchError;
             double receiveStrength = ReceiveStrength;
+            double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
+            double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
+            double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -200,6 +218,12 @@ namespace Eleven.Simulation
                     case "touchStrength": touchStrength = o.Value; break;
                     case "touchError": touchError = o.Value; break;
                     case "receiveStrength": receiveStrength = o.Value; break;
+                    case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
+                    case "attachedLeadFast": attachedLeadFast = o.Value; break;
+                    case "attachedAcceleration": attachedAcceleration = o.Value; break;
+                    case "attachedSpeedCap": attachedSpeedCap = o.Value; break;
+                    case "attachedDeadband": attachedDeadband = o.Value; break;
+                    case "attachedReleaseReach": attachedReleaseReach = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -239,10 +263,16 @@ namespace Eleven.Simulation
                 touchInterval: touchInterval,
                 touchStrength: touchStrength,
                 touchError: touchError,
-                receiveStrength: receiveStrength);
+                receiveStrength: receiveStrength,
+                attachedLeadSlow: attachedLeadSlow,
+                attachedLeadFast: attachedLeadFast,
+                attachedAcceleration: attachedAcceleration,
+                attachedSpeedCap: attachedSpeedCap,
+                attachedDeadband: attachedDeadband,
+                attachedReleaseReach: attachedReleaseReach);
         }
 
-        /// <summary>This config under another ball control model (#59), every other value kept.</summary>
+        /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
         public SimConfig WithControlModel(ControlModel model) => new SimConfig(
             tickRate: TickRate,
             gravity: Gravity,
@@ -278,7 +308,13 @@ namespace Eleven.Simulation
             touchInterval: TouchInterval,
             touchStrength: TouchStrength,
             touchError: TouchError,
-            receiveStrength: ReceiveStrength);
+            receiveStrength: ReceiveStrength,
+            attachedLeadSlow: AttachedLeadSlow,
+            attachedLeadFast: AttachedLeadFast,
+            attachedAcceleration: AttachedAcceleration,
+            attachedSpeedCap: AttachedSpeedCap,
+            attachedDeadband: AttachedDeadband,
+            attachedReleaseReach: AttachedReleaseReach);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

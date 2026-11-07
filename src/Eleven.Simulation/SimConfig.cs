@@ -21,7 +21,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 7;
+        public const int FormatVersion = 8;
 
         public SimConfig(
             int tickRate = 60,
@@ -58,11 +58,17 @@ namespace Eleven.Simulation
             double touchInterval = 0.25,
             double touchStrength = 5,
             double touchError = 0.3,
-            double receiveStrength = 12)
+            double receiveStrength = 12,
+            double attachedLeadSlow = 0.5,
+            double attachedLeadFast = 0.8,
+            double attachedAcceleration = 25,
+            double attachedSpeedCap = 3,
+            double attachedDeadband = 0.2,
+            double attachedReleaseReach = 1.35)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
-            if (controlModel != ControlModel.Off && controlModel != ControlModel.Free) throw new ArgumentOutOfRangeException(nameof(controlModel));
+            if (controlModel != ControlModel.Off && controlModel != ControlModel.Free && controlModel != ControlModel.Attached) throw new ArgumentOutOfRangeException(nameof(controlModel));
 
             TickRate = tickRate;
             Gravity = gravity;
@@ -99,6 +105,12 @@ namespace Eleven.Simulation
             TouchStrength = touchStrength;
             TouchError = touchError;
             ReceiveStrength = receiveStrength;
+            AttachedLeadSlow = attachedLeadSlow;
+            AttachedLeadFast = attachedLeadFast;
+            AttachedAcceleration = attachedAcceleration;
+            AttachedSpeedCap = attachedSpeedCap;
+            AttachedDeadband = attachedDeadband;
+            AttachedReleaseReach = attachedReleaseReach;
 
             CheckTunableRanges();
 
@@ -262,6 +274,35 @@ namespace Eleven.Simulation
         /// </summary>
         public double TouchError { get; }
 
+        /// <summary>m. Under ATTACHED (#60), how far ahead of a slow holder the ball is steered.</summary>
+        public double AttachedLeadSlow { get; }
+
+        /// <summary>m. Under ATTACHED, how far ahead of a holder at full speed the ball is steered; between the two it follows speed.</summary>
+        public double AttachedLeadFast { get; }
+
+        /// <summary>
+        /// m/s². Under ATTACHED, the largest change the controller makes to the ball's velocity per
+        /// second, at full ball control; half of it at none. It bounds every step's correction, so a
+        /// ball far from its target can't snap back.
+        /// </summary>
+        public double AttachedAcceleration { get; }
+
+        /// <summary>m/s. Under ATTACHED, the fastest the controller closes the ball on its target, relative to the holder, at full ball control; half of it at none.</summary>
+        public double AttachedSpeedCap { get; }
+
+        /// <summary>m. Under ATTACHED, how far the ball may drift from its target before the controller corrects its position; inside it, the ball only keeps pace.</summary>
+        public double AttachedDeadband { get; }
+
+        /// <summary>
+        /// m. Under ATTACHED, how far from its holder the ball may get before it is lost. The ball is
+        /// gained within <see cref="ControlReach"/>, so it is lost only beyond the larger of the two
+        /// (<see cref="AttachedLossReach"/>): every value in each range is valid on its own.
+        /// </summary>
+        public double AttachedReleaseReach { get; }
+
+        /// <summary>m. Where ATTACHED loses the ball: the larger of <see cref="AttachedReleaseReach"/> and <see cref="ControlReach"/>.</summary>
+        public double AttachedLossReach => AttachedReleaseReach > ControlReach ? AttachedReleaseReach : ControlReach;
+
         /// <summary><see cref="TouchInterval"/> in whole steps, nearest, at least one.</summary>
         public int TouchIntervalTicks { get; }
 
@@ -314,7 +355,13 @@ namespace Eleven.Simulation
                 touchInterval: r.ReadDouble(nameof(TouchInterval)),
                 touchStrength: r.ReadDouble(nameof(TouchStrength)),
                 touchError: r.ReadDouble(nameof(TouchError)),
-                receiveStrength: r.ReadDouble(nameof(ReceiveStrength)));
+                receiveStrength: r.ReadDouble(nameof(ReceiveStrength)),
+                attachedLeadSlow: r.ReadDouble(nameof(AttachedLeadSlow)),
+                attachedLeadFast: r.ReadDouble(nameof(AttachedLeadFast)),
+                attachedAcceleration: r.ReadDouble(nameof(AttachedAcceleration)),
+                attachedSpeedCap: r.ReadDouble(nameof(AttachedSpeedCap)),
+                attachedDeadband: r.ReadDouble(nameof(AttachedDeadband)),
+                attachedReleaseReach: r.ReadDouble(nameof(AttachedReleaseReach)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -360,11 +407,17 @@ namespace Eleven.Simulation
             w.WriteDouble(TouchStrength, nameof(TouchStrength));
             w.WriteDouble(TouchError, nameof(TouchError));
             w.WriteDouble(ReceiveStrength, nameof(ReceiveStrength));
+            w.WriteDouble(AttachedLeadSlow, nameof(AttachedLeadSlow));
+            w.WriteDouble(AttachedLeadFast, nameof(AttachedLeadFast));
+            w.WriteDouble(AttachedAcceleration, nameof(AttachedAcceleration));
+            w.WriteDouble(AttachedSpeedCap, nameof(AttachedSpeedCap));
+            w.WriteDouble(AttachedDeadband, nameof(AttachedDeadband));
+            w.WriteDouble(AttachedReleaseReach, nameof(AttachedReleaseReach));
             return w.ToArray();
         }
 
         private static ControlModel ReadControlModel(int value) =>
-            value == (int)ControlModel.Off || value == (int)ControlModel.Free
+            value == (int)ControlModel.Off || value == (int)ControlModel.Free || value == (int)ControlModel.Attached
                 ? (ControlModel)value
                 : throw new FormatException($"Unknown ball control model {value}.");
     }

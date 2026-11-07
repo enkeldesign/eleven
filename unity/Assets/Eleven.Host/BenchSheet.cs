@@ -22,9 +22,11 @@ namespace Eleven.Host
     /// </summary>
     internal sealed class BenchSheet
     {
+        private static readonly string[] Models = { "Free", "Attached" };
+
         private static readonly string[] Groups =
         {
-            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup,
+            TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup,
             TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
         };
 
@@ -32,6 +34,7 @@ namespace Eleven.Host
         private readonly bool _trace;
         private readonly Func<BenchCandidate> _applied;
         private readonly Action<BenchCandidate> _apply;
+        private readonly Action<ControlModel> _switchModel;
         private readonly System.Action _closed;
         private readonly Dictionary<string, double> _pending = new Dictionary<string, double>();
         private readonly Dictionary<string, UiKit.Value> _shown = new Dictionary<string, UiKit.Value>();
@@ -42,6 +45,7 @@ namespace Eleven.Host
         private readonly Label _state;
         private readonly Label _pendingText;
         private readonly Label _problem;
+        private readonly UiKit.Segmented _models;
         private readonly UiKit.Segmented _tabs;
         private readonly ScrollView _list;
         private readonly UiKit.Action _close;
@@ -51,12 +55,13 @@ namespace Eleven.Host
         private bool _reportOpen;
         private bool _reportControls;
 
-        public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, System.Action closed)
+        public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel, System.Action closed)
         {
             _ui = ui;
             _trace = trace;
             _applied = applied;
             _apply = apply;
+            _switchModel = switchModel;
             _closed = closed;
 
             _scrim = new VisualElement { name = "Bench scrim", pickingMode = PickingMode.Position };
@@ -92,6 +97,16 @@ namespace Eleven.Host
             _sheet.Content.Add(_state);
             _sheet.Content.Add(_pendingText);
             _sheet.Content.Add(_problem);
+
+            // The live FREE ↔ ATTACHED switch (#60): it acts at once and the run goes on, unlike the
+            // knobs below, which wait for APPLY / RETRY and a fresh run.
+            Label modelsLabel = UiKit.Text(_theme, TypeScale.Body, "Ball control. Switches now; the run goes on.", Role.Text);
+            modelsLabel.style.marginBottom = Spacing.Xs;
+            _sheet.Content.Add(modelsLabel);
+            _models = UiKit.MakeSegmented(ui, _theme, Models, 0, index => _switchModel(index == 1 ? ControlModel.Attached : ControlModel.Free));
+            _models.Element.style.marginBottom = Spacing.M;
+            _models.Element.style.flexShrink = 0;
+            _sheet.Content.Add(_models.Element);
 
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
@@ -134,6 +149,7 @@ namespace Eleven.Host
             if (Open) return;
             Open = true;
             _scrim.style.display = DisplayStyle.Flex;
+            UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             ShowGroup(_group);
             _reportOpen = true;
             Describe();
@@ -157,6 +173,7 @@ namespace Eleven.Host
         public List<VisualElement> FocusOrder()
         {
             var order = new List<VisualElement>();
+            foreach (UiKit.Raised model in _models.Segments) order.Add(model.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[_group]))
             {
@@ -276,7 +293,8 @@ namespace Eleven.Host
             {
                 _reportOpen = false;
                 string tabs = string.Join(";", Groups.Select((g, i) => $"{g}={P(_tabs.Segments[i].Element)}"));
-                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)}");
+                string models = string.Join(";", Models.Select((m, i) => $"{m}={P(_models.Segments[i].Element)}"));
+                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)} models={models}");
 
                 float screen = _ui.Root.layout.width;
                 float smallest = float.MaxValue;

@@ -17,5 +17,12 @@ namespace Eleven.Simulation
         /// player in control pushes it ahead with discrete, bounded touches.
         /// </summary>
         Free = 1,
+
+        /// <summary>
+        /// The attached comparator (#60): while a player has the ball, a bounded controller steers
+        /// its velocity toward a lead point ahead of them. It is never parented or teleported, and
+        /// the ball still moves under its own physics. It is lost beyond a release reach, or to a kick.
+        /// </summary>
+        Attached = 2,
     }
 }

@@ -215,7 +215,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -323,6 +323,38 @@ namespace Eleven.Host
             _hud.ShowStatus(FormattableString.Invariant($"Applied {changes} change{(changes == 1 ? "" : "s")}, fresh run in {Math.Max(1, milliseconds):F0} ms."));
         }
 
+        /// <summary>
+        /// The live FREE ↔ ATTACHED switch (#60), between steps. The run goes on from the same state
+        /// under the new model: nothing in the state is touched, and gestures in progress, or a kick
+        /// queued for the next tick, carry over to the new simulator. Only the model changes in the
+        /// applied values; pending bench edits stay pending. The run's recording and the felt-wrong
+        /// recorder start a new segment here, since each holds one config.
+        /// </summary>
+        private void SwitchModel(ControlModel model)
+        {
+            if (_config.ControlModel == model) return;
+            ulong before = _simulator.StateHash();
+            _bench = _bench.WithControlModel(model);
+            _config = _bench.Config;
+            _view.Use(_config);
+            _simulator = ControlSwitch.To(_simulator, model);
+            _recording = CommandRecording.StartFrom(_simulator);
+            _feel.Start(_simulator);
+
+            Log(FormattableString.Invariant(
+                $"ELEVEN model switched to={ModelName(model)} tick={_simulator.Tick} before={before:x16} after={_simulator.StateHash():x16} config={_config.Hash:x16}"));
+            _hud.ShowStatus(model == ControlModel.Attached
+                ? "Ball control: ATTACHED from now. The run goes on."
+                : "Ball control: FREE from now. The run goes on.");
+        }
+
+        private static string ModelName(ControlModel model) => model switch
+        {
+            ControlModel.Free => "free",
+            ControlModel.Attached => "attached",
+            _ => "off",
+        };
+
         private static string SafeName(string s)
         {
             var chars = s.ToCharArray();
@@ -370,7 +402,7 @@ namespace Eleven.Host
                     return;
                 }
 
-                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
