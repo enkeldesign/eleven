@@ -750,11 +750,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const tickAfterClose = Number(lastLog(tracePattern)?.[1] ?? -1);
     check('opening and closing the bench leaves the run alone', !!opened && whileOpen.length === 0 && tickAfterClose > tickBeforeOpen,
       `${whileOpen.length ? whileOpen.slice(0, 3).join(' | ') : 'no reset, apply or game input'}; trace tick ${tickBeforeOpen} → ${tickAfterClose}`);
+    // The run went on from the switch: a trace at or past the last switch's tick, waited for,
+    // since the latest trace when the sheet closes may predate the switches.
     const switchTicks = switched.map((w) => Number(w.line?.[1] ?? NaN));
+    const resumed = Number.isFinite(switchTicks[1])
+      ? await waitFor(logs, { exec: (l) => { const m = tracePattern.exec(l); return m && Number(m[1]) >= switchTicks[1] ? m : null; } }, 20_000, fromOpen)
+      : null;
     check('the ball control model switches live, keeping the run and its state',
-      switched.every((w) => w.line && w.line[2] === w.line[3]) && switchTicks[1] >= switchTicks[0] && whileOpen.length === 0 && tickAfterClose >= switchTicks[1],
+      switched.every((w) => w.line && w.line[2] === w.line[3]) && switchTicks[1] >= switchTicks[0] && whileOpen.length === 0 && !!resumed,
       Object.keys(models).length
-        ? `${switched.map((w) => (w.line ? `${w.model} at tick ${w.line[1]}, state ${w.line[2]} → ${w.line[3]}` : `${w.model}: no switch line`)).join('; ')}; trace tick after closing ${tickAfterClose}`
+        ? `${switched.map((w) => (w.line ? `${w.model} at tick ${w.line[1]}, state ${w.line[2]} → ${w.line[3]}` : `${w.model}: no switch line`)).join('; ')}; next trace tick ${resumed ? resumed.match[1] : 'none within 20 s'}`
         : `no model control in the bench (open line: ${opened?.match.input ?? 'none'})`);
 
     // APPLY / RETRY: the pending candidate starts a fresh run, hashed as .NET hashes it.
