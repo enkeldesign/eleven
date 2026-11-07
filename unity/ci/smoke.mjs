@@ -369,14 +369,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const length = Math.hypot(bx - px, by - py) || 1;
           return { x: origin.x + ((bx - px) / length) * reach, y: origin.y - ((by - py) / length) * reach };
         };
+        // Pressed and dragged out in steps, as the stick check above does: on desktop, a press
+        // followed at once by one long move left the player standing (ce241fa).
         const held = aimAt(start);
-        if (useTouch) {
-          await touch('touchStart', origin);
-          await touch('touchMove', held);
-        } else {
+        if (useTouch) await touch('touchStart', origin);
+        else {
           await page.mouse.move(origin.x, origin.y);
           await page.mouse.down();
-          await page.mouse.move(held.x, held.y);
+        }
+        for (let i = 1; i <= 10; i++) {
+          const p = { x: origin.x + ((held.x - origin.x) * i) / 10, y: origin.y + ((held.y - origin.y) * i) / 10 };
+          if (useTouch) await touch('touchMove', p);
+          else await page.mouse.move(p.x, p.y);
+          await sleep(20);
         }
         const until = Date.now() + 30_000;
         while (!touched && Date.now() < until) {
@@ -403,8 +408,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       }
       const touches = logs.slice(fromDribble).filter((l) => /ELEVEN event \d+ Touched 1/.test(l)).length;
       notes.dribble = carried ? `${touches} touches, ball carried ${carried.moved.toFixed(1)} m, ${carried.apart.toFixed(2)} m from the player` : 'none';
+      const presses = logs.slice(fromDribble).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.replace('ELEVEN press ', ''));
       const approach = Number.isFinite(closest) && last
-        ? `; closest ${closest.toFixed(2)} m; last trace tick ${last[1]} player ${last[2]},${last[3]} ball ${last[4]},${last[5]}`
+        ? `; closest ${closest.toFixed(2)} m; last trace tick ${last[1]} player ${last[2]},${last[3]} ball ${last[4]},${last[5]}; presses: ${presses.join(' | ') || 'none'}`
         : '';
       check('running onto the ball carries it with touches', !!carried && touches >= 2 && carried.moved > 3 && carried.apart < 2,
         start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}${approach}`) : 'no trace line with the ball');
