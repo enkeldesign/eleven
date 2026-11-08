@@ -6,7 +6,10 @@ using Xunit;
 
 namespace Eleven.Simulation.Tests
 {
-    /// <summary>#66: the turn characterisation under FREE and ATTACHED, off and on, and its recorded technical reference.</summary>
+    /// <summary>
+    /// #66 and #75: the turn and cut characterisation under FREE and ATTACHED, off and on, snapped
+    /// and swept, and its recorded technical reference.
+    /// </summary>
     public class TurnCurvesTests
     {
         private static string ReferencePath =>
@@ -16,8 +19,10 @@ namespace Eleven.Simulation.Tests
 
         private static readonly List<TurnCurve> Default = TurnCurves.Characterise(Config);
 
-        private static TurnCurve Of(string model, string turn, string profile, string speed, double degrees) =>
-            Default.Single(c => c.Model == model && c.Turn == turn && c.Profile == profile && c.Speed == speed && c.Degrees == degrees);
+        private static TurnCurve Of(string model, string turn, string profile, string speed, double degrees, double sweep = 0) =>
+            Default.Single(c => c.Model == model && c.Turn == turn && c.Profile == profile && c.Speed == speed && c.Degrees == degrees && c.SweepSeconds == sweep);
+
+        private static readonly double[] Sweeps = { 0, TurnCurves.SweepSeconds };
 
         public static readonly TheoryData<string> Models = new TheoryData<string> { "free", "attached" };
 
@@ -31,22 +36,23 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void Every_case_runs_under_both_models_off_and_on_from_every_touch_phase()
+        public void Every_case_runs_under_both_models_off_and_on_snapped_and_swept_from_every_touch_phase()
         {
-            Assert.Equal(2 * 2 * 3 * 2 * 3, Default.Count);
+            Assert.Equal(2 * 2 * 3 * 2 * 4 * 2, Default.Count);
             Assert.All(Default, c => Assert.Equal(Config.TouchIntervalTicks, c.Starts));
             foreach (string model in new[] { "free", "attached" })
             foreach (string turn in new[] { "off", "on" })
-                Assert.Equal(18, Default.Count(c => c.Model == model && c.Turn == turn));
+            foreach (double sweep in Sweeps)
+                Assert.Equal(24, Default.Count(c => c.Model == model && c.Turn == turn && c.SweepSeconds == sweep));
         }
 
-        [Theory]
-        [MemberData(nameof(Models))]
-        public void A_turn_short_of_the_turn_angle_measures_the_same_off_and_on(string model)
+        [Fact]
+        public void Under_attached_a_change_short_of_the_turn_angle_measures_the_same_off_and_on()
         {
-            foreach (TurnCurve on in Default.Where(c => c.Model == model && c.Turn == "on" && c.Degrees == 90))
+            // The cut is FREE's alone (#75).
+            foreach (TurnCurve on in Default.Where(c => c.Model == "attached" && c.Turn == "on" && c.Degrees <= 90))
             {
-                TurnCurve off = Of(model, "off", on.Profile, on.Speed, 90);
+                TurnCurve off = Of("attached", "off", on.Profile, on.Speed, on.Degrees, on.SweepSeconds);
                 Assert.Equal(Row(off), Row(on));
             }
         }
@@ -58,6 +64,7 @@ namespace Eleven.Simulation.Tests
             foreach (string speed in new[] { "half", "sprint" })
             foreach (double degrees in new[] { 135.0, 180.0 })
             {
+                // Snapped, as #66 measured them.
                 TurnCurve off = Of(model, "off", "good", speed, degrees), on = Of(model, "on", "good", speed, degrees);
                 string at = $"{model}, {speed}, {degrees}°";
                 Assert.True(on.Kept == on.Starts && on.Kept >= off.Kept, $"{at}: kept {on.Kept} with the turn, {off.Kept} without");

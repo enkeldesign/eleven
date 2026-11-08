@@ -1347,6 +1347,7 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
                 InRange(owner, nameof(p.TouchCooldown), p.TouchCooldown, config.TouchIntervalTicks);
+                InRange(owner, nameof(p.CutCooldown), p.CutCooldown, config.TouchIntervalTicks);
                 if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
                 {
                     throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");

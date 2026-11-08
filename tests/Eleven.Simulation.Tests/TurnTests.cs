@@ -373,8 +373,8 @@ namespace Eleven.Simulation.Tests
             state.Encode(w);
             byte[] bytes = w.ToArray();
 
-            // The flag is the last byte of the last player, just before the keeper count.
-            int flag = bytes.Length - 4 - 1;
+            // The flag is the last player's last byte but their cut cooldown (#75), just before the keeper count.
+            int flag = bytes.Length - 4 - 4 - 1;
             Assert.Equal(1, bytes[flag]);
             bytes[flag] = 2;
             Assert.Throws<FormatException>(() => SimState.Decode(new Encoding.CanonicalReader(bytes)));
