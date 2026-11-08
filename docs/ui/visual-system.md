@@ -36,6 +36,7 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
   - It happens between frames, with no step and no command, and cancels gestures in progress, so a held stick can't reverse the player.
   - The bench's **Pitch view, 0° / 180°**, tests it ([test-bench.md](../simulation/test-bench.md)).
 - **The mapping is exact:** a quarter turn, by swaps and subtraction from 0, with no scaling or mirroring. Screen left and right stay left and right, and it round-trips bit for bit.
+- **The action is framed below the status line**, which sits over the top of the play area, where the play runs up-field. A message never covers the ball, and the pitch under it is more to see ahead.
 - **Look-ahead follows the play area's height.**
   - A wide play area shows less up-field than the horizontal pitch did across it: iPad portrait, iPhone landscape.
   - A tall one shows more: iPhone portrait, iPad landscape.

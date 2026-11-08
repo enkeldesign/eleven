@@ -211,9 +211,10 @@ namespace Eleven.Host
         /// Frames the player and the ball inside the HUD's play area: centred between them, zoomed
         /// out just enough to keep both in view with a margin. The play area's shorter side always
         /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre, and its
-        /// height, up-field, at least the least look-ahead. The camera still renders the whole
-        /// screen; it is shifted so the play lands in the uncovered part. All of it is worked out on
-        /// screen, through the orientation (#72).
+        /// height, up-field, at least the least look-ahead. Player and ball are kept below the
+        /// status line, which sits over the top of the play area. The camera still renders the
+        /// whole screen; it is shifted so the play lands in the uncovered part. All of it is worked
+        /// out on screen, through the orientation (#72).
         /// </summary>
         private void Frame(Vector2 player, Vector2 ball, in HudLayout layout)
         {
@@ -222,18 +223,24 @@ namespace Eleven.Host
             Vec2 span = _orientation.ToScreen(new Vec2(ball.x - player.x, ball.y - player.y));
             Vector2 halfSpan = new Vector2(Mathf.Abs((float)span.X), Mathf.Abs((float)span.Y)) * 0.5f;
 
+            // The status line sits over the top of the play area (#53). On the vertical pitch that
+            // is where the play runs up-field, so the action is framed in the part below it: a
+            // message never covers the ball, and the pitch under it is more to see ahead (#72).
+            float band = Mathf.Clamp(layout.StatusArea.yMax - play.yMin, 0, play.height * 0.5f);
+            var framed = new Rect(play.x, play.y + band, play.width, play.height - band);
+
             // Pixels per metre: the closest zoom allowed, reduced until both fit.
             float pixelsPerMetre = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
             pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / _minAhead);
-            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.width * 0.5f / (halfSpan.x + FramingMargin));
-            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / (halfSpan.y + FramingMargin));
+            pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.width * 0.5f / (halfSpan.x + FramingMargin));
+            pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.height * 0.5f / (halfSpan.y + FramingMargin));
             _camera.orthographicSize = layout.ScreenHeight * 0.5f / pixelsPerMetre;
-            _ahead = play.height * 0.5f / pixelsPerMetre;
+            _ahead = (framed.height * 0.5f + band) / pixelsPerMetre;
             _across = play.width * 0.5f / pixelsPerMetre;
 
-            // Shift so the pitch point `centre` appears at the play area's centre. HUD y grows
+            // Shift so the pitch point `centre` appears at the framed area's centre. HUD y grows
             // downwards, the screen's up.
-            Vector2 offset = play.center - new Vector2(layout.ScreenWidth * 0.5f, layout.ScreenHeight * 0.5f);
+            Vector2 offset = framed.center - new Vector2(layout.ScreenWidth * 0.5f, layout.ScreenHeight * 0.5f);
             Vector2 cameraAt = centre - World(new Vec2(offset.x, -offset.y)) / pixelsPerMetre;
             _camera.transform.position = new Vector3(cameraAt.x, cameraAt.y, -10);
         }
