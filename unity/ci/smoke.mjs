@@ -372,6 +372,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const start = ballPattern.exec(lastLog(ballPattern)?.input ?? '') ?? null;
       let carried = null;
       let touched = null;
+      let turned = null;
       let closest = Infinity;
       let last = start;
       if (start) {
@@ -384,6 +385,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         // Pressed and dragged out in steps, as the stick check above does: on desktop, a press
         // followed at once by one long move left the player standing (ce241fa).
         const held = aimAt(start);
+        let stickAt = held;
         if (useTouch) await touch('touchStart', origin);
         else {
           await page.mouse.move(origin.x, origin.y);
@@ -405,11 +407,24 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           if (!fresh || touched) continue;
           last = fresh;
           const steer = aimAt(fresh);
+          stickAt = steer;
           if (useTouch) await touch('touchMove', steer);
           else await page.mouse.move(steer.x, steer.y);
         }
         const from = touched ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
         const to = from ? (await waitForLog(ballPattern, 10_000, logs.length))?.match ?? null : null;
+
+        // The turn with the ball (#66): the stick reversed in one move while carrying the ball. The
+        // footballer traps it beside where they plant, then plays it out as they come round.
+        if (to) {
+          const fromTurn = logs.length;
+          const back = { x: 2 * origin.x - stickAt.x, y: 2 * origin.y - stickAt.y };
+          if (useTouch) await touch('touchMove', back);
+          else await page.mouse.move(back.x, back.y);
+          const trap = await waitForLog(/ELEVEN event (\d+) Turned 1 1/, 10_000, fromTurn);
+          const out = trap ? await waitForLog(/ELEVEN event (\d+) Turned 1 2/, 10_000, fromTurn) : null;
+          turned = { trap, out };
+        }
         if (useTouch) await touch('touchEnd');
         else await page.mouse.up();
         if (from && to) {
@@ -426,6 +441,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         : '';
       check('running onto the ball carries it with touches', !!carried && touches >= 2 && carried.moved > 3 && carried.apart < 2,
         start ? (carried ? notes.dribble : `${touches} touches; ${touched ? 'no trace lines after the first touch' : 'no Touched event'}${approach}`) : 'no trace line with the ball');
+      const trapTick = Number(turned?.trap?.match[1] ?? NaN), outTick = Number(turned?.out?.match[1] ?? NaN);
+      notes.turn = turned?.trap ? `trap at tick ${trapTick}, out at ${turned.out ? outTick : 'none'}` : 'none';
+      check('reversing with the ball traps it, then plays it out', !!turned?.trap && !!turned?.out && outTick > trapTick,
+        carried ? notes.turn : 'no dribble to reverse');
     }
 
     // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.
