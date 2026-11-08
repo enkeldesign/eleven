@@ -321,6 +321,45 @@ namespace Eleven.Simulation.Tests
             }
         }
 
+        [Theory]
+        [MemberData(nameof(Models))]
+        public void A_turn_ends_when_the_player_loses_the_ball(ControlModel model)
+        {
+            // Codex on #73. Lost mid-turn: beyond reach under FREE, released under ATTACHED.
+            SimConfig config = Under(model);
+            SimState lost = TestWorld.State(config, new Vec3(2, 0, config.BallRadius));
+            lost.Players[0].Turning = true;
+            if (model == ControlModel.Attached) lost.Ball.AttachedTo = TestWorld.PlayerId;
+            var sim = new Simulator(config, lost);
+            sim.Step(new[] { new Command(A, 0, Vec2.Zero) }, new List<SimEvent>());
+            Assert.False(sim.PeekState().Players[0].Turning, "still turning after losing the ball");
+
+            // So the next possession is an ordinary one: a ball rolled at a standing player left
+            // mid-turn is taken exactly as if they had never turned.
+            SimState Rolled(bool turning)
+            {
+                SimState s = TestWorld.State(config, new Vec3(3, 0, config.BallRadius), new Vec3(-3, 0, 0));
+                s.Players[0].Turning = turning;
+                return s;
+            }
+
+            var stale = new Simulator(config, Rolled(true));
+            var fresh = new Simulator(config, Rolled(false));
+            int controls = 0;
+            for (int t = 0; t < 2 * config.TickRate; t++)
+            {
+                var events = new List<SimEvent>();
+                stale.Step(new[] { new Command(A, t, Vec2.Zero) }, events);
+                fresh.Step(new[] { new Command(A, t, Vec2.Zero) }, new List<SimEvent>());
+                controls += events.Count(e => e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached);
+                BallState a = stale.PeekState().Ball, b = fresh.PeekState().Ball;
+                Assert.True(a.Position.X == b.Position.X && a.Position.Y == b.Position.Y && a.Velocity.X == b.Velocity.X && a.Velocity.Y == b.Velocity.Y,
+                    $"step {t}: left mid-turn the ball is at ({a.Position.X:F3}, {a.Position.Y:F3}), never turning ({b.Position.X:F3}, {b.Position.Y:F3})");
+            }
+
+            Assert.True(controls > 0, "the rolled ball was never controlled");
+        }
+
         [Fact]
         public void The_turn_flag_round_trips_through_the_encoding_and_a_bad_one_is_refused()
         {
