@@ -35,7 +35,12 @@ Before the turn, a reversal left the ball trailing (Erik on build 128).
 
    After the touch out, each model resumes.
 
-`PlayerState.Turning` is set by the trap and cleared by the touch out, an ordinary touch or a kick's wind-up. A turn that is released mid-way, with the stick let go, holds until the stick asks for a direction again.
+`PlayerState.Turning` is set by the trap. It is cleared by:
+- the touch out, or an ordinary touch;
+- a kick's wind-up;
+- losing the ball: beyond the control reach under FREE, released under ATTACHED. A take under ATTACHED always starts with the ordinary correction (Codex on #73).
+
+So a player's next possession after losing the ball mid-turn is an ordinary one. A turn whose stick is let go mid-way holds until the stick asks for a direction again.
 
 ## Bounds and failure
 
@@ -160,6 +165,7 @@ Every column after `kept` is over the starts kept.
 - `turnStrength` 0 makes no turn touch;
 - no turn touch through a kick's wind-up and cooldown, and a wind-up ends the turn;
 - determinism, and snapshot and restore mid-turn;
+- a turn ends when the player loses the ball, so a ball rolled at them afterwards is taken as if they had never turned;
 - the turn flag round-trips through the encoding, and a bad one is refused.
 
 `TurnCurvesTests` checks the reference and the relationships in it.
