@@ -18,6 +18,11 @@ namespace Eleven.Simulation.Analyzers
     /// ELEVEN002: any <c>System.Math</c>/<c>MathF</c> member other than the exact helpers below,
     /// anywhere in simulation code. Transcendentals go through <c>SimMath</c>, which is backed by
     /// the simulation's own <c>PortableMath</c> (ADR-0002).
+    ///
+    /// ELEVEN003: AI code (the <c>Eleven.Simulation.AI</c> namespace) naming the simulation's state
+    /// or the simulator: <c>SimState</c>, <c>Simulator</c>, <c>PlayerState</c>, <c>BallState</c>,
+    /// <c>KeeperState</c> or <c>Snapshot</c>, or any of their members. AI sees the simulation
+    /// only through an Observation (INV-9, #69).
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class BannedApiAnalyzer : DiagnosticAnalyzer
@@ -41,6 +46,22 @@ namespace Eleven.Simulation.Analyzers
             "Determinism",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor PerceptionBoundary = new DiagnosticDescriptor(
+            PerceptionBoundaryId,
+            "AI code reaching simulation internals",
+            "'{0}' is out of AI code's reach: AI sees the simulation only through an Observation (INV-9)",
+            "Perception",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        private const string AiNamespace = "Eleven.Simulation.AI";
+
+        private static readonly HashSet<string> SimulationInternals = new HashSet<string>
+        {
+            "Eleven.Simulation.SimState", "Eleven.Simulation.Simulator", "Eleven.Simulation.PlayerState",
+            "Eleven.Simulation.BallState", "Eleven.Simulation.KeeperState", "Eleven.Simulation.Snapshot",
+        };
 
         // Exact operations whose IEEE-754 results don't depend on the platform.
         private static readonly HashSet<string> ExactMathMembers = new HashSet<string>
@@ -66,7 +87,7 @@ namespace Eleven.Simulation.Analyzers
         };
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-            ImmutableArray.Create(Nondeterministic, MathBoundary);
+            ImmutableArray.Create(Nondeterministic, MathBoundary, PerceptionBoundary);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -81,6 +102,12 @@ namespace Eleven.Simulation.Analyzers
             SymbolInfo info = context.SemanticModel.GetSymbolInfo(name, context.CancellationToken);
             ISymbol? symbol = info.Symbol ?? (info.CandidateSymbols.Length > 0 ? info.CandidateSymbols[0] : null);
             if (symbol == null) return;
+
+            if (InAiCode(context) && ReachesInternals(symbol))
+            {
+                Report(context, PerceptionBoundary, name, symbol.ToDisplayString(), "");
+                return;
+            }
 
             if (symbol is INamedTypeSymbol type)
             {
@@ -117,6 +144,19 @@ namespace Eleven.Simulation.Analyzers
             {
                 Report(context, MathBoundary, name, memberName, "");
             }
+        }
+
+        private static bool InAiCode(SyntaxNodeAnalysisContext context)
+        {
+            string? ns = context.ContainingSymbol?.ContainingNamespace?.ToDisplayString();
+            return ns != null && (ns == AiNamespace || ns.StartsWith(AiNamespace + "."));
+        }
+
+        // The type itself, or a member of it.
+        private static bool ReachesInternals(ISymbol symbol)
+        {
+            INamedTypeSymbol? type = symbol as INamedTypeSymbol ?? symbol.ContainingType;
+            return type != null && SimulationInternals.Contains(type.OriginalDefinition.ToDisplayString());
         }
 
         private static string? BannedTypeReason(INamedTypeSymbol type)
