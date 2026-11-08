@@ -12,9 +12,10 @@ namespace Eleven.Simulation
         /// aftertouch phases (#37). Version 5 added each player's team, pass capabilities and quick-pass
         /// target (#38). Version 6 added the touch cooldown (#59), version 7 the ball's attachment
         /// (#60), and version 8 replaced the ball's beyond-the-goal-line flag with its goal-line
-        /// state (#68). Version 9 added the keepers and the held ball (#69).
+        /// state (#68). Version 9 added the keepers and the held ball (#69). Version 10 added each
+        /// player's turn with the ball (#66).
         /// </summary>
-        public const int StateSchemaVersion = 9;
+        public const int StateSchemaVersion = 10;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

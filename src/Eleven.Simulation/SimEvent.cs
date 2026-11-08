@@ -68,6 +68,13 @@ namespace Eleven.Simulation
 
         /// <summary>Subject: the keeper who has parried the ball (#69).</summary>
         KeeperParried = 15,
+
+        /// <summary>
+        /// Subject: the player who has played one of a turn's two touches with the ball (#66);
+        /// <see cref="SimEvent.Other"/> is 1 for the trap and 2 for the touch out. Under FREE it comes
+        /// with <see cref="Touched"/>. A later player model can animate it.
+        /// </summary>
+        Turned = 16,
     }
 
     /// <summary>
@@ -106,7 +113,7 @@ namespace Eleven.Simulation
 
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
-            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame ? $"{Tick} {Kind} {Subject} {Other}"
+            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

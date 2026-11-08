@@ -16,14 +16,15 @@ namespace Eleven.Simulation
     /// <see cref="BounceSpinRetention"/> (#40). Version 6 added the quick pass's range and weight (#38).
     /// Version 7 added the ball control model and its touches (#59). Version 8 added ATTACHED's
     /// values (#60). Version 9 added the goal: its mouth, its posts and crossbar, and how the frame
-    /// returns the ball (#68). Version 10 added the keeper's dive, recovery and save (#69).
+    /// returns the ball (#68). Version 10 added the keeper's dive, recovery and save (#69). Version 11
+    /// added the turn with the ball: its angle and strength (#66).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 10;
+        public const int FormatVersion = 11;
 
         public SimConfig(
             int tickRate = 60,
@@ -75,7 +76,9 @@ namespace Eleven.Simulation
             double attachedAcceleration = 25,
             double attachedSpeedCap = 3,
             double attachedDeadband = 0.2,
-            double attachedReleaseReach = 1.35)
+            double attachedReleaseReach = 1.35,
+            double turnAngle = 2.0,
+            double turnStrength = 6)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -131,6 +134,8 @@ namespace Eleven.Simulation
             AttachedSpeedCap = attachedSpeedCap;
             AttachedDeadband = attachedDeadband;
             AttachedReleaseReach = attachedReleaseReach;
+            TurnAngle = turnAngle;
+            TurnStrength = turnStrength;
 
             CheckTunableRanges();
 
@@ -143,6 +148,7 @@ namespace Eleven.Simulation
             TouchIntervalTicks = Math.Max(1, (int)Math.Round(TouchInterval * TickRate));
             KeeperDiveTicks = Math.Max(1, (int)Math.Round(KeeperDiveSeconds * TickRate));
             KeeperRecoverTicks = Math.Max(1, (int)Math.Round(KeeperRecoverSeconds * TickRate));
+            TurnCos = Maths.SimMath.Cos(TurnAngle);
         }
 
         /// <summary>Fixed steps per simulated second.</summary>
@@ -380,6 +386,22 @@ namespace Eleven.Simulation
         /// <summary>m. Where ATTACHED loses the ball: the larger of <see cref="AttachedReleaseReach"/> and <see cref="ControlReach"/>.</summary>
         public double AttachedLossReach => AttachedReleaseReach > ControlReach ? AttachedReleaseReach : ControlReach;
 
+        /// <summary>
+        /// rad. The turn with the ball (#66): the smallest change of direction, between where the
+        /// stick asks to go and where the player is moving, that the footballer plays as a turn
+        /// rather than an ordinary touch. docs/simulation/turn.md.
+        /// </summary>
+        public double TurnAngle { get; }
+
+        /// <summary>
+        /// m/s. The turn's largest change to the ball's velocity, at each of its two touches, at full
+        /// ball control (#66); half of it at none. 0 turns the turn off: every touch is ordinary.
+        /// </summary>
+        public double TurnStrength { get; }
+
+        /// <summary>cos(<see cref="TurnAngle"/>), through the simulation's own maths.</summary>
+        internal double TurnCos { get; }
+
         /// <summary><see cref="TouchInterval"/> in whole steps, nearest, at least one.</summary>
         public int TouchIntervalTicks { get; }
 
@@ -447,7 +469,9 @@ namespace Eleven.Simulation
                 attachedAcceleration: r.ReadDouble(nameof(AttachedAcceleration)),
                 attachedSpeedCap: r.ReadDouble(nameof(AttachedSpeedCap)),
                 attachedDeadband: r.ReadDouble(nameof(AttachedDeadband)),
-                attachedReleaseReach: r.ReadDouble(nameof(AttachedReleaseReach)));
+                attachedReleaseReach: r.ReadDouble(nameof(AttachedReleaseReach)),
+                turnAngle: r.ReadDouble(nameof(TurnAngle)),
+                turnStrength: r.ReadDouble(nameof(TurnStrength)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -508,6 +532,8 @@ namespace Eleven.Simulation
             w.WriteDouble(AttachedSpeedCap, nameof(AttachedSpeedCap));
             w.WriteDouble(AttachedDeadband, nameof(AttachedDeadband));
             w.WriteDouble(AttachedReleaseReach, nameof(AttachedReleaseReach));
+            w.WriteDouble(TurnAngle, nameof(TurnAngle));
+            w.WriteDouble(TurnStrength, nameof(TurnStrength));
             return w.ToArray();
         }
 
