@@ -183,9 +183,9 @@ The slow keeper:
 | 16 m, lofted | held 1.37 s | miss | miss |
 
 **What the table shows:**
-- **Reaction to contact.** The reference keeper reacts in 0.20 s and the slow one in 0.30 s. Contact comes 0.47–0.92 s after a penalty, inside the research's 0.9 s full movement.
+- **Reaction to contact.** The reference keeper reacts in 0.20 s and the slow one in 0.30 s. His contacts with penalties come 0.47–1.02 s after the kick; the research's full movement to the side is about 0.9 s.
 - **Reach.** A penalty to the low corner at 15 m/s or more beats even the reference keeper: he dives as soon as his reaction lets him, and runs out of dive 2.1 m across. From 16 m he has time, and gets there.
-- **The two profiles differ.** The reference keeper saves 17 of 24; the slow one saves 11.
+- **The two profiles differ.** The reference keeper saves 18 of 24; the slow one saves 10.
 - **The furthest across** either went was 2.7 m, on his feet before a 12 m/s high corner from 16 m.
 
 No playtest yet suggests a deliberate departure from the real scale: that is Erik's to find on the bench.
