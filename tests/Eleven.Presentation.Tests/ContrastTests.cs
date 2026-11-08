@@ -190,7 +190,7 @@ namespace Eleven.Presentation.Tests
             Assert.InRange(shades, 1.10, 1.35);
             foreach (Rgba grass in new[] { Domain.Pitch, Domain.PitchMown })
             {
-                foreach ((string name, Rgba colour) in new[] { ("player", Domain.Player), ("ball", Domain.Ball), ("lines", Domain.PitchLine), ("HUD border", Theme.Pitch[Role.Outline]) })
+                foreach ((string name, Rgba colour) in new[] { ("player", Domain.Player), ("keeper", Domain.Keeper), ("ball", Domain.Ball), ("lines", Domain.PitchLine), ("HUD border", Theme.Pitch[Role.Outline]) })
                 {
                     double ratio = Rgba.Contrast(colour, grass);
                     Assert.True(ratio >= 3, $"{name} {ratio:F2}:1 against {grass.ToHex()}");
@@ -209,7 +209,7 @@ namespace Eleven.Presentation.Tests
             }
 
             Assert.DoesNotContain(Theme.Roles, r => r.ToString().IndexOf("football", StringComparison.OrdinalIgnoreCase) >= 0);
-            Assert.Equal(new[] { "Pitch", "PitchMown", "PitchLine", "Ball", "BallShadow", "Player" }, Domain.All.Select(d => d.Name));
+            Assert.Equal(new[] { "Pitch", "PitchMown", "PitchLine", "Ball", "BallShadow", "Player", "Keeper" }, Domain.All.Select(d => d.Name));
             Assert.Equal("#2E6B3A", Domain.Pitch.ToHex());
         }
 

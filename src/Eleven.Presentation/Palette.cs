@@ -91,9 +91,16 @@ namespace Eleven.Presentation
         /// <summary>The controlled player, 3.4:1 against the pitch (WCAG 1.4.11 asks 3:1 for graphics).</summary>
         public static readonly Rgba Player = Rgba.Hex("#99CC44");
 
+        /// <summary>
+        /// The keeper (#69), sky blue: 3.8:1 against the pitch and 4.7:1 against its mown shade. Its hue
+        /// sits on the blue–yellow axis, so it stays apart from the green player and the yellow ball
+        /// for red–green colour blindness too; his place in goal tells him apart as well.
+        /// </summary>
+        public static readonly Rgba Keeper = Rgba.Hex("#000000");
+
         public static readonly (string Name, Rgba Colour)[] All =
         {
-            ("Pitch", Pitch), ("PitchMown", PitchMown), ("PitchLine", PitchLine), ("Ball", Ball), ("BallShadow", BallShadow), ("Player", Player),
+            ("Pitch", Pitch), ("PitchMown", PitchMown), ("PitchLine", PitchLine), ("Ball", Ball), ("BallShadow", BallShadow), ("Player", Player), ("Keeper", Keeper),
         };
     }
 }
