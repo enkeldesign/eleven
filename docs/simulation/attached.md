@@ -24,7 +24,7 @@ The step order is the same as FREE's:
 
 commands → movement → aftertouch → kicks → **ball control** → keepers → ball integration, the goal's frame and keepers' saves → goal line.
 
-Under ATTACHED, the ball-control slot does this:
+Under ATTACHED, the ball-control slot does this, with a turn's trap and touch out in place of step 5's correction during a turn ([turn.md](turn.md), #66):
 
 1. **A kick released it.** If a kick or quick pass connected this step, a held ball is released. Nothing takes it on the kick's own step, and the kicker stays excluded through their wind-up and kick cooldown.
 2. **The holder loses it** when any of these holds:

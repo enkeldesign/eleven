@@ -37,6 +37,8 @@ Touches run after kicks, and **no one touches the ball on the step a kick connec
 
 A **standing player** (slower than 0.5 m/s, stick released) with the ball at rest within reach leaves it alone.
 
+**A turn breaks the touch interval** (#66). On a sharp change of direction the footballer traps the ball as the turn starts and plays it out as they come round, whatever the touch cooldown, and no ordinary touch comes in between. [turn.md](turn.md) has the rule, shared with ATTACHED.
+
 ## A touch
 
 1. **Where the player will be.** The touch predicts the player's position by their next touch, under this step's stick, with the simulation's own movement (`Accelerate`, shared with `StepPlayer`; INV-13).
@@ -89,6 +91,8 @@ These are in the bench's Control tab, with `ballControl` on the Player tab.
 `eleven-sim dribble <dir> [name=value ...]` writes `dribble-curves.csv`, and CI publishes it. `docs/simulation/dribble-reference.csv` is the recorded technical reference, checked by `DribbleCurvesTests`.
 
 Every case runs under FREE and under ATTACHED (#60), each under a good profile (`ballControl` 0.9) and a poor one (0.3).
+
+**The turn cases always turn on a touch step,** the best case under FREE. Started at each step of a touch interval instead, a 90° sprint turn keeps the ball from 3 of 15 starts at good control and none at the bench's 0.7. `eleven-sim turns` measures every phase ([turn.md](turn.md#the-characterisation)); 45° and 90° turns are short of the turn angle, so these rows are the same with the turn on or off.
 - Each row names its model and carries that model's config hash.
 - `lost_s` is time beyond the control reach under FREE, and time not attached under ATTACHED. It is measured only in the straight, stop, turn and switch cases.
 - ATTACHED's own columns are in [attached.md](attached.md#the-characterisation).

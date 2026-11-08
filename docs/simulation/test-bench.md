@@ -38,7 +38,7 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - Only the model changes in the applied values; pending edits stay pending.
 
 **Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch.
-- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)) and the capture reach both models share.
+- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, and the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)). `turnStrength` 0 turns the turn off, for comparing with and without it.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
 - Keeper holds the practice keeper's four capabilities and the config's five keeper values (#69, [keeper.md](keeper.md)). The capabilities change the practice keeper, never the config.
