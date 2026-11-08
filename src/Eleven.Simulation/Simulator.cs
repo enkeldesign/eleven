@@ -35,6 +35,10 @@ namespace Eleven.Simulation
         // Whether a kick connected on this step: then no one touches the ball on it (#59).
         private bool _kickConnected;
 
+        // Where each keeper's body started this step, so the ball's contact with him is swept in
+        // his own frame (#69, Codex on #71). Rebuilt every step.
+        private readonly List<Vec2> _keeperFrom = new List<Vec2>();
+
         /// <param name="initial">Copied, so the caller's object is never mutated.</param>
         public Simulator(SimConfig config, SimState initial)
         {
@@ -66,6 +70,8 @@ namespace Eleven.Simulation
             ResolveCommands(tick, commands, events);
 
             double dt = Config.TickSeconds;
+            _keeperFrom.Clear();
+            foreach (KeeperState k in _state.Keepers) _keeperFrom.Add(_state.Players[IndexOfPlayer(k.PlayerId)].Position);
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 Command? command = FindAccepted(_state.Players[i].OwnerControllerId);
@@ -833,12 +839,15 @@ namespace Eleven.Simulation
 
             Vec3 path = ball.Position - start;
             double frame = GoalFrame.FirstContact(start, path, Config, out FramePart part, out Vec3 a, out Vec3 b);
+            // A keeper moves through the step too, so his contact is swept in his frame: the ball's
+            // path relative to his, against his envelope where he started the step.
             double soonest = double.PositiveInfinity;
             int saver = -1;
             for (int k = 0; k < _state.Keepers.Length; k++)
             {
-                Envelope(k, out Vec3 feet, out Vec3 top, out double reach);
-                double s = GoalFrame.Sweep(start, path, feet, top, reach);
+                Vec2 moved = Body(k).Position - _keeperFrom[k];
+                Envelope(k, _keeperFrom[k], out Vec3 feet, out Vec3 top, out double reach);
+                double s = GoalFrame.Sweep(start, path - new Vec3(moved.X, moved.Y, 0), feet, top, reach);
                 if (s < soonest)
                 {
                     soonest = s;
@@ -848,8 +857,8 @@ namespace Eleven.Simulation
 
             if (saver >= 0 && soonest <= frame)
             {
-                ball.Position = start + path * soonest;
-                Save(saver, tick, events);
+                Vec2 moved = Body(saver).Position - _keeperFrom[saver];
+                Save(saver, start + path * soonest, _keeperFrom[saver] + moved * soonest, moved * (1 - soonest), tick, events);
             }
             else if (part != FramePart.None)
             {
@@ -991,15 +1000,16 @@ namespace Eleven.Simulation
             keeper.DiveTop = target.Z < LyingTop ? LyingTop : target.Z > StandingTop ? StandingTop : target.Z;
         }
 
+        private PlayerState Body(int k) => _state.Players[IndexOfPlayer(_state.Keepers[k].PlayerId)];
+
         /// <summary>
-        /// A keeper's envelope: the capsule his hands reach, round a vertical axis at his position,
-        /// from the ground to a top his phase sets, at his reach plus the ball's radius for the
-        /// ball's centre. It moves only with his body.
+        /// A keeper's envelope with his body at <paramref name="at"/>: the capsule his hands reach,
+        /// round a vertical axis there, from the ground to a top his phase sets, at his reach plus
+        /// the ball's radius for the ball's centre. It moves only with his body.
         /// </summary>
-        private void Envelope(int k, out Vec3 feet, out Vec3 top, out double reach)
+        private void Envelope(int k, Vec2 at, out Vec3 feet, out Vec3 top, out double reach)
         {
             KeeperState keeper = _state.Keepers[k];
-            Vec2 at = _state.Players[IndexOfPlayer(keeper.PlayerId)].Position;
             double height = keeper.Phase switch
             {
                 KeeperPhase.Dive => keeper.DiveTop,
@@ -1018,14 +1028,18 @@ namespace Eleven.Simulation
         /// far out toward his reach its line passes his body, to nothing at his fingertips. Anything
         /// faster he parries: its velocity along the contact normal reverses, scaled by the parry
         /// restitution, and turns by a seeded error that shrinks with his handling. No random save
-        /// chance: the outcome is the speed, where he meets it, and his handling.
+        /// chance: the outcome is the speed, where he meets it, and his handling. The contact is
+        /// where both were at that moment of the step, the ball at <paramref name="ballAt"/> and his
+        /// body at <paramref name="keeperAt"/>; a held ball goes on with him for the
+        /// <paramref name="rest"/> of his step.
         /// </summary>
-        private void Save(int k, long tick, List<SimEvent> events)
+        private void Save(int k, Vec3 ballAt, Vec2 keeperAt, Vec2 rest, long tick, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
             KeeperState keeper = _state.Keepers[k];
-            PlayerState body = _state.Players[IndexOfPlayer(keeper.PlayerId)];
-            Envelope(k, out Vec3 feet, out Vec3 top, out _);
+            PlayerState body = Body(k);
+            Envelope(k, keeperAt, out Vec3 feet, out Vec3 top, out _);
+            ball.Position = ballAt;
 
             var moving = new Vec3(body.Velocity.X, body.Velocity.Y, 0);
             Vec3 relative = ball.Velocity - moving;
@@ -1042,6 +1056,7 @@ namespace Eleven.Simulation
             {
                 ball.HeldBy = keeper.PlayerId;
                 ball.Velocity = moving;
+                ball.Position = new Vec3(ballAt.X + rest.X, ballAt.Y + rest.Y, ballAt.Z);
                 events.Add(new SimEvent(tick, SimEventKind.KeeperHeld, keeper.PlayerId));
                 return;
             }

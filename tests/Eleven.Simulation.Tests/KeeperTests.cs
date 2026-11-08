@@ -107,6 +107,29 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(without.PeekState().Ball.Position, withKeeper.PeekState().Ball.Position);
         }
 
+        // Codex on #71: the sweep is relative, so his own movement can bring the ball into his reach.
+        [Fact]
+        public void He_holds_a_resting_ball_he_moves_onto()
+        {
+            Vec2 at = Spot(C);
+            var sim = new Simulator(C, State(C, new Vec3(at.X - 2.5, 0, C.BallRadius)));
+            List<SimEvent> events = Run(sim, C.TickRate, keeper: t => Keep(t, move: new Vec2(-1, 0)));
+
+            Assert.Single(events, e => e.Kind == SimEventKind.KeeperHeld && e.Subject == Keeper);
+            Assert.Equal(Keeper, sim.PeekState().Ball.HeldBy);
+        }
+
+        [Fact]
+        public void A_dive_onto_a_resting_ball_reaches_it()
+        {
+            Vec2 at = Spot(C);
+            var sim = new Simulator(C, State(C, new Vec3(at.X, 2.0, C.BallRadius)));
+            List<SimEvent> events = Run(sim, C.TickRate, keeper: t => Keep(t, dive: t == 0 ? new Vec3(at.X, 2.0, 0.3) : (Vec3?)null));
+
+            Assert.Contains(events, e => e.Kind == SimEventKind.KeeperDived);
+            Assert.Contains(events, e => e.Kind == SimEventKind.KeeperHeld);
+        }
+
         [Fact]
         public void A_shot_at_his_body_is_held_and_moves_with_him()
         {

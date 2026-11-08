@@ -24,8 +24,8 @@ config_hash,profile,distance_m,target,speed_mps,outcome,reaction_s,dive_s,contac
 612365a19171e0ff,reference,16.000,lofted,15.000,parried,0.200,,1.150,0.817,position
 612365a19171e0ff,reference,16.000,lofted,18.000,miss,0.200,,,0.807,none
 612365a19171e0ff,slow,11.000,centre,12.000,held,0.300,,0.750,0.330,position
-612365a19171e0ff,slow,11.000,centre,15.000,held,0.300,,0.583,0.291,position
-612365a19171e0ff,slow,11.000,centre,18.000,parried,0.300,,0.483,0.593,position
+612365a19171e0ff,slow,11.000,centre,15.000,parried,0.300,,0.583,0.519,position
+612365a19171e0ff,slow,11.000,centre,18.000,parried,0.300,,0.483,0.621,position
 612365a19171e0ff,slow,11.000,low-corner,12.000,goal,0.300,0.300,,1.500,none
 612365a19171e0ff,slow,11.000,low-corner,15.000,goal,0.300,0.300,,1.500,none
 612365a19171e0ff,slow,11.000,low-corner,18.000,goal,0.300,0.300,,1.500,none

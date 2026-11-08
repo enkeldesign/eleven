@@ -67,7 +67,7 @@ These heights are technical constants of the body. His reach extends the envelop
 
 A well-struck corner beats them, and a ball beyond his reach passes untouched: `KeeperTests` runs one 2 cm past it, bit for bit as with no keeper.
 
-**Contact.** Each step, the ball's path is swept against his envelope as against the goal's frame, and the earliest contact wins. Keepers take no FREE touches and no ATTACHED takes: they play the ball with their hands.
+**Contact.** Each step, the ball's path is swept against his envelope as against the goal's frame, and the earliest contact wins. Since he moves through the step too, the sweep is in his frame: the ball's path relative to his, against his envelope where he started the step. So moving onto a resting ball, or diving onto one, he reaches it. The contact resolves where both were at that moment, and a held ball goes on with him for the rest of his step. Keepers take no FREE touches and no ATTACHED takes: they play the ball with their hands.
 
 ## The save: held or parried
 
@@ -173,7 +173,7 @@ The slow keeper:
 
 | Shot | 12 m/s | 15 m/s | 18 m/s |
 | --- | --- | --- | --- |
-| 11 m, centre | held 0.75 s | held 0.58 s | parried 0.48 s |
+| 11 m, centre | held 0.75 s | parried 0.58 s | parried 0.48 s |
 | 11 m, low corner | **goal** | **goal** | **goal** |
 | 11 m, high corner | **goal** | **goal** | **goal** |
 | 11 m, lofted | held 0.87 s | miss | miss |
