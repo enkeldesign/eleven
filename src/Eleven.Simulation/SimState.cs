@@ -24,17 +24,22 @@ namespace Eleven.Simulation
         /// <summary>Controllable players, in ascending id order. Slice 1 has exactly one.</summary>
         public PlayerState[] Players = Array.Empty<PlayerState>();
 
+        /// <summary>The keepers (#69), in ascending player id order, each one of <see cref="Players"/>.</summary>
+        public KeeperState[] Keepers = Array.Empty<KeeperState>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
             copy.Players = (PlayerState[])Players.Clone();
+            copy.Keepers = (KeeperState[])Keepers.Clone();
             return copy;
         }
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
-        /// each player. Field order within the ball and players is as declared, a player's
-        /// capabilities in their own declaration order. Fails on NaN or ±Infinity anywhere.
+        /// each player, keeper count (int32), each keeper. Field order within the ball, players and
+        /// keepers is as declared, capabilities in their own declaration order. Fails on NaN or
+        /// ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
         {
@@ -47,6 +52,7 @@ namespace Eleven.Simulation
             WriteVec3(w, Ball.Spin, "Ball.Spin");
             w.WriteByte((byte)Ball.Line);
             w.WriteInt32(Ball.AttachedTo);
+            w.WriteInt32(Ball.HeldBy);
 
             w.WriteInt32(Players.Length);
             foreach (PlayerState player in Players)
@@ -74,6 +80,20 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
                 w.WriteInt32(player.TouchCooldown);
             }
+
+            w.WriteInt32(Keepers.Length);
+            foreach (KeeperState keeper in Keepers)
+            {
+                w.WriteInt32(keeper.PlayerId);
+                w.WriteInt32((int)keeper.Phase);
+                w.WriteInt32(keeper.PhaseTicks);
+                WriteVec2(w, keeper.DiveVelocity, "Keeper.DiveVelocity");
+                w.WriteDouble(keeper.DiveTop, "Keeper.DiveTop");
+                w.WriteDouble(keeper.Capabilities.ReactionTime, "Keeper.Capabilities.ReactionTime");
+                w.WriteDouble(keeper.Capabilities.DiveSpeed, "Keeper.Capabilities.DiveSpeed");
+                w.WriteDouble(keeper.Capabilities.Reach, "Keeper.Capabilities.Reach");
+                w.WriteDouble(keeper.Capabilities.Handling, "Keeper.Capabilities.Handling");
+            }
         }
 
         public static SimState Decode(CanonicalReader r)
@@ -90,6 +110,7 @@ namespace Eleven.Simulation
             state.Ball.Spin = ReadVec3(r, "Ball.Spin");
             state.Ball.Line = ReadLine(r.ReadByte());
             state.Ball.AttachedTo = r.ReadInt32();
+            state.Ball.HeldBy = r.ReadInt32();
 
             int count = r.ReadInt32();
             if (count < 0 || count > 1024) throw new FormatException($"Implausible player count {count}.");
@@ -126,8 +147,33 @@ namespace Eleven.Simulation
                 };
             }
 
+            int keepers = r.ReadInt32();
+            if (keepers < 0 || keepers > count) throw new FormatException($"Implausible keeper count {keepers}.");
+            state.Keepers = new KeeperState[keepers];
+            for (int i = 0; i < keepers; i++)
+            {
+                state.Keepers[i] = new KeeperState
+                {
+                    PlayerId = r.ReadInt32(),
+                    Phase = ReadPhase(r.ReadInt32()),
+                    PhaseTicks = r.ReadInt32(),
+                    DiveVelocity = ReadVec2(r, "Keeper.DiveVelocity"),
+                    DiveTop = r.ReadDouble("Keeper.DiveTop"),
+                    Capabilities = new KeeperCapabilities
+                    {
+                        ReactionTime = r.ReadDouble("Keeper.Capabilities.ReactionTime"),
+                        DiveSpeed = r.ReadDouble("Keeper.Capabilities.DiveSpeed"),
+                        Reach = r.ReadDouble("Keeper.Capabilities.Reach"),
+                        Handling = r.ReadDouble("Keeper.Capabilities.Handling"),
+                    },
+                };
+            }
+
             return state;
         }
+
+        private static KeeperPhase ReadPhase(int value) =>
+            value >= (int)KeeperPhase.Position && value <= (int)KeeperPhase.Recover ? (KeeperPhase)value : throw new FormatException($"Unknown keeper phase {value}.");
 
         /// <summary>FNV-1a 64 of the canonical encoding.</summary>
         public ulong ComputeHash(CanonicalWriter scratch)
@@ -190,6 +236,12 @@ namespace Eleven.Simulation
         /// Any other model clears it on its first step.
         /// </summary>
         public int AttachedTo;
+
+        /// <summary>
+        /// The id of the keeper holding the ball (#69); 0 when no one is. A held ball stays where it
+        /// was caught and moves with him; no kick or touch reaches it.
+        /// </summary>
+        public int HeldBy;
     }
 
     public struct PlayerState

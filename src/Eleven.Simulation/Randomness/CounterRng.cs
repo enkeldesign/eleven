@@ -14,6 +14,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>A ball-control touch's direction error (#59), bounded by the toucher's ball control and the touch's difficulty.</summary>
         Touch = 3,
+
+        /// <summary>A keeper's parry (#69): its direction error, within ± the config's parry error, scaled by his handling.</summary>
+        Keeper = 4,
     }
 
     /// <summary>

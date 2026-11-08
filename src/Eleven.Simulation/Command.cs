@@ -47,7 +47,14 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly bool QuickPass;
 
-        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false)
+        /// <summary>
+        /// A keeper's dive (#69): the point on the pitch, with its height, he dives for. Taken only by
+        /// a keeper on his feet (<see cref="KeeperPhase.Position"/>); ignored otherwise, as for
+        /// any other player. A non-finite target is <see cref="CommandRejection.Invalid"/>.
+        /// </summary>
+        public readonly Vec3? Dive;
+
+        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null)
         {
             ControllerId = controllerId;
             Tick = tick;
@@ -55,6 +62,7 @@ namespace Eleven.Simulation
             Kick = kick;
             Aftertouch = aftertouch;
             QuickPass = quickPass;
+            Dive = dive;
         }
     }
 

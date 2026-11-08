@@ -110,6 +110,50 @@ namespace Eleven.Simulation.Maths
             Assert.Equal(3, Analyze(source).Count(d => d.Id == BannedApiAnalyzer.MathBoundaryId));
         }
 
+        // INV-9 (#69): code in the AI namespace sees the simulation only through an Observation.
+        private const string Reaching = @"
+namespace Eleven.Simulation
+{
+    public struct Vec2 { public double X, Y; }
+    public sealed class SimState { public BallState Ball; public PlayerState[] Players = new PlayerState[0]; }
+    public struct BallState { public Vec2 Position; }
+    public struct PlayerState { public Vec2 Position; }
+    public sealed class Simulator { public SimState PeekState() => new SimState(); }
+    public readonly struct KeeperObservation { public Vec2 BallPosition => default; }
+}
+
+namespace Eleven.Simulation.AI
+{
+    using Eleven.Simulation;
+
+    internal static class Peeking
+    {
+        public static double Ball(SimState state) => state.Ball.Position.X;          // ELEVEN003 SimState, Ball, BallState.Position
+        public static double Body(Simulator sim) => sim.PeekState().Players[0].Position.Y; // ELEVEN003 Simulator, PeekState, Players
+        public static double Seen(KeeperObservation seen) => seen.BallPosition.X;
+    }
+}";
+
+        [Fact]
+        public void Ai_code_naming_the_simulations_state_is_caught_and_its_observation_is_not()
+        {
+            ImmutableArray<Diagnostic> diagnostics = Analyze(Reaching);
+            Diagnostic[] boundary = diagnostics.Where(d => d.Id == BannedApiAnalyzer.PerceptionBoundaryId).ToArray();
+
+            Assert.All(boundary, d => Assert.Equal(DiagnosticSeverity.Error, d.Severity));
+            int[] lines = boundary.Select(d => d.Location.GetLineSpan().StartLinePosition.Line).Distinct().OrderBy(l => l).ToArray();
+            int[] marked = Reaching.Split('\n').Select((line, index) => (line, index)).Where(x => x.line.Contains("// ELEVEN003")).Select(x => x.index).ToArray();
+            Assert.Equal(marked, lines);
+            Assert.Contains(boundary, d => d.GetMessage().Contains("Eleven.Simulation.SimState"));
+            Assert.Contains(boundary, d => d.GetMessage().Contains("Eleven.Simulation.Simulator"));
+        }
+
+        [Fact]
+        public void The_same_names_outside_ai_code_are_allowed()
+        {
+            Assert.DoesNotContain(Analyze(Reaching.Replace("namespace Eleven.Simulation.AI", "namespace Eleven.Simulation.Tools")), d => d.Id == BannedApiAnalyzer.PerceptionBoundaryId);
+        }
+
         private static ImmutableArray<Diagnostic> Analyze(string source)
         {
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)

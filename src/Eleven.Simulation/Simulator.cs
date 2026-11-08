@@ -140,6 +140,7 @@ namespace Eleven.Simulation
             if (c.Tick < tick) return CommandRejection.Stale;
             if (c.Tick > tick) return CommandRejection.Early;
             if (!IsFinite(c.Move) || !IsFinite(c.Aftertouch)) return CommandRejection.Invalid;
+            if (c.Dive.HasValue && !(SimMath.IsFinite(c.Dive.Value.X) && SimMath.IsFinite(c.Dive.Value.Y) && SimMath.IsFinite(c.Dive.Value.Z))) return CommandRejection.Invalid;
             if (c.Kick.HasValue)
             {
                 KickIntent kick = c.Kick.Value;
@@ -165,7 +166,7 @@ namespace Eleven.Simulation
                 kick = new KickIntent(k.Direction, Clamp01(k.Strength), Clamp01(k.Loft));
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass);
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)
@@ -798,8 +799,7 @@ namespace Eleven.Simulation
         private void StepBall(long tick, double dt, Vec3 start, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
-            if (IntegrateBall(ref ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
-            GoalFrame.Resolve(start, ref ball, Config, out FramePart first, out FramePart second);
+            if (BallFlight.Advance(ref ball, Config, out FramePart first, out FramePart second)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
             if (first != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)first));
             if (second != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)second));
         }
@@ -808,7 +808,7 @@ namespace Eleven.Simulation
         /// One step of the ball model. Static so that predictions run the simulation's own physics
         /// (INV-13): the quick pass weighs and leads its passes with it. Returns whether the ball bounced.
         /// </summary>
-        private static bool IntegrateBall(ref BallState ball, SimConfig config, double dt)
+        internal static bool IntegrateBall(ref BallState ball, SimConfig config, double dt)
         {
             double radius = config.BallRadius;
             bool airborne = ball.Position.Z > radius || ball.Velocity.Z > 0;
@@ -942,6 +942,32 @@ namespace Eleven.Simulation
                 }
             }
 
+            // Keepers (#69): each a player, once, in ascending id order, with capabilities in range
+            // and a phase this config could have produced.
+            for (int i = 0; i < state.Keepers.Length; i++)
+            {
+                KeeperState k = state.Keepers[i];
+                if (i > 0 && k.PlayerId <= state.Keepers[i - 1].PlayerId) throw new ArgumentException("Keepers must be in strictly ascending player id order.", nameof(state));
+                if (Array.FindIndex(state.Players, p => p.Id == k.PlayerId) < 0) throw new ArgumentException($"Keeper {k.PlayerId} isn't a player in the state.", nameof(state));
+                string owner = $"Keeper {k.PlayerId}";
+                k.Capabilities.CheckRanges(owner);
+                int most = k.Phase switch
+                {
+                    KeeperPhase.Position => 0,
+                    KeeperPhase.React => ReactionTicks(k.Capabilities, config),
+                    KeeperPhase.Dive => config.KeeperDiveTicks,
+                    KeeperPhase.Recover => config.KeeperRecoverTicks,
+                    _ => throw new ArgumentException($"{owner}: unknown phase {(int)k.Phase}.", nameof(state)),
+                };
+                InRange(owner, nameof(k.PhaseTicks), k.PhaseTicks, most);
+                if (k.Phase != KeeperPhase.Position && k.PhaseTicks == 0) throw new ArgumentException($"{owner}: a {k.Phase} phase needs steps left.", nameof(state));
+            }
+
+            if (state.Ball.HeldBy != 0 && Array.FindIndex(state.Keepers, k => k.PlayerId == state.Ball.HeldBy) < 0)
+            {
+                throw new ArgumentException($"The ball is held by {state.Ball.HeldBy}, who isn't a keeper.", nameof(state));
+            }
+
             // A goal-line state the encoding knows (#68).
             if (state.Ball.Line > LineState.CrossingWide) throw new ArgumentException($"Unknown goal-line state {(byte)state.Ball.Line}.", nameof(state));
 
@@ -959,6 +985,10 @@ namespace Eleven.Simulation
 
             return state;
         }
+
+        /// <summary>A keeper's reaction time in whole steps, nearest, at least one (#69).</summary>
+        internal static int ReactionTicks(in KeeperCapabilities capabilities, SimConfig config) =>
+            Math.Max(1, (int)Math.Round(capabilities.ReactionTime * config.TickRate));
 
         private static void InRange(string owner, string field, int value, int max)
         {

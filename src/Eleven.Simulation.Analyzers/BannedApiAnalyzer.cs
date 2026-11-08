@@ -24,6 +24,7 @@ namespace Eleven.Simulation.Analyzers
     {
         public const string NondeterministicId = "ELEVEN001";
         public const string MathBoundaryId = "ELEVEN002";
+        public const string PerceptionBoundaryId = "ELEVEN003";
 
         private static readonly DiagnosticDescriptor Nondeterministic = new DiagnosticDescriptor(
             NondeterministicId,
