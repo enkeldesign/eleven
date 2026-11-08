@@ -46,13 +46,13 @@ namespace Eleven.Simulation.AI
 
                 // Within his reach, he squares up to it; with time to get there, he shuffles across.
                 if (away <= square) return new KeeperDecision(Ease(toward));
-                if (away - square <= Shuffle * seen.RunSpeed * seconds) return new KeeperDecision(Unit(toward));
+                if (away - square <= Shuffle * seen.RunSpeed * seconds) return new KeeperDecision(Unit(toward) * Shuffle);
 
                 // Otherwise he dives for it, once its arrival is within the dive's time.
                 double dive = away / seen.Capabilities.DiveSpeed;
                 if (dive > config.KeeperDiveSeconds) dive = config.KeeperDiveSeconds;
                 if (seconds <= dive + Margin) return new KeeperDecision(Vec2.Zero, new Vec3(seen.Position.X, at.Y, at.Z));
-                return new KeeperDecision(Unit(toward));
+                return new KeeperDecision(Unit(toward) * Shuffle);
             }
 
             // On the line from the goal's centre toward the ball, StandOff out, inside the posts.
