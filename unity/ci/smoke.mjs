@@ -337,7 +337,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         `posts ${left.x},${left.y} and ${right.x},${right.y}; goal centre ${goal.x},${goal.y}`);
       notes[`view${degrees}`] = `${v[14]} m up-field, ${v[15]} m across`;
     };
-    const viewNow = async () => (await waitForLog(viewPattern, 10_000, logs.length))?.match ?? null;
+    const viewNow = async () => (await waitForLog(viewPattern, 30_000, logs.length))?.match ?? null;
 
     // View passes (#72): the vertical pitch at this size, at 0°, then flipped to 180° through the
     // bench, as a match's half-time would: stick and flick up the screen go up-field either way.
@@ -353,9 +353,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
       const stickUp = async (degrees) => {
         const label = `at ${degrees}°`;
-        // Trace lines come once a simulated second, which at the tablet's 5 fps can be more than
-        // 5 s apart: wait longer, and fall back on the latest one.
-        const before = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? lastLog(tracePattern);
+        // Trace lines come once a simulated second, and on a slow runner the simulation steps
+        // only on frames short enough to count: wait long, and fall back on the latest line.
+        const before = (await waitForLog(tracePattern, 30_000, logs.length))?.match ?? lastLog(tracePattern);
         const origin = at(n[8], n[9]);
         const reach = n[10] * sx;
         if (useTouch) await touch('touchStart', origin);
@@ -369,12 +369,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           else await page.mouse.move(p.x, p.y);
           await sleep(20);
         }
-        // Long enough to run well up-field, short enough to stay on the pitch.
-        await sleep(1500);
+        // Held until a trace line shows a run well up-field, at most 30 s: long enough on a slow
+        // runner, and short enough on a fast one to stay on the pitch.
+        let after = null;
+        const until = Date.now() + 30_000;
+        while (Date.now() < until) {
+          const line = (await waitForLog(tracePattern, Math.max(1, until - Date.now()), logs.length))?.match ?? null;
+          if (!line) break;
+          after = line;
+          if (before && Math.abs(Number(line[2]) - Number(before[2])) > 4) break;
+        }
         await page.screenshot({ path: path.join(outDir, `${name}-${degrees}.png`) });
         if (useTouch) await touch('touchEnd');
         else await page.mouse.up();
-        const after = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
         const dx = before && after ? Number(after[2]) - Number(before[2]) : NaN;
         const dy = before && after ? Number(after[3]) - Number(before[3]) : NaN;
         check(`${label}: stick up the screen runs up-field`, dx * up(degrees) > 2 && Math.abs(dy) < Math.abs(dx) * 0.2,
@@ -424,7 +431,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       checkView(180, await viewNow(), 'at 180°');
       await stickUp(180);
       await flickUp(180);
-      const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromFlip))?.match ?? null;
+      const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromFlip))?.match ?? null;
       check('the recording across the flip replays to the live state', !!replay && replay[4] === 'match', replay ? replay[0].replace('ELEVEN ', '') : 'no recording check');
       const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
@@ -1162,7 +1169,9 @@ try {
   const { defaultBrowserType: _tablet, ...tabletPortrait } = devices['iPad (gen 7)'];
   await runPass(browser, `${base}?trace=1&view=1`, 'view-phone', phone, true);
   await runPass(browser, `${base}?trace=1&view=1`, 'view-phone-landscape', phoneLandscape, true);
-  await runPass(browser, `${base}?trace=1&view=1`, 'view-tablet', tabletPortrait, true);
+  // The iPad at device scale 1: the same layout in proportion, a quarter of the pixels. At its
+  // own scale 2 the software renderer ran it at 3 fps, too slow for the simulation to step.
+  await runPass(browser, `${base}?trace=1&view=1`, 'view-tablet', { ...tabletPortrait, deviceScaleFactor: 1 }, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
