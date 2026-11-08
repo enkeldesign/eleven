@@ -28,6 +28,9 @@ using Eleven.Simulation.Harness;
 /// eleven-sim candidate [name=value ...]
 ///                              a feel test bench candidate (#45): the reference values with any knobs changed,
 ///                              its config hash and practice start hash, e.g. candidate kickSpeed=28 maxSpeed=8.5
+/// eleven-sim turns &lt;dir&gt; [name=value ...]
+///                              characterise the turn with the ball (#66): 90°, 135° and 180° under FREE and
+///                              ATTACHED, the turn off and on, from every touch phase, e.g. turns out turnStrength=8
 /// eleven-sim passes &lt;dir&gt; [name=value ...]
 ///                              measure the quick pass (#38) in the practice drills under the reference profile
 ///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1
@@ -60,6 +63,8 @@ internal static class Program
                 return Goal(args[1], args.Skip(2));
             case "keeper" when args.Length >= 2:
                 return Keeper(args[1], args.Skip(2));
+            case "turns" when args.Length >= 2:
+                return Turns(args[1], args.Skip(2));
             case "replay" when args.Length == 2:
                 return Replay(args[1]);
             case "candidate":
@@ -67,7 +72,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
                 return 2;
         }
     }
@@ -258,6 +263,23 @@ internal static class Program
         }
 
         Console.WriteLine($"config {config.Hash:x16}, {DribbleCurves.KeyNumbers(curves)} -> {directory}");
+        return 0;
+    }
+
+    private static int Turns(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
+
+        SimConfig config = SpikeScenario.Config().With(overrides);
+        List<TurnCurve> curves = TurnCurves.Characterise(config);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "turn-curves.csv")))
+        {
+            TurnCurves.WriteCsv(csv, config, curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {TurnCurves.KeyNumbers(curves)} -> {directory}");
         return 0;
     }
 
