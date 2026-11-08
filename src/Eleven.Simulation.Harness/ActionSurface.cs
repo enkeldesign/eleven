@@ -300,6 +300,20 @@ namespace Eleven.Simulation.Harness
         public ActionSurfaceSettings Settings { get; private set; }
 
         /// <summary>
+        /// How the pitch is shown (#72). Gestures are read in screen space, and the stick, a flick's
+        /// line and aftertouch become world directions through it before a command is made, so the
+        /// commands recorded are in world coordinates whatever the view (INV-10).
+        /// </summary>
+        public PitchOrientation Orientation { get; private set; } = PitchOrientation.Practice;
+
+        /// <summary>A new view, such as a half-time flip: every gesture in progress is cancelled, as on a reset.</summary>
+        public void Orient(PitchOrientation orientation)
+        {
+            Orientation = orientation;
+            Cancel();
+        }
+
+        /// <summary>
         /// Whether the controlled player's kick is winding up or its aftertouch window is open, read
         /// from the state each frame: a press on the ACTION surface then shapes the ball instead of
         /// starting a gesture.
@@ -315,7 +329,7 @@ namespace Eleven.Simulation.Harness
         public double StickKnobX { get; private set; }
         public double StickKnobY { get; private set; }
 
-        /// <summary>Move vector, length at most 1; +x right, +y up the screen.</summary>
+        /// <summary>The stick's move vector on screen, length at most 1: +x right, +y up the screen.</summary>
         public Vec2 Move => _move;
 
         /// <summary>Whether a finger is on the ACTION surface for a gesture.</summary>
@@ -389,10 +403,12 @@ namespace Eleven.Simulation.Harness
         /// <summary>The owned command for <paramref name="tick"/>. A gesture's kick or pass is delivered once.</summary>
         public Command CommandFor(long tick)
         {
-            Vec2 aftertouch = _shapingPointer != NoPointer ? _aftertouch : Vec2.Zero;
-            if (!_pending) return new Command(_controllerId, tick, _move, null, aftertouch);
+            // Read on screen, sent in the world: what the screen shows up is up-field (#72).
+            Vec2 move = Orientation.ToWorld(_move);
+            Vec2 aftertouch = _shapingPointer != NoPointer ? Orientation.ToWorld(_aftertouch) : Vec2.Zero;
+            if (!_pending) return new Command(_controllerId, tick, move, null, aftertouch);
 
-            var command = new Command(_controllerId, tick, _move, _pendingKick, aftertouch, quickPass: !_pendingKick.HasValue);
+            var command = new Command(_controllerId, tick, move, _pendingKick, aftertouch, quickPass: !_pendingKick.HasValue);
             ActionReport report = _pendingReport;
             _pending = false;
             _pendingKick = null;
@@ -511,8 +527,8 @@ namespace Eleven.Simulation.Harness
             double hold = (_flickStart ?? sample.Time) - _press.Time;
             bool charged = hold >= s.HoldSeconds;
             double strength = charged ? Lerp(s.FlickStrength, s.ChargedStrength, ChargeFor(hold)) : s.FlickStrength;
-            // The gesture's line, kept exactly: screen right is pitch +x, screen up pitch +y.
-            var direction = new Vec2(sample.X - _press.X, _press.Y - sample.Y);
+            // The gesture's line, kept exactly, in the world direction the screen shows it (#72).
+            Vec2 direction = Orientation.ToWorld(new Vec2(sample.X - _press.X, _press.Y - sample.Y));
             Pend(new KickIntent(direction, strength, s.Loft), new ActionReport(charged ? ActionGesture.HoldFlick : ActionGesture.Flick, sample.Time, strength, direction));
         }
 

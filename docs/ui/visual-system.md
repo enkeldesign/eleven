@@ -25,6 +25,23 @@ ELEVEN's visual system (#48, ADR-0003) is one code-controlled source of truth fo
 
 **Domain colours** (`Domain`: pitch, lines, ball, players, keeper) are a separate set. No role uses them, and no theme redefines them.
 
+**The pitch is vertical** (#72): goal to goal runs bottom to top, and the controlled team always attacks up the screen, in portrait and landscape alike.
+- **One orientation, everywhere.** `PitchOrientation` (harness) says which way along the goal-to-goal axis, world +x (0°) or −x (180°), is up.
+  - **Drawing.** The camera rolls by its `CameraRoll`, so the lines, the mown pattern, the goal, the players and the shadow turn with the view.
+  - **Framing and the height cue.** The framing works on screen through the same orientation. The ball's height cue lifts it up the screen, toward the attacked goal.
+  - **Input.** The touch adapter maps the stick, a flick's line and aftertouch from screen to world through it before a command is made, so recorded commands are in world coordinates whatever the view (INV-10).
+  - **The HUD**, an overlay, stays upright and in place.
+- **The match decides the end; the view only shows it.** The view follows the controlled team's authoritative attack direction: +x in practice, and in a match whatever its half-time end switch says (INV-8).
+  - A flip is a half turn of the view and of the input mapping, with no simulation state, config or hash.
+  - It happens between frames, with no step and no command, and cancels gestures in progress, so a held stick can't reverse the player.
+  - The bench's **Pitch view, 0° / 180°**, tests it ([test-bench.md](../simulation/test-bench.md)).
+- **The mapping is exact:** a quarter turn, by swaps and subtraction from 0, with no scaling or mirroring. Screen left and right stay left and right, and it round-trips bit for bit.
+- **The action is framed below the status line**, which sits over the top of the play area, where the play runs up-field. A message never covers the ball, and the pitch under it is more to see ahead.
+- **Look-ahead follows the play area's height.**
+  - A wide play area shows less up-field than the horizontal pitch did across it: iPad portrait, iPhone landscape.
+  - A tall one shows more: iPhone portrait, iPad landscape.
+  - `?ahead=10` sets the least up-field view in metres, zooming out to give it, for comparison. The trace's `ELEVEN view` line reports `ahead` and `across`.
+
 **The pitch is mown** (#58) in two shades, `Pitch` and `PitchMown`, so movement reads under the following camera wherever it is.
 - **Cross-cut is the default:** squares mown both ways, so movement reads in every direction.
 - **`?pitch=stripes`** draws bands parallel to the goal lines, as in SWOS and Kick Off 2. **`?pitch=plain`** draws one shade. Both are there for comparison.

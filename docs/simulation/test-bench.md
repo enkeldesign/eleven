@@ -37,6 +37,11 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - The run goes on from the same state, so it isn't a pending edit.
 - Only the model changes in the applied values; pending edits stay pending.
 
+**Pitch view (#72):**
+- "0° / 180°" sits below the ball-control switch. 180° shows a second half, with the ends switched: the controlled team attacks −x, still up the screen, and the practice goal is at the bottom.
+- It flips the view and the stick's mapping at once, between frames, and the run goes on. Nothing in the simulation changes, and gestures in progress are cancelled.
+- It is a presentation setting, not a knob: in no config, candidate or capture. Reset and APPLY / RETRY keep it. [visual-system.md](../ui/visual-system.md) has the contract.
+
 **Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch.
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, and the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)). `turnStrength` 0 turns the turn off, for comparing with and without it.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).

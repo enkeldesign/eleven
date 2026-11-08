@@ -70,6 +70,11 @@ namespace Eleven.Host
         private double _lastTraceTime;
         private bool _modalWasOpen;
 
+        // How the pitch is shown (#72): the controlled team's attacked end up the screen. Practice
+        // attacks the +x goal; the bench's Pitch view shows 180°, a second half's switched ends, to
+        // test the half-time flip. Presentation only: no simulation state.
+        private PitchOrientation _orientation = PitchOrientation.Practice;
+
         // What the last ACTION gesture became, shown on the disc for a moment (#28).
         private string _lastGesture = "";
         private double _lastGestureUntil;
@@ -92,8 +97,14 @@ namespace Eleven.Host
             // ?pitch=stripes or ?pitch=plain: the comparators for the mown pattern (#58).
             PitchView.Mowing mowing = url.Contains("pitch=stripes") ? PitchView.Mowing.Stripes
                 : url.Contains("pitch=plain") ? PitchView.Mowing.Plain : PitchView.Mowing.Crosscut;
-            _view = new PitchView(_config, transform, mowing);
+            // ?ahead=10: the least up-field view, in metres, the camera zooms out to give (#72).
+            float ahead = 0;
+            int aheadAt = url.IndexOf("ahead=", StringComparison.Ordinal);
+            if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
+            _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
             _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface);
+            _view.Orient(_orientation);
+            _input.Orient(_orientation);
             _input.Delivered += GestureDelivered;
             // ?noui: measurement only (#48), the frame without the UI.
             // ?textscale=1.5: enlarged text, until settings exist to choose it (#48).
@@ -223,6 +234,7 @@ namespace Eleven.Host
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
                 Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)}"));
+                Log($"ELEVEN view tick={s.Tick} {_view.Report(_layout)}");
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -376,6 +388,28 @@ namespace Eleven.Host
                 : "Ball control: FREE from now. The run goes on.");
         }
 
+        /// <summary>
+        /// The bench's Pitch view (#72): 180° shows a second half, with the ends switched, so the
+        /// controlled team attacks −x, still up the screen. A view and input mapping change between
+        /// frames: no step and no command, and gestures in progress are cancelled, so a held stick
+        /// can't reverse the player. The tick and the state hash are logged either side.
+        /// </summary>
+        private void SwitchView(bool secondHalf)
+        {
+            PitchOrientation to = secondHalf ? PitchOrientation.Practice.Flipped : PitchOrientation.Practice;
+            if (to == _orientation) return;
+            long tick = _simulator.Tick;
+            ulong before = _simulator.StateHash();
+            _orientation = to;
+            _input.Orient(to);
+            _view.Orient(to);
+            Log(FormattableString.Invariant(
+                $"ELEVEN view flipped to={to} tick={tick} before={before:x16} after={_simulator.StateHash():x16} steps={_simulator.Tick - tick}"));
+            _hud?.ShowStatus(secondHalf
+                ? "Pitch view 180°: ends switched, attacking up."
+                : "Pitch view 0°: attacking up.");
+        }
+
         private static string ModelName(ControlModel model) => model switch
         {
             ControlModel.Free => "free",
@@ -430,7 +464,8 @@ namespace Eleven.Host
                     return;
                 }
 
-                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel);
+                _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
+                    () => _orientation != PitchOrientation.Practice, SwitchView);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
