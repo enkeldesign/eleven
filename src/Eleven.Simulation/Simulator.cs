@@ -16,9 +16,10 @@ namespace Eleven.Simulation
     /// 3. aftertouch: each open window shapes the ball by its owner's input, then counts down,
     /// 4. kicks: accept intents (a manual kick, or a quick pass the footballer resolves) into wind-ups,
     ///    count wind-ups down, and connect or miss those that end,
-    /// 5. integrate the ball,
-    /// 6. check the goal line,
-    /// 7. advance the tick.
+    /// 5. ball control: touches under FREE, or ATTACHED's release, take and correction,
+    /// 6. integrate the ball, then resolve the goal's frame along the step's path (#68),
+    /// 7. judge the goal line, on where the ball ends and where its centre crossed the line,
+    /// 8. advance the tick.
     ///
     /// So a window opened by a contact first acts on the next step, and a wind-up of W steps
     /// started on step N connects on step N + W.
@@ -85,8 +86,9 @@ namespace Eleven.Simulation
             // touches on the step a kick connects, whatever the cooldown, and the kicker not through it.
             StepControl(tick, events);
 
-            StepBall(tick, dt, events);
-            CheckGoalLine(tick, events);
+            Vec3 start = _state.Ball.Position;
+            StepBall(tick, dt, start, events);
+            CheckGoalLine(tick, start, events);
 
             _state.Tick = tick + 1;
         }
@@ -791,9 +793,15 @@ namespace Eleven.Simulation
             return true;
         }
 
-        private void StepBall(long tick, double dt, List<SimEvent> events)
+        // The ball integrates, then the goal's frame resolves along the step's path (#68): the
+        // straight segment from where the ball started the step to where it ends.
+        private void StepBall(long tick, double dt, Vec3 start, List<SimEvent> events)
         {
-            if (IntegrateBall(ref _state.Ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, _state.Ball.Id));
+            ref BallState ball = ref _state.Ball;
+            if (IntegrateBall(ref ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
+            GoalFrame.Resolve(start, ref ball, Config, out FramePart first, out FramePart second);
+            if (first != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)first));
+            if (second != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)second));
         }
 
         /// <summary>
@@ -847,16 +855,40 @@ namespace Eleven.Simulation
             return false;
         }
 
-        private void CheckGoalLine(long tick, List<SimEvent> events)
+        /// <summary>
+        /// The goal line (#68), after the frame, on where the ball ends the step and where its centre
+        /// crossed the line on the step's path. The centre over the line decides through the mouth or
+        /// wide, where it crossed; the whole ball over it scores or goes out, once. The state returns
+        /// to in play only when the centre is back in front of the line. docs/simulation/goal.md.
+        /// </summary>
+        private void CheckGoalLine(long tick, Vec3 start, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
-            bool beyond = ball.Position.X - Config.BallRadius > Config.GoalLineX;
-            if (beyond && !ball.BeyondGoalLine)
+            double line = Config.GoalLineX;
+            Vec3 end = ball.Position;
+            if (end.X <= line)
             {
-                events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
+                ball.Line = LineState.InPlay;
+                return;
             }
 
-            ball.BeyondGoalLine = beyond;
+            // A ball whose centre started the step in front of the line was in play, whatever its
+            // state says. One placed over the line in play is judged where it was placed.
+            LineState state = start.X <= line ? LineState.InPlay : ball.Line;
+            if (state == LineState.InPlay)
+            {
+                Vec3 at = start.X <= line ? start + (end - start) * ((line - start.X) / (end.X - start.X)) : start;
+                state = GoalFrame.InMouth(at, Config) ? LineState.CrossingMouth : LineState.CrossingWide;
+            }
+
+            if (end.X - Config.BallRadius > line && (state == LineState.CrossingMouth || state == LineState.CrossingWide))
+            {
+                events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
+                if (state == LineState.CrossingMouth) events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id));
+                state = state == LineState.CrossingMouth ? LineState.Goal : LineState.Out;
+            }
+
+            ball.Line = state;
         }
 
         private static double Decay(double perSecond, double dt)
@@ -909,6 +941,9 @@ namespace Eleven.Simulation
                     }
                 }
             }
+
+            // A goal-line state the encoding knows (#68).
+            if (state.Ball.Line > LineState.CrossingWide) throw new ArgumentException($"Unknown goal-line state {(byte)state.Ball.Line}.", nameof(state));
 
             // The ball is attached to no one (0) or to a player who exists (#60).
             if (state.Ball.AttachedTo != 0)

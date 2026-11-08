@@ -8,6 +8,7 @@
 // Each pass boots the player, reads the host's log lines from the browser console and drives the
 // on-screen controls through Unity's Input System:
 //   - boot: the host reports ready, with its build id and the page's load time
+//   - the goal (#68): the pitch draws the simulation's goal, Law 1's mouth with 12 cm posts
 //   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
 //     (ADR-0002: cross-runtime determinism is a gate)
 //   - the HUD (#48, #53): placed actions hold their labels, the build line fits its panel and keeps
@@ -238,6 +239,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const loadMs = Number(/loadMs=(\d+)/.exec(ready.match.input)?.[1]);
     notes.loadSeconds = loadMs / 1000;
     check('reports its load time', loadMs > 0 && loadMs < 240_000, Number.isFinite(loadMs) ? `${loadMs} ms from navigation start` : 'no loadMs on the ready line');
+
+    // The goal is drawn from the simulation's geometry (#68): Law 1's mouth, 12 cm posts on the line.
+    const pitch = await waitForLog(/ELEVEN pitch mowing=\S+ band=\S+ goal=(\S+) posts=(\S+) at=(\S+)/, 5_000);
+    check('the pitch draws the simulation\'s goal', !!pitch && pitch.match[1] === '7.32x2.44' && pitch.match[2] === '0.12' && pitch.match[3] === '52.44,3.72',
+      pitch ? pitch.match[0].replace('ELEVEN pitch ', '') : 'no pitch line');
 
     if (name === 'desktop') {
       const icons = await page.evaluate(async () => {

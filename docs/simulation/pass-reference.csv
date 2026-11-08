@@ -1,9 +1,9 @@
 config_hash,drill,profile,pass_vision_rad,pass_anticipation,kick_error_rad,target,line_deg,lead_m,launch_speed_mps,closest_m,closest_s,arrival_speed_mps
-922d5bd65c5eea08,standard,profile,1.050,0.750,0.050,ahead-advancing,7.011,1.320,9.897,1.335,4.283,6.627
-922d5bd65c5eea08,standard,literal-narrow,0.600,0.000,0.050,ahead-advancing,12.454,0.000,6.138,13.414,1.533,5.026
-922d5bd65c5eea08,standard,reader-wide,2.100,1.000,0.050,wide,67.380,0.000,5.106,0.022,1.533,3.994
-922d5bd65c5eea08,standard,all-round,3.142,0.750,0.050,wide,67.380,0.000,5.106,0.022,1.533,3.994
-922d5bd65c5eea08,crossing-run,profile,1.050,0.750,0.050,crossing-run,-7.473,9.605,6.430,2.302,2.250,4.756
-922d5bd65c5eea08,crossing-run,literal-narrow,0.600,0.000,0.050,crossing-run,30.388,0.000,6.356,7.412,1.517,5.257
-922d5bd65c5eea08,crossing-run,reader-wide,2.100,1.000,0.050,crossing-run,-15.852,11.303,7.116,0.095,2.367,5.350
-922d5bd65c5eea08,crossing-run,all-round,3.142,0.750,0.050,crossing-run,-7.473,9.605,6.430,2.302,2.250,4.756
+6a09841010d9565e,standard,profile,1.050,0.750,0.050,ahead-advancing,7.011,1.320,9.897,1.335,4.283,6.627
+6a09841010d9565e,standard,literal-narrow,0.600,0.000,0.050,ahead-advancing,12.454,0.000,6.138,13.414,1.533,5.026
+6a09841010d9565e,standard,reader-wide,2.100,1.000,0.050,wide,67.380,0.000,5.106,0.022,1.533,3.994
+6a09841010d9565e,standard,all-round,3.142,0.750,0.050,wide,67.380,0.000,5.106,0.022,1.533,3.994
+6a09841010d9565e,crossing-run,profile,1.050,0.750,0.050,crossing-run,-7.473,9.605,6.430,2.302,2.250,4.756
+6a09841010d9565e,crossing-run,literal-narrow,0.600,0.000,0.050,crossing-run,30.388,0.000,6.356,7.412,1.517,5.257
+6a09841010d9565e,crossing-run,reader-wide,2.100,1.000,0.050,crossing-run,-15.852,11.303,7.116,0.095,2.367,5.350
+6a09841010d9565e,crossing-run,all-round,3.142,0.750,0.050,crossing-run,-7.473,9.605,6.430,2.302,2.250,4.756

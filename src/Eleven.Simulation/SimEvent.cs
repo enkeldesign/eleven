@@ -14,9 +14,9 @@ namespace Eleven.Simulation
         Bounced = 2,
 
         /// <summary>
-        /// Subject: the ball. Emitted on the step where the ball becomes wholly beyond the goal
-        /// line (x − radius &gt; goal line x) having not been after the previous step. Geometry
-        /// only, not a football goal.
+        /// Subject: the ball. Emitted on the step where the whole ball crosses the goal line
+        /// (x − radius &gt; goal line x), between the posts or not. Geometry only: a crossing
+        /// through the mouth also emits <see cref="Goal"/> (#68).
         /// </summary>
         GoalLineCrossed = 3,
 
@@ -43,6 +43,19 @@ namespace Eleven.Simulation
 
         /// <summary>Subject: the player who has lost the ball under ATTACHED (#60): to a kick, beyond reach, or to a nearer player.</summary>
         Released = 9,
+
+        /// <summary>
+        /// Subject: the ball. Emitted on the step the whole ball crosses the goal line, when its
+        /// centre crossed it between the posts and under the crossbar (#68). Always with
+        /// <see cref="GoalLineCrossed"/> on the same step.
+        /// </summary>
+        Goal = 10,
+
+        /// <summary>
+        /// Subject: the ball. Emitted on the step the ball hits the goal's frame (#68);
+        /// <see cref="SimEvent.Other"/> is the <see cref="FramePart"/>.
+        /// </summary>
+        HitFrame = 11,
     }
 
     /// <summary>
@@ -57,7 +70,10 @@ namespace Eleven.Simulation
         public readonly int Subject;
         public readonly CommandRejection Rejection;
 
-        /// <summary>A second id where the kind has one: the receiver of <see cref="SimEventKind.QuickPassResolved"/>; otherwise 0.</summary>
+        /// <summary>
+        /// A second value where the kind has one: the receiver of <see cref="SimEventKind.QuickPassResolved"/>,
+        /// or the <see cref="FramePart"/> of <see cref="SimEventKind.HitFrame"/>; otherwise 0.
+        /// </summary>
         public readonly int Other;
 
         public SimEvent(long tick, SimEventKind kind, int subject, CommandRejection rejection = CommandRejection.None, int other = 0)
@@ -78,7 +94,7 @@ namespace Eleven.Simulation
 
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
-            : Kind == SimEventKind.QuickPassResolved ? $"{Tick} {Kind} {Subject} {Other}"
+            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

@@ -35,7 +35,7 @@ namespace Eleven.Simulation
         /// <summary>
         /// Which part of the feel it belongs to, for tools that list it (#45): <see cref="BallGroup"/>,
         /// <see cref="KickGroup"/>, <see cref="PassGroup"/>, <see cref="ControlGroup"/>,
-        /// <see cref="AttachedGroup"/> or <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
+        /// <see cref="AttachedGroup"/>, <see cref="GoalGroup"/> or <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
         /// </summary>
         public string Group { get; }
 
@@ -48,6 +48,9 @@ namespace Eleven.Simulation
 
         /// <summary>The attached comparator (#60): its lead, correction and release reach.</summary>
         public const string AttachedGroup = "Attached";
+
+        /// <summary>The goal (#68): its mouth, its frame and how the frame returns the ball.</summary>
+        public const string GoalGroup = "Goal";
         public const string PlayerGroup = "Player";
 
         public string Unit { get; }
@@ -68,7 +71,7 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The ball-, kick-, pass- and ball-control-feel surface (#24, #37, #38, #59): the supported way for tools, presets and the later
+    /// The ball-, kick-, pass-, ball-control- and goal-feel surface (#24, #37, #38, #59, #68): the supported way for tools, presets and the later
     /// tuning panel to read and vary config. Values change only by building a new config with <see cref="With(string, double)"/>,
     /// so every variant is validated and hashed like any other config.
     /// </summary>
@@ -118,6 +121,10 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.AttachedGroup, "attachedSpeedCap", "m/s", 0.5, 10, 2, 4),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedDeadband", "m", 0, 0.6, 0.1, 0.3),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedReleaseReach", "m", 0.5, 3, 1.1, 1.7),
+            new TunableParameter(TunableParameter.GoalGroup, "goalWidth", "m", 3, 12),
+            new TunableParameter(TunableParameter.GoalGroup, "goalHeight", "m", 1.5, 4),
+            new TunableParameter(TunableParameter.GoalGroup, "postWidth", "m", 0.05, 0.3, 0.1, 0.12),
+            new TunableParameter(TunableParameter.GoalGroup, "frameRestitution", "fraction", 0, 1, 0.55, 0.85),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -158,6 +165,10 @@ namespace Eleven.Simulation
             "attachedSpeedCap" => AttachedSpeedCap,
             "attachedDeadband" => AttachedDeadband,
             "attachedReleaseReach" => AttachedReleaseReach,
+            "goalWidth" => GoalWidth,
+            "goalHeight" => GoalHeight,
+            "postWidth" => PostWidth,
+            "frameRestitution" => FrameRestitution,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -184,6 +195,7 @@ namespace Eleven.Simulation
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
+            double goalWidth = GoalWidth, goalHeight = GoalHeight, postWidth = PostWidth, frameRestitution = FrameRestitution;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -224,6 +236,10 @@ namespace Eleven.Simulation
                     case "attachedSpeedCap": attachedSpeedCap = o.Value; break;
                     case "attachedDeadband": attachedDeadband = o.Value; break;
                     case "attachedReleaseReach": attachedReleaseReach = o.Value; break;
+                    case "goalWidth": goalWidth = o.Value; break;
+                    case "goalHeight": goalHeight = o.Value; break;
+                    case "postWidth": postWidth = o.Value; break;
+                    case "frameRestitution": frameRestitution = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -256,6 +272,10 @@ namespace Eleven.Simulation
                 passFreeDistance: passFreeDistance,
                 kickCooldownTicks: KickCooldownTicks,
                 goalLineX: GoalLineX,
+                goalWidth: goalWidth,
+                goalHeight: goalHeight,
+                postWidth: postWidth,
+                frameRestitution: frameRestitution,
                 controlModel: ControlModel,
                 controlReach: controlReach,
                 dribbleLeadSlow: dribbleLeadSlow,
@@ -301,6 +321,10 @@ namespace Eleven.Simulation
             passFreeDistance: PassFreeDistance,
             kickCooldownTicks: KickCooldownTicks,
             goalLineX: GoalLineX,
+            goalWidth: GoalWidth,
+            goalHeight: GoalHeight,
+            postWidth: PostWidth,
+            frameRestitution: FrameRestitution,
             controlModel: model,
             controlReach: ControlReach,
             dribbleLeadSlow: DribbleLeadSlow,

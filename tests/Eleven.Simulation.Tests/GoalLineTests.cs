@@ -33,7 +33,7 @@ namespace Eleven.Simulation.Tests
         {
             var config = Config();
             SimState state = State(config, ballPosition: new Vec3(config.GoalLineX + 5, 0, config.BallRadius));
-            state.Ball.BeyondGoalLine = true;
+            state.Ball.Line = LineState.Out;
 
             Assert.Empty(RollFor(Simulator(config, state), 120));
         }
@@ -54,7 +54,7 @@ namespace Eleven.Simulation.Tests
 
             // Beyond after the previous step, but back behind the line now and heading out again.
             SimState state = State(config, ballPosition: new Vec3(config.GoalLineX, 0, config.BallRadius), ballVelocity: new Vec3(3, 0, 0));
-            state.Ball.BeyondGoalLine = true;
+            state.Ball.Line = LineState.Out;
 
             Assert.Single(RollFor(Simulator(config, state), 300));
         }

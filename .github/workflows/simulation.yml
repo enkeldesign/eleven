@@ -148,6 +148,19 @@ jobs:
           path: dribble-curves/
           if-no-files-found: error
 
+      # Technical reference goal edges: shots at the posts and the crossbar, inside to wide (#68).
+      - name: Characterise the goal
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll goal goal-edges | tee goal.txt
+          echo "::notice title=Goal edges::$(sed 's| -> .*||' goal.txt)"
+
+      - name: Publish goal edges
+        uses: actions/upload-artifact@v4
+        with:
+          name: goal-edges
+          path: goal-edges/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

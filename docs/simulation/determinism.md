@@ -21,7 +21,7 @@ The rules the engine-free simulation follows so that the same code, config, seed
 
 `tick-v1`: state N is the state after N steps. Step N applies the commands whose tick is N and turns state N into state N+1. Hash N is the hash of state N, so a 60-second run at 60 Hz has 3601 hashes, ticks 0 to 3600.
 
-Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball control: touches under FREE, at most one a step ([dribble.md](dribble.md)), or ATTACHED's release, take and bounded correction ([attached.md](attached.md)); nothing takes the ball on the step a kick connects → integrate the ball → check the goal line → advance the tick. The kick's timers are described in [kick.md](kick.md).
+Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball control: touches under FREE, at most one a step ([dribble.md](dribble.md)), or ATTACHED's release, take and bounded correction ([attached.md](attached.md)); nothing takes the ball on the step a kick connects → integrate the ball, then resolve the goal's frame along the step's path → judge the goal line ([goal.md](goal.md)) → advance the tick. The kick's timers are described in [kick.md](kick.md).
 
 The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`.
 
@@ -39,9 +39,9 @@ A command is `(controller id, tick, move vector, kick intent or none, aftertouch
 
 ## Events
 
-`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach), `QuickPassResolved` (player; `Other` is the chosen receiver, or 0 for a free pass). They're the simulation's internal events, not the match-result contract (INV-14).
+`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach), `QuickPassResolved` (player; `Other` is the chosen receiver, or 0 for a free pass), `Touched` (player), `Attached` and `Released` (player), `Goal` (ball) and `HitFrame` (ball; `Other` is the part of the frame). They're the simulation's internal events, not the match-result contract (INV-14).
 
-**Goal-line crossing** is geometry only. The ball is beyond the line when it is wholly past it: `x − radius > GoalLineX`. `BallState.BeyondGoalLine` records whether that held after the previous step. The event fires only on the step where it goes from false to true, so a ball resting beyond the line emits one event, not one per tick. A ball that comes back behind the line clears the flag and can cross again.
+**Goal-line crossing.** The ball crosses the line when it becomes wholly past it: `x − radius > GoalLineX`. `GoalLineCrossed` fires on that step, whether it is a goal or not, and `Goal` too when its centre crossed between the posts and under the crossbar. `BallState.Line` records where the ball stood after the previous step, so a ball resting beyond the line emits its events once, not once per tick. It returns to in play only when the ball's centre is back in front of the line, after which it can cross again. [goal.md](goal.md) has the rule.
 
 ## Randomness
 
@@ -61,7 +61,7 @@ No generator state survives a draw, so an extra draw in one stream can't shift a
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 8`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, version 7 added the ball control model and its touch values, #59, and version 8 added the ATTACHED model and its six values, #60). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 9`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, version 7 added the ball control model and its touch values, #59, version 8 added the ATTACHED model and its six values, #60, and version 9 added the goal's mouth, frame and restitution, #68). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
 
 ## Canonical encoding
 
@@ -69,10 +69,10 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 
 - Integers: little-endian two's complement, 4 bytes (`int32`) or 8 bytes (`int64`, `uint64`).
 - Doubles: the IEEE-754 binary64 bit pattern, little-endian. The exact bits are kept, so −0 and +0 encode differently. They can behave differently later (in `atan2`, for example), so they count as different state.
-- Booleans: one byte, 0 or 1.
+- Booleans: one byte, 0 or 1. Small enums, such as the ball's goal-line state: one byte, their stable value.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, beyond-goal-line, attached-to), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation, ball control), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction, touch cooldown).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, goal-line state, attached-to), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation, ball control), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction, touch cooldown).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.

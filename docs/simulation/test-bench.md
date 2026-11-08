@@ -9,7 +9,7 @@ The test bench (#45, part of #27) is how values are tuned by playing. Research s
 Each knob shows what its metadata holds:
 - its unit and valid range;
 - its research starting range, where docs/simulation/ball.md, kick.md, movement.md or pass.md gives one, or "technical reference" otherwise;
-- its group (`TunableParameter.Group`: Ball, Kick, Pass, Control, Attached, Player or Touch).
+- its group (`TunableParameter.Group`: Ball, Kick, Pass, Control, Attached, Goal, Player or Touch).
 
 Each knob also has:
 - **a label** derived from its name (`kickSpeed` becomes "Kick speed");
@@ -37,9 +37,10 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - The run goes on from the same state, so it isn't a pending edit.
 - Only the model changes in the applied values; pending edits stay pending.
 
-**Group tabs:** Ball, Kick, Pass, Control, Attached, Player and Touch.
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Player and Touch.
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)) and the capture reach both models share.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
+- Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
 - Their player value, `ballControl`, is on the Player tab.
 - Each tab lists its knobs, and the list scrolls, so the sheet's actions stay in reach.
 - The sheet keeps its height whichever tab is shown, so the tabs stay put (#59).

@@ -42,11 +42,17 @@ namespace Eleven.Host
         private const float HeightLift = 0.5f;
         private const float HeightGrowth = 0.08f;
 
+        // The posts and crossbar are drawn this many times their width, so 12 cm reads on a phone.
+        private const float FrameExaggeration = 2.5f;
+
         private SimConfig _config;
         private readonly Camera _camera;
         private readonly Transform _player;
         private readonly Transform _ball;
         private readonly Transform _ballShadow;
+        private readonly Transform _crossbar;
+        private readonly Transform _rightPost;
+        private readonly Transform _leftPost;
         private float _ballDiameter;
         private Vector3 _ballShown;
 
@@ -72,25 +78,48 @@ namespace Eleven.Host
             float goalLine = (float)config.GoalLineX;
             float length = goalLine * 2;
             if (mowing != Mowing.Plain) Mow(root, mowing, new Vector2(length, PitchHalfWidth * 2));
-            Line(root, square, "Goal line", new Vector2(goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
-            Line(root, square, "Far goal line", new Vector2(-goalLine, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
+            // The goal lines lie inside the pitch: GoalLineX is the line's outer edge (#68).
+            Line(root, square, "Goal line", new Vector2(goalLine - LineWidth / 2, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
+            Line(root, square, "Far goal line", new Vector2(-goalLine + LineWidth / 2, 0), new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Halfway line", Vector2.zero, new Vector2(LineWidth, PitchHalfWidth * 2));
             Line(root, square, "Touchline", new Vector2(0, PitchHalfWidth), new Vector2(length, LineWidth));
             Line(root, square, "Far touchline", new Vector2(0, -PitchHalfWidth), new Vector2(length, LineWidth));
 
+            // The goal (#68), from the simulation's geometry: seen from above, the crossbar is a
+            // thicker stretch of the goal line between the two posts. White, as Law 1 asks.
+            _crossbar = Shape(root, square, "Crossbar", HostPalette.PitchLine, 2, 1);
+            _rightPost = Shape(root, disc, "Right post", HostPalette.PitchLine, 2, 1);
+            _leftPost = Shape(root, disc, "Left post", HostPalette.PitchLine, 2, 1);
+            PlaceGoal(config);
+
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
-            _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 2, _ballDiameter);
-            _player = Shape(root, disc, "Player", HostPalette.Player, 3, PlayerDiameter);
-            _ball = Shape(root, disc, "Ball", HostPalette.Ball, 4, _ballDiameter);
+            _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 3, _ballDiameter);
+            _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
+            _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
+        }
+
+        /// <summary>For the trace: the goal as drawn, from the simulation's geometry.</summary>
+        public string Goal => System.FormattableString.Invariant($"{_config.GoalWidth:F2}x{_config.GoalHeight:F2} posts={_config.PostWidth:F2} at={_config.FrameAxisX:F2},{_config.PostAxisY:F2}");
+
+        // The posts on their axes, the crossbar between them, at the simulation's sizes.
+        private void PlaceGoal(SimConfig config)
+        {
+            float x = (float)config.FrameAxisX, y = (float)config.PostAxisY, width = (float)config.PostWidth * FrameExaggeration;
+            _crossbar.localPosition = new Vector3(x, 0, 0);
+            _crossbar.localScale = new Vector3(width * 0.6f, y * 2, 1);
+            _rightPost.localPosition = new Vector3(x, -y, 0);
+            _leftPost.localPosition = new Vector3(x, y, 0);
+            _rightPost.localScale = _leftPost.localScale = Vector3.one * width;
         }
 
         /// <summary>
-        /// Draws a run under another config (#45, APPLY / RETRY): the ball's size follows its radius.
-        /// The goal line is not tunable, so the pitch stays.
+        /// Draws a run under another config (#45, APPLY / RETRY): the ball's size follows its radius,
+        /// and the goal its size (#68). The goal line is not tunable, so the pitch stays.
         /// </summary>
         public void Use(SimConfig config)
         {
             _config = config;
+            PlaceGoal(config);
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
             _ballShadow.localScale = Vector3.one * _ballDiameter;
             _ball.localScale = Vector3.one * _ballDiameter;
