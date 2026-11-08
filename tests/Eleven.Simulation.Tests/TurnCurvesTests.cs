@@ -57,6 +57,77 @@ namespace Eleven.Simulation.Tests
             }
         }
 
+        [Fact]
+        public void With_the_cut_good_and_bench_control_keep_every_45_and_90_degree_cut_from_every_touch_phase()
+        {
+            foreach (string profile in new[] { "good", "bench" })
+            foreach (string speed in new[] { "half", "sprint" })
+            foreach (double degrees in new[] { 45.0, 90.0 })
+            {
+                TurnCurve on = Of("free", "on", profile, speed, degrees);
+                Assert.True(on.Kept == on.Starts, $"{profile}, {speed}, {degrees}°: kept {on.Kept} of {on.Starts}");
+            }
+
+            // At a sprint, swept as a thumb sweeps a stick, too.
+            foreach (string profile in new[] { "good", "bench" })
+            foreach (double degrees in new[] { 45.0, 90.0 })
+            {
+                TurnCurve on = Of("free", "on", profile, "sprint", degrees, TurnCurves.SweepSeconds);
+                Assert.True(on.Kept == on.Starts, $"{profile}, sprint, {degrees}° swept: kept {on.Kept} of {on.Starts}");
+            }
+        }
+
+        [Fact]
+        public void With_the_cut_poorer_control_retains_fewer_sprint_cuts_and_none_is_free()
+        {
+            foreach (double degrees in new[] { 45.0, 90.0 })
+            foreach (double sweep in Sweeps)
+            {
+                TurnCurve good = Of("free", "on", "good", "sprint", degrees, sweep), poor = Of("free", "on", "poor", "sprint", degrees, sweep);
+                Assert.True(poor.Retained < good.Retained, $"{degrees}°, swept {sweep} s: control 0.3 retained {poor.Retained}, 0.9 {good.Retained}");
+                Assert.True(poor.Kept <= poor.Starts / 2, $"{degrees}°, swept {sweep} s: control 0.3 kept {poor.Kept} of {poor.Starts}");
+            }
+        }
+
+        [Fact]
+        public void With_the_cut_a_45_degree_cut_is_no_harder_than_a_90_and_half_stick_no_harder_than_a_sprint()
+        {
+            foreach (string profile in new[] { "good", "bench", "poor" })
+            {
+                foreach (string speed in new[] { "half", "sprint" })
+                {
+                    TurnCurve at45 = Of("free", "on", profile, speed, 45), at90 = Of("free", "on", profile, speed, 90);
+                    Assert.True(at45.Retained >= at90.Retained, $"{profile}, {speed}: retained {at45.Retained} at 45°, {at90.Retained} at 90°");
+                    if (at45.Kept > 0 && at90.Kept > 0)
+                    {
+                        Assert.True(at45.KickReadyMaxSeconds <= at90.KickReadyMaxSeconds, $"{profile}, {speed}: kick-ready in {at45.KickReadyMaxSeconds:F2} s at 45°, {at90.KickReadyMaxSeconds:F2} s at 90°");
+                    }
+                }
+
+                foreach (double degrees in new[] { 45.0, 90.0 })
+                {
+                    TurnCurve half = Of("free", "on", profile, "half", degrees), sprint = Of("free", "on", profile, "sprint", degrees);
+                    Assert.True(half.Retained >= sprint.Retained, $"{profile}, {degrees}°: retained {half.Retained} at half stick, {sprint.Retained} at a sprint");
+                }
+            }
+
+            TurnCurve poor45 = Of("free", "on", "poor", "sprint", 45), poor90 = Of("free", "on", "poor", "sprint", 90);
+            Assert.True(poor45.Retained > poor90.Retained, $"control 0.3 at a sprint retained {poor45.Retained} at 45°, {poor90.Retained} at 90°");
+        }
+
+        [Fact]
+        public void The_cut_leaves_snapped_turns_and_attached_unchanged()
+        {
+            foreach (TurnCurve on in Default.Where(c => c.Turn == "on" && (c.Model == "attached" || (c.Degrees >= 135 && c.SweepSeconds == 0))))
+            {
+                TurnCurve noCut = Without.Single(c => c.Model == on.Model && c.Turn == "on" && c.Profile == on.Profile && c.Speed == on.Speed && c.Degrees == on.Degrees && c.SweepSeconds == on.SweepSeconds);
+                Assert.Equal(Row(noCut), Row(on));
+            }
+        }
+
+        // The reference with the cut off and the turn on: #66 as it was.
+        private static readonly List<TurnCurve> Without = TurnCurves.Characterise(Config.With("cutStrength", 0));
+
         [Theory]
         [MemberData(nameof(Models))]
         public void With_the_turn_good_control_gets_the_ball_ahead_sooner_and_it_trails_less(string model)
