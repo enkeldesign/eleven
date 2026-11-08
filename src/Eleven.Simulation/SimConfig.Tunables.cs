@@ -118,6 +118,8 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "touchStrength", "m/s", 1, 20),
             new TunableParameter(TunableParameter.ControlGroup, "touchError", "rad", 0, 0.6),
             new TunableParameter(TunableParameter.ControlGroup, "receiveStrength", "m/s", 1, 30),
+            new TunableParameter(TunableParameter.ControlGroup, "turnAngle", "rad", Math.PI / 2, Math.PI),
+            new TunableParameter(TunableParameter.ControlGroup, "turnStrength", "m/s", 0, 20),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -167,6 +169,8 @@ namespace Eleven.Simulation
             "touchStrength" => TouchStrength,
             "touchError" => TouchError,
             "receiveStrength" => ReceiveStrength,
+            "turnAngle" => TurnAngle,
+            "turnStrength" => TurnStrength,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -205,6 +209,7 @@ namespace Eleven.Simulation
             double controlReach = ControlReach, dribbleLeadSlow = DribbleLeadSlow, dribbleLeadFast = DribbleLeadFast;
             double touchInterval = TouchInterval, touchStrength = TouchStrength, touchError = TouchError;
             double receiveStrength = ReceiveStrength;
+            double turnAngle = TurnAngle, turnStrength = TurnStrength;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -245,6 +250,8 @@ namespace Eleven.Simulation
                     case "touchStrength": touchStrength = o.Value; break;
                     case "touchError": touchError = o.Value; break;
                     case "receiveStrength": receiveStrength = o.Value; break;
+                    case "turnAngle": turnAngle = o.Value; break;
+                    case "turnStrength": turnStrength = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -314,7 +321,9 @@ namespace Eleven.Simulation
                 attachedAcceleration: attachedAcceleration,
                 attachedSpeedCap: attachedSpeedCap,
                 attachedDeadband: attachedDeadband,
-                attachedReleaseReach: attachedReleaseReach);
+                attachedReleaseReach: attachedReleaseReach,
+                turnAngle: turnAngle,
+                turnStrength: turnStrength);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -368,7 +377,9 @@ namespace Eleven.Simulation
             attachedAcceleration: AttachedAcceleration,
             attachedSpeedCap: AttachedSpeedCap,
             attachedDeadband: AttachedDeadband,
-            attachedReleaseReach: AttachedReleaseReach);
+            attachedReleaseReach: AttachedReleaseReach,
+            turnAngle: TurnAngle,
+            turnStrength: TurnStrength);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

@@ -174,6 +174,19 @@ jobs:
           path: keeper-shots/
           if-no-files-found: error
 
+      # Technical reference turns with the ball: 90°, 135° and 180°, off and on, from every touch phase (#66).
+      - name: Characterise turns
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll turns turn-curves | tee turns.txt
+          echo "::notice title=Turn curves::$(sed 's| -> .*||' turns.txt)"
+
+      - name: Publish turn curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: turn-curves
+          path: turn-curves/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

@@ -79,6 +79,7 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.AftertouchTicks);
                 w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
                 w.WriteInt32(player.TouchCooldown);
+                w.WriteByte(player.Turning ? (byte)1 : (byte)0);
             }
 
             w.WriteInt32(Keepers.Length);
@@ -144,6 +145,7 @@ namespace Eleven.Simulation
                     AftertouchTicks = r.ReadInt32(),
                     AftertouchDirection = r.ReadDouble("Player.AftertouchDirection"),
                     TouchCooldown = r.ReadInt32(),
+                    Turning = ReadFlag(r.ReadByte(), "Player.Turning"),
                 };
             }
 
@@ -171,6 +173,9 @@ namespace Eleven.Simulation
 
             return state;
         }
+
+        private static bool ReadFlag(byte value, string field) =>
+            value <= 1 ? value == 1 : throw new FormatException($"{field} must be 0 or 1, not {value}.");
 
         private static KeeperPhase ReadPhase(int value) =>
             value >= (int)KeeperPhase.Position && value <= (int)KeeperPhase.Recover ? (KeeperPhase)value : throw new FormatException($"Unknown keeper phase {value}.");
@@ -313,5 +318,12 @@ namespace Eleven.Simulation
         /// configured touch interval by a touch, decreased by one at the start of each later step.
         /// </summary>
         public int TouchCooldown;
+
+        /// <summary>
+        /// In a turn with the ball (#66): this player's last touch was a turn's trap, and they are not
+        /// yet moving the way the stick asks. The turn's second touch, out of it, clears it.
+        /// docs/simulation/turn.md.
+        /// </summary>
+        public bool Turning;
     }
 }

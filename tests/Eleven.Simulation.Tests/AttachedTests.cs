@@ -130,13 +130,14 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_sharp_turn_at_speed_can_lose_the_ball()
         {
+            // A 90° cut, short of the turn angle: a reversal is the turn's (#66, TurnTests).
             SimConfig config = Attached();
             Run run = Play(config, AtFeet(config, 0.3), tick => new[]
             {
-                new Command(A, tick, tick < 2 * config.TickRate ? new Vec2(1, 0) : new Vec2(-1, 0.2)),
+                new Command(A, tick, tick < 2 * config.TickRate ? new Vec2(1, 0) : new Vec2(0, 1)),
             }, 4);
 
-            Assert.True(run.Count(SimEventKind.Released, 2 * config.TickRate) > 0, "a reversal at a sprint never lost the ball at control 0.3");
+            Assert.True(run.Count(SimEventKind.Released, 2 * config.TickRate) > 0, "a 90° turn at a sprint never lost the ball at control 0.3");
         }
 
         [Fact]
