@@ -353,7 +353,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
       const stickUp = async (degrees) => {
         const label = `at ${degrees}°`;
-        const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+        // Trace lines come once a simulated second, which at the tablet's 5 fps can be more than
+        // 5 s apart: wait longer, and fall back on the latest one.
+        const before = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? lastLog(tracePattern);
         const origin = at(n[8], n[9]);
         const reach = n[10] * sx;
         if (useTouch) await touch('touchStart', origin);
@@ -372,7 +374,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         await page.screenshot({ path: path.join(outDir, `${name}-${degrees}.png`) });
         if (useTouch) await touch('touchEnd');
         else await page.mouse.up();
-        const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+        const after = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
         const dx = before && after ? Number(after[2]) - Number(before[2]) : NaN;
         const dy = before && after ? Number(after[3]) - Number(before[3]) : NaN;
         check(`${label}: stick up the screen runs up-field`, dx * up(degrees) > 2 && Math.abs(dy) < Math.abs(dx) * 0.2,
