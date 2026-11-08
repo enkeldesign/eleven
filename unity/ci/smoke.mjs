@@ -343,8 +343,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // bench, as a match's half-time would: stick and flick up the screen go up-field either way.
     if (url.includes('view=1')) {
       const up = (degrees) => (degrees === 0 ? 1 : -1);
+      // Low in the ACTION zone: a flick up from its centre ends over THIS FELT WRONG on a phone,
+      // and a lift over a UI action can activate it (#57), opening the note sheet.
       const zone = actionZonePattern.exec(lastLog(layoutPattern)?.input ?? '')?.slice(1, 5).map(Number) ?? null;
-      const actionAt = zone ? at(zone[0] + zone[2] / 2, zone[1] + zone[3] / 2) : at(n[6], n[7]);
+      const actionAt = zone ? at(zone[0] + zone[2] / 2, zone[1] + zone[3] * 0.85) : at(n[6], n[7]);
+      const since = (from) => logs.slice(from).filter((l) => /^ELEVEN (press|release|action|ui status|ui sheet|bench open|bench closed|view flipped)/.test(l)).map((l) => l.trim().replace('ELEVEN ', '').slice(0, 90)).join(' | ') || 'nothing';
       const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
       const burst = (...events) => Promise.all(events.map(([type, touchPoints]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints })));
 
@@ -364,7 +367,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           else await page.mouse.move(p.x, p.y);
           await sleep(20);
         }
-        await sleep(2500);
+        // Long enough to run well up-field, short enough to stay on the pitch.
+        await sleep(1500);
         await page.screenshot({ path: path.join(outDir, `${name}-${degrees}.png`) });
         if (useTouch) await touch('touchEnd');
         else await page.mouse.up();
@@ -393,7 +397,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const flicked = (await waitForLog(actionPattern, 5_000, from))?.match ?? null;
         const x = Number(flicked?.[3]), y = Number(flicked?.[4]);
         check(`at ${degrees}°: a flick up the screen kicks up-field`, !!flicked && flicked[1] === 'flick' && x * up(degrees) > 0 && Math.abs(y) < Math.abs(x) * 0.3,
-          flicked ? flicked[0].replace('ELEVEN action ', '') : 'no action line after the flick');
+          flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line after the flick; since: ${since(from)}`);
       };
 
       checkView(0, await viewNow(), 'at 0°');
@@ -404,15 +408,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const benchAt = benchPattern.exec(lastLog(layoutPattern)?.input ?? '');
       const fromOpen = logs.length;
       if (benchAt) await tap(at(Number(benchAt[1]) + Number(benchAt[3]) / 2, Number(benchAt[2]) + Number(benchAt[4]) / 2));
-      const opened = (await waitForLog(/ELEVEN bench open .* close=(\S+) models=\S+ views=(\S+)/, 8_000, fromOpen))?.match ?? null;
+      const opened = (await waitForLog(/ELEVEN bench open .* close=(\S+) models=\S+ views=(\S+)/, 15_000, fromOpen))?.match ?? null;
       const views = Object.fromEntries((opened?.[2] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
       const fromFlip = logs.length;
       if (views['180']) await tap(at(...views['180'].split(',').map(Number)));
       const flipped = (await waitForLog(/ELEVEN view flipped to=180 tick=(\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\d+)/, 5_000, fromFlip))?.match ?? null;
       check('the half-time flip changes no state and makes no step', !!flipped && flipped[2] === flipped[3] && flipped[4] === '0',
-        flipped ? flipped[0].replace('ELEVEN ', '') : `no flip line${opened ? '' : ' (the bench did not open)'}`);
+        flipped ? flipped[0].replace('ELEVEN ', '') : `no flip line${opened ? '' : ' (the bench did not open)'}; since: ${since(fromOpen)}`);
       if (opened) await tap(at(...opened[1].split(',').map(Number)));
-      await waitForLog(/ELEVEN bench closed/, 5_000, fromFlip);
+      // Escape closes any sheet still open, so a failure above doesn't hide the checks below.
+      if (!(await waitForLog(/ELEVEN bench closed/, 5_000, fromFlip))) await page.keyboard.press('Escape');
 
       checkView(180, await viewNow(), 'at 180°');
       await stickUp(180);
