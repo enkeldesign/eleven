@@ -192,6 +192,13 @@ namespace Eleven.Simulation
         // Plain comparisons rather than Math.Min and Max, whose treatment of −0 runtimes needn't share.
         private static double Clamp01(double x) => x < 0 ? 0 : x > 1 ? 1 : x;
 
+        // The stick of a player's accepted command this step; none is neutral.
+        private Vec2 MoveOf(in PlayerState player)
+        {
+            Command? command = FindAccepted(player.OwnerControllerId);
+            return command.HasValue ? command.Value.Move : Vec2.Zero;
+        }
+
         private Command? FindAccepted(int controllerId)
         {
             foreach (Command c in _accepted)
@@ -641,7 +648,7 @@ namespace Eleven.Simulation
             // and its touch out, in place of a correction, as they do. Not through a wind-up: the
             // holder keeps the ball under the correction until contact.
             PlayerState held = _state.Players[holder];
-            TurnTouch turn = held.WindUpTicks > 0 ? TurnTouch.None : TurnFor(held, FindAccepted(held.OwnerControllerId)!.Value.Move);
+            TurnTouch turn = held.WindUpTicks > 0 ? TurnTouch.None : TurnFor(held, MoveOf(held));
             switch (turn)
             {
                 case TurnTouch.Trap:
@@ -949,7 +956,7 @@ namespace Eleven.Simulation
         {
             ref PlayerState player = ref _state.Players[index];
             ref BallState ball = ref _state.Ball;
-            Vec2 move = FindAccepted(player.OwnerControllerId)!.Value.Move;
+            Vec2 move = MoveOf(player);
             if (Standing(player, move)) return false;
 
             Vec2 sent = TrapVelocity(player, move, out double turn, out double overload);
@@ -968,7 +975,7 @@ namespace Eleven.Simulation
         {
             ref PlayerState player = ref _state.Players[index];
             ref BallState ball = ref _state.Ball;
-            Vec2 move = FindAccepted(player.OwnerControllerId)!.Value.Move;
+            Vec2 move = MoveOf(player);
             Vec2 ballVelocity = ball.Velocity.Horizontal;
             Vec2 wanted = TouchTarget(player, move, Config.AttachedLeadSlow, Config.AttachedLeadFast);
             double overload = 0;
