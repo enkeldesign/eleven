@@ -17,6 +17,8 @@ namespace Eleven.Host
         public static readonly Color BallShadow = new Color(0f, 0f, 0f, 0.35f);
         // The player. Light green, 3.4:1 against the pitch (WCAG 1.4.11 asks 3:1 for graphics).
         public static readonly Color Player = new Color32(0x99, 0xCC, 0x44, 0xFF);
+        // The keeper (#69), straight from the domain tokens: sky blue, 3.8:1 against the pitch.
+        public static readonly Color Keeper = Domain.Keeper.ToColor();
         // The match controls (#28's): the ACTION label and the discs. The UI around the match takes
         // its colours from the visual system's roles (#48, #53).
         public static readonly Color HudText = Color.white;

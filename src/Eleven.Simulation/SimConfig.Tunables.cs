@@ -35,7 +35,7 @@ namespace Eleven.Simulation
         /// <summary>
         /// Which part of the feel it belongs to, for tools that list it (#45): <see cref="BallGroup"/>,
         /// <see cref="KickGroup"/>, <see cref="PassGroup"/>, <see cref="ControlGroup"/>,
-        /// <see cref="AttachedGroup"/>, <see cref="GoalGroup"/> or <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
+        /// <see cref="AttachedGroup"/>, <see cref="GoalGroup"/>, <see cref="KeeperGroup"/> or <see cref="PlayerGroup"/>. Metadata only; no config value or hash depends on it.
         /// </summary>
         public string Group { get; }
 
@@ -51,6 +51,9 @@ namespace Eleven.Simulation
 
         /// <summary>The goal (#68): its mouth, its frame and how the frame returns the ball.</summary>
         public const string GoalGroup = "Goal";
+
+        /// <summary>The keeper (#69): his dive, recovery and save, and his own capabilities.</summary>
+        public const string KeeperGroup = KeeperCapabilities.Group;
         public const string PlayerGroup = "Player";
 
         public string Unit { get; }
@@ -125,6 +128,11 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.GoalGroup, "goalHeight", "m", 1.5, 4),
             new TunableParameter(TunableParameter.GoalGroup, "postWidth", "m", 0.05, 0.3, 0.1, 0.12),
             new TunableParameter(TunableParameter.GoalGroup, "frameRestitution", "fraction", 0, 1, 0.55, 0.85),
+            new TunableParameter(TunableParameter.KeeperGroup, "keeperDiveSeconds", "s", 0.1, 1.5, 0.45, 0.90),
+            new TunableParameter(TunableParameter.KeeperGroup, "keeperRecoverSeconds", "s", 0.1, 3),
+            new TunableParameter(TunableParameter.KeeperGroup, "keeperHoldSpeed", "m/s", 0, 50),
+            new TunableParameter(TunableParameter.KeeperGroup, "keeperParryRestitution", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.KeeperGroup, "keeperParryError", "rad", 0, 1),
         });
 
         /// <summary>The current value of a tunable, by its name in <see cref="Tunables"/>.</summary>
@@ -169,6 +177,11 @@ namespace Eleven.Simulation
             "goalHeight" => GoalHeight,
             "postWidth" => PostWidth,
             "frameRestitution" => FrameRestitution,
+            "keeperDiveSeconds" => KeeperDiveSeconds,
+            "keeperRecoverSeconds" => KeeperRecoverSeconds,
+            "keeperHoldSpeed" => KeeperHoldSpeed,
+            "keeperParryRestitution" => KeeperParryRestitution,
+            "keeperParryError" => KeeperParryError,
             _ => throw new ArgumentException($"'{name}' is not a tunable config value.", nameof(name)),
         };
 
@@ -196,6 +209,8 @@ namespace Eleven.Simulation
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
             double goalWidth = GoalWidth, goalHeight = GoalHeight, postWidth = PostWidth, frameRestitution = FrameRestitution;
+            double keeperDiveSeconds = KeeperDiveSeconds, keeperRecoverSeconds = KeeperRecoverSeconds, keeperHoldSpeed = KeeperHoldSpeed;
+            double keeperParryRestitution = KeeperParryRestitution, keeperParryError = KeeperParryError;
 
             foreach (KeyValuePair<string, double> o in overrides)
             {
@@ -240,6 +255,11 @@ namespace Eleven.Simulation
                     case "goalHeight": goalHeight = o.Value; break;
                     case "postWidth": postWidth = o.Value; break;
                     case "frameRestitution": frameRestitution = o.Value; break;
+                    case "keeperDiveSeconds": keeperDiveSeconds = o.Value; break;
+                    case "keeperRecoverSeconds": keeperRecoverSeconds = o.Value; break;
+                    case "keeperHoldSpeed": keeperHoldSpeed = o.Value; break;
+                    case "keeperParryRestitution": keeperParryRestitution = o.Value; break;
+                    case "keeperParryError": keeperParryError = o.Value; break;
                     default: throw new ArgumentException($"'{o.Key}' is not a tunable config value.", nameof(overrides));
                 }
             }
@@ -276,6 +296,11 @@ namespace Eleven.Simulation
                 goalHeight: goalHeight,
                 postWidth: postWidth,
                 frameRestitution: frameRestitution,
+                keeperDiveSeconds: keeperDiveSeconds,
+                keeperRecoverSeconds: keeperRecoverSeconds,
+                keeperHoldSpeed: keeperHoldSpeed,
+                keeperParryRestitution: keeperParryRestitution,
+                keeperParryError: keeperParryError,
                 controlModel: ControlModel,
                 controlReach: controlReach,
                 dribbleLeadSlow: dribbleLeadSlow,
@@ -325,6 +350,11 @@ namespace Eleven.Simulation
             goalHeight: GoalHeight,
             postWidth: PostWidth,
             frameRestitution: FrameRestitution,
+            keeperDiveSeconds: KeeperDiveSeconds,
+            keeperRecoverSeconds: KeeperRecoverSeconds,
+            keeperHoldSpeed: KeeperHoldSpeed,
+            keeperParryRestitution: KeeperParryRestitution,
+            keeperParryError: KeeperParryError,
             controlModel: model,
             controlReach: ControlReach,
             dribbleLeadSlow: DribbleLeadSlow,

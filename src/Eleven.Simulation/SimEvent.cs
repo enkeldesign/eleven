@@ -56,6 +56,18 @@ namespace Eleven.Simulation
         /// <see cref="SimEvent.Other"/> is the <see cref="FramePart"/>.
         /// </summary>
         HitFrame = 11,
+
+        /// <summary>Subject: the keeper who has started reacting to a kick (#69).</summary>
+        KeeperReacted = 12,
+
+        /// <summary>Subject: the keeper who has dived (#69).</summary>
+        KeeperDived = 13,
+
+        /// <summary>Subject: the keeper who has caught and holds the ball (#69).</summary>
+        KeeperHeld = 14,
+
+        /// <summary>Subject: the keeper who has parried the ball (#69).</summary>
+        KeeperParried = 15,
     }
 
     /// <summary>

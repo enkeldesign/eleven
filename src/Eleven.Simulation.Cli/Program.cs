@@ -58,6 +58,8 @@ internal static class Program
                 return Passes(args[1], args.Skip(2));
             case "goal" when args.Length >= 2:
                 return Goal(args[1], args.Skip(2));
+            case "keeper" when args.Length >= 2:
+                return Keeper(args[1], args.Skip(2));
             case "replay" when args.Length == 2:
                 return Replay(args[1]);
             case "candidate":
@@ -65,7 +67,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | dribble <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
                 return 2;
         }
     }
@@ -273,6 +275,23 @@ internal static class Program
         }
 
         Console.WriteLine($"config {config.Hash:x16}, {GoalEdges.KeyNumbers(config, edges)} -> {directory}");
+        return 0;
+    }
+
+    private static int Keeper(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
+
+        SimConfig config = new SimConfig().With(overrides);
+        List<KeeperShot> shots = KeeperShots.Characterise(config);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "keeper-shots.csv")))
+        {
+            KeeperShots.WriteCsv(csv, config, shots);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {KeeperShots.KeyNumbers(shots)} -> {directory}");
         return 0;
     }
 

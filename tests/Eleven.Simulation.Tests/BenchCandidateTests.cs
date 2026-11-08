@@ -24,24 +24,61 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
-        public void The_knobs_are_the_config_tunables_then_the_player_capabilities_then_the_touch_gestures()
+        public void The_knobs_are_the_config_tunables_then_the_player_and_keeper_capabilities_then_the_touch_gestures()
         {
-            var expected = SimConfig.Tunables.Concat(PlayerCapabilities.Parameters).Concat(ActionSurfaceSettings.Parameters).ToList();
+            var expected = SimConfig.Tunables.Concat(PlayerCapabilities.Parameters).Concat(KeeperCapabilities.Parameters).Concat(ActionSurfaceSettings.Parameters).ToList();
             int players = SimConfig.Tunables.Count;
-            int touch = players + PlayerCapabilities.Parameters.Count;
+            int keeper = players + PlayerCapabilities.Parameters.Count;
+            int touch = keeper + KeeperCapabilities.Parameters.Count;
             Assert.Equal(expected.Count, BenchCandidate.Knobs.Count);
             for (int i = 0; i < expected.Count; i++)
             {
                 Assert.Same(expected[i], BenchCandidate.Knobs[i].Parameter);
-                Assert.Equal(i >= players && i < touch, BenchCandidate.Knobs[i].OnPlayer);
+                Assert.Equal(i >= players && i < keeper, BenchCandidate.Knobs[i].OnPlayer);
+                Assert.Equal(i >= keeper && i < touch, BenchCandidate.Knobs[i].OnKeeper);
                 Assert.Equal(i >= touch, BenchCandidate.Knobs[i].OnAdapter);
             }
+        }
+
+        // #69: practice is the spike's start with a keeper in goal, played by his brain.
+        [Fact]
+        public void The_practice_start_is_the_spikes_with_the_reference_keeper_in_goal()
+        {
+            SimState start = BenchCandidate.Reference.PracticeStart();
+            SimState spike = SpikeScenario.InitialState(SpikeScenario.Config());
+            KeeperState keeper = Assert.Single(start.Keepers);
+            Assert.Equal(KeeperCapabilities.Reference, keeper.Capabilities);
+            PlayerState body = start.Players.Single(p => p.Id == keeper.PlayerId);
+            Assert.NotEqual(spike.Players[0].TeamId, body.TeamId);
+            Assert.NotEqual(spike.Players[0].OwnerControllerId, body.OwnerControllerId);
+            Assert.True(body.Position.X < SpikeScenario.Config().GoalLineX && body.Position.X > SpikeScenario.Config().GoalLineX - 3, $"he starts at {body.Position}");
+
+            // Otherwise the spike's start: its ball and its player.
+            Assert.Equal(spike.Ball.Position, start.Ball.Position);
+            Assert.Equal(spike.Players[0].Position, start.Players[0].Position);
+            Assert.Equal(spike.Seed, start.Seed);
+        }
+
+        [Fact]
+        public void A_keeper_knob_changes_the_practice_keeper_and_never_the_config()
+        {
+            BenchCandidate slower = Changed(Set("reactionTime", 0.3), Set("diveSpeed", 2.5));
+
+            Assert.Equal(0.3, slower.Keeper.ReactionTime);
+            Assert.Equal(2.5, slower.Get("diveSpeed"));
+            Assert.Equal(BenchCandidate.Reference.Config.Hash, slower.Config.Hash);
+            Assert.Equal(0.3, slower.PracticeStart().Keepers[0].Capabilities.ReactionTime);
+            Assert.NotEqual(BenchCandidate.Reference.PracticeStartHash(), slower.PracticeStartHash());
+            Assert.Equal(2, slower.ChangesFrom(BenchCandidate.Reference));
+
+            Assert.True(BenchCandidate.TryParse(slower.Values(), out BenchCandidate? parsed, out string problem), problem);
+            Assert.Equal(0, parsed!.ChangesFrom(slower));
         }
 
         [Fact]
         public void Every_knob_has_a_group_a_label_and_a_step_inside_its_range()
         {
-            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
+            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
             Assert.NotEmpty(BenchCandidate.Knobs);
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
@@ -84,14 +121,15 @@ namespace Eleven.Simulation.Tests
             BenchCandidate reference = BenchCandidate.Reference;
             Assert.Equal(SpikeScenario.Config().Hash, reference.Config.Hash);
             Assert.Equal(PlayerCapabilities.Reference, reference.Capabilities);
-            var spike = new Simulator(SpikeScenario.Config(), SpikeScenario.InitialState(SpikeScenario.Config()));
-            Assert.Equal(spike.StateHash(), reference.PracticeStartHash());
+            Assert.Equal(KeeperCapabilities.Reference, reference.Keeper);
+            Assert.Equal(new Simulator(reference.Config, reference.PracticeStart()).StateHash(), reference.PracticeStartHash());
             Assert.Equal(BenchCandidate.ReferencePreset, reference.PresetName);
             Assert.Equal(ActionSurfaceSettings.Reference.Describe(), reference.ActionSurface.Describe());
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
                 double expected = k.OnAdapter ? ActionSurfaceSettings.Reference.Get(k.Name)
-                    : k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
+                    : k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name)
+                    : k.OnKeeper ? KeeperCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
                 Assert.Equal(expected, reference.Get(k.Name));
             }
         }

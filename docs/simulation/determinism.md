@@ -21,13 +21,13 @@ The rules the engine-free simulation follows so that the same code, config, seed
 
 `tick-v1`: state N is the state after N steps. Step N applies the commands whose tick is N and turns state N into state N+1. Hash N is the hash of state N, so a 60-second run at 60 Hz has 3601 hashes, ticks 0 to 3600.
 
-Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball control: touches under FREE, at most one a step ([dribble.md](dribble.md)), or ATTACHED's release, take and bounded correction ([attached.md](attached.md)); nothing takes the ball on the step a kick connects → integrate the ball, then resolve the goal's frame along the step's path → judge the goal line ([goal.md](goal.md)) → advance the tick. The kick's timers are described in [kick.md](kick.md).
+Inside a step: resolve commands → count down kick and touch cooldowns, move players, update headings → aftertouch (open windows shape the ball, then count down) → kicks (accept intents into wind-ups, count them down, connect or miss) → ball control: touches under FREE, at most one a step ([dribble.md](dribble.md)), or ATTACHED's release, take and bounded correction ([attached.md](attached.md)); nothing takes the ball on the step a kick connects → keepers' phases: count down, react to a kick that connected on this step, take a dive ([keeper.md](keeper.md)) → the ball: held, it moves with its keeper; free, it integrates, then the goal's frame turns a ball touching it at the step's start, and the first contact along the step's path, with the frame or a keeper, stops it → judge the goal line ([goal.md](goal.md)) → advance the tick. The kick's timers are described in [kick.md](kick.md).
 
 The tick rate lives in config (default 60 Hz); the step length is `1 / TickRate`.
 
 ## Commands
 
-A command is `(controller id, tick, move vector, kick intent or none, aftertouch vector, quick pass)`, recorded before any assistance (INV-10). A kick intent is a direction, a strength and a loft ([kick.md](kick.md)). A quick pass asks the footballer to pick, lead and weight a pass inside the simulation ([pass.md](pass.md)). A manual kick intent in the same command takes precedence.
+A command is `(controller id, tick, move vector, kick intent or none, aftertouch vector, quick pass, dive target or none)`, recorded before any assistance (INV-10). A controller may be a human's input adapter or an AI, such as a keeper's brain, which decides on an Observation (INV-9, [keeper.md](keeper.md)); a dive target is taken only by a keeper on his feet. A kick intent is a direction, a strength and a loft ([kick.md](kick.md)). A quick pass asks the footballer to pick, lead and weight a pass inside the simulation ([pass.md](pass.md)). A manual kick intent in the same command takes precedence.
 
 - A command controls the player whose `OwnerControllerId` equals its controller id. Ownership is part of state. A command for a controller that owns no player is rejected as `Unowned`.
 - A command applies only at its own tick. Passed to a step after its tick, it is `Stale`; before, `Early`.
@@ -39,7 +39,7 @@ A command is `(controller id, tick, move vector, kick intent or none, aftertouch
 
 ## Events
 
-`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach), `QuickPassResolved` (player; `Other` is the chosen receiver, or 0 for a free pass), `Touched` (player), `Attached` and `Released` (player), `Goal` (ball) and `HitFrame` (ball; `Other` is the part of the frame). They're the simulation's internal events, not the match-result contract (INV-14).
+`Kicked` (subject: player), `Bounced` (ball), `GoalLineCrossed` (ball), `CommandRejected` (controller), `KickMissed` (player: a wind-up ended with the ball out of reach), `QuickPassResolved` (player; `Other` is the chosen receiver, or 0 for a free pass), `Touched` (player), `Attached` and `Released` (player), `Goal` (ball), `HitFrame` (ball; `Other` is the part of the frame), and `KeeperReacted`, `KeeperDived`, `KeeperHeld` and `KeeperParried` (keeper). They're the simulation's internal events, not the match-result contract (INV-14).
 
 **Goal-line crossing.** The ball crosses the line when it becomes wholly past it: `x − radius > GoalLineX`. `GoalLineCrossed` fires on that step, whether it is a goal or not, and `Goal` too when its centre crossed between the posts and under the crossbar. `BallState.Line` records where the ball stood after the previous step, so a ball resting beyond the line emits its events once, not once per tick. It returns to in play only when the ball's centre is back in front of the line, after which it can cross again. [goal.md](goal.md) has the rule.
 
@@ -57,11 +57,11 @@ uniform = (h >> 11) × 2⁻⁵³        // in [0, 1)
 
 `mix` is the SplitMix64 finaliser: `z = (z ^ z>>30) × 0xBF58476D1CE4E5B9; z = (z ^ z>>27) × 0x94D049BB133111EB; z ^ z>>31`, on unsigned 64-bit integers with wrap-around. `stream` and `entity` are 32-bit, `draw` is the draw's index within that stream, entity and tick, starting at 0.
 
-No generator state survives a draw, so an extra draw in one stream can't shift another stream's values. Streams in use: `KickDirection = 1`, the kicker's execution error. `KickSpin = 2` is reserved: the spike's random kick sidespin, no longer drawn since #37, and not reused. The seed is part of state.
+No generator state survives a draw, so an extra draw in one stream can't shift another stream's values. Streams in use: `KickDirection = 1`, the kicker's execution error; `Touch = 3`, a touch's direction error (#59); `Keeper = 4`, a keeper's parry direction (#69). `KickSpin = 2` is reserved: the spike's random kick sidespin, no longer drawn since #37, and not reused. The seed is part of state.
 
 ## Config
 
-`SimConfig` is immutable and versioned (`FormatVersion = 9`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, version 7 added the ball control model and its touch values, #59, version 8 added the ATTACHED model and its six values, #60, and version 9 added the goal's mouth, frame and restitution, #68). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
+`SimConfig` is immutable and versioned (`FormatVersion = 10`; version 2 dropped the maths backend, version 3 moved player movement out to each player's capabilities, version 4 added the kick's wind-up and aftertouch and moved its direction error to the player, version 5 added bounce spin retention, version 6 added the quick pass's range and weight, version 7 added the ball control model and its touch values, #59, version 8 added the ATTACHED model and its six values, #60, version 9 added the goal's mouth, frame and restitution, #68, and version 10 the keeper's dive, recovery and save, #69). Its hash is FNV-1a 64 over its canonical encoding: the format version, then every field in declaration order (`SimConfig.Encode`). The default physics values are placeholders that exercise the code, not tuned feel. The ball-feel values tools may vary, with their valid and research-derived starting ranges, are `SimConfig.Tunables`, described with the ball model in [ball.md](ball.md). Per-player capabilities are state, not config: see [movement.md](movement.md), [kick.md](kick.md) and [pass.md](pass.md).
 
 ## Canonical encoding
 
@@ -72,7 +72,7 @@ Used for state hashes, the config hash and snapshots (`CanonicalWriter`).
 - Booleans: one byte, 0 or 1. Small enums, such as the ball's goal-line state: one byte, their stable value.
 - Strings (snapshot header only): an int32 byte count, then UTF-8.
 - Arrays: an int32 count, then the elements.
-- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, goal-line state, attached-to), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation, ball control), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction, touch cooldown).
+- No padding, field names or tags. The order is fixed and documented in `SimState.Encode`: tick, seed, ball (id, position, velocity, spin, goal-line state, attached-to, held-by), player count, then each player (id, owner controller id, team id, capabilities (max speed, acceleration, kick power, kick error, pass vision, pass anticipation, ball control), position, velocity, heading, kick cooldown, wind-up ticks, wind-up direction, strength, loft and target, aftertouch ticks, aftertouch direction, touch cooldown), keeper count, then each keeper (player id, phase, phase ticks, dive velocity, dive top, capabilities (reaction time, dive speed, reach, handling)).
 - **NaN and ±Infinity are refused.** Encoding throws, so a non-finite value in state can't be hashed or snapshotted silently. A simulator validates its initial state the same way.
 
 All future-affecting state is in `SimState`; anything else that affects the next tick is in `SimConfig`. Per-step scratch (the accepted-command list, random draw counters) is rebuilt every step.
@@ -93,13 +93,14 @@ Restoring checks the schema version, tick convention and config hash, then build
 A `CommandRecording` (harness) is a session's owned commands exactly as they were passed to the simulation, before any assistance (INV-10), with the snapshot the session started from. Replaying it reproduces the session tick for tick under the same build and config, and `Replay` can report every tick's hash.
 
 Encoding, canonical:
-1. Magic `ELRC`, format version (int32, now 3), snapshot length (int32) and bytes, step count (int32).
+1. Magic `ELRC`, format version (int32, now 4), snapshot length (int32) and bytes, step count (int32).
 2. Then, per step, a command count (int32), and per command:
    - controller id (int32) and tick (int64);
    - move x and y;
    - whether there is a kick intent (bool), and if so its direction x and y, strength and loft;
    - aftertouch x and y;
-   - quick pass (bool).
+   - quick pass (bool);
+   - whether there is a dive target (bool), and if so its x, y and z (#69).
 
 Every double is its raw IEEE-754 bits (uint64), so even invalid input replays as it was. Version 2 replaced version 1's kick flag with the kick intent and added aftertouch (#37); version 3 added the quick pass (#38). Recordings are version-specific and may expire (INV-7).
 

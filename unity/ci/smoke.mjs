@@ -9,6 +9,7 @@
 // on-screen controls through Unity's Input System:
 //   - boot: the host reports ready, with its build id and the page's load time
 //   - the goal (#68): the pitch draws the simulation's goal, Law 1's mouth with 12 cm posts
+//   - the keeper (#69): practice puts him in goal, where his brain keeps him on his feet
 //   - autorun (desktop): the issue 1 scenario's digest in WebGL must equal the .NET hash log's
 //     (ADR-0002: cross-runtime determinism is a gate)
 //   - the HUD (#48, #53): placed actions hold their labels, the build line fits its panel and keeps
@@ -355,6 +356,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('counts dropped frames', !!pacing && Number(pacing[2]) > 0,
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
     check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
+
+    // The keeper (#69): practice puts him in goal, and his brain keeps him there, on his feet.
+    const keeper = after?.input.match(/keeper=(-?[\d.]+),(-?[\d.]+),(\w+)/);
+    check('the keeper stands in goal', !!keeper && Number(keeper[1]) > 49.5 && Number(keeper[1]) < 52.5 && Math.abs(Number(keeper[2])) < 3.66 && keeper[3] === 'position',
+      keeper ? keeper[0] : 'no keeper in the trace line');
 
     // Running with the ball (#59, FREE): the stick steers the player onto the resting ball, and
     // touches carry it on. Like a player, it re-aims at the ball from each trace line (once a

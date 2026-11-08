@@ -11,11 +11,12 @@ namespace Eleven.Simulation.Harness
     /// <summary>One knob on the feel test bench (#45): a tunable from the supported metadata.</summary>
     public sealed class BenchKnob
     {
-        internal BenchKnob(TunableParameter parameter, bool onPlayer, bool onAdapter = false)
+        internal BenchKnob(TunableParameter parameter, bool onPlayer, bool onAdapter = false, bool onKeeper = false)
         {
             Parameter = parameter;
             OnPlayer = onPlayer;
             OnAdapter = onAdapter;
+            OnKeeper = onKeeper;
             Label = LabelFor(parameter.Name);
             int exponent;
             Step = StepFor(parameter, out exponent);
@@ -30,6 +31,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>A touch adapter value (<see cref="ActionSurfaceSettings"/>): how gestures read, never how the football behaves.</summary>
         public bool OnAdapter { get; }
+
+        /// <summary>A <see cref="KeeperCapabilities"/> value of the practice keeper (#69), rather than a <see cref="SimConfig"/> value.</summary>
+        public bool OnKeeper { get; }
 
         public string Name => Parameter.Name;
 
@@ -92,7 +96,8 @@ namespace Eleven.Simulation.Harness
 
     /// <summary>
     /// A complete set of feel test bench values (#45): every <see cref="SimConfig.Tunables"/> value,
-    /// every <see cref="PlayerCapabilities.Parameters"/> value of the controlled player, and every
+    /// every <see cref="PlayerCapabilities.Parameters"/> value of the controlled player, every
+    /// <see cref="KeeperCapabilities.Parameters"/> value of the practice keeper (#69), and every
     /// touch gesture value of Candidate A (<see cref="ActionSurfaceSettings.Parameters"/>, #28). It is
     /// built only through the supported surface (<see cref="SimConfig.With(IEnumerable{KeyValuePair{string, double}})"/>,
     /// <see cref="PlayerCapabilities.With"/> and <see cref="ActionSurfaceSettings.With"/>), so a
@@ -111,30 +116,31 @@ namespace Eleven.Simulation.Harness
         /// <summary>The active preset a capture records for any other values, until presets have names (#46).</summary>
         public const string UnsavedPreset = "unsaved";
 
-        /// <summary>The config tunables, then the player capabilities, then the touch gestures, in metadata order.</summary>
+        /// <summary>The config tunables, then the player's and the keeper's capabilities, then the touch gestures, in metadata order.</summary>
         public static readonly ReadOnlyCollection<BenchKnob> Knobs = Array.AsReadOnly(MakeKnobs());
 
-        private static readonly BenchCandidate s_reference = new BenchCandidate(SpikeScenario.Config(), PlayerCapabilities.Reference, ActionSurfaceSettings.Reference);
+        private static readonly BenchCandidate s_reference = new BenchCandidate(SpikeScenario.Config(), PlayerCapabilities.Reference, ActionSurfaceSettings.Reference, KeeperCapabilities.Reference);
 
-        private BenchCandidate(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings actionSurface)
+        private BenchCandidate(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings actionSurface, KeeperCapabilities keeper)
         {
             Config = config;
             Capabilities = capabilities;
             ActionSurface = actionSurface;
+            Keeper = keeper;
         }
 
         /// <summary>The technical reference: the spike's config, <see cref="PlayerCapabilities.Reference"/> and <see cref="ActionSurfaceSettings.Reference"/>.</summary>
         public static BenchCandidate Reference => s_reference;
 
         /// <summary>The values of an existing config and player, with the reference touch settings unless given.</summary>
-        public static BenchCandidate From(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings? actionSurface = null) =>
-            new BenchCandidate(config, capabilities, actionSurface ?? ActionSurfaceSettings.Reference);
+        public static BenchCandidate From(SimConfig config, PlayerCapabilities capabilities, ActionSurfaceSettings? actionSurface = null, KeeperCapabilities? keeper = null) =>
+            new BenchCandidate(config, capabilities, actionSurface ?? ActionSurfaceSettings.Reference, keeper ?? KeeperCapabilities.Reference);
 
         /// <summary>The immutable config these values make.</summary>
         public SimConfig Config { get; }
 
         /// <summary>These values under another ball control model (#60), the live switch's applied candidate; every knob is kept.</summary>
-        public BenchCandidate WithControlModel(ControlModel model) => new BenchCandidate(Config.WithControlModel(model), Capabilities, ActionSurface);
+        public BenchCandidate WithControlModel(ControlModel model) => new BenchCandidate(Config.WithControlModel(model), Capabilities, ActionSurface, Keeper);
 
         /// <summary>The controlled player's capabilities these values make.</summary>
         public PlayerCapabilities Capabilities { get; }
@@ -142,15 +148,37 @@ namespace Eleven.Simulation.Harness
         /// <summary>Candidate A's gesture settings these values make (#28).</summary>
         public ActionSurfaceSettings ActionSurface { get; }
 
+        /// <summary>The practice keeper's capabilities these values make (#69).</summary>
+        public KeeperCapabilities Keeper { get; }
+
         /// <summary>A knob's value, by name.</summary>
         public double Get(string name)
         {
             BenchKnob knob = Find(name) ?? throw new ArgumentException($"'{name}' is not a bench knob.", nameof(name));
-            return knob.OnAdapter ? ActionSurface.Get(name) : knob.OnPlayer ? Capabilities.Get(name) : Config.Get(name);
+            return knob.OnAdapter ? ActionSurface.Get(name) : knob.OnPlayer ? Capabilities.Get(name) : knob.OnKeeper ? Keeper.Get(name) : Config.Get(name);
         }
 
-        /// <summary>The standard practice start under these values: the spike's start with this player.</summary>
-        public SimState PracticeStart() => SpikeScenario.InitialState(Config, Capabilities);
+        /// <summary>The practice keeper's player id and AI controller (#69).</summary>
+        public const int KeeperId = 2, KeeperController = 2;
+
+        /// <summary>
+        /// The standard practice start under these values: the spike's start with this player, and
+        /// this keeper in goal (#69), on the other team, owned by his own AI controller, 1.5 m off the
+        /// line facing the play.
+        /// </summary>
+        public SimState PracticeStart()
+        {
+            SimState start = SpikeScenario.InitialState(Config, Capabilities);
+            var keeper = new PlayerState
+            {
+                Id = KeeperId, OwnerControllerId = KeeperController, TeamId = start.Players[0].TeamId + 1, Capabilities = PlayerCapabilities.Reference,
+                Position = new Vec2(Config.GoalLineX - 1.5, 0), Heading = Math.PI,
+            };
+
+            start.Players = new[] { start.Players[0], keeper };
+            start.Keepers = new[] { new KeeperState { PlayerId = KeeperId, Capabilities = Keeper } };
+            return start;
+        }
 
         /// <summary>The state hash of <see cref="PracticeStart"/>.</summary>
         public ulong PracticeStartHash() => new Simulator(Config, PracticeStart()).StateHash();
@@ -177,6 +205,7 @@ namespace Eleven.Simulation.Harness
             var config = new List<KeyValuePair<string, double>>();
             PlayerCapabilities capabilities = Capabilities;
             ActionSurfaceSettings actionSurface = ActionSurface;
+            KeeperCapabilities keeper = Keeper;
             foreach (KeyValuePair<string, double> change in changes)
             {
                 BenchKnob? knob = Find(change.Key);
@@ -190,6 +219,7 @@ namespace Eleven.Simulation.Harness
                 if (problem.Length > 0) return false;
                 if (knob.OnAdapter) actionSurface = actionSurface.With(knob.Name, change.Value);
                 else if (knob.OnPlayer) capabilities = capabilities.With(knob.Name, change.Value);
+                else if (knob.OnKeeper) keeper = keeper.With(knob.Name, change.Value);
                 else config.Add(change);
             }
 
@@ -204,7 +234,7 @@ namespace Eleven.Simulation.Harness
                 return false;
             }
 
-            result = new BenchCandidate(made, capabilities, actionSurface);
+            result = new BenchCandidate(made, capabilities, actionSurface, keeper);
             problem = "";
             return true;
         }
@@ -325,9 +355,10 @@ namespace Eleven.Simulation.Harness
 
         private static BenchKnob[] MakeKnobs()
         {
-            var knobs = new List<BenchKnob>(SimConfig.Tunables.Count + PlayerCapabilities.Parameters.Count + ActionSurfaceSettings.Parameters.Count);
+            var knobs = new List<BenchKnob>(SimConfig.Tunables.Count + PlayerCapabilities.Parameters.Count + KeeperCapabilities.Parameters.Count + ActionSurfaceSettings.Parameters.Count);
             foreach (TunableParameter p in SimConfig.Tunables) knobs.Add(new BenchKnob(p, onPlayer: false));
             foreach (TunableParameter p in PlayerCapabilities.Parameters) knobs.Add(new BenchKnob(p, onPlayer: true));
+            foreach (TunableParameter p in KeeperCapabilities.Parameters) knobs.Add(new BenchKnob(p, onPlayer: false, onKeeper: true));
             foreach (TunableParameter p in ActionSurfaceSettings.Parameters) knobs.Add(new BenchKnob(p, onPlayer: false, onAdapter: true));
             return knobs.ToArray();
         }

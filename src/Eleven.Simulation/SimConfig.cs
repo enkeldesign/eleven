@@ -16,14 +16,14 @@ namespace Eleven.Simulation
     /// <see cref="BounceSpinRetention"/> (#40). Version 6 added the quick pass's range and weight (#38).
     /// Version 7 added the ball control model and its touches (#59). Version 8 added ATTACHED's
     /// values (#60). Version 9 added the goal: its mouth, its posts and crossbar, and how the frame
-    /// returns the ball (#68).
+    /// returns the ball (#68). Version 10 added the keeper's dive, recovery and save (#69).
     ///
     /// The ball- and kick-feel values tools may vary, and their valid ranges, are listed in
     /// <see cref="Tunables"/>; the constructor refuses values outside them.
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 9;
+        public const int FormatVersion = 10;
 
         public SimConfig(
             int tickRate = 60,
@@ -57,6 +57,11 @@ namespace Eleven.Simulation
             double goalHeight = 2.44,
             double postWidth = 0.12,
             double frameRestitution = 0.7,
+            double keeperDiveSeconds = 0.6,
+            double keeperRecoverSeconds = 0.8,
+            double keeperHoldSpeed = 22,
+            double keeperParryRestitution = 0.4,
+            double keeperParryError = 0.3,
             ControlModel controlModel = ControlModel.Off,
             double controlReach = 0.9,
             double dribbleLeadSlow = 0.5,
@@ -107,6 +112,11 @@ namespace Eleven.Simulation
             GoalHeight = goalHeight;
             PostWidth = postWidth;
             FrameRestitution = frameRestitution;
+            KeeperDiveSeconds = keeperDiveSeconds;
+            KeeperRecoverSeconds = keeperRecoverSeconds;
+            KeeperHoldSpeed = keeperHoldSpeed;
+            KeeperParryRestitution = keeperParryRestitution;
+            KeeperParryError = keeperParryError;
             ControlModel = controlModel;
             ControlReach = controlReach;
             DribbleLeadSlow = dribbleLeadSlow;
@@ -131,6 +141,8 @@ namespace Eleven.Simulation
             KickWindUpTicks = (int)Math.Round(KickWindUpSeconds * TickRate);
             AftertouchTicks = (int)Math.Round(AftertouchSeconds * TickRate);
             TouchIntervalTicks = Math.Max(1, (int)Math.Round(TouchInterval * TickRate));
+            KeeperDiveTicks = Math.Max(1, (int)Math.Round(KeeperDiveSeconds * TickRate));
+            KeeperRecoverTicks = Math.Max(1, (int)Math.Round(KeeperRecoverSeconds * TickRate));
         }
 
         /// <summary>Fixed steps per simulated second.</summary>
@@ -270,6 +282,31 @@ namespace Eleven.Simulation
         /// </summary>
         public double FrameRestitution { get; }
 
+        /// <summary>s. The longest a keeper's dive carries him (#69): a dive lasts the time its distance needs, up to this.</summary>
+        public double KeeperDiveSeconds { get; }
+
+        /// <summary>s. How long a keeper is on the ground after a dive (#69).</summary>
+        public double KeeperRecoverSeconds { get; }
+
+        /// <summary>
+        /// m/s. The fastest ball a keeper holds (#69), relative to him, met at his body with full
+        /// handling. It falls with his handling, to half at none, and with how far out he meets it,
+        /// to nothing at his fingertips; anything faster he parries.
+        /// </summary>
+        public double KeeperHoldSpeed { get; }
+
+        /// <summary>Fraction of the ball's speed along the contact normal, relative to the keeper, that a parry returns (#69).</summary>
+        public double KeeperParryRestitution { get; }
+
+        /// <summary>rad. A parry's largest direction error with no handling (#69); none with full handling.</summary>
+        public double KeeperParryError { get; }
+
+        /// <summary><see cref="KeeperDiveSeconds"/> in whole steps, nearest, at least one.</summary>
+        public int KeeperDiveTicks { get; }
+
+        /// <summary><see cref="KeeperRecoverSeconds"/> in whole steps, nearest, at least one.</summary>
+        public int KeeperRecoverTicks { get; }
+
         /// <summary>m. x of the posts' and crossbar's axes: <see cref="GoalLineX"/> − <see cref="PostWidth"/> / 2.</summary>
         public double FrameAxisX => GoalLineX - PostWidth / 2;
 
@@ -392,6 +429,11 @@ namespace Eleven.Simulation
                 goalHeight: r.ReadDouble(nameof(GoalHeight)),
                 postWidth: r.ReadDouble(nameof(PostWidth)),
                 frameRestitution: r.ReadDouble(nameof(FrameRestitution)),
+                keeperDiveSeconds: r.ReadDouble(nameof(KeeperDiveSeconds)),
+                keeperRecoverSeconds: r.ReadDouble(nameof(KeeperRecoverSeconds)),
+                keeperHoldSpeed: r.ReadDouble(nameof(KeeperHoldSpeed)),
+                keeperParryRestitution: r.ReadDouble(nameof(KeeperParryRestitution)),
+                keeperParryError: r.ReadDouble(nameof(KeeperParryError)),
                 controlModel: ReadControlModel(r.ReadInt32()),
                 controlReach: r.ReadDouble(nameof(ControlReach)),
                 dribbleLeadSlow: r.ReadDouble(nameof(DribbleLeadSlow)),
@@ -447,6 +489,11 @@ namespace Eleven.Simulation
             w.WriteDouble(GoalHeight, nameof(GoalHeight));
             w.WriteDouble(PostWidth, nameof(PostWidth));
             w.WriteDouble(FrameRestitution, nameof(FrameRestitution));
+            w.WriteDouble(KeeperDiveSeconds, nameof(KeeperDiveSeconds));
+            w.WriteDouble(KeeperRecoverSeconds, nameof(KeeperRecoverSeconds));
+            w.WriteDouble(KeeperHoldSpeed, nameof(KeeperHoldSpeed));
+            w.WriteDouble(KeeperParryRestitution, nameof(KeeperParryRestitution));
+            w.WriteDouble(KeeperParryError, nameof(KeeperParryError));
             w.WriteInt32((int)ControlModel);
             w.WriteDouble(ControlReach, nameof(ControlReach));
             w.WriteDouble(DribbleLeadSlow, nameof(DribbleLeadSlow));
