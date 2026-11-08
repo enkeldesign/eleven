@@ -108,6 +108,12 @@ namespace Eleven.Host
         /// <summary>New gesture settings (APPLY / RETRY); any gesture in progress is cancelled.</summary>
         public void Use(ActionSurfaceSettings settings) => _gestures.Use(settings);
 
+        /// <summary>
+        /// How the pitch is shown (#72): gestures read on screen go up-field the way the screen shows
+        /// it. A new view cancels any gesture in progress, so a flip moves nothing and kicks nothing.
+        /// </summary>
+        public void Orient(PitchOrientation orientation) => _gestures.Orient(orientation);
+
         /// <summary>The owned command for <paramref name="tick"/>. A gesture's kick or pass is delivered once.</summary>
         public Command CommandFor(long tick) => _gestures.CommandFor(tick);
 

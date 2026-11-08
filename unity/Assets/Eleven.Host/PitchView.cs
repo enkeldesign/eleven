@@ -1,12 +1,18 @@
 using System.Collections.Generic;
 using Eleven.Simulation;
+using Eleven.Simulation.Harness;
 using UnityEngine;
 
 namespace Eleven.Host
 {
     /// <summary>
     /// Draws the pitch, the player and the ball as simple shapes, top-down. Built entirely at
-    /// runtime: no scene objects, prefabs or imported art. Pitch x runs right, y up the screen.
+    /// runtime: no scene objects, prefabs or imported art.
+    ///
+    /// The pitch is vertical (#72): the camera rolls so that the controlled team's attacked end is
+    /// up the screen, through <see cref="PitchOrientation"/>, the same mapping the touch adapter
+    /// reads gestures through. The scene stays in world coordinates, so the lines, the mown pattern,
+    /// the goal, the players and the shadow turn with the view; the HUD, an overlay, doesn't.
     ///
     /// Presentation only: it reads interpolated positions and never feeds anything back into the
     /// simulation (INV-12).
@@ -56,10 +62,19 @@ namespace Eleven.Host
         private readonly Transform _leftPost;
         private float _ballDiameter;
         private Vector3 _ballShown;
+        private PitchOrientation _orientation = PitchOrientation.Practice;
+        private readonly float _minAhead;
+        private float _ahead;
+        private float _across;
 
-        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut)
+        /// <param name="minAhead">
+        /// The least the play shows up-field either side of the action, in metres (#72, <c>?ahead=</c>);
+        /// the camera zooms out to give it. The reference is the closest zoom's, so it changes nothing.
+        /// </param>
+        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut, float minAhead = MinHalfExtent)
         {
             Grass = mowing;
+            _minAhead = Mathf.Max(MinHalfExtent, minAhead);
             _config = config;
             Disc = MakeDiscTexture(64);
             Sprite disc = Sprite.Create(Disc, new Rect(0, 0, Disc.width, Disc.height), new Vector2(0.5f, 0.5f), Disc.width);
@@ -75,6 +90,7 @@ namespace Eleven.Host
             _camera.nearClipPlane = 0.1f;
             _camera.farClipPlane = 100f;
             cameraObject.transform.position = new Vector3(0, 0, -10);
+            Orient(_orientation);
 
             float goalLine = (float)config.GoalLineX;
             float length = goalLine * 2;
@@ -128,6 +144,18 @@ namespace Eleven.Host
             _ball.localScale = Vector3.one * _ballDiameter;
         }
 
+        /// <summary>
+        /// Shows the pitch with <paramref name="orientation"/>'s end up (#72): a half-time flip turns
+        /// the view by half a turn. Presentation only: nothing in the simulation moves.
+        /// </summary>
+        public void Orient(PitchOrientation orientation)
+        {
+            _orientation = orientation;
+            _camera.transform.rotation = Quaternion.Euler(0, 0, (float)orientation.CameraRoll);
+        }
+
+        public PitchOrientation Orientation => _orientation;
+
         /// <summary>A white anti-aliased disc, also used by the HUD.</summary>
         public Texture2D Disc { get; }
 
@@ -144,9 +172,11 @@ namespace Eleven.Host
             if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
 
-            // Height is shown by lifting the ball up the screen and growing it slightly.
+            // Height is shown by lifting the ball up the screen and growing it slightly. Up the
+            // screen is toward the attacked end (#72); the shadow stays on the ground.
             float height = Mathf.Max(0, ball.z - (float)_config.BallRadius);
-            _ball.localPosition = new Vector3(ball.x, ball.y + height * HeightLift, 0);
+            Vector2 up = World(new Vec2(0, 1));
+            _ball.localPosition = new Vector3(ball.x + up.x * height * HeightLift, ball.y + up.y * height * HeightLift, 0);
             _ball.localScale = Vector3.one * (_ballDiameter * (1 + height * HeightGrowth));
 
             _ballShown = _ball.localPosition;
@@ -158,28 +188,61 @@ namespace Eleven.Host
             $"player:{(InPlay(_player.localPosition, layout) ? "in" : "out")},ball:{(InPlay(_ballShown, layout) ? "in" : "out")}";
 
         /// <summary>
+        /// For the smoke test (#72): the orientation, and where these fall on screen, in HUD pixels
+        /// with y down: the player, the attacked end's goal-line centre, the practice goal's centre and
+        /// its two posts. Then how far the play shows up-field and across, either side of the action.
+        /// </summary>
+        public string Report(in HudLayout layout)
+        {
+            int screenHeight = layout.ScreenHeight;
+            string At(Vector3 world)
+            {
+                Vector3 s = _camera.WorldToScreenPoint(world);
+                return System.FormattableString.Invariant($"{s.x:F0},{screenHeight - s.y:F0}");
+            }
+
+            var attacked = new Vector3((float)_config.GoalLineX * _orientation.Up, 0, 0);
+            var goal = new Vector3((float)_config.FrameAxisX, 0, 0);
+            return System.FormattableString.Invariant(
+                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m");
+        }
+
+        /// <summary>
         /// Frames the player and the ball inside the HUD's play area: centred between them, zoomed
         /// out just enough to keep both in view with a margin. The play area's shorter side always
-        /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre. The camera
-        /// still renders the whole screen; it is shifted so the play lands in the uncovered part.
+        /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre, and its
+        /// height, up-field, at least the least look-ahead. The camera still renders the whole
+        /// screen; it is shifted so the play lands in the uncovered part. All of it is worked out on
+        /// screen, through the orientation (#72).
         /// </summary>
         private void Frame(Vector2 player, Vector2 ball, in HudLayout layout)
         {
             Rect play = layout.PlayArea;
             Vector2 centre = Vector2.Lerp(player, ball, 0.5f);
-            Vector2 halfSpan = new Vector2(Mathf.Abs(ball.x - player.x), Mathf.Abs(ball.y - player.y)) * 0.5f;
+            Vec2 span = _orientation.ToScreen(new Vec2(ball.x - player.x, ball.y - player.y));
+            Vector2 halfSpan = new Vector2(Mathf.Abs((float)span.X), Mathf.Abs((float)span.Y)) * 0.5f;
 
             // Pixels per metre: the closest zoom allowed, reduced until both fit.
             float pixelsPerMetre = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
+            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / _minAhead);
             pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.width * 0.5f / (halfSpan.x + FramingMargin));
             pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / (halfSpan.y + FramingMargin));
             _camera.orthographicSize = layout.ScreenHeight * 0.5f / pixelsPerMetre;
+            _ahead = play.height * 0.5f / pixelsPerMetre;
+            _across = play.width * 0.5f / pixelsPerMetre;
 
             // Shift so the pitch point `centre` appears at the play area's centre. HUD y grows
-            // downwards, the pitch's upwards.
+            // downwards, the screen's up.
             Vector2 offset = play.center - new Vector2(layout.ScreenWidth * 0.5f, layout.ScreenHeight * 0.5f);
-            Vector2 cameraAt = centre - new Vector2(offset.x, -offset.y) / pixelsPerMetre;
+            Vector2 cameraAt = centre - World(new Vec2(offset.x, -offset.y)) / pixelsPerMetre;
             _camera.transform.position = new Vector3(cameraAt.x, cameraAt.y, -10);
+        }
+
+        // A screen vector, +x right and +y up, as the world direction it shows.
+        private Vector2 World(Vec2 screen)
+        {
+            Vec2 w = _orientation.ToWorld(screen);
+            return new Vector2((float)w.X, (float)w.Y);
         }
 
         private bool InPlay(Vector3 world, in HudLayout layout)
