@@ -31,6 +31,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>A touch adapter value (<see cref="ActionSurfaceSettings"/>): how gestures read, never how the football behaves.</summary>
         public bool OnAdapter { get; }
 
+        /// <summary>A <see cref="KeeperCapabilities"/> value of the practice keeper (#69), rather than a <see cref="SimConfig"/> value.</summary>
+        public bool OnKeeper { get; }
+
         public string Name => Parameter.Name;
 
         public string Group => Parameter.Group;
@@ -141,6 +144,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>Candidate A's gesture settings these values make (#28).</summary>
         public ActionSurfaceSettings ActionSurface { get; }
+
+        /// <summary>The practice keeper's capabilities these values make (#69).</summary>
+        public KeeperCapabilities Keeper => KeeperCapabilities.Reference;
 
         /// <summary>A knob's value, by name.</summary>
         public double Get(string name)
