@@ -15,8 +15,12 @@
 //   - the HUD (#48, #53): placed actions hold their labels, the build line fits its panel and keeps
 //     its size as its values change, and no page controls remain over the canvas
 //   - Run scenario: the tap is acknowledged, and the result panel fits its text
-//   - stick: dragging it moves the player (from the host's trace lines), and the camera keeps the
-//     player and ball inside the area the HUD leaves free
+//   - stick: dragging it up the screen runs the player up-field (from the host's trace lines), and
+//     the camera keeps the player and ball inside the area the HUD leaves free
+//   - the vertical pitch (#72): the attacked end is up the screen and the goal line runs across it.
+//     View passes at iPhone portrait and landscape and iPad check that at 0°, flip to 180° through
+//     the bench (the tick and state hash unchanged), and check it again, with stick and flick up
+//     the screen going up-field each time
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
 //   - THIS FELT WRONG (#44, #53): a Unity action of at least 44 x 44 pt, placed from the HUD's
@@ -70,6 +74,12 @@ const actionZonePattern = /action=(-?\d+),(-?\d+),(\d+),(\d+)/;
 const actionPattern = /ELEVEN action gesture=(\w+) strength=([\d.]+) direction=(-?[\d.]+),(-?[\d.]+) latency=(-?[\d.]+)ms/;
 const keptPattern = /ELEVEN capture ticks=(\d+)\.\.(\d+) steps=(\d+) bytes=(\d+) name=(\S+) note=(\d+)/;
 const tracePattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+)/;
+// The vertical pitch (#72): where the host shows the player, the attacked end, the practice goal
+// and its posts, in HUD pixels with y down, and how far the play shows up-field and across.
+const viewPattern = /ELEVEN view tick=(\d+) orientation=(\d+) up=(\S+) player=(-?\d+),(-?\d+) attacked=(-?\d+),(-?\d+) goal=(-?\d+),(-?\d+) posts=(-?\d+),(-?\d+);(-?\d+),(-?\d+) ahead=([\d.]+)m across=([\d.]+)m/;
+// Screen vectors here are +x right and +y up the screen, as PitchOrientation's are.
+const toWorld = (v, degrees) => (degrees === 180 ? { x: -v.y, y: v.x } : { x: v.y, y: -v.x });
+const toScreen = (v, degrees) => (degrees === 180 ? { x: v.y, y: -v.x } : { x: -v.y, y: v.x });
 
 const results = { checks: [], notes: {} };
 const annotate = (level, title, message) =>
@@ -310,6 +320,110 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(150);
     };
 
+    // The vertical pitch (#72): the attacked end is up the screen, the practice goal above the
+    // player at 0° and below at 180°, and its posts on one screen row with the goal's centre
+    // between them.
+    const checkView = (degrees, v, label) => {
+      if (!v) {
+        check(`${label}: the attacked end is up the screen`, false, 'no view line');
+        return;
+      }
+      const [player, attacked, goal, left, right] = [[4, 5], [6, 7], [8, 9], [10, 11], [12, 13]].map(([i, j]) => ({ x: Number(v[i]), y: Number(v[j]) }));
+      const goalWay = degrees === 0 ? goal.y < player.y : goal.y > player.y;
+      check(`${label}: the attacked end is up the screen`, Number(v[2]) === degrees && attacked.y < player.y && goalWay,
+        `orientation ${v[2]} (${v[3]} up); player ${player.x},${player.y}; attacked end ${attacked.x},${attacked.y}; practice goal ${goal.x},${goal.y}`);
+      check(`${label}: the goal line runs across the screen`,
+        Math.abs(left.y - right.y) <= 2 && Math.abs(goal.y - left.y) <= 2 && goal.x > Math.min(left.x, right.x) && goal.x < Math.max(left.x, right.x),
+        `posts ${left.x},${left.y} and ${right.x},${right.y}; goal centre ${goal.x},${goal.y}`);
+      notes[`view${degrees}`] = `${v[14]} m up-field, ${v[15]} m across`;
+    };
+    const viewNow = async () => (await waitForLog(viewPattern, 10_000, logs.length))?.match ?? null;
+
+    // View passes (#72): the vertical pitch at this size, at 0°, then flipped to 180° through the
+    // bench, as a match's half-time would: stick and flick up the screen go up-field either way.
+    if (url.includes('view=1')) {
+      const up = (degrees) => (degrees === 0 ? 1 : -1);
+      const zone = actionZonePattern.exec(lastLog(layoutPattern)?.input ?? '')?.slice(1, 5).map(Number) ?? null;
+      const actionAt = zone ? at(zone[0] + zone[2] / 2, zone[1] + zone[3] / 2) : at(n[6], n[7]);
+      const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
+      const burst = (...events) => Promise.all(events.map(([type, touchPoints]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints })));
+
+      const stickUp = async (degrees) => {
+        const label = `at ${degrees}°`;
+        const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+        const origin = at(n[8], n[9]);
+        const reach = n[10] * sx;
+        if (useTouch) await touch('touchStart', origin);
+        else {
+          await page.mouse.move(origin.x, origin.y);
+          await page.mouse.down();
+        }
+        for (let i = 1; i <= 10; i++) {
+          const p = { x: origin.x, y: origin.y - (reach * i) / 10 };
+          if (useTouch) await touch('touchMove', p);
+          else await page.mouse.move(p.x, p.y);
+          await sleep(20);
+        }
+        await sleep(2500);
+        await page.screenshot({ path: path.join(outDir, `${name}-${degrees}.png`) });
+        if (useTouch) await touch('touchEnd');
+        else await page.mouse.up();
+        const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
+        const dx = before && after ? Number(after[2]) - Number(before[2]) : NaN;
+        const dy = before && after ? Number(after[3]) - Number(before[3]) : NaN;
+        check(`${label}: stick up the screen runs up-field`, dx * up(degrees) > 2 && Math.abs(dy) < Math.abs(dx) * 0.2,
+          before && after ? `player ${before[2]},${before[3]} → ${after[2]},${after[3]}` : 'no trace lines');
+        const inView = after?.input.match(/view=player:(\w+),ball:(\w+)/);
+        check(`${label}: player and ball stay clear of the HUD`, !!inView && inView[1] === 'in' && inView[2] === 'in', inView ? inView[0] : 'no view report');
+      };
+
+      const flickUp = async (degrees) => {
+        await sleep(1_500);
+        const from = logs.length;
+        const to = { x: actionAt.x, y: actionAt.y - 60 * pointPx * sy };
+        const along = (f) => ({ x: actionAt.x, y: actionAt.y + (to.y - actionAt.y) * f });
+        if (useTouch) {
+          await burst(['touchStart', [{ ...actionAt, id: 1 }]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [{ ...along(f), id: 1 }]]), ['touchEnd', []]);
+        } else {
+          await page.mouse.move(actionAt.x, actionAt.y);
+          await page.mouse.down();
+          for (const f of [0.34, 0.67, 1]) await page.mouse.move(along(f).x, along(f).y);
+          await page.mouse.up();
+        }
+        const flicked = (await waitForLog(actionPattern, 5_000, from))?.match ?? null;
+        const x = Number(flicked?.[3]), y = Number(flicked?.[4]);
+        check(`at ${degrees}°: a flick up the screen kicks up-field`, !!flicked && flicked[1] === 'flick' && x * up(degrees) > 0 && Math.abs(y) < Math.abs(x) * 0.3,
+          flicked ? flicked[0].replace('ELEVEN action ', '') : 'no action line after the flick');
+      };
+
+      checkView(0, await viewNow(), 'at 0°');
+      await stickUp(0);
+      await flickUp(0);
+
+      // The flip, through the bench's Pitch view: between frames, with no step and no command.
+      const benchAt = benchPattern.exec(lastLog(layoutPattern)?.input ?? '');
+      const fromOpen = logs.length;
+      if (benchAt) await tap(at(Number(benchAt[1]) + Number(benchAt[3]) / 2, Number(benchAt[2]) + Number(benchAt[4]) / 2));
+      const opened = (await waitForLog(/ELEVEN bench open .* close=(\S+) models=\S+ views=(\S+)/, 8_000, fromOpen))?.match ?? null;
+      const views = Object.fromEntries((opened?.[2] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+      const fromFlip = logs.length;
+      if (views['180']) await tap(at(...views['180'].split(',').map(Number)));
+      const flipped = (await waitForLog(/ELEVEN view flipped to=180 tick=(\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\d+)/, 5_000, fromFlip))?.match ?? null;
+      check('the half-time flip changes no state and makes no step', !!flipped && flipped[2] === flipped[3] && flipped[4] === '0',
+        flipped ? flipped[0].replace('ELEVEN ', '') : `no flip line${opened ? '' : ' (the bench did not open)'}`);
+      if (opened) await tap(at(...opened[1].split(',').map(Number)));
+      await waitForLog(/ELEVEN bench closed/, 5_000, fromFlip);
+
+      checkView(180, await viewNow(), 'at 180°');
+      await stickUp(180);
+      await flickUp(180);
+      const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 15_000, fromFlip))?.match ?? null;
+      check('the recording across the flip replays to the live state', !!replay && replay[4] === 'match', replay ? replay[0].replace('ELEVEN ', '') : 'no recording check');
+      const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
     // The UI around the match is UI Toolkit, built from code (#48): its text must render.
     const ui = lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+) ms=([\d.]+)/);
     const text = lastLog(/ELEVEN ui text "([^"]+)" width=([\d.]+) height=([\d.]+)/);
@@ -326,8 +440,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const fit = await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 8_000, fromRun);
     check('result panel fits its text', !!fit && fit.match[1] === 'yes', fit ? fit.match[0].replace('ELEVEN hud result ', '') : 'no fit report');
 
-    // Stick: drag right from the stick's rest position and hold; the player should move along +x.
-    // Trace lines come once a simulated second, so wait for a fresh one on each side of the drag.
+    // Stick: drag up the screen from the stick's rest position and hold; the player should run
+    // up-field, along +x toward the goal at the top (#72). Trace lines come once a simulated
+    // second, so wait for a fresh one on each side of the drag.
     const before = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     const origin = at(n[8], n[9]);
     const reach = n[10] * sx;
@@ -337,7 +452,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.mouse.down();
     }
     for (let i = 1; i <= 10; i++) {
-      const p = { x: origin.x + (reach * i) / 10, y: origin.y };
+      const p = { x: origin.x, y: origin.y - (reach * i) / 10 };
       if (useTouch) await touch('touchMove', p);
       else await page.mouse.move(p.x, p.y);
       await sleep(20);
@@ -355,7 +470,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     notes.dropped = pacing ? `${pacing[1]}/${pacing[2]}` : 'none';
     check('counts dropped frames', !!pacing && Number(pacing[2]) > 0,
       pacing ? `${pacing[1]} dropped of ${pacing[2]} frames, interval ${pacing[3]} ms` : 'no pacing in the trace line');
-    check('stick moves the player', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
+    check('stick up the screen runs the player up-field', notes.stickMovedMetres > 3, before && after ? `player x ${before[2]} → ${after[2]} (ticks ${before[1]} → ${after[1]})` : 'no trace lines');
+    checkView(0, await viewNow(), 'the vertical pitch');
 
     // The keeper (#69): practice puts him in goal, and his brain keeps him there, on his feet.
     const keeper = after?.input.match(/keeper=(-?[\d.]+),(-?[\d.]+),(\w+)/);
@@ -380,7 +496,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const [px, py, bx, by] = m.slice(2, 6).map(Number);
           closest = Math.min(closest, Math.hypot(bx - px, by - py));
           const length = Math.hypot(bx - px, by - py) || 1;
-          return { x: origin.x + ((bx - px) / length) * reach, y: origin.y - ((by - py) / length) * reach };
+          const s = toScreen({ x: (bx - px) / length, y: (by - py) / length }, 0);
+          return { x: origin.x + s.x * reach, y: origin.y - s.y * reach };
         };
         // Pressed and dragged out in steps, as the stick check above does: on desktop, a press
         // followed at once by one long move left the player standing (ce241fa).
@@ -475,8 +592,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('a tap on ACTION asks for the quick pass', !!tapped && tapped.match[1] === 'tap' && /target=action/.test(tapPress ?? '') && !!resolved,
       `${tapPress ?? 'no press logged'}; ${tapped ? tapped.match[0].replace('ELEVEN action ', '') : 'no action line'}; ${resolved ? resolved.match[0].replace('ELEVEN event ', '') : 'no QuickPassResolved event'}`);
 
-    // An immediate flick is a manual kick along the gesture: right and up the screen is +x, +y on
-    // the pitch. Wait for the quick pass's wind-up and window to pass first, so ACTION starts a gesture.
+    // An immediate flick is a manual kick along the gesture: right and up the screen is, on the
+    // vertical pitch, +x and −y (#72). Wait for the quick pass's wind-up and window to pass first,
+    // so ACTION starts a gesture.
     await sleep(1_500);
     const fromFlick = logs.length;
     const flickTo = { x: actionCentre.x + 60 * pointPx * sx, y: actionCentre.y - 30 * pointPx * sy };
@@ -490,8 +608,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.mouse.up();
     }
     const flicked = await waitForLog(actionPattern, 5_000, fromFlick);
+    const flickWorld = toWorld({ x: 60, y: 30 }, 0);
     check('an immediate flick on ACTION is a manual kick along the gesture',
-      !!flicked && flicked.match[1] === 'flick' && Number(flicked.match[3]) > 0 && Number(flicked.match[4]) > 0,
+      !!flicked && flicked.match[1] === 'flick' && Math.sign(Number(flicked.match[3])) === Math.sign(flickWorld.x) && Math.sign(Number(flicked.match[4])) === Math.sign(flickWorld.y),
       flicked ? flicked.match[0].replace('ELEVEN action ', '') : 'no action line after the flick');
 
     // Both thumbs at once: the stick held right while the right thumb taps ACTION. The tap still
@@ -516,9 +635,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       const presses = logs.slice(fromBoth).filter((l) => /^ELEVEN (press|release) /.test(l)).map((l) => l.trim().replace('ELEVEN ', ''));
       const targets = presses.map((l) => /target=(\w+)/.exec(l)?.[1]).filter(Boolean);
-      const moved = beforeBoth && afterBoth ? Number(afterBoth[2]) - Number(beforeBoth[2]) : NaN;
+      const moved = beforeBoth && afterBoth ? Math.hypot(Number(afterBoth[2]) - Number(beforeBoth[2]), Number(afterBoth[3]) - Number(beforeBoth[3])) : NaN;
       check('the stick and ACTION work at the same time', !!both && both.match[1] === 'tap' && targets.includes('stick') && targets.includes('action') && moved > 1,
-        `${presses.join(' | ') || 'no presses'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player x moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
+        `${presses.join(' | ') || 'no presses'}; ${both ? both.match[0].replace('ELEVEN action ', '') : 'no action line'}; player moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m while both were down`);
     }
 
     // A finger keeps its owner from press to lift (Codex on #57): Unity reports a held finger
@@ -551,10 +670,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       const lines = logs.slice(fromOver).filter((l) => /^ELEVEN (press|release|capture pressed|scenario) /.test(l)).map((l) => l.trim().replace('ELEVEN ', '').slice(0, 80));
       const still = !!first && !!second && first[2] === second[2] && first[3] === second[3];
-      const freed = !!dragFrom && !!dragTo && Number(dragTo[2]) - Number(dragFrom[2]) > 1;
+      const dragged = dragFrom && dragTo ? Math.hypot(Number(dragTo[2]) - Number(dragFrom[2]), Number(dragTo[3]) - Number(dragFrom[3])) : NaN;
+      const freed = dragged > 1;
       notes.liftOverActionActivates = lines.some((l) => l.startsWith('scenario'));
       check('a stick finger that passes over the UI still lets go of the stick', still && freed,
-        `${lines.join(' | ') || 'no presses'}; player ${first ? `${first[2]},${first[3]}` : '?'} → ${second ? `${second[2]},${second[3]}` : '?'} after the lift; a fresh drag moved it ${dragFrom && dragTo ? (Number(dragTo[2]) - Number(dragFrom[2])).toFixed(2) : '?'} m; the lift ${notes.liftOverActionActivates ? 'activated' : 'did not activate'} Run scenario`);
+        `${lines.join(' | ') || 'no presses'}; player ${first ? `${first[2]},${first[3]}` : '?'} → ${second ? `${second[2]},${second[3]}` : '?'} after the lift; a fresh drag moved it ${Number.isFinite(dragged) ? dragged.toFixed(2) : '?'} m; the lift ${notes.liftOverActionActivates ? 'activated' : 'did not activate'} Run scenario`);
     }
 
     const kickErrors = logs.slice(fromKick).filter((l) => /error|exception/i.test(l));
@@ -1030,6 +1150,12 @@ try {
   await runPass(browser, idle('noui=1'), 'phone-noui-after', phone, true);
   // The HUD on a 320 pt phone with text at 200 % (WCAG 1.4.4): placed actions must grow with their labels.
   await runPass(browser, `${base}?trace=1&idle=1&textscale=2`, 'narrow-large-text-hud', { ...phone, viewport: { width: 320, height: 640 } }, true);
+  // The vertical pitch (#72) at 0° and 180°: iPhone portrait and landscape, and iPad portrait.
+  const { defaultBrowserType: _landscape, ...phoneLandscape } = devices['iPhone 13 landscape'];
+  const { defaultBrowserType: _tablet, ...tabletPortrait } = devices['iPad (gen 7)'];
+  await runPass(browser, `${base}?trace=1&view=1`, 'view-phone', phone, true);
+  await runPass(browser, `${base}?trace=1&view=1`, 'view-phone-landscape', phoneLandscape, true);
+  await runPass(browser, `${base}?trace=1&view=1`, 'view-tablet', tabletPortrait, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
