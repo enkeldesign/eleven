@@ -43,7 +43,7 @@ A ball's path stays one straight segment, with at most two contacts in a step (a
 - a ball struck straight at a post comes back along its line at `frameRestitution` times its speed;
 - the normal is the direction from the axis to the contact point. It is never shorter than `ballRadius` + `postWidth`/2, which is above 0, so it is always finite.
 
-**Players** don't collide with the frame. They are still dots, and the keeper is #69.
+**Players** don't collide with the frame. They are still dots. A keeper's envelope is swept along the same step's path as the frame, and the earliest contact wins ([keeper.md](keeper.md)).
 
 **The quick pass's weighting** rolls a pass on open grass, without the frame. A pass is never weighted for a post.
 

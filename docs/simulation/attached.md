@@ -22,7 +22,7 @@ SOL's handoff on #60, from #29's sources ([SWOS](https://files.swos.eu/manual/SW
 
 The step order is the same as FREE's:
 
-commands → movement → aftertouch → kicks → **ball control** → ball integration and the goal's frame → goal line.
+commands → movement → aftertouch → kicks → **ball control** → keepers → ball integration, the goal's frame and keepers' saves → goal line.
 
 Under ATTACHED, the ball-control slot does this:
 
