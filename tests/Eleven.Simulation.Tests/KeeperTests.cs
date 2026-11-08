@@ -28,9 +28,10 @@ namespace Eleven.Simulation.Tests
             var states = new List<SimState>();
             List<SimEvent> events = Run(sim, C.TickRate,
                 shooter: t => new Command(ShooterController, t, Vec2.Zero, t == 0 ? Shot(C, start, 0, 0.8) : (KickIntent?)null),
-                keeper: t => Keep(t, dive: target), states);
+                keeper: t => Keep(t, dive: t >= C.KickWindUpTicks ? target : (Vec3?)null), states);
 
             long kicked = events.Single(e => e.Kind == SimEventKind.Kicked).Tick;
+            Assert.Equal(C.KickWindUpTicks, kicked);
             SimEvent reacted = Assert.Single(events, e => e.Kind == SimEventKind.KeeperReacted);
             Assert.Equal(kicked, reacted.Tick);
 
@@ -40,7 +41,8 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(KeeperPhase.React, states[(int)t].Keepers[0].Phase);
             }
 
-            // He asked to dive on every step; the dive comes when his reaction ends, not before.
+            // He asked to dive on every step from the kick's own; the dive comes when his reaction
+            // ends, not before.
             SimEvent dived = Assert.Single(events, e => e.Kind == SimEventKind.KeeperDived);
             Assert.Equal(kicked + reaction, dived.Tick);
         }
@@ -203,7 +205,7 @@ namespace Eleven.Simulation.Tests
         {
             SimState start = Penalty(C);
             Func<long, Command?> shooter = t => new Command(ShooterController, t, Vec2.Zero, t == 0 ? Shot(C, start, 2.5, 0.8) : (KickIntent?)null);
-            Func<long, Command?> keeper = t => Keep(t, dive: new Vec3(Spot(C).X, 2.5, 0.5));
+            Func<long, Command?> keeper = t => Keep(t, dive: t >= C.KickWindUpTicks ? new Vec3(Spot(C).X, 2.5, 0.5) : (Vec3?)null);
             int ticks = 3 * C.TickRate;
 
             var whole = new List<ulong>();

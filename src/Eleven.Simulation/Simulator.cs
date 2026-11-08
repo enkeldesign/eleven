@@ -69,7 +69,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 Command? command = FindAccepted(_state.Players[i].OwnerControllerId);
-                StepPlayer(ref _state.Players[i], command, dt);
+                StepPlayer(ref _state.Players[i], command, dt, KeeperOf(_state.Players[i].Id));
             }
 
             for (int i = 0; i < _state.Players.Length; i++)
@@ -85,6 +85,9 @@ namespace Eleven.Simulation
             // After kicks, so a kick's own step and its cooldown keep the ball free (#59): no one
             // touches on the step a kick connects, whatever the cooldown, and the kicker not through it.
             StepControl(tick, events);
+
+            // Keepers' phases (#69), after kicks, so a kick sets them reacting on its own step.
+            StepKeepers(tick, events);
 
             Vec3 start = _state.Ball.Position;
             StepBall(tick, dt, start, events);
@@ -192,15 +195,20 @@ namespace Eleven.Simulation
             return null;
         }
 
-        private void StepPlayer(ref PlayerState player, Command? command, double dt)
+        private void StepPlayer(ref PlayerState player, Command? command, double dt, int keeper)
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
             if (player.TouchCooldown > 0) player.TouchCooldown--;
 
             // The stick asks for a velocity; the player's own capabilities decide how fast they
             // run and how quickly they get there, whether speeding up, braking or turning (#36).
+            // A keeper's body follows his phase (#69): reacting he sets, braking whatever is asked;
+            // diving he flies at his dive's velocity; recovering he is on the ground.
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
-            player.Velocity = Accelerate(player.Velocity, move, player.Capabilities, dt);
+            KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
+            if (phase == KeeperPhase.Dive) player.Velocity = _state.Keepers[keeper].DiveVelocity;
+            else if (phase == KeeperPhase.Recover) player.Velocity = Vec2.Zero;
+            else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, player.Capabilities, dt);
             player.Position += player.Velocity * dt;
 
             // Below a millimetre per second the player counts as stopped and keeps its last heading.
@@ -465,7 +473,7 @@ namespace Eleven.Simulation
             player.WindUpTarget = 0;
 
             Vec2 offset = ball.Position.Horizontal - player.Position;
-            if (ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
+            if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
             {
                 events.Add(new SimEvent(tick, SimEventKind.KickMissed, player.Id));
                 return;
@@ -516,7 +524,7 @@ namespace Eleven.Simulation
             _state.Ball.AttachedTo = 0;
 
             if (Config.ControlModel != ControlModel.Free) return;
-            if (_kickConnected) return;
+            if (_kickConnected || _state.Ball.HeldBy != 0) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
 
             double reachSquared = Config.ControlReach * Config.ControlReach;
@@ -525,7 +533,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 PlayerState p = _state.Players[i];
-                if (p.WindUpTicks > 0 || p.KickCooldown > 0 || p.TouchCooldown > 0) continue;
+                if (p.WindUpTicks > 0 || p.KickCooldown > 0 || p.TouchCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
                 if (!FindAccepted(p.OwnerControllerId).HasValue) continue;
                 double distanceSquared = (_state.Ball.Position.Horizontal - p.Position).LengthSquared;
                 if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
@@ -547,7 +555,14 @@ namespace Eleven.Simulation
         {
             ref BallState ball = ref _state.Ball;
 
-            // A kick released it, and nothing takes it on the kick's own step.
+            // A kick released it, and nothing takes it on the kick's own step. A keeper's ball is
+            // in his hands.
+            if (ball.HeldBy != 0)
+            {
+                Release(tick, events);
+                return;
+            }
+
             if (_kickConnected)
             {
                 Release(tick, events);
@@ -579,7 +594,7 @@ namespace Eleven.Simulation
                 {
                     if (i == holder) continue;
                     PlayerState p = _state.Players[i];
-                    if (p.WindUpTicks > 0 || p.KickCooldown > 0) continue;
+                    if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
                     if (!FindAccepted(p.OwnerControllerId).HasValue) continue;
                     double distanceSquared = (ball.Position.Horizontal - p.Position).LengthSquared;
                     if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
@@ -796,12 +811,51 @@ namespace Eleven.Simulation
 
         // The ball integrates, then the goal's frame resolves along the step's path (#68): the
         // straight segment from where the ball started the step to where it ends.
+        // The ball (#68, #69). Held, it moves with its keeper, where he caught it. Free, it
+        // integrates; then the frame turns a ball touching it at the step's start, and the first
+        // contact along the step's path, with the frame or a keeper, stops it there. With no keeper
+        // in its way, this is exactly BallFlight's step (INV-13).
         private void StepBall(long tick, double dt, Vec3 start, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
-            if (BallFlight.Advance(ref ball, Config, out FramePart first, out FramePart second)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
-            if (first != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)first));
-            if (second != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)second));
+            int holder = KeeperOf(ball.HeldBy);
+            if (holder >= 0)
+            {
+                Vec2 v = _state.Players[IndexOfPlayer(ball.HeldBy)].Velocity;
+                ball.Velocity = new Vec3(v.X, v.Y, 0);
+                ball.Position = new Vec3(ball.Position.X + v.X * dt, ball.Position.Y + v.Y * dt, ball.Position.Z);
+                return;
+            }
+
+            if (IntegrateBall(ref ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
+            GoalFrame.TouchAtStart(start, ref ball, Config, out FramePart touched);
+            if (touched != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)touched));
+
+            Vec3 path = ball.Position - start;
+            double frame = GoalFrame.FirstContact(start, path, Config, out FramePart part, out Vec3 a, out Vec3 b);
+            double soonest = double.PositiveInfinity;
+            int saver = -1;
+            for (int k = 0; k < _state.Keepers.Length; k++)
+            {
+                Envelope(k, out Vec3 feet, out Vec3 top, out double reach);
+                double s = GoalFrame.Sweep(start, path, feet, top, reach);
+                if (s < soonest)
+                {
+                    soonest = s;
+                    saver = k;
+                }
+            }
+
+            if (saver >= 0 && soonest <= frame)
+            {
+                ball.Position = start + path * soonest;
+                Save(saver, tick, events);
+            }
+            else if (part != FramePart.None)
+            {
+                GoalFrame.StopAndTurn(start + path * frame, ref ball, a, b, Config.FrameRestitution);
+                events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)part));
+            }
         }
 
         /// <summary>
@@ -853,6 +907,181 @@ namespace Eleven.Simulation
             ball.Position = new Vec3(ball.Position.X + velocity.X * dt, ball.Position.Y + velocity.Y * dt, radius);
             ball.Spin *= Decay(config.GroundSpinDecay, dt);
             return false;
+        }
+
+        // ---- The keeper (#69, docs/simulation/keeper.md) -------------------------------------------
+
+        // m. The top of a keeper's envelope's axis on his feet, and on the ground: technical
+        // constants of the body, not feel values. His reach extends the envelope beyond both.
+        private const double StandingTop = 2.0;
+        private const double LyingTop = 0.3;
+
+        /// <summary>The index in <see cref="SimState.Keepers"/> of the keeper who is player <paramref name="playerId"/>, or −1.</summary>
+        private int KeeperOf(int playerId)
+        {
+            if (playerId == 0) return -1;
+            for (int k = 0; k < _state.Keepers.Length; k++)
+            {
+                if (_state.Keepers[k].PlayerId == playerId) return k;
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Each keeper's phase, after kicks: a phase from an earlier step counts down and ends; a kick
+        /// that connected on this step sets a keeper on his feet reacting; and a keeper on his feet
+        /// takes a dive his command asks for. So a dive starts no sooner than his reaction time after
+        /// the kick, whatever his brain asks, and a dive asked on the kick's own step is refused.
+        /// </summary>
+        private void StepKeepers(long tick, List<SimEvent> events)
+        {
+            for (int k = 0; k < _state.Keepers.Length; k++)
+            {
+                ref KeeperState keeper = ref _state.Keepers[k];
+                ref PlayerState body = ref _state.Players[IndexOfPlayer(keeper.PlayerId)];
+
+                if (keeper.Phase != KeeperPhase.Position && --keeper.PhaseTicks == 0)
+                {
+                    if (keeper.Phase == KeeperPhase.Dive)
+                    {
+                        // He lands, and stays down.
+                        keeper.Phase = KeeperPhase.Recover;
+                        keeper.PhaseTicks = Config.KeeperRecoverTicks;
+                        keeper.DiveVelocity = Vec2.Zero;
+                        keeper.DiveTop = 0;
+                        body.Velocity = Vec2.Zero;
+                    }
+                    else
+                    {
+                        keeper.Phase = KeeperPhase.Position;
+                    }
+                }
+
+                if (_kickConnected && keeper.Phase == KeeperPhase.Position)
+                {
+                    keeper.Phase = KeeperPhase.React;
+                    keeper.PhaseTicks = ReactionTicks(keeper.Capabilities, Config);
+                    events.Add(new SimEvent(tick, SimEventKind.KeeperReacted, keeper.PlayerId));
+                }
+
+                Command? command = FindAccepted(body.OwnerControllerId);
+                if (keeper.Phase == KeeperPhase.Position && command.HasValue && command.Value.Dive.HasValue && _state.Ball.HeldBy != keeper.PlayerId)
+                {
+                    Dive(ref keeper, body, command.Value.Dive.Value);
+                    events.Add(new SimEvent(tick, SimEventKind.KeeperDived, keeper.PlayerId));
+                }
+            }
+        }
+
+        // A dive carries his body toward the target at his dive speed for the steps the distance
+        // needs, at most the longest dive, at the target's height: from the next step on.
+        private void Dive(ref KeeperState keeper, in PlayerState body, Vec3 target)
+        {
+            Vec2 to = target.Horizontal - body.Position;
+            double distance = SimMath.Sqrt(to.LengthSquared);
+            double step = keeper.Capabilities.DiveSpeed * Config.TickSeconds;
+            int ticks = distance > 0 ? (int)Math.Ceiling(distance / step - 1e-9) : 1;
+            if (ticks < 1) ticks = 1;
+            if (ticks > Config.KeeperDiveTicks) ticks = Config.KeeperDiveTicks;
+
+            keeper.Phase = KeeperPhase.Dive;
+            keeper.PhaseTicks = ticks;
+            keeper.DiveVelocity = distance > 0 ? to * (keeper.Capabilities.DiveSpeed / distance) : Vec2.Zero;
+            keeper.DiveTop = target.Z < LyingTop ? LyingTop : target.Z > StandingTop ? StandingTop : target.Z;
+        }
+
+        /// <summary>
+        /// A keeper's envelope: the capsule his hands reach, round a vertical axis at his position,
+        /// from the ground to a top his phase sets, at his reach plus the ball's radius for the
+        /// ball's centre. It moves only with his body.
+        /// </summary>
+        private void Envelope(int k, out Vec3 feet, out Vec3 top, out double reach)
+        {
+            KeeperState keeper = _state.Keepers[k];
+            Vec2 at = _state.Players[IndexOfPlayer(keeper.PlayerId)].Position;
+            double height = keeper.Phase switch
+            {
+                KeeperPhase.Dive => keeper.DiveTop,
+                KeeperPhase.Recover => LyingTop,
+                _ => StandingTop,
+            };
+
+            feet = new Vec3(at.X, at.Y, 0);
+            top = new Vec3(at.X, at.Y, height);
+            reach = keeper.Capabilities.Reach + Config.BallRadius;
+        }
+
+        /// <summary>
+        /// The ball meets keeper <paramref name="k"/>'s envelope. Relative to him, he holds a ball no
+        /// faster than his hold speed, which falls with his handling, to half at none, and with how
+        /// far out toward his reach its line passes his body, to nothing at his fingertips. Anything
+        /// faster he parries: its velocity along the contact normal reverses, scaled by the parry
+        /// restitution, and turns by a seeded error that shrinks with his handling. No random save
+        /// chance: the outcome is the speed, where he meets it, and his handling.
+        /// </summary>
+        private void Save(int k, long tick, List<SimEvent> events)
+        {
+            ref BallState ball = ref _state.Ball;
+            KeeperState keeper = _state.Keepers[k];
+            PlayerState body = _state.Players[IndexOfPlayer(keeper.PlayerId)];
+            Envelope(k, out Vec3 feet, out Vec3 top, out _);
+
+            var moving = new Vec3(body.Velocity.X, body.Velocity.Y, 0);
+            Vec3 relative = ball.Velocity - moving;
+            double speed = SimMath.Sqrt(relative.LengthSquared);
+            double stretch = speed > 0 ? LineToAxis(ball.Position, relative, feet, top) / keeper.Capabilities.Reach : 1;
+            if (stretch > 1) stretch = 1;
+            double hold = Config.KeeperHoldSpeed * (0.5 + 0.5 * keeper.Capabilities.Handling) * (1 - stretch);
+
+            ball.Spin = Vec3.Zero;
+            ball.AttachedTo = 0;
+            for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
+
+            if (speed <= hold)
+            {
+                ball.HeldBy = keeper.PlayerId;
+                ball.Velocity = moving;
+                events.Add(new SimEvent(tick, SimEventKind.KeeperHeld, keeper.PlayerId));
+                return;
+            }
+
+            Vec3 normal = ball.Position - GoalFrame.Closest(ball.Position, feet, top);
+            double length = SimMath.Sqrt(normal.LengthSquared);
+            if (length > 0)
+            {
+                normal = normal * (1 / length);
+                double into = GoalFrame.Dot(relative, normal);
+                if (into < 0) relative -= normal * ((1 + Config.KeeperParryRestitution) * into);
+            }
+
+            double error = Config.KeeperParryError * (1 - keeper.Capabilities.Handling);
+            if (error > 0)
+            {
+                var draws = new StreamDraws(_state.Seed, tick, RandomStream.Keeper, keeper.PlayerId);
+                double angle = (2 * draws.NextUniform() - 1) * error;
+                double c = SimMath.Cos(angle), s = SimMath.Sin(angle);
+                relative = new Vec3(relative.X * c - relative.Y * s, relative.X * s + relative.Y * c, relative.Z);
+            }
+
+            ball.Velocity = relative + moving;
+            events.Add(new SimEvent(tick, SimEventKind.KeeperParried, keeper.PlayerId));
+        }
+
+        // How close the line through `p` along `direction` passes the axis from `a` to `b`.
+        private static double LineToAxis(Vec3 p, Vec3 direction, Vec3 a, Vec3 b)
+        {
+            Vec3 w = b - a, r = p - a;
+            double uu = GoalFrame.Dot(direction, direction), ww = GoalFrame.Dot(w, w), uw = GoalFrame.Dot(direction, w);
+            double ur = GoalFrame.Dot(direction, r), wr = GoalFrame.Dot(w, r);
+            double denominator = uu * ww - uw * uw;
+            double along = denominator > 1e-12 ? (uu * wr - uw * ur) / denominator : 0;
+            if (along < 0) along = 0;
+            if (along > 1) along = 1;
+            Vec3 onAxis = a + w * along;
+            double t = GoalFrame.Dot(direction, onAxis - p) / uu;
+            Vec3 gap = p + direction * t - onAxis;
+            return SimMath.Sqrt(gap.LengthSquared);
         }
 
         /// <summary>

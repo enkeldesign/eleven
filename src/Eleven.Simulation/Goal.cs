@@ -60,56 +60,79 @@ namespace Eleven.Simulation
         /// </summary>
         public static void Resolve(Vec3 start, ref BallState ball, SimConfig config, out FramePart first, out FramePart second)
         {
-            first = second = FramePart.None;
-            double reach = config.BallRadius + config.PostWidth / 2;
+            second = FramePart.None;
+            TouchAtStart(start, ref ball, config, out first);
+            double soonest = FirstContact(start, ball.Position - start, config, out FramePart hit, out Vec3 a, out Vec3 b);
+            if (hit == FramePart.None) return;
+            StopAndTurn(start + (ball.Position - start) * soonest, ref ball, a, b, config.FrameRestitution);
+            if (first == FramePart.None) first = hit;
+            else second = hit;
+        }
+
+        /// <summary>
+        /// The first half of <see cref="Resolve"/>: a ball touching the frame at the step's start and
+        /// moving into it is turned at once, and moves the whole step from <paramref name="start"/>
+        /// along its new velocity. Returns the part it was touching, or none.
+        /// </summary>
+        public static void TouchAtStart(Vec3 start, ref BallState ball, SimConfig config, out FramePart part)
+        {
+            part = FramePart.None;
+            double reach = Reach(config);
             if (!NearFrame(start, ball.Position, config, reach + Touch)) return;
 
-            double x = config.FrameAxisX, y = config.PostAxisY, z = config.CrossbarAxisZ;
-            var rightFoot = new Vec3(x, -y, 0);
-            var rightTop = new Vec3(x, -y, z);
-            var leftFoot = new Vec3(x, y, 0);
-            var leftTop = new Vec3(x, y, z);
-
-            // Touching and moving in at the start: the contact is now.
             Vec3 path = ball.Position - start;
-            for (int i = 0; i < 3 && first == FramePart.None; i++)
+            for (int i = 0; i < 3; i++)
             {
-                Axis(i, rightFoot, rightTop, leftFoot, leftTop, out Vec3 a, out Vec3 b, out FramePart part);
+                Axis(i, config, out Vec3 a, out Vec3 b, out FramePart touched);
                 Vec3 off = start - Closest(start, a, b);
                 if (off.LengthSquared > (reach + Touch) * (reach + Touch) || off.LengthSquared == 0 || Dot(off, path) >= 0) continue;
 
                 Turn(ref ball, off * (1 / SimMath.Sqrt(off.LengthSquared)), config.FrameRestitution);
                 Vec3 end = start + ball.Velocity * config.TickSeconds;
                 ball.Position = end.Z < config.BallRadius ? new Vec3(end.X, end.Y, config.BallRadius) : end;
-                path = ball.Position - start;
-                first = part;
+                part = touched;
+                return;
             }
+        }
 
-            // The first contact along the path stops the ball there.
+        /// <summary>
+        /// The second half: the fraction of the path from <paramref name="start"/> along
+        /// <paramref name="path"/> at which the ball first meets the frame, with the part and its
+        /// axis; infinity and none when it doesn't.
+        /// </summary>
+        public static double FirstContact(Vec3 start, Vec3 path, SimConfig config, out FramePart part, out Vec3 axisA, out Vec3 axisB)
+        {
             double soonest = double.PositiveInfinity;
-            FramePart hit = FramePart.None;
-            Vec3 hitA = Vec3.Zero, hitB = Vec3.Zero;
+            part = FramePart.None;
+            axisA = axisB = Vec3.Zero;
+            double reach = Reach(config);
+            if (!NearFrame(start, start + path, config, reach + Touch)) return soonest;
+
             for (int i = 0; i < 3; i++)
             {
-                Axis(i, rightFoot, rightTop, leftFoot, leftTop, out Vec3 a, out Vec3 b, out FramePart part);
+                Axis(i, config, out Vec3 a, out Vec3 b, out FramePart hit);
                 double s = Sweep(start, path, a, b, reach);
                 if (s < soonest)
                 {
                     soonest = s;
-                    hit = part;
-                    hitA = a;
-                    hitB = b;
+                    part = hit;
+                    axisA = a;
+                    axisB = b;
                 }
             }
 
-            if (hit == FramePart.None) return;
-            Vec3 at = start + path * soonest;
-            Vec3 normal = at - Closest(at, hitA, hitB);
-            ball.Position = at;
-            if (normal.LengthSquared > 0) Turn(ref ball, normal * (1 / SimMath.Sqrt(normal.LengthSquared)), config.FrameRestitution);
-            if (first == FramePart.None) first = hit;
-            else second = hit;
+            return soonest;
         }
+
+        /// <summary>Stops the ball at <paramref name="at"/>, on the capsule round the axis from <paramref name="a"/> to <paramref name="b"/>, and turns it.</summary>
+        public static void StopAndTurn(Vec3 at, ref BallState ball, Vec3 a, Vec3 b, double restitution)
+        {
+            Vec3 normal = at - Closest(at, a, b);
+            ball.Position = at;
+            if (normal.LengthSquared > 0) Turn(ref ball, normal * (1 / SimMath.Sqrt(normal.LengthSquared)), restitution);
+        }
+
+        private static double Reach(SimConfig config) => config.BallRadius + config.PostWidth / 2;
 
         /// <summary>
         /// Whether the ball's centre at <paramref name="at"/> is inside the goal mouth, as the goal
@@ -119,13 +142,15 @@ namespace Eleven.Simulation
         public static bool InMouth(Vec3 at, SimConfig config) =>
             (at.Y < 0 ? -at.Y : at.Y) < config.PostAxisY && at.Z < config.CrossbarAxisZ;
 
-        private static void Axis(int i, Vec3 rightFoot, Vec3 rightTop, Vec3 leftFoot, Vec3 leftTop, out Vec3 a, out Vec3 b, out FramePart part)
+        // The posts' axes run from their feet to their tops, the crossbar's between the tops.
+        private static void Axis(int i, SimConfig config, out Vec3 a, out Vec3 b, out FramePart part)
         {
+            double x = config.FrameAxisX, y = config.PostAxisY, z = config.CrossbarAxisZ;
             switch (i)
             {
-                case 0: a = rightFoot; b = rightTop; part = FramePart.RightPost; break;
-                case 1: a = leftFoot; b = leftTop; part = FramePart.LeftPost; break;
-                default: a = rightTop; b = leftTop; part = FramePart.Crossbar; break;
+                case 0: a = new Vec3(x, -y, 0); b = new Vec3(x, -y, z); part = FramePart.RightPost; break;
+                case 1: a = new Vec3(x, y, 0); b = new Vec3(x, y, z); part = FramePart.LeftPost; break;
+                default: a = new Vec3(x, -y, z); b = new Vec3(x, y, z); part = FramePart.Crossbar; break;
             }
         }
 
@@ -153,7 +178,7 @@ namespace Eleven.Simulation
         /// to <paramref name="b"/>, moving in; infinity when it doesn't within the segment. A centre
         /// already touching is never a later contact: the start of the step handled it.
         /// </summary>
-        private static double Sweep(Vec3 p, Vec3 d, Vec3 a, Vec3 b, double reach)
+        internal static double Sweep(Vec3 p, Vec3 d, Vec3 a, Vec3 b, double reach)
         {
             Vec3 off = p - Closest(p, a, b);
             if (off.LengthSquared <= (reach + Touch) * (reach + Touch)) return Dot(off, d) < 0 ? 0 : double.PositiveInfinity;
@@ -194,13 +219,13 @@ namespace Eleven.Simulation
             return s >= 0 && s <= 1 ? s : double.PositiveInfinity;
         }
 
-        private static Vec3 Closest(Vec3 p, Vec3 a, Vec3 b)
+        internal static Vec3 Closest(Vec3 p, Vec3 a, Vec3 b)
         {
             Vec3 ab = b - a;
             double t = Dot(p - a, ab) / Dot(ab, ab);
             return a + ab * (t < 0 ? 0 : t > 1 ? 1 : t);
         }
 
-        private static double Dot(Vec3 u, Vec3 v) => u.X * v.X + u.Y * v.Y + u.Z * v.Z;
+        internal static double Dot(Vec3 u, Vec3 v) => u.X * v.X + u.Y * v.Y + u.Z * v.Z;
     }
 }
