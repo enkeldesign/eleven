@@ -48,6 +48,7 @@ namespace Eleven.Host
         private SimConfig _config;
         private readonly Camera _camera;
         private readonly Transform _player;
+        private readonly Transform _keeper;
         private readonly Transform _ball;
         private readonly Transform _ballShadow;
         private readonly Transform _crossbar;
@@ -95,6 +96,8 @@ namespace Eleven.Host
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
             _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 3, _ballDiameter);
             _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
+            _keeper = Shape(root, disc, "Keeper", HostPalette.Keeper, 4, PlayerDiameter);
+            _keeper.gameObject.SetActive(false);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
         }
 
@@ -131,11 +134,14 @@ namespace Eleven.Host
         /// <summary>How the grass is mown.</summary>
         public Mowing Grass { get; }
 
+        /// <param name="keeper">The keeper's position (#69), or null when there is none.</param>
         /// <param name="ball">x, y on the pitch and z, the height of the ball's centre.</param>
         /// <param name="layout">The HUD, whose <see cref="HudLayout.PlayArea"/> the play is framed in.</param>
-        public void Render(Vector2 player, Vector3 ball, in HudLayout layout)
+        public void Render(Vector2 player, Vector2? keeper, Vector3 ball, in HudLayout layout)
         {
             _player.localPosition = new Vector3(player.x, player.y, 0);
+            _keeper.gameObject.SetActive(keeper.HasValue);
+            if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
 
             // Height is shown by lifting the ball up the screen and growing it slightly.

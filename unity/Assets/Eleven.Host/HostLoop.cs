@@ -62,6 +62,7 @@ namespace Eleven.Host
         private double _lastTime;
         private double _accumulator;
         private Vector2 _previousPlayer;
+        private Vector2 _previousKeeper;
         private Vector3 _previousBall;
         private GUIStyle _buttonStyle;
         private Vector2Int _styledFor;
@@ -189,8 +190,10 @@ namespace Eleven.Host
 
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
+            Vector2? keeper = Keeper(state, out Vec2 at) ? Vector2.Lerp(_previousKeeper, ToVector(at), alpha) : (Vector2?)null;
             _view.Render(
                 Vector2.Lerp(_previousPlayer, ToVector(state.Players[0].Position), alpha),
+                keeper,
                 Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
                 _layout);
         }
@@ -200,6 +203,10 @@ namespace Eleven.Host
             RememberPrevious();
             _commands.Clear();
             _commands.Add(_input.CommandFor(_simulator.Tick));
+
+            // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
+            // recorded with the player's, so a replay never runs it.
+            KeeperControllers.Append(_simulator, _commands);
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
             _simulator.Step(_commands, _events);
@@ -215,7 +222,7 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)}"));
             }
 
             if (_simulator.Tick % ReplayCheckEveryTicks == 0) CheckReplay();
@@ -250,7 +257,28 @@ namespace Eleven.Host
             SimState state = _simulator.PeekState();
             _previousPlayer = ToVector(state.Players[0].Position);
             _previousBall = ToVector(state.Ball.Position);
+            if (Keeper(state, out Vec2 at)) _previousKeeper = ToVector(at);
         }
+
+        // The keeper's position (#69), when practice has one.
+        private static bool Keeper(SimState state, out Vec2 at)
+        {
+            at = Vec2.Zero;
+            if (state.Keepers.Length == 0) return false;
+            int id = state.Keepers[0].PlayerId;
+            foreach (PlayerState p in state.Players)
+            {
+                if (p.Id == id) at = p.Position;
+            }
+
+            return true;
+        }
+
+        // For the smoke test: where the keeper is and his phase, or none.
+        private static string KeeperTrace(SimState state) =>
+            Keeper(state, out Vec2 at)
+                ? FormattableString.Invariant($"{at.X:F2},{at.Y:F2},{state.Keepers[0].Phase.ToString().ToLowerInvariant()}")
+                : "none";
 
         private void ResetMatch()
         {

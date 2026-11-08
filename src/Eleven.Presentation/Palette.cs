@@ -96,7 +96,7 @@ namespace Eleven.Presentation
         /// sits on the blue–yellow axis, so it stays apart from the green player and the yellow ball
         /// for red–green colour blindness too; his place in goal tells him apart as well.
         /// </summary>
-        public static readonly Rgba Keeper = Rgba.Hex("#000000");
+        public static readonly Rgba Keeper = Rgba.Hex("#7FD3F7");
 
         public static readonly (string Name, Rgba Colour)[] All =
         {
