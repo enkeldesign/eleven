@@ -169,11 +169,16 @@ namespace Eleven.Simulation.Harness
             return shot;
         }
 
-        // The loft whose flight, by the simulation's own ball, crosses the goal line at `height`.
+        // The lowest loft whose flight, by the simulation's own ball, crosses the goal line at
+        // `height`. Scanned up from a flat shot, which stays under the bar until it gets there: a
+        // steeper one can meet the bar, so height at the line is not monotonic in loft.
         private static double LoftFor(SimConfig config, Vec3 from, Vec2 to, double speed, double height)
         {
-            double lo = 0, hi = 0.6;
-            for (int i = 0; i < 40; i++)
+            const double Step = 0.005;
+            double lo = 0;
+            while (lo < 1 && HeightAtLine(config, from, to, speed, lo + Step) < height) lo += Step;
+            double hi = lo + Step;
+            for (int i = 0; i < 30; i++)
             {
                 double mid = (lo + hi) / 2;
                 if (HeightAtLine(config, from, to, speed, mid) < height) lo = mid;
