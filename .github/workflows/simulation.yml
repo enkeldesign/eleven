@@ -161,6 +161,19 @@ jobs:
           path: goal-edges/
           if-no-files-found: error
 
+      # Technical reference keeper: shots from 11 and 16 m against a reference and a slow keeper (#69).
+      - name: Characterise the keeper
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll keeper keeper-shots | tee keeper.txt
+          echo "::notice title=Keeper shots::$(sed 's| -> .*||' keeper.txt)"
+
+      - name: Publish keeper shots
+        uses: actions/upload-artifact@v4
+        with:
+          name: keeper-shots
+          path: keeper-shots/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

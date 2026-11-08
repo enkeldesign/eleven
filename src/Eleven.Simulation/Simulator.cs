@@ -1219,6 +1219,9 @@ namespace Eleven.Simulation
         internal static int ReactionTicks(in KeeperCapabilities capabilities, SimConfig config) =>
             Math.Max(1, (int)Math.Round(capabilities.ReactionTime * config.TickRate));
 
+        /// <summary>A keeper's reaction in whole steps under <paramref name="config"/>, for tools that report it (#69).</summary>
+        public static int ReactionTicksFor(KeeperCapabilities capabilities, SimConfig config) => ReactionTicks(capabilities, config);
+
         private static void InRange(string owner, string field, int value, int max)
         {
             if (value < 0 || value > max)
