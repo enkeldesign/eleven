@@ -1,6 +1,6 @@
 # The turn with the ball
 
-How a footballer turns sharply with the ball (#66), under FREE ([dribble.md](dribble.md)) and ATTACHED ([attached.md](attached.md)) alike. It is a research-backed starting hypothesis, not approved feel. Its values are technical references for the test bench, and the FREE-or-ATTACHED choice (#29) stays open.
+How a footballer turns sharply with the ball (#66), under FREE ([dribble.md](dribble.md)) and ATTACHED ([attached.md](attached.md)) alike. A change of direction short of the turn angle is a cut under FREE ([cut.md](cut.md), #75). It is a research-backed starting hypothesis, not approved feel. Its values are technical references for the test bench, and the FREE-or-ATTACHED choice (#29) stays open.
 
 ## The research starting answer
 
@@ -94,11 +94,12 @@ At 7–8, 0.7 turns as tightly as 0.9, and the gradient flattens. At 5, ATTACHED
 
 ## The characterisation
 
-`eleven-sim turns <dir> [name=value ...]` writes `turn-curves.csv`, and CI publishes it. `docs/simulation/turn-reference.csv` is the recorded technical reference, checked by `TurnCurvesTests`.
+`eleven-sim turns <dir> [name=value ...]` writes `turn-curves.csv`, and CI publishes it. `docs/simulation/turn-reference.csv` is the recorded technical reference, checked by `TurnCurvesTests`. It measures the cut too ([cut.md](cut.md#the-characterisation)).
 
 **The cases:**
-- 90°, 135° and 180° turns from the ball at the feet, after 2 s at half stick or full;
-- under FREE and ATTACHED, with the turn off (`turnStrength` 0) and on;
+- 45°, 90°, 135° and 180° changes of direction from the ball at the feet, after 2 s at half stick or full;
+- the stick snapped to the new direction, or swept there at a steady rate over 0.1 s (`sweep_s`), as a thumb sweeps a stick;
+- under FREE and ATTACHED, with the turn and the cut off (`turnStrength` and `cutStrength` 0) and on;
 - at ballControl 0.9 (good), 0.7 (bench, the bench's player) and 0.3 (poor);
 - each case started at each of the 15 steps of a touch interval.
 
@@ -108,16 +109,19 @@ At 7–8, 0.7 turns as tightly as 0.9, and the gradient flattens. At 5, ATTACHED
 | --- | --- |
 | `entry_mps` | the player's speed as the stick turns |
 | `kept` | the starts with control throughout: within reach under FREE, attached under ATTACHED, and the ball ahead again within 3 s |
-| `forward_mean_s`, `forward_max_s` | from the step the player first moves the new way until the ball is 0.3 m ahead along it |
+| `retained` | the starts in control at the end of the 3 s, whatever happened on the way: within reach and touched in the last touch interval under FREE, attached under ATTACHED |
+| `forward_mean_s`, `forward_min_s`, `forward_max_s` | from the step the player first moves the new way until the ball is 0.3 m ahead along it; the min and max give the spread across phases |
 | `trail_max_m`, `behind_max_s` | over that time, the furthest the ball is behind the player, and for how long |
 | `kick_ready_max_s` | until the ball is ahead, within kick reach and low enough, under either model |
 | `exit_mps` | the player's speed along the new direction when the ball is first ahead |
 | `pass_beside_min_m` | the closest the ball passes the player's centre, across the new direction |
 | `max_step_change_mps` | the largest change of ball velocity in one step, over every start |
+| `out_max_s` | the longest spell without control, over every start; a ball never regained counts to the window's end |
+| `separation_max_m` | the furthest the ball gets from the player's centre, over every start |
 
-Every column after `kept` is over the starts kept.
+The columns from `forward_mean_s` to `pass_beside_min_m` are over the starts kept.
 
-**180° at the references**, worst over the starts kept:
+**180° at the references**, snapped, worst over the starts kept:
 
 | 180° | Off: kept, ahead in, trails | On: kept, ahead in, trails |
 | --- | --- | --- |
@@ -139,11 +143,11 @@ Every column after `kept` is over the starts kept.
 - **Kick-ready comes with the ball ahead** in every row.
 - **The ball passes the player beside them.** At 0.9 it passes at least 0.16 m from their centre. Off, a 180° reversal passes within 0.05 m, through them. Poorer control passes closer, because its trap only partly arrests the ball.
 - **The largest change in one step** with the turn on is 5.85 m/s at 0.9 under FREE, against a cap of 5.7: the rest is the touch's error. Under ATTACHED, with no error, it is 5.71, the cap plus a step's rolling friction.
-- **90° rows are the same off and on.**
+- **90° rows:** under ATTACHED they are the same off and on. Under FREE the cut acts ([cut.md](cut.md)).
 
 ## What stays open
 
-- **A 90° cut isn't a turn**, and it is unchanged. Under FREE it is still decided by the touch phase: at a sprint, 0.9 keeps it from 3 of 15 starts and 0.7 from none. That is a separate problem, with its own issue.
+- **A 90° cut isn't a turn.** Under FREE it was decided by the touch phase: at a sprint, 0.9 kept it from 3 of 15 starts and 0.7 from none. The cut (#75, [cut.md](cut.md)) now touches the ball as it starts, and a turn's touch out stands for a cut's touch, so the two never stack.
 - **ATTACHED at 0.3 keeps a sprint reversal** at the reference, but as slowly as at half speed with the turn off: 1.10 s and 0.92 m.
   - Meanwhile it still loses a 90° sprint turn.
   - The cause is ATTACHED's 1.35 m loss reach: the player brakes onto a ball the trap only slowed.
@@ -161,7 +165,7 @@ Every column after `kept` is over the starts kept.
 - better control trails less;
 - with no execution error, each turn touch is within its bound, and the ball moves only by its velocity;
 - a good player's turn takes the ball past them at least 0.12 m from their centre;
-- 45° and 90° turns are ordinary, with the same per-tick hashes as with the turn off;
+- 45° and 90° changes of direction make no turn touch, with the same per-tick hashes as with the turn off (the cut, the same in both, is [cut.md](cut.md)'s);
 - `turnStrength` 0 makes no turn touch;
 - no turn touch through a kick's wind-up and cooldown, and a wind-up ends the turn;
 - determinism, and snapshot and restore mid-turn;

@@ -43,7 +43,7 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - It is a presentation setting, not a knob: in no config, candidate or capture. Reset and APPLY / RETRY keep it. [visual-system.md](../ui/visual-system.md) has the contract.
 
 **Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch.
-- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, and the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)). `turnStrength` 0 turns the turn off, for comparing with and without it.
+- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
 - Keeper holds the practice keeper's four capabilities and the config's five keeper values (#69, [keeper.md](keeper.md)). The capabilities change the practice keeper, never the config.
