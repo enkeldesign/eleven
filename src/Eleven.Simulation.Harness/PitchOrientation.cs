@@ -47,15 +47,20 @@ namespace Eleven.Simulation.Harness
         public PitchOrientation Flipped => new PitchOrientation(!_minusXUp);
 
         /// <summary>
-        /// Degrees to roll the camera about its view axis so that the attacked end is up the screen.
+        /// Degrees to roll the camera about its view axis so that the attacked end is up the screen:
+        /// a camera rolled by r has its up at (−sin r, cos r) in the world, so −90 puts +x up and 90
+        /// puts −x up.
         /// </summary>
-        public double CameraRoll => 0;
+        public double CameraRoll => _minusXUp ? 90 : -90;
 
-        /// <summary>A world vector as the screen shows it: +x right, +y up the screen.</summary>
-        public Vec2 ToScreen(Vec2 world) => world;
+        /// <summary>
+        /// A world vector as the screen shows it: +x right, +y up the screen. With +x up, world +y is
+        /// screen left; with −x up, screen right.
+        /// </summary>
+        public Vec2 ToScreen(Vec2 world) => _minusXUp ? new Vec2(world.Y, 0 - world.X) : new Vec2(0 - world.Y, world.X);
 
         /// <summary>A screen vector, +x right and +y up the screen, as the world direction it shows.</summary>
-        public Vec2 ToWorld(Vec2 screen) => screen;
+        public Vec2 ToWorld(Vec2 screen) => _minusXUp ? new Vec2(0 - screen.Y, screen.X) : new Vec2(screen.Y, 0 - screen.X);
 
         public bool Equals(PitchOrientation other) => _minusXUp == other._minusXUp;
 

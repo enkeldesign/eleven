@@ -121,13 +121,14 @@ namespace Eleven.Simulation.Tests
         public void A_manual_kick_into_empty_space_is_not_snapped_to_a_receiver()
         {
             // The pass drill: receivers ahead (14, 3), behind (-7, -1) and wide (3, 6). The flick
-            // goes down-right, at -45°, into space at least 57° from every one of them.
+            // goes at -45° on the pitch, into space at least 57° from every one of them: up and
+            // right on the vertical pitch's screen (#72).
             SimConfig config = SpikeScenario.Config();
             var sim = new Simulator(config, PassDrill.InitialState(config, PlayerCapabilities.Reference, PassDrill.Standard));
             var adapter = new ActionSurfaceAdapter(PassDrill.PasserController, S);
             adapter.SetLayout(StickZone, ActionZone, StickRadius, 1);
             adapter.Feed(Down(1, 300, 200, 0));
-            adapter.Feed(Up(1, 340, 240, 0.05)); // right and down the screen
+            adapter.Feed(Up(1, 340, 160, 0.05)); // right and up the screen
 
             var events = new List<SimEvent>();
             var commands = new List<Command>();
