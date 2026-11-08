@@ -72,8 +72,9 @@ namespace Eleven.Simulation.Tests
 
             Assert.True(c.Kick.HasValue);
             Assert.False(c.QuickPass);
-            // Screen up is pitch +y: 40 px right and 40 px up is the line (40, 40).
-            Assert.Equal(new Vec2(40, 40), c.Kick!.Value.Direction);
+            // The pitch is vertical (#72): screen up is toward the attacked goal, +x in practice,
+            // and screen right is −y. 40 px right and 40 px up is the line (40, −40).
+            Assert.Equal(new Vec2(40, -40), c.Kick!.Value.Direction);
             Assert.Equal(S.FlickStrength, c.Kick.Value.Strength);
             Assert.Equal(S.Loft, c.Kick.Value.Loft);
         }
@@ -154,7 +155,7 @@ namespace Eleven.Simulation.Tests
             adapter.ShapingOpen = true; // the state now shows the kick winding up or its window open
             Assert.Equal(TouchRole.Shaping, adapter.Feed(Down(2, 300, 200, 0.2)));
             Command shaping = Feed(adapter, 1, To(2, 320, 200, 0.22));
-            Assert.Equal(new Vec2(20 / S.AftertouchRange, 0), shaping.Aftertouch);
+            Assert.Equal(new Vec2(0, -20 / S.AftertouchRange), shaping.Aftertouch); // screen right is −y (#72)
             Assert.False(shaping.Kick.HasValue);
             Assert.False(shaping.QuickPass);
 
@@ -171,8 +172,8 @@ namespace Eleven.Simulation.Tests
             adapter.Feed(Down(2, 300, 200, 0));
             Command c = Feed(adapter, 0, To(2, 300, 100, 0.05)); // far up the screen
 
-            Assert.Equal(0, c.Aftertouch.X, 12);
-            Assert.Equal(1, c.Aftertouch.Y, 12); // up the screen is pitch +y, capped at full
+            Assert.Equal(1, c.Aftertouch.X, 12); // up the screen is toward the attacked goal, +x (#72), capped at full
+            Assert.Equal(0, c.Aftertouch.Y, 12);
         }
 
         [Fact]
@@ -192,13 +193,13 @@ namespace Eleven.Simulation.Tests
             adapter.Feed(To(1, 150, 200, 0.01)); // full stick right
 
             Command flick = Feed(adapter, 0, Down(2, 300, 200, 0.02), Up(2, 340, 200, 0.06));
-            Assert.Equal(new Vec2(1, 0), flick.Move);
+            Assert.Equal(new Vec2(0, -1), flick.Move); // screen right is −y (#72)
             Assert.True(flick.Kick.HasValue);
 
             adapter.ShapingOpen = true;
             Command shaping = Feed(adapter, 1, Down(3, 300, 200, 0.1), To(3, 300, 220, 0.12));
-            Assert.Equal(new Vec2(1, 0), shaping.Move);
-            Assert.True(shaping.Aftertouch.Y < 0);
+            Assert.Equal(new Vec2(0, -1), shaping.Move);
+            Assert.True(shaping.Aftertouch.X < 0); // down the screen, away from the attacked goal
         }
 
         [Fact]
@@ -213,9 +214,9 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(TouchRole.Stick, adapter.Feed(Down(1, 150, 200, 0.03)));
             Assert.Equal(TouchRole.Action, adapter.Feed(Down(2, 300, 200, 0.04)));
             Command c = Feed(adapter, 0, Up(2, 340, 200, 0.06));
-            Assert.Equal(new Vec2(1, 0), c.Move);
+            Assert.Equal(new Vec2(0, -1), c.Move); // screen right is −y (#72)
             Assert.True(c.Kick.HasValue);
-            Assert.Equal(new Vec2(40, 0), c.Kick!.Value.Direction); // from the first press, not the repeat
+            Assert.Equal(new Vec2(0, -40), c.Kick!.Value.Direction); // from the first press, not the repeat
         }
 
         [Fact]

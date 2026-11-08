@@ -300,6 +300,19 @@ namespace Eleven.Simulation.Harness
         public ActionSurfaceSettings Settings { get; private set; }
 
         /// <summary>
+        /// How the pitch is shown (#72). Gestures are read in screen space, and the stick, a flick's
+        /// line and aftertouch become world directions through it before a command is made, so the
+        /// commands recorded are in world coordinates whatever the view (INV-10).
+        /// </summary>
+        public PitchOrientation Orientation { get; private set; } = PitchOrientation.Practice;
+
+        /// <summary>A new view, such as a half-time flip: every gesture in progress is cancelled, as on a reset.</summary>
+        public void Orient(PitchOrientation orientation)
+        {
+            Orientation = orientation;
+        }
+
+        /// <summary>
         /// Whether the controlled player's kick is winding up or its aftertouch window is open, read
         /// from the state each frame: a press on the ACTION surface then shapes the ball instead of
         /// starting a gesture.
