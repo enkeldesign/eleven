@@ -540,10 +540,18 @@ namespace Eleven.Simulation
             _state.Ball.AttachedTo = 0;
 
             if (Config.ControlModel != ControlModel.Free) return;
+
+            // A turn ends when the player loses the ball, beyond their reach (Codex on #73), so
+            // their next possession starts with ordinary touches.
+            double reachSquared = Config.ControlReach * Config.ControlReach;
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                if (_state.Players[i].Turning && (_state.Ball.Position.Horizontal - _state.Players[i].Position).LengthSquared > reachSquared) _state.Players[i].Turning = false;
+            }
+
             if (_kickConnected || _state.Ball.HeldBy != 0) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
 
-            double reachSquared = Config.ControlReach * Config.ControlReach;
             double nearest = double.MaxValue;
             int toucher = -1;
             TurnTouch kind = TurnTouch.None;
@@ -675,19 +683,24 @@ namespace Eleven.Simulation
             return -1;
         }
 
+        // Losing the ball ends the holder's turn too (#66, Codex on #73).
         private void Release(long tick, List<SimEvent> events)
         {
             if (_state.Ball.AttachedTo == 0) return;
             events.Add(new SimEvent(tick, SimEventKind.Released, _state.Ball.AttachedTo));
+            int holder = IndexOfPlayer(_state.Ball.AttachedTo);
+            if (holder >= 0) _state.Players[holder].Turning = false;
             _state.Ball.AttachedTo = 0;
         }
 
         // Taking control is a first touch, as under FREE: it cushions the ball's speed relative to the
         // taker by at most the receive strength, scaled by ball control. A ball arriving faster than
         // that is only partly slowed, and the correction may not hold it. It clears spin, and closes
-        // every aftertouch window, since the ball has a new controller.
+        // every aftertouch window, since the ball has a new controller. A new possession starts with
+        // the ordinary correction, whatever turn the taker was in before (#66, Codex on #73).
         private void Take(int index, long tick, List<SimEvent> events)
         {
+            _state.Players[index].Turning = false;
             ref BallState ball = ref _state.Ball;
             PlayerState taker = _state.Players[index];
             Vec2 relative = ball.Velocity.Horizontal - taker.Velocity;
