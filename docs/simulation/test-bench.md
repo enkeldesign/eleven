@@ -4,7 +4,7 @@ The test bench (#45, part of #27) is how values are tuned by playing. Research s
 
 ## Knobs
 
-`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick, pass and ball control), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
+`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick, pass and ball control), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28), then every `SplitSettings.Parameters` entry (Candidate B's, #76). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
 
 Each knob shows what its metadata holds:
 - its unit and valid range;
@@ -42,7 +42,13 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - It flips the view and the stick's mapping at once, between frames, and the run goes on. Nothing in the simulation changes, and gestures in progress are cancelled.
 - It is a presentation setting, not a knob: in no config, candidate or capture. Reset and APPLY / RETRY keep it. [visual-system.md](../ui/visual-system.md) has the contract.
 
-**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch.
+**Touch controls (#76):**
+- "A · Action / B · Pass + Kick" sits below the Pitch view. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
+- A gesture in progress is cancelled, and fingers already down are ignored until they lift.
+- It is the non-gesture way to switch, in Tab's order with the other choices. Reset and APPLY / RETRY keep it.
+- A capture records the active candidate and every one of its values.
+
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player, Touch (Candidate A's gestures) and Split (Candidate B's).
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
@@ -78,7 +84,7 @@ Precise tuning never needs a drag. Every target is at least 44 × 44 pt. The con
 
 ## Touch: Candidate A, ACTION SURFACE
 
-Candidate A from #28, playable and tunable here; Candidates B and C are not built. It is an input adapter over the existing intents and physics. `ActionSurfaceAdapter` (harness, engine-free, so .NET tests it) reads raw pointer samples, each with its event time, into owned commands for one controller (INV-10). The host's `TouchAdapter` only feeds it Input System events.
+Candidate A from #28, playable and tunable here, and switchable live with B (#76); Candidate C is not built yet (#77). It is an input adapter over the existing intents and physics. `ActionSurfaceAdapter` (harness, engine-free, so .NET tests it) reads raw pointer samples, each with its event time, into owned commands for one controller (INV-10). The host's `TouchAdapter` only feeds it Input System events.
 
 **Where a finger lands decides its role, fixed for that finger's life:**
 - **Stick zone, left:** the floating stick. It always moves the player, whatever the right thumb does.
@@ -113,7 +119,7 @@ Each control belongs to its first finger, and a second finger on it is ignored. 
 - The window is the simulation's `aftertouchSeconds`. Outside it, the simulation ignores aftertouch, and there is no second duration.
 - Lifting a re-touch sends nothing, so it is never a tap. The stick no longer doubles as aftertouch.
 
-**Cancelled:** a reset, APPLY / RETRY or a sheet opening drops any gesture in progress. Nothing pending is delivered, and fingers already down are ignored until they lift, so no phantom kick, pass or aftertouch follows.
+**Cancelled:** a reset, APPLY / RETRY, a sheet opening, a view flip or a switch of candidate drops any gesture in progress. Nothing pending is delivered, and fingers already down are ignored until they lift, so no phantom kick, pass or aftertouch follows.
 
 **The disc says what the surface does:** ACTION, HOLD with the charge, SHAPE, then for a moment what the last gesture became (PASS, or KICK with its strength), and the milliseconds from the finger lifting to the command.
 
@@ -130,6 +136,27 @@ Each control belongs to its first finger, and a second finger on it is ignored. 
 | `actionChargedStrength` | fraction of kick power | 0–1 | — | 1.0 |
 | `actionLoft` | fraction of `kickLoft` | 0–1 | — | 0.43 (0.45 rad, the spike's kick elevation) |
 | `actionAftertouchRange` | pt | 10–200 | — | 40 |
+
+## Touch: Candidate B, SPLIT
+
+Candidate B from #28 and #76, after Super Soccer Champs: the convenience pass and the manual kick on separate controls, so the thumb never has to tell a tap from a flick on one surface. It is a comparator, not a replacement. `SplitAdapter` (harness, engine-free) shares A's stick, shaping, cancelling and screen-to-world mapping (`GestureAdapter`) and A's reading of a press, a hold and a flick (`FlickReader`).
+
+**Where a finger lands decides its role, fixed for that finger's life:**
+- **Stick zone, left:** the floating stick, as in A.
+- **PASS:** a bounded disc at the right thumb's rest, A's ACTION disc's place and size (`HudLayout.PassCentre`, `PassRadius`).
+- **KICK:** the rest of the right-hand control area. It is marked by a smaller disc beside PASS: to its left, up and left, or above, wherever it fits clear of PASS and the capture actions (`HudLayout.KickMarker`). A press on a UI action inside the area belongs to the UI.
+
+| Control | Gesture | Command |
+| --- | --- | --- |
+| **PASS** | a press | the assisted quick pass, delivered on the next tick, at the press: no hold threshold, no wait for the release. Lifting or dragging PASS asks for nothing more. It never replaces a kick waiting for its tick. |
+| **KICK** | a flick | a manual kick along the gesture, kept exactly, as A's flick (`splitFlickDistance`, `splitFastFlickDistance`, `splitFastFlickSpeed`). The flick may end anywhere, even over PASS: only its press decides. |
+| | hold → flick | a stronger kick, as A's (`splitHoldSeconds`, `splitChargeSeconds`, `splitChargedStrength`) |
+| | released without a flick | nothing: a tap or hold on KICK isn't a pass, and a kick along the facing is Candidate C's (#77) |
+| | a re-touch while a kick winds up, its window is open, or a gesture waits for its tick | shaping, as A's (`splitAftertouchRange`) |
+
+**The discs say what the controls do:** PASS, and for a moment the milliseconds from the press to the command; KICK, HOLD with the charge, SHAPE, then the last kick's strength.
+
+**Starting values** are Candidate A's, as #76 asks, so the two compare on the same reading. They are technical references, not approved feel: `splitHoldSeconds` 0.18, `splitFlickDistance` 20, `splitFastFlickDistance` 8, `splitFastFlickSpeed` 400, `splitFlickStrength` 0.6, `splitChargeSeconds` 0.5, `splitChargedStrength` 1.0, `splitLoft` 0.43 and `splitAftertouchRange` 40, with A's valid and research ranges.
 
 ## Measured
 
@@ -151,5 +178,18 @@ Each control belongs to its first finger, and a second finger on it is ignored. 
 - in the phone pass, the stick and ACTION work at the same time.
 
 The .NET tests (`ActionSurfaceTests`) cover the rest of the gesture reading: hold → flick, fast short flicks, unsnapped kicks into space, shaping, finger order, cancellation and determinism.
+
+**What the smoke test checks for Candidate B**, on an iPhone 13 in portrait and landscape:
+- PASS's disc and KICK's marker each hold a 44 × 44 pt square, in a right-hand area larger still;
+- switching to B through the bench changes no state and makes no step;
+- a press on PASS asks for the quick pass (`QuickPassResolved`), with the press-to-command time in `ELEVEN action gesture=pass ... latency=`;
+- an immediate flick on KICK is a manual kick along the gesture, and a hold → flick a stronger one;
+- a re-touch on KICK during a kick shapes it and kicks nothing more;
+- the stick and KICK work at the same time;
+- a KICK finger held while the controls switch to A and back, and the view flips, makes nothing when lifted;
+- at 180°, a flick up the screen on KICK kicks up-field;
+- the session's recording, across the switches, replays to the live state.
+
+`SplitTests` covers the reading in .NET, with the live switch: a finger held across it makes nothing on either candidate, and a command waiting for its tick is dropped.
 
 **A capture under the candidate.** The smoke test then presses THIS FELT WRONG, and CI replays that capture under .NET with the rest.

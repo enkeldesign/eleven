@@ -27,10 +27,13 @@ namespace Eleven.Host
         // The Pitch view (#72): attacking up, and a second half's switched ends.
         private static readonly string[] Views = { "0°", "180°" };
 
+        // The touch candidates (#28, #76), in ControlCandidate's order.
+        private static readonly string[] Controls = { "A · Action", "B · Pass + Kick" };
+
         private static readonly string[] Groups =
         {
             TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup,
-            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
+            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, SplitSettings.Group,
         };
 
         private readonly UiRoot _ui;
@@ -40,6 +43,8 @@ namespace Eleven.Host
         private readonly Action<ControlModel> _switchModel;
         private readonly Func<bool> _secondHalf;
         private readonly Action<bool> _switchView;
+        private readonly Func<int> _activeControls;
+        private readonly Action<int> _switchControls;
         private readonly System.Action _closed;
         private readonly Dictionary<string, double> _pending = new Dictionary<string, double>();
         private readonly Dictionary<string, UiKit.Value> _shown = new Dictionary<string, UiKit.Value>();
@@ -52,6 +57,7 @@ namespace Eleven.Host
         private readonly Label _problem;
         private readonly UiKit.Segmented _models;
         private readonly UiKit.Segmented _views;
+        private readonly UiKit.Segmented _controls;
         private readonly UiKit.Segmented _tabs;
         private readonly ScrollView _list;
         private readonly UiKit.Action _close;
@@ -62,10 +68,12 @@ namespace Eleven.Host
         private bool _reportControls;
 
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
-            Func<bool> secondHalf, Action<bool> switchView, System.Action closed)
+            Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls, System.Action closed)
         {
             _secondHalf = secondHalf;
             _switchView = switchView;
+            _activeControls = activeControls;
+            _switchControls = switchControls;
             _ui = ui;
             _trace = trace;
             _applied = applied;
@@ -128,6 +136,17 @@ namespace Eleven.Host
             _views.Element.style.flexShrink = 0;
             _sheet.Content.Add(_views.Element);
 
+            // The touch candidates (#28, #76): a choice anyone can make without a gesture. It acts at
+            // once and the run goes on; only the touch adapter changes, and gestures in progress are
+            // cancelled.
+            Label controlsLabel = UiKit.Text(_theme, TypeScale.Body, "Touch controls. Switches now; the run goes on.", Role.Text);
+            controlsLabel.style.marginBottom = Spacing.Xs;
+            _sheet.Content.Add(controlsLabel);
+            _controls = UiKit.MakeSegmented(ui, _theme, Controls, 0, index => _switchControls(index));
+            _controls.Element.style.marginBottom = Spacing.M;
+            _controls.Element.style.flexShrink = 0;
+            _sheet.Content.Add(_controls.Element);
+
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
             // The tabs wrap onto a second row on a phone. They must never shrink: squeezed to one
@@ -171,6 +190,7 @@ namespace Eleven.Host
             _scrim.style.display = DisplayStyle.Flex;
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
+            UiKit.Select(_theme, _controls, _activeControls());
             ShowGroup(_group);
             _reportOpen = true;
             Describe();
@@ -196,6 +216,7 @@ namespace Eleven.Host
             var order = new List<VisualElement>();
             foreach (UiKit.Raised model in _models.Segments) order.Add(model.Element);
             foreach (UiKit.Raised view in _views.Segments) order.Add(view.Element);
+            foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[_group]))
             {
@@ -317,7 +338,8 @@ namespace Eleven.Host
                 string tabs = string.Join(";", Groups.Select((g, i) => $"{g}={P(_tabs.Segments[i].Element)}"));
                 string models = string.Join(";", Models.Select((m, i) => $"{m}={P(_models.Segments[i].Element)}"));
                 string views = string.Join(";", new[] { "0", "180" }.Select((v, i) => $"{v}={P(_views.Segments[i].Element)}"));
-                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)} models={models} views={views}");
+                string controls = string.Join(";", new[] { "A", "B" }.Select((c, i) => $"{c}={P(_controls.Segments[i].Element)}"));
+                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)} models={models} views={views} controls={controls}");
 
                 float screen = _ui.Root.layout.width;
                 float smallest = float.MaxValue;

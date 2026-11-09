@@ -21,6 +21,10 @@
 //     View passes at iPhone portrait and landscape and iPad check that at 0°, flip to 180° through
 //     the bench (the tick and state hash unchanged), and check it again, with stick and flick up
 //     the screen going up-field each time
+//   - Candidate B, SPLIT (#76), iPhone portrait and landscape: PASS and KICK each hold a 44 x 44 pt
+//     square; B is switched on through the bench with no step; PASS asks for the quick pass at the
+//     press; KICK's flick, hold → flick and re-touch; the stick and KICK together; a KICK finger
+//     held across a switch and back makes nothing; and at 180° a flick up kicks up-field
 //   - pacing: the trace lines carry the dropped-frame counter
 //   - recording: the host's command recording replays to the live state
 //   - THIS FELT WRONG (#44, #53): a Unity action of at least 44 x 44 pt, placed from the HUD's
@@ -433,6 +437,170 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await flickUp(180);
       const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromFlip))?.match ?? null;
       check('the recording across the flip replays to the live state', !!replay && replay[4] === 'match', replay ? replay[0].replace('ELEVEN ', '') : 'no recording check');
+      const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
+    // Candidate B, SPLIT (#76): switched on through the bench, live; PASS at the press, KICK's
+    // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
+    if (url.includes('split=1')) {
+      const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
+      const layoutLine = lastLog(layoutPattern)?.input ?? '';
+      const zone = actionZonePattern.exec(layoutLine)?.slice(1, 5).map(Number) ?? null;
+      const passAt = /pass=(-?\d+),(-?\d+),(\d+)/.exec(layoutLine)?.slice(1, 4).map(Number) ?? null;
+      const markerAt = /kickMarker=(-?\d+),(-?\d+),(\d+)/.exec(layoutLine)?.slice(1, 4).map(Number) ?? null;
+      const since = (from) => logs.slice(from).filter((l) => /^ELEVEN (press|release|action|controls|ui status|bench open|bench closed|view flipped)/.test(l)).map((l) => l.trim().replace('ELEVEN ', '').slice(0, 90)).join(' | ') || 'nothing';
+      const burst = (...events) => Promise.all(events.map(([type, touchPoints]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints })));
+      const pt = (q, id) => ({ x: q.x, y: q.y, id });
+
+      // Targets: PASS's disc holds a 44 x 44 pt square, and so does KICK's marker, inside a
+      // right-hand area larger still.
+      const square = (r) => (r * Math.SQRT2) / pointPx;
+      check('PASS and KICK are bounded targets of at least 44 x 44 pt',
+        !!passAt && !!zone && square(passAt[2]) >= 44 && (!markerAt || markerAt[2] === 0 || square(markerAt[2]) >= 44) && zone[2] / pointPx >= 88 && zone[3] / pointPx >= 88,
+        `pass ${passAt?.join(',') ?? '?'} px (${passAt ? square(passAt[2]).toFixed(0) : '?'} pt square); kick marker ${markerAt?.join(',') ?? '?'}; area ${zone?.join(',') ?? '?'} px at ${pointPx} px/pt`);
+      const pass = passAt ? at(passAt[0], passAt[1]) : at(n[6], n[7]);
+      // KICK: the marker if drawn, else the right-hand area's free top-left corner.
+      const kick = markerAt && markerAt[2] > 0 ? at(markerAt[0], markerAt[1]) : at(zone[0] + 30 * pointPx, zone[1] + zone[3] * 0.6);
+
+      // The switch, through the bench: between frames, no step, the state untouched.
+      const benchAt = benchPattern.exec(layoutLine);
+      const benchCentre = benchAt ? at(Number(benchAt[1]) + Number(benchAt[3]) / 2, Number(benchAt[2]) + Number(benchAt[4]) / 2) : null;
+      const openBench = async (id) => {
+        const fromOpen = logs.length;
+        if (benchCentre) await burst(['touchStart', [pt(benchCentre, id)]], ['touchEnd', [pt(benchCentre, id)]]);
+        return (await waitForLog(/ELEVEN bench open .* close=(\S+) models=\S+ views=(\S+) controls=(\S+)/, 15_000, fromOpen))?.match ?? null;
+      };
+      const segments = (text) => Object.fromEntries((text ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+      const press = async (where, id, held = []) => {
+        if (!where) return;
+        const p = at(...where.split(',').map(Number));
+        await burst(['touchStart', [...held, pt(p, id)]], ['touchEnd', [pt(p, id)]]);
+        await sleep(300);
+      };
+      const closeBench = async (opened, id, held = []) => {
+        const fromClose = logs.length;
+        if (opened) await press(opened[1], id, held);
+        if (!(await waitForLog(/ELEVEN bench closed/, 5_000, fromClose))) await page.keyboard.press('Escape');
+      };
+      const switchPattern = (to) => new RegExp(`ELEVEN controls switched to=${to} tick=(\\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\\d+)`);
+
+      const fromSwitch = logs.length;
+      const opened = await openBench(2);
+      await press(segments(opened?.[3]).B, 2);
+      const toSplit = (await waitForLog(switchPattern('split'), 5_000, fromSwitch))?.match ?? null;
+      check('switching to B through the bench changes no state and makes no step', !!toSplit && toSplit[2] === toSplit[3] && toSplit[4] === '0',
+        toSplit ? toSplit[0].replace('ELEVEN ', '') : `no switch line${opened ? '' : ' (the bench did not open)'}; since: ${since(fromSwitch)}`);
+      await closeBench(opened, 2);
+
+      // PASS: the quick pass at the press, with the press-to-command time.
+      await sleep(500);
+      const fromPass = logs.length;
+      await burst(['touchStart', [pt(pass, 1)]], ['touchEnd', [pt(pass, 1)]]);
+      const passed = (await waitForLog(actionPattern, 5_000, fromPass))?.match ?? null;
+      const resolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 5_000, fromPass);
+      const passPress = logs.slice(fromPass).find((l) => l.startsWith('ELEVEN press'));
+      notes.passLatencyMs = passed ? Number(passed[5]) : NaN;
+      check('a press on PASS asks for the quick pass', !!passed && passed[1] === 'pass' && /target=pass/.test(passPress ?? '') && !!resolved,
+        `${passPress ?? 'no press logged'}; ${passed ? passed[0].replace('ELEVEN action ', '') : 'no action line'}; ${resolved ? 'QuickPassResolved' : 'no QuickPassResolved event'}; since: ${since(fromPass)}`);
+
+      // KICK's immediate flick, up and right on screen: +x and −y at 0° (#72).
+      const flickFrom = async (start, dx, dy, holdMs = 0, id = 1, held = []) => {
+        const end = { x: start.x + dx * pointPx * sx, y: start.y - dy * pointPx * sy };
+        const along = (f) => ({ x: start.x + (end.x - start.x) * f, y: start.y + (end.y - start.y) * f });
+        if (holdMs > 0) {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [...held, pt(start, id)] });
+          await sleep(holdMs);
+          await burst(...[0.34, 0.67, 1].map((f) => ['touchMove', [...held, pt(along(f), id)]]), ['touchEnd', [pt(end, id)]]);
+        } else {
+          await burst(['touchStart', [...held, pt(start, id)]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [...held, pt(along(f), id)]]), ['touchEnd', [pt(end, id)]]);
+        }
+      };
+      await sleep(1_500);
+      const fromFlick = logs.length;
+      await flickFrom(kick, 30, 60);
+      const flicked = (await waitForLog(actionPattern, 5_000, fromFlick))?.match ?? null;
+      const flickWorld = toWorld({ x: 30, y: 60 }, 0);
+      const flickPress = logs.slice(fromFlick).find((l) => l.startsWith('ELEVEN press'));
+      check('an immediate flick on KICK is a manual kick along the gesture',
+        !!flicked && flicked[1] === 'flick' && /target=kick/.test(flickPress ?? '') && Math.sign(Number(flicked[3])) === Math.sign(flickWorld.x) && Math.sign(Number(flicked[4])) === Math.sign(flickWorld.y),
+        `${flickPress ?? 'no press'}; ${flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlick)}`}`);
+
+      // Hold → flick: stronger.
+      await sleep(1_500);
+      const fromHold = logs.length;
+      await flickFrom(kick, 30, 60, 1_000);
+      const held = (await waitForLog(actionPattern, 8_000, fromHold))?.match ?? null;
+      check('a hold then flick on KICK asks for a stronger kick', !!held && held[1] === 'holdflick' && !!flicked && Number(held[2]) > Number(flicked[2]),
+        held ? `${held[0].replace('ELEVEN action ', '')}; the immediate flick asked ${flicked?.[2] ?? '?'}` : `no action line; since: ${since(fromHold)}`);
+
+      // A re-touch on KICK while the flick's kick waits for its tick shapes it, and kicks nothing.
+      await sleep(1_500);
+      const fromShape = logs.length;
+      const second = { x: kick.x, y: kick.y + 10 * pointPx * sy };
+      await burst(
+        ['touchStart', [pt(kick, 1)]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [pt({ x: kick.x + 30 * f * pointPx * sx, y: kick.y - 60 * f * pointPx * sy }, 1)]]),
+        ['touchEnd', [pt({ x: kick.x + 30 * pointPx * sx, y: kick.y - 60 * pointPx * sy }, 1)]],
+        ['touchStart', [pt(second, 2)]], ['touchMove', [pt({ x: second.x + 40 * pointPx * sx, y: second.y }, 2)]]);
+      await sleep(400);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await sleep(300);
+      const shapingPress = logs.slice(fromShape).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
+      const kicks = logs.slice(fromShape).filter((l) => /ELEVEN action gesture=(flick|holdflick)/.test(l)).length;
+      check('a re-touch on KICK during a kick shapes it and kicks nothing more', shapingPress.some((l) => /target=shaping/.test(l)) && kicks === 1,
+        `${shapingPress.join(' | ') || 'no presses'}; ${kicks} kick(s)`);
+
+      // Both thumbs: the stick held right while the right thumb flicks KICK.
+      await sleep(1_500);
+      const fromBoth = logs.length;
+      const s0 = at(n[8], n[9]);
+      const reach = n[10] * sx;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
+      for (let i = 1; i <= 5; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + (reach * i) / 5, y: s0.y }, 1)] });
+        await sleep(20);
+      }
+      const s1 = { x: s0.x + reach, y: s0.y };
+      const beforeBoth = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
+      await flickFrom(kick, 30, 60, 0, 2, [pt(s1, 1)]);
+      const both = (await waitForLog(actionPattern, 5_000, fromBoth))?.match ?? null;
+      const afterBoth = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const moved = beforeBoth && afterBoth ? Math.hypot(Number(afterBoth[2]) - Number(beforeBoth[2]), Number(afterBoth[3]) - Number(beforeBoth[3])) : NaN;
+      check('the stick and KICK work at the same time', !!both && both[1] === 'flick' && moved > 1,
+        `${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; player moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m; since: ${since(fromBoth)}`);
+
+      // A KICK finger held while the controls switch to A and back, and the view flips to 180°:
+      // lifted afterwards, it makes nothing.
+      await sleep(1_500);
+      const fromHeld = logs.length;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(kick, 1)] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)] });
+      const holding = [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)];
+      const reopened = await openBench(2);
+      await press(segments(reopened?.[3]).A, 2, holding);
+      await press(segments(reopened?.[3]).B, 2, holding);
+      await press(segments(reopened?.[2])['180'], 2, holding);
+      await closeBench(reopened, 2, holding);
+      await burst(['touchMove', [pt({ x: kick.x + 30 * pointPx * sx, y: kick.y - 60 * pointPx * sy }, 1)]], ['touchEnd', []]);
+      await sleep(1_000);
+      const toA = (await waitForLog(switchPattern('action-surface'), 1, fromHeld))?.match ?? null;
+      const backToB = (await waitForLog(switchPattern('split'), 1, fromHeld))?.match ?? null;
+      const heldActions = logs.slice(fromHeld).filter((l) => l.startsWith('ELEVEN action'));
+      check('a KICK finger held across a switch and back makes nothing', !!toA && !!backToB && toA[4] === '0' && backToB[4] === '0' && heldActions.length === 0,
+        `${toA ? 'to A' : 'no switch to A'}, ${backToB ? 'back to B' : 'no switch back'}; ${heldActions.length} action(s) after: ${heldActions.join(' | ') || 'none'}; since: ${since(fromHeld)}`);
+
+      // At 180°: a flick up the screen on KICK kicks up-field, toward −x.
+      await sleep(1_500);
+      const fromFlipped = logs.length;
+      await flickFrom(kick, 0, 60);
+      const up180 = (await waitForLog(actionPattern, 5_000, fromFlipped))?.match ?? null;
+      check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && up180[1] === 'flick' && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
+        up180 ? up180[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlipped)}`);
+
+      const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromSwitch))?.match ?? null;
+      check('the recording across the switches replays to the live state', !!replay && replay[4] === 'match', replay ? replay[0].replace('ELEVEN ', '') : 'no recording check');
       const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
       return;
@@ -1189,6 +1357,9 @@ try {
   // The iPad at device scale 1: the same layout in proportion, a quarter of the pixels. At its
   // own scale 2 the software renderer ran it at 3 fps, too slow for the simulation to step.
   await runPass(browser, `${base}?trace=1&view=1`, 'view-tablet', { ...tabletPortrait, deviceScaleFactor: 1 }, true);
+  // Candidate B, SPLIT (#76): PASS and KICK on an iPhone, portrait and landscape.
+  await runPass(browser, `${base}?trace=1&split=1`, 'split-phone', phone, true);
+  await runPass(browser, `${base}?trace=1&split=1`, 'split-phone-landscape', phoneLandscape, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });
