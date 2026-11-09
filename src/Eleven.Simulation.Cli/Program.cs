@@ -29,8 +29,9 @@ using Eleven.Simulation.Harness;
 ///                              a feel test bench candidate (#45): the reference values with any knobs changed,
 ///                              its config hash and practice start hash, e.g. candidate kickSpeed=28 maxSpeed=8.5
 /// eleven-sim turns &lt;dir&gt; [name=value ...]
-///                              characterise the turn with the ball (#66): 90°, 135° and 180° under FREE and
-///                              ATTACHED, the turn off and on, from every touch phase, e.g. turns out turnStrength=8
+///                              characterise the turn and the cut with the ball (#66, #75): 45°, 90°, 135° and 180°,
+///                              snapped and swept, under FREE and ATTACHED, the turn and cut off and on, from every
+///                              touch phase, e.g. turns out cutStrength=0
 /// eleven-sim passes &lt;dir&gt; [name=value ...]
 ///                              measure the quick pass (#38) in the practice drills under the reference profile
 ///                              (or one with capabilities changed) and three contrasts, e.g. passes out passAnticipation=1

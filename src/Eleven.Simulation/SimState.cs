@@ -80,6 +80,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.AftertouchDirection, "Player.AftertouchDirection");
                 w.WriteInt32(player.TouchCooldown);
                 w.WriteByte(player.Turning ? (byte)1 : (byte)0);
+                w.WriteInt32(player.CutCooldown);
             }
 
             w.WriteInt32(Keepers.Length);
@@ -146,6 +147,7 @@ namespace Eleven.Simulation
                     AftertouchDirection = r.ReadDouble("Player.AftertouchDirection"),
                     TouchCooldown = r.ReadInt32(),
                     Turning = ReadFlag(r.ReadByte(), "Player.Turning"),
+                    CutCooldown = r.ReadInt32(),
                 };
             }
 
@@ -325,5 +327,12 @@ namespace Eleven.Simulation
         /// docs/simulation/turn.md.
         /// </summary>
         public bool Turning;
+
+        /// <summary>
+        /// Steps until this player can cut with the ball again under FREE (#75): a cut touch, or a
+        /// turn's touch out, which stands for one as they come round, sets it to the touch interval,
+        /// so there is at most one cut per stride. docs/simulation/cut.md.
+        /// </summary>
+        public int CutCooldown;
     }
 }

@@ -213,6 +213,7 @@ namespace Eleven.Simulation
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
             if (player.TouchCooldown > 0) player.TouchCooldown--;
+            if (player.CutCooldown > 0) player.CutCooldown--;
 
             // The stick asks for a velocity; the player's own capabilities decide how fast they
             // run and how quickly they get there, whether speeding up, braking or turning (#36).
@@ -555,6 +556,7 @@ namespace Eleven.Simulation
             double nearest = double.MaxValue;
             int toucher = -1;
             TurnTouch kind = TurnTouch.None;
+            bool cut = false;
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 PlayerState p = _state.Players[i];
@@ -563,25 +565,57 @@ namespace Eleven.Simulation
                 if (!command.HasValue) continue;
 
                 // The touch interval is a stride's cadence on the run, and a turn breaks it: its
-                // trap comes as the turn starts and its touch out as the player comes round.
+                // trap comes as the turn starts and its touch out as the player comes round. So does
+                // a cut (#75): its touch comes on its first step on which the player can play the
+                // ball, at most once a stride.
                 TurnTouch turn = TurnFor(p, command.Value.Move);
-                bool due = p.TouchCooldown == 0 || (turn == TurnTouch.Trap && !p.Turning) || turn == TurnTouch.Out;
+                bool cutting = turn == TurnTouch.None && p.CutCooldown == 0 && CutAsked(p, command.Value.Move);
+                bool due = p.TouchCooldown == 0 || (turn == TurnTouch.Trap && !p.Turning) || turn == TurnTouch.Out || cutting;
                 if (!due) continue;
                 double distanceSquared = (_state.Ball.Position.Horizontal - p.Position).LengthSquared;
                 if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
                 nearest = distanceSquared;
                 toucher = i;
                 kind = turn;
+                cut = cutting;
             }
 
             if (toucher < 0) return;
             bool touched = kind == TurnTouch.Trap
                 ? Trap(toucher, tick, true)
-                : Touch(toucher, tick, kind == TurnTouch.Out ? Config.TurnStrength : Config.TouchStrength);
+                : Touch(toucher, tick, kind == TurnTouch.Out ? Config.TurnStrength : cut ? Config.CutStrength : Config.TouchStrength);
             if (!touched) return;
-            int id = _state.Players[toucher].Id;
-            events.Add(new SimEvent(tick, SimEventKind.Touched, id));
-            if (kind != TurnTouch.None) events.Add(new SimEvent(tick, SimEventKind.Turned, id, other: (int)kind));
+
+            ref PlayerState player = ref _state.Players[toucher];
+            if (cut)
+            {
+                // The follow-up: the next touch comes the cut interval later, the way the stick
+                // asks by then, or with the cadence if that is sooner.
+                player.TouchCooldown = Math.Min(Config.CutIntervalTicks, Config.TouchIntervalTicks);
+            }
+
+            // One cut a stride. A turn's touch out stands for a cut's touch as the player comes
+            // round from it, so a turn never has a cut touch on top of its own.
+            if ((cut || kind == TurnTouch.Out) && Config.CutStrength > 0) player.CutCooldown = Config.TouchIntervalTicks;
+
+            events.Add(new SimEvent(tick, SimEventKind.Touched, player.Id));
+            if (kind != TurnTouch.None) events.Add(new SimEvent(tick, SimEventKind.Turned, player.Id, other: (int)kind));
+            if (cut) events.Add(new SimEvent(tick, SimEventKind.Cut, player.Id));
+        }
+
+        // ---- The cut with the ball under FREE (#75, docs/simulation/cut.md) ------------------------
+
+        // Whether the stick asks this player for a cut: a direction more than the cut angle from
+        // where they are moving, faster than the trap speed, and no more than the turn angle, beyond
+        // which it is a turn whether or not the turn is on. Never when the cut is off.
+        private bool CutAsked(in PlayerState p, Vec2 move)
+        {
+            if (Config.CutStrength <= 0) return false;
+            double speedSquared = p.Velocity.LengthSquared, stickSquared = move.LengthSquared;
+            if (speedSquared < TrapSpeed * TrapSpeed || stickSquared == 0) return false;
+            double along = p.Velocity.X * move.X + p.Velocity.Y * move.Y;
+            double norm = SimMath.Sqrt(speedSquared * stickSquared);
+            return along < Config.CutCos * norm && along >= Config.TurnCos * norm;
         }
 
         /// <summary>
@@ -1347,6 +1381,7 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
                 InRange(owner, nameof(p.TouchCooldown), p.TouchCooldown, config.TouchIntervalTicks);
+                InRange(owner, nameof(p.CutCooldown), p.CutCooldown, config.TouchIntervalTicks);
                 if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
                 {
                     throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");

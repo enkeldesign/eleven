@@ -114,7 +114,8 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_sharper_turn_at_speed_separates_the_ball_more()
         {
-            SimConfig config = Free();
+            // The touch cadence's own gradient, from one touch phase, with the cut off (#75).
+            SimConfig config = Free(c => c.With("cutStrength", 0));
             double at45 = SeparationAfterTurn(config, 45, 0.3), at90 = SeparationAfterTurn(config, 90, 0.3);
             Assert.True(at90 > at45 + 0.1, $"control 0.3, after 90°: {at90:F2} m; after 45°: {at45:F2} m");
         }
@@ -130,7 +131,8 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Better_ball_control_keeps_a_sharp_turn_tighter()
         {
-            SimConfig config = Free();
+            // The touch cadence's own gradient, from one touch phase, with the cut off (#75).
+            SimConfig config = Free(c => c.With("cutStrength", 0));
             double good = SeparationAfterTurn(config, 90, 0.9), poor = SeparationAfterTurn(config, 90, 0.3);
             Assert.True(poor > good + 0.1, $"control 0.3: {poor:F2} m; control 0.9: {good:F2} m");
         }

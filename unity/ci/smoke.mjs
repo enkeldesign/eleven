@@ -471,10 +471,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       else await page.mouse.move(p.x, p.y);
       await sleep(20);
     }
+    // Released before the screenshot: a large viewport's screenshot can take seconds, and a held
+    // stick kept running the player through it, past the goal line on the phone (#75's first run).
     await sleep(2500);
-    await page.screenshot({ path: path.join(outDir, `${name}-playing.png`) });
     if (useTouch) await touch('touchEnd');
     else await page.mouse.up();
+    await page.screenshot({ path: path.join(outDir, `${name}-playing.png`) });
     const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     notes.stickMovedMetres = before && after ? Number(after[2]) - Number(before[2]) : NaN;
     const view = after?.input.match(/view=player:(\w+),ball:(\w+)/);
@@ -503,6 +505,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       let carried = null;
       let touched = null;
       let turned = null;
+      let cut = null;
       let closest = Infinity;
       let last = start;
       if (start) {
@@ -555,6 +558,17 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const trap = await waitForLog(/ELEVEN event (\d+) Turned 1 1/, 10_000, fromTurn);
           const out = trap ? await waitForLog(/ELEVEN event (\d+) Turned 1 2/, 10_000, fromTurn) : null;
           turned = { trap, out };
+
+          // The cut with the ball (#75): a simulated second on along the reversal's line, the stick
+          // turned a quarter turn on screen. The footballer touches the ball as the cut starts.
+          if (out) {
+            await waitForLog(ballPattern, 10_000, logs.length);
+            const fromCut = logs.length;
+            const side = { x: origin.x - (back.y - origin.y), y: origin.y + (back.x - origin.x) };
+            if (useTouch) await touch('touchMove', side);
+            else await page.mouse.move(side.x, side.y);
+            cut = await waitForLog(/ELEVEN event (\d+) Cut 1/, 10_000, fromCut);
+          }
         }
         if (useTouch) await touch('touchEnd');
         else await page.mouse.up();
@@ -576,6 +590,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       notes.turn = turned?.trap ? `trap at tick ${trapTick}, out at ${turned.out ? outTick : 'none'}` : 'none';
       check('reversing with the ball traps it, then plays it out', !!turned?.trap && !!turned?.out && outTick > trapTick,
         carried ? notes.turn : 'no dribble to reverse');
+      notes.cut = cut ? `cut touch at tick ${cut.match[1]}` : 'none';
+      check('cutting with the ball touches it as the cut starts', !!cut,
+        turned?.out ? notes.cut : 'no reversal to cut from');
     }
 
     // Candidate A, ACTION SURFACE (#28): the right thumb's surface, large and at least 44 x 44 pt.

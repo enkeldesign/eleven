@@ -120,6 +120,9 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "receiveStrength", "m/s", 1, 30),
             new TunableParameter(TunableParameter.ControlGroup, "turnAngle", "rad", Math.PI / 2, Math.PI),
             new TunableParameter(TunableParameter.ControlGroup, "turnStrength", "m/s", 0, 20),
+            new TunableParameter(TunableParameter.ControlGroup, "cutAngle", "rad", Math.PI / 12, Math.PI / 2),
+            new TunableParameter(TunableParameter.ControlGroup, "cutStrength", "m/s", 0, 20),
+            new TunableParameter(TunableParameter.ControlGroup, "cutInterval", "s", 0.02, 1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -171,6 +174,9 @@ namespace Eleven.Simulation
             "receiveStrength" => ReceiveStrength,
             "turnAngle" => TurnAngle,
             "turnStrength" => TurnStrength,
+            "cutAngle" => CutAngle,
+            "cutStrength" => CutStrength,
+            "cutInterval" => CutInterval,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -210,6 +216,7 @@ namespace Eleven.Simulation
             double touchInterval = TouchInterval, touchStrength = TouchStrength, touchError = TouchError;
             double receiveStrength = ReceiveStrength;
             double turnAngle = TurnAngle, turnStrength = TurnStrength;
+            double cutAngle = CutAngle, cutStrength = CutStrength, cutInterval = CutInterval;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -252,6 +259,9 @@ namespace Eleven.Simulation
                     case "receiveStrength": receiveStrength = o.Value; break;
                     case "turnAngle": turnAngle = o.Value; break;
                     case "turnStrength": turnStrength = o.Value; break;
+                    case "cutAngle": cutAngle = o.Value; break;
+                    case "cutStrength": cutStrength = o.Value; break;
+                    case "cutInterval": cutInterval = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -323,7 +333,10 @@ namespace Eleven.Simulation
                 attachedDeadband: attachedDeadband,
                 attachedReleaseReach: attachedReleaseReach,
                 turnAngle: turnAngle,
-                turnStrength: turnStrength);
+                turnStrength: turnStrength,
+                cutAngle: cutAngle,
+                cutStrength: cutStrength,
+                cutInterval: cutInterval);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -379,7 +392,10 @@ namespace Eleven.Simulation
             attachedDeadband: AttachedDeadband,
             attachedReleaseReach: AttachedReleaseReach,
             turnAngle: TurnAngle,
-            turnStrength: TurnStrength);
+            turnStrength: TurnStrength,
+            cutAngle: CutAngle,
+            cutStrength: CutStrength,
+            cutInterval: CutInterval);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

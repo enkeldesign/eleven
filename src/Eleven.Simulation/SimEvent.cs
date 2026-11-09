@@ -75,6 +75,12 @@ namespace Eleven.Simulation
         /// with <see cref="Touched"/>. A later player model can animate it.
         /// </summary>
         Turned = 16,
+
+        /// <summary>
+        /// Subject: the player who has played a cut's touch with the ball under FREE (#75). It comes
+        /// with <see cref="Touched"/>. A later player model can animate it.
+        /// </summary>
+        Cut = 17,
     }
 
     /// <summary>

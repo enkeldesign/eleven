@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 11;
+        public const int FormatVersion = 12;
 
         public SimConfig(
             int tickRate = 60,
@@ -78,7 +78,10 @@ namespace Eleven.Simulation
             double attachedDeadband = 0.2,
             double attachedReleaseReach = 1.35,
             double turnAngle = 2.0,
-            double turnStrength = 6)
+            double turnStrength = 6,
+            double cutAngle = 0.35,
+            double cutStrength = 5,
+            double cutInterval = 0.07)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -136,6 +139,9 @@ namespace Eleven.Simulation
             AttachedReleaseReach = attachedReleaseReach;
             TurnAngle = turnAngle;
             TurnStrength = turnStrength;
+            CutAngle = cutAngle;
+            CutStrength = cutStrength;
+            CutInterval = cutInterval;
 
             CheckTunableRanges();
 
@@ -149,6 +155,8 @@ namespace Eleven.Simulation
             KeeperDiveTicks = Math.Max(1, (int)Math.Round(KeeperDiveSeconds * TickRate));
             KeeperRecoverTicks = Math.Max(1, (int)Math.Round(KeeperRecoverSeconds * TickRate));
             TurnCos = Maths.SimMath.Cos(TurnAngle);
+            CutCos = Maths.SimMath.Cos(CutAngle);
+            CutIntervalTicks = Math.Max(1, (int)Math.Round(CutInterval * TickRate));
         }
 
         /// <summary>Fixed steps per simulated second.</summary>
@@ -402,6 +410,33 @@ namespace Eleven.Simulation
         /// <summary>cos(<see cref="TurnAngle"/>), through the simulation's own maths.</summary>
         internal double TurnCos { get; }
 
+        /// <summary>
+        /// rad. The cut with the ball under FREE (#75): the smallest change of direction, between
+        /// where the stick asks to go and where the player is moving, that the footballer plays as a
+        /// cut, with a touch as it starts rather than on the touch cadence. A change beyond
+        /// <see cref="TurnAngle"/> is a turn, not a cut. docs/simulation/cut.md.
+        /// </summary>
+        public double CutAngle { get; }
+
+        /// <summary>
+        /// m/s. The cut touch's largest change to the ball's velocity, at full ball control (#75);
+        /// half of it at none. 0 turns the cut off: a change of direction short of a turn waits for
+        /// the touch cadence.
+        /// </summary>
+        public double CutStrength { get; }
+
+        /// <summary>
+        /// s. How soon after a cut touch the footballer touches the ball again (#75): a quick
+        /// follow-up, the way the stick asks by then, before the touch cadence resumes.
+        /// </summary>
+        public double CutInterval { get; }
+
+        /// <summary>cos(<see cref="CutAngle"/>), through the simulation's own maths.</summary>
+        internal double CutCos { get; }
+
+        /// <summary><see cref="CutInterval"/> in whole steps, nearest, at least one.</summary>
+        public int CutIntervalTicks { get; }
+
         /// <summary><see cref="TouchInterval"/> in whole steps, nearest, at least one.</summary>
         public int TouchIntervalTicks { get; }
 
@@ -471,7 +506,10 @@ namespace Eleven.Simulation
                 attachedDeadband: r.ReadDouble(nameof(AttachedDeadband)),
                 attachedReleaseReach: r.ReadDouble(nameof(AttachedReleaseReach)),
                 turnAngle: r.ReadDouble(nameof(TurnAngle)),
-                turnStrength: r.ReadDouble(nameof(TurnStrength)));
+                turnStrength: r.ReadDouble(nameof(TurnStrength)),
+                cutAngle: r.ReadDouble(nameof(CutAngle)),
+                cutStrength: r.ReadDouble(nameof(CutStrength)),
+                cutInterval: r.ReadDouble(nameof(CutInterval)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -534,6 +572,9 @@ namespace Eleven.Simulation
             w.WriteDouble(AttachedReleaseReach, nameof(AttachedReleaseReach));
             w.WriteDouble(TurnAngle, nameof(TurnAngle));
             w.WriteDouble(TurnStrength, nameof(TurnStrength));
+            w.WriteDouble(CutAngle, nameof(CutAngle));
+            w.WriteDouble(CutStrength, nameof(CutStrength));
+            w.WriteDouble(CutInterval, nameof(CutInterval));
             return w.ToArray();
         }
 

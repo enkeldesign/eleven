@@ -109,9 +109,15 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_sharper_turn_and_poorer_control_lose_more()
         {
-            Assert.True(Of("turn-90", "poor").MaxSeparationMetres > Of("turn-45", "poor").MaxSeparationMetres);
-            Assert.True(Of("turn-90", "poor").LostSeconds > Of("turn-90", "good").LostSeconds);
-            Assert.True(Of("turn-45", "poor").LostSeconds >= Of("turn-45", "good").LostSeconds);
+            // The touch cadence's own gradient, with the cut off: these turn cases turn on a touch
+            // step, one phase, and the cut (#75) makes every phase like it. The cut's gradients,
+            // across every phase, are TurnCurvesTests'.
+            List<DribbleCurve> cadence = DribbleCurves.Characterise(Config.With("cutStrength", 0));
+            DribbleCurve At(string name, string profile) => cadence.Single(c => c.Case == name && c.Profile == profile && c.Model == "free");
+
+            Assert.True(At("turn-90", "poor").MaxSeparationMetres > At("turn-45", "poor").MaxSeparationMetres);
+            Assert.True(At("turn-90", "poor").LostSeconds > At("turn-90", "good").LostSeconds);
+            Assert.True(At("turn-45", "poor").LostSeconds >= At("turn-45", "good").LostSeconds);
         }
 
         [Fact]
