@@ -100,13 +100,14 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Every_knob_has_a_group_a_label_and_a_step_inside_its_range()
         {
-            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group };
+            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, SplitSettings.Group };
             Assert.NotEmpty(BenchCandidate.Knobs);
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
                 Assert.Contains(k.Group, groups);
                 Assert.Equal(k.OnPlayer, k.Group == TunableParameter.PlayerGroup);
                 Assert.Equal(k.OnAdapter, k.Group == ActionSurfaceSettings.Group);
+                Assert.Equal(k.OnSplit, k.Group == SplitSettings.Group);
                 Assert.False(string.IsNullOrWhiteSpace(k.Label), k.Name);
                 Assert.True(char.IsUpper(k.Label[0]), k.Label);
                 Assert.True(k.Step > 0 && k.Step <= k.Parameter.Max - k.Parameter.Min, $"{k.Name} step {k.Step}");
@@ -150,6 +151,7 @@ namespace Eleven.Simulation.Tests
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
                 double expected = k.OnAdapter ? ActionSurfaceSettings.Reference.Get(k.Name)
+                    : k.OnSplit ? SplitSettings.Reference.Get(k.Name)
                     : k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name)
                     : k.OnKeeper ? KeeperCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
                 Assert.Equal(expected, reference.Get(k.Name));
