@@ -35,6 +35,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>A <see cref="KeeperCapabilities"/> value of the practice keeper (#69), rather than a <see cref="SimConfig"/> value.</summary>
         public bool OnKeeper { get; }
 
+        /// <summary>A Candidate B touch value (<see cref="SplitSettings"/>, #76): how its gestures read, never how the football behaves.</summary>
+        public bool OnSplit { get; }
+
         public string Name => Parameter.Name;
 
         public string Group => Parameter.Group;
@@ -150,6 +153,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>The practice keeper's capabilities these values make (#69).</summary>
         public KeeperCapabilities Keeper { get; }
+
+        /// <summary>Candidate B's gesture settings these values make (#76).</summary>
+        public SplitSettings Split => SplitSettings.Reference;
 
         /// <summary>A knob's value, by name.</summary>
         public double Get(string name)
