@@ -212,6 +212,13 @@ namespace Eleven.Simulation.Harness
             foreach (int pointer in pointers) Ignore(pointer);
         }
 
+        /// <summary>
+        /// A finger lifted while another candidate was active: no longer ignored here, so a pointer
+        /// id the platform reuses (the desktop mouse's) starts a fresh gesture when this candidate
+        /// is active again (Codex on #79).
+        /// </summary>
+        public void Lifted(int pointer) => _ignored.Remove(pointer);
+
         /// <summary>A pointer that begins outside the stick zone and isn't already held: the candidate gives it a role.</summary>
         protected abstract TouchRole BeginControl(in TouchSample sample);
 

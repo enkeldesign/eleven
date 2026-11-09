@@ -83,7 +83,21 @@ namespace Eleven.Simulation.Harness
             }
         }
 
-        public TouchRole Feed(in TouchSample sample) => Current.Feed(sample);
+        /// <summary>
+        /// One sample, for the active candidate. A lift also reaches the inactive one, which may
+        /// still be ignoring that finger from before a switch.
+        /// </summary>
+        public TouchRole Feed(in TouchSample sample)
+        {
+            TouchRole role = Current.Feed(sample);
+            if (sample.Phase == TouchPhase.Ended || sample.Phase == TouchPhase.Canceled)
+            {
+                GestureAdapter other = Active == ControlCandidate.Split ? ActionSurface : (GestureAdapter)Split;
+                other.Lifted(sample.Pointer);
+            }
+
+            return role;
+        }
 
         public Command CommandFor(long tick) => Current.CommandFor(tick);
 
