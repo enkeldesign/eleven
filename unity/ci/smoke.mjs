@@ -546,7 +546,15 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           await burst(['touchStart', [...held, pt(start, id)]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [...held, pt(along(f), id)]]), ['touchEnd', [pt(end, id)]]);
         }
       };
-      await sleep(1_500);
+      // Between KICK's checks, the last kick's wind-up and aftertouch window (a few tenths of a
+      // simulated second) must have closed, or the next press on KICK shapes it. The phone passes
+      // can step only about 13 times a wall-clock second, so wait on the simulation, not the
+      // clock: two fresh trace lines, which come once a simulated second, are 60 steps apart.
+      const settle = async () => {
+        const first = await waitForLog(tracePattern, 20_000, logs.length);
+        if (first) await waitForLog(tracePattern, 20_000, first.index + 1);
+      };
+      await settle();
       const fromFlick = logs.length;
       await flickFrom(kick, 30, 60);
       const flicked = (await waitForLog(actionPattern, 20_000, fromFlick))?.match ?? null;
@@ -557,7 +565,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         `${kickWhere}; ${flickPress ?? 'no press'}; ${flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlick)}`}`);
 
       // Hold → flick: stronger.
-      await sleep(1_500);
+      await settle();
       const fromHold = logs.length;
       await flickFrom(kick, 30, 60, 1_000);
       const held = (await waitForLog(actionPattern, 20_000, fromHold))?.match ?? null;
@@ -565,7 +573,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         held ? `${held[0].replace('ELEVEN action ', '')}; the immediate flick asked ${flicked?.[2] ?? '?'}` : `no action line; since: ${since(fromHold)}`);
 
       // A re-touch on KICK while the flick's kick waits for its tick shapes it, and kicks nothing.
-      await sleep(1_500);
+      await settle();
       const fromShape = logs.length;
       const second = { x: kick.x, y: kick.y + 10 * pointPx * sy };
       await burst(
@@ -581,7 +589,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         `${shapingPress.join(' | ') || 'no presses'}; ${kicks} kick(s)`);
 
       // Both thumbs: the stick held right while the right thumb flicks KICK.
-      await sleep(1_500);
+      await settle();
       const fromBoth = logs.length;
       const s0 = at(n[8], n[9]);
       const reach = n[10] * sx;
