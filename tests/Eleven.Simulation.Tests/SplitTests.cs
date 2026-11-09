@@ -373,6 +373,28 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_reused_pointer_held_across_a_switch_and_lifted_is_forgotten_by_both_candidates()
+        {
+            // Codex on #79. The desktop mouse is always pointer −1. Held on A, switched to B, lifted
+            // under B and switched back: A's next press with it is a fresh gesture, not ignored.
+            const int Mouse = -1;
+            TouchCandidates candidates = Candidates();
+            candidates.Feed(Down(Mouse, 250, 200, 0));
+            candidates.Switch(ControlCandidate.Split);
+            candidates.Feed(Up(Mouse, 250, 200, 0.05));
+            candidates.Switch(ControlCandidate.ActionSurface);
+
+            Assert.Equal(TouchRole.Action, candidates.Feed(Down(Mouse, 250, 200, 0.1)));
+            candidates.Feed(Up(Mouse, 250, 200, 0.15));
+            Assert.True(candidates.CommandFor(0).QuickPass, "A dropped the fresh tap");
+
+            // And B, switched to again, doesn't inherit the old pointer either.
+            candidates.Switch(ControlCandidate.Split);
+            Assert.Equal(TouchRole.Pass, candidates.Feed(Down(Mouse, 330, 330, 0.2)));
+            Assert.True(candidates.CommandFor(1).QuickPass, "B dropped the fresh pass");
+        }
+
+        [Fact]
         public void A_switch_drops_a_command_waiting_for_its_tick()
         {
             TouchCandidates candidates = Candidates();
