@@ -1,6 +1,7 @@
 // Unity compiles this file with nullable annotations off; the .NET build has them on.
 #nullable enable
 using System;
+using System.Collections.Generic;
 
 namespace Eleven.Simulation.Harness
 {
@@ -43,10 +44,19 @@ namespace Eleven.Simulation.Harness
         /// <summary>Raised when the active adapter delivers a gesture's command.</summary>
         public event Action<ActionReport>? Delivered;
 
-        /// <summary>Another candidate, at once.</summary>
+        /// <summary>
+        /// Another candidate, at once. The one giving way cancels its gestures, and the one taking
+        /// over starts clean and ignores every finger the other held until it lifts.
+        /// </summary>
         public void Switch(ControlCandidate to)
         {
+            if (to == Active) return;
+            GestureAdapter from = Current;
+            var held = new List<int>(from.HeldPointers());
+            from.Cancel();
             Active = to;
+            Current.Cancel();
+            Current.IgnoreUntilLifted(held);
         }
 
         /// <summary>Where the controls are, for every candidate, so a switch takes effect at once.</summary>

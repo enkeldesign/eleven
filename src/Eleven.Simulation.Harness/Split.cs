@@ -143,6 +143,10 @@ namespace Eleven.Simulation.Harness
     /// </summary>
     public sealed class SplitAdapter : GestureAdapter
     {
+        private readonly FlickReader _flick = new FlickReader();
+        private int _passPointer = NoPointer;
+        private int _kickPointer = NoPointer;
+
         public SplitAdapter(int controllerId, SplitSettings settings)
             : base(controllerId)
         {
@@ -152,10 +156,10 @@ namespace Eleven.Simulation.Harness
         public SplitSettings Settings { get; private set; }
 
         /// <summary>Whether a finger is on KICK for a gesture.</summary>
-        public override bool ActionHeld => false;
+        public override bool ActionHeld => _kickPointer != NoPointer;
 
         /// <summary>Whether a finger holds PASS.</summary>
-        public bool PassHeld => false;
+        public bool PassHeld => _passPointer != NoPointer;
 
         /// <summary>New settings; any gesture in progress is cancelled.</summary>
         public void Use(SplitSettings settings)
@@ -164,25 +168,78 @@ namespace Eleven.Simulation.Harness
             Cancel();
         }
 
-        public override double Charge(double now) => 0;
+        public override double Charge(double now) => _kickPointer == NoPointer ? 0 : _flick.Charge(now, Settings.Flick);
 
         public override string Describe() => Settings.Describe();
 
         protected override double AftertouchRange => Settings.AftertouchRange;
 
-        protected override TouchRole? HeldRole(int pointer) => null;
+        protected override TouchRole? HeldRole(int pointer) =>
+            pointer == _passPointer ? TouchRole.Pass : pointer == _kickPointer ? TouchRole.Kick : (TouchRole?)null;
 
         protected override IEnumerable<int> ControlPointers()
         {
-            yield break;
+            if (_passPointer != NoPointer) yield return _passPointer;
+            if (_kickPointer != NoPointer) yield return _kickPointer;
         }
 
         protected override void CancelControls()
         {
+            _passPointer = NoPointer;
+            _kickPointer = NoPointer;
+            _flick.Reset();
         }
 
-        protected override TouchRole BeginControl(in TouchSample sample) => TouchRole.None;
+        protected override TouchRole BeginControl(in TouchSample sample)
+        {
+            // PASS: the quick pass at the press, with no hold threshold and no wait for the release.
+            // The footballer's simulation decides who, where and how well (#38). A pass never
+            // replaces a kick already waiting for its tick.
+            if (Layout.OnPass(sample.X, sample.Y))
+            {
+                if (_passPointer != NoPointer) return TouchRole.None;
+                _passPointer = sample.Pointer;
+                Pend(null, new ActionReport(ActionGesture.Pass, sample.Time, 0, Vec2.Zero));
+                return TouchRole.Pass;
+            }
 
-        protected override TouchRole FeedControl(in TouchSample sample) => TouchRole.None;
+            // KICK: the rest of the right-hand area.
+            if (!Layout.ActionZone.Contains(sample.X, sample.Y) || _kickPointer != NoPointer || ShapingHeld) return TouchRole.None;
+            if (ShapingWanted) return StartShaping(sample);
+
+            _kickPointer = sample.Pointer;
+            _flick.Begin(sample);
+            return TouchRole.Kick;
+        }
+
+        protected override TouchRole FeedControl(in TouchSample sample)
+        {
+            if (sample.Pointer == _passPointer)
+            {
+                // Lifting PASS, or dragging it, asks for nothing more.
+                if (sample.Phase != TouchPhase.Moved) _passPointer = NoPointer;
+                return TouchRole.Pass;
+            }
+
+            if (sample.Pointer != _kickPointer) return TouchRole.None;
+            if (sample.Phase == TouchPhase.Moved) _flick.Track(sample, Settings.Flick, Layout.PixelsPerPoint);
+            else if (sample.Phase == TouchPhase.Ended) Release(sample);
+            else _kickPointer = NoPointer; // the system took the touch: no command
+            return TouchRole.Kick;
+        }
+
+        private void Release(in TouchSample sample)
+        {
+            _kickPointer = NoPointer;
+            FlickRelease release = _flick.Release(sample, Settings.Flick, Layout.PixelsPerPoint, out double strength, out Vec2 line);
+
+            // Without a flick, KICK asks for nothing: a kick along the facing is Candidate C's (#77).
+            if (release == FlickRelease.Tap || release == FlickRelease.Hold) return;
+
+            // The gesture's line, kept exactly, in the world direction the screen shows it (#72).
+            Vec2 direction = Orientation.ToWorld(line);
+            Pend(new KickIntent(direction, strength, Settings.Loft),
+                new ActionReport(release == FlickRelease.HoldFlick ? ActionGesture.HoldFlick : ActionGesture.Flick, sample.Time, strength, direction));
+        }
     }
 }
