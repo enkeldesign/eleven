@@ -461,8 +461,21 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         !!passAt && !!zone && !!markerAt && square(passAt[2]) >= 44 && square(markerAt[2]) >= 44 && zone[2] / pointPx >= 88 && zone[3] / pointPx >= 88,
         `pass ${passAt?.join(',') ?? '?'} px (${passAt ? square(passAt[2]).toFixed(0) : '?'} pt square); kick marker ${markerAt?.join(',') ?? '?'}; area ${zone?.join(',') ?? '?'} px at ${pointPx} px/pt`);
       const pass = passAt ? at(passAt[0], passAt[1]) : at(n[6], n[7]);
-      // KICK: its marker, beside PASS.
-      const kick = markerAt && markerAt[2] > 0 ? at(markerAt[0], markerAt[1]) : at(zone[0] + 30 * pointPx, zone[1] + zone[3] * 0.6);
+      // KICK: its marker, beside PASS, unless a flick from there would end on one of the HUD's
+      // actions. The test sends a flick in one go, and at a few frames a second the UI sees the
+      // press where the flick ends: on THIS FELT WRONG, it opens the note sheet (a landscape
+      // phone). Then the right-hand area's lower left, which is KICK too.
+      const uiRects = ['feltWrong', 'save', 'bench'].map((k) => new RegExp(`${k}=(-?\\d+),(-?\\d+),(\\d+),(\\d+)`).exec(layoutLine)?.slice(1, 5).map(Number)).filter(Boolean);
+      const onUi = (x, y) => uiRects.some(([rx, ry, rw, rh]) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh);
+      const flicksClear = ([cx, cy]) => [[30, 60], [0, 60], [20, 40], [40, -10]].every(([dx, dy]) => !onUi(cx + dx * pointPx, cy - dy * pointPx));
+      const offPass = ([cx, cy]) => !passAt || Math.hypot(cx - passAt[0], cy - passAt[1]) > passAt[2] + 4 * pointPx;
+      const kickStarts = [
+        ...(markerAt && markerAt[2] > 0 ? [['marker', markerAt[0], markerAt[1]]] : []),
+        ...(zone ? [['lower left', zone[0] + 30 * pointPx, zone[1] + zone[3] - 30 * pointPx]] : []),
+      ];
+      const kickStart = kickStarts.find(([, cx, cy]) => offPass([cx, cy]) && flicksClear([cx, cy])) ?? kickStarts[0];
+      const kick = at(kickStart[1], kickStart[2]);
+      const kickWhere = `KICK from its ${kickStart[0]} at ${kickStart[1].toFixed(0)},${kickStart[2].toFixed(0)}`;
 
       // The switch, through the bench: between frames, no step, the state untouched.
       const benchAt = benchPattern.exec(layoutLine);
@@ -475,11 +488,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         await sleep(300);
       };
       // The bench, opened on its Touch tab, where the A / B choice is: [close, views, candidates].
-      const openBench = async (id, held = []) => {
+      const openBench = async (id, held = [], touchTab = true) => {
         const fromOpen = logs.length;
         if (benchCentre) await burst(['touchStart', [...held, pt(benchCentre, id)]], ['touchEnd', [pt(benchCentre, id)]]);
         const opened = (await waitForLog(/ELEVEN bench open .* tabs=(\S+) apply=\S+ revert=\S+ close=(\S+) models=\S+ views=(\S+)/, 15_000, fromOpen))?.match ?? null;
         if (!opened) return null;
+        if (!touchTab) return [null, opened[2], opened[3], ''];
         const fromTab = logs.length;
         await press(segments(opened[1]).Touch, id, held);
         const candidates = (await waitForLog(/ELEVEN bench candidates (\S+)/, 10_000, fromTab))?.match ?? null;
@@ -492,13 +506,22 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       };
       const switchPattern = (to) => new RegExp(`ELEVEN controls switched to=${to} tick=(\\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\\d+)`);
 
+      // ?controls=split starts on B: a landscape phone's bench has no room for its Touch tab's
+      // knob list until #31, so the portrait pass switches through the bench.
+      const startsOnB = url.includes('controls=split');
       const fromSwitch = logs.length;
-      const opened = await openBench(2);
-      await press(segments(opened?.[3]).B, 2);
-      const toSplit = (await waitForLog(switchPattern('split'), 5_000, fromSwitch))?.match ?? null;
-      check('switching to B through the bench changes no state and makes no step', !!toSplit && toSplit[2] === toSplit[3] && toSplit[4] === '0',
-        toSplit ? toSplit[0].replace('ELEVEN ', '') : `no switch line${opened ? '' : ' (the bench did not open)'}; since: ${since(fromSwitch)}`);
-      await closeBench(opened, 2);
+      if (startsOnB) {
+        const started = lastLog(/ELEVEN controls candidate=(\S+) (\S+)/);
+        check('?controls=split starts on B', !!started && started[1] === 'split' && started[2].startsWith('split/'),
+          started ? started[0].replace('ELEVEN ', '').slice(0, 120) : 'no controls line');
+      } else {
+        const opened = await openBench(2);
+        await press(segments(opened?.[3]).B, 2);
+        const toSplit = (await waitForLog(switchPattern('split'), 5_000, fromSwitch))?.match ?? null;
+        check('switching to B through the bench changes no state and makes no step', !!toSplit && toSplit[2] === toSplit[3] && toSplit[4] === '0',
+          toSplit ? toSplit[0].replace('ELEVEN ', '') : `no switch line${opened ? '' : ' (the bench did not open)'}; since: ${since(fromSwitch)}`);
+        await closeBench(opened, 2);
+      }
 
       // PASS: the quick pass at the press, with the press-to-command time.
       await sleep(500);
@@ -531,7 +554,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const flickPress = logs.slice(fromFlick).find((l) => l.startsWith('ELEVEN press'));
       check('an immediate flick on KICK is a manual kick along the gesture',
         !!flicked && flicked[1] === 'flick' && /target=kick/.test(flickPress ?? '') && Math.sign(Number(flicked[3])) === Math.sign(flickWorld.x) && Math.sign(Number(flicked[4])) === Math.sign(flickWorld.y),
-        `${flickPress ?? 'no press'}; ${flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlick)}`}`);
+        `${kickWhere}; ${flickPress ?? 'no press'}; ${flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlick)}`}`);
 
       // Hold → flick: stronger.
       await sleep(1_500);
@@ -577,25 +600,33 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       check('the stick and KICK work at the same time', !!both && both[1] === 'flick' && moved > 1,
         `${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; player moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m; since: ${since(fromBoth)}`);
 
-      // A KICK finger held while the controls switch to A and back, and the view flips to 180°:
-      // lifted afterwards, it makes nothing.
+      // A KICK finger held while the controls switch to A and back (through the bench, so not
+      // when the pass starts on B), and the view flips to 180°: lifted afterwards, it makes nothing.
       await sleep(1_500);
       const fromHeld = logs.length;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(kick, 1)] });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)] });
       const holding = [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)];
-      const reopened = await openBench(2, holding);
-      await press(segments(reopened?.[3]).A, 2, holding);
-      await press(segments(reopened?.[3]).B, 2, holding);
+      const reopened = await openBench(2, holding, !startsOnB);
+      if (!startsOnB) {
+        await press(segments(reopened?.[3]).A, 2, holding);
+        await press(segments(reopened?.[3]).B, 2, holding);
+      }
       await press(segments(reopened?.[2])['180'], 2, holding);
       await closeBench(reopened, 2, holding);
       await burst(['touchMove', [pt({ x: kick.x + 30 * pointPx * sx, y: kick.y - 60 * pointPx * sy }, 1)]], ['touchEnd', []]);
       await sleep(1_000);
       const toA = (await waitForLog(switchPattern('action-surface'), 1, fromHeld))?.match ?? null;
       const backToB = (await waitForLog(switchPattern('split'), 1, fromHeld))?.match ?? null;
+      const flipped = (await waitForLog(/ELEVEN view flipped to=180 tick=\d+ before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\d+)/, 1, fromHeld))?.match ?? null;
       const heldActions = logs.slice(fromHeld).filter((l) => l.startsWith('ELEVEN action'));
-      check('a KICK finger held across a switch and back makes nothing', !!toA && !!backToB && toA[4] === '0' && backToB[4] === '0' && heldActions.length === 0,
-        `${toA ? 'to A' : 'no switch to A'}, ${backToB ? 'back to B' : 'no switch back'}; ${heldActions.length} action(s) after: ${heldActions.join(' | ') || 'none'}; since: ${since(fromHeld)}`);
+      if (startsOnB) {
+        check('a KICK finger held across the 180° flip makes nothing', !!flipped && flipped[3] === '0' && heldActions.length === 0,
+          `${flipped ? 'flipped' : 'no flip'}; ${heldActions.length} action(s) after: ${heldActions.join(' | ') || 'none'}; since: ${since(fromHeld)}`);
+      } else {
+        check('a KICK finger held across a switch and back makes nothing', !!toA && !!backToB && toA[4] === '0' && backToB[4] === '0' && heldActions.length === 0,
+          `${toA ? 'to A' : 'no switch to A'}, ${backToB ? 'back to B' : 'no switch back'}; ${heldActions.length} action(s) after: ${heldActions.join(' | ') || 'none'}; since: ${since(fromHeld)}`);
+      }
 
       // At 180°: a flick up the screen on KICK kicks up-field, toward −x.
       await sleep(1_500);
@@ -1365,7 +1396,7 @@ try {
   await runPass(browser, `${base}?trace=1&view=1`, 'view-tablet', { ...tabletPortrait, deviceScaleFactor: 1 }, true);
   // Candidate B, SPLIT (#76): PASS and KICK on an iPhone, portrait and landscape.
   await runPass(browser, `${base}?trace=1&split=1`, 'split-phone', phone, true);
-  await runPass(browser, `${base}?trace=1&split=1`, 'split-phone-landscape', phoneLandscape, true);
+  await runPass(browser, `${base}?trace=1&split=1&controls=split`, 'split-phone-landscape', phoneLandscape, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });

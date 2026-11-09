@@ -48,6 +48,8 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - A gesture in progress is cancelled, and fingers already down are ignored until they lift.
 - It is the non-gesture way to switch, in Tab's order with the other choices. Reset and APPLY / RETRY keep it.
 - A capture records the active candidate and every one of its values.
+- `?controls=split` starts on B, before the first step: a link for a device comparison.
+- **On a landscape phone the bench's knob list gets almost no room**, on every tab. The sheet's fixed rows (ball control, view, two rows of tabs) take its height, so the A / B choice can't be reached there. The bench in landscape is #31's. Until then, switch in portrait and turn the phone, or open with `?controls=split`.
 
 **Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch. Touch holds the A / B choice, then Candidate A's gesture knobs, then B's (the `Split` group).
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
@@ -182,14 +184,16 @@ The .NET tests (`ActionSurfaceTests`) cover the rest of the gesture reading: hol
 
 **What the smoke test checks for Candidate B**, on an iPhone 13 in portrait and landscape:
 - PASS's disc and KICK's marker each hold a 44 × 44 pt square, in a right-hand area larger still;
-- switching to B through the bench changes no state and makes no step;
+- in portrait, switching to B through the bench changes no state and makes no step. Landscape starts on B with `?controls=split`, since its bench has almost no room for the Touch tab's list;
 - a press on PASS asks for the quick pass (`QuickPassResolved`), with the press-to-command time in `ELEVEN action gesture=pass ... latency=`;
 - an immediate flick on KICK is a manual kick along the gesture, and a hold → flick a stronger one;
 - a re-touch on KICK during a kick shapes it and kicks nothing more;
 - the stick and KICK work at the same time;
-- a KICK finger held while the controls switch to A and back, and the view flips, makes nothing when lifted;
+- a KICK finger held while the controls switch to A and back (portrait) and the view flips makes nothing when lifted;
 - at 180°, a flick up the screen on KICK kicks up-field;
 - the session's recording, across the switches, replays to the live state.
+
+The test sends each flick in one go. At the few frames a second a 3× phone draws on the runner, the UI then sees the press where the flick ends, and a flick ending on THIS FELT WRONG opens the note sheet. So KICK is pressed at its marker unless a flick from there would end on a HUD action; otherwise at the right-hand area's lower left, which is KICK too (in landscape). A finger takes many frames, so on a device the UI sees the press where it lands.
 
 `SplitTests` covers the reading in .NET, with the live switch: a finger held across it makes nothing on either candidate, and a command waiting for its tick is dropped.
 

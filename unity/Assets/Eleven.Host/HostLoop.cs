@@ -103,6 +103,10 @@ namespace Eleven.Host
             if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
             _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split);
+            // ?controls=split: start on Candidate B (#76), before the first step. A link for a device
+            // comparison, and the route to B where the bench's Touch tab has no room (a landscape
+            // phone, until #31).
+            if (url.Contains("controls=split")) _input.Switch(ControlCandidate.Split);
             _view.Orient(_orientation);
             _input.Orient(_orientation);
             _input.Delivered += GestureDelivered;

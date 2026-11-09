@@ -89,7 +89,9 @@ jobs:
     name: Smoke test in Chromium
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # About 25 minutes with Candidate B's two passes (#76), on a runner that draws a 3x phone
+    # at a few frames a second.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
