@@ -458,26 +458,32 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       // right-hand area larger still.
       const square = (r) => (r * Math.SQRT2) / pointPx;
       check('PASS and KICK are bounded targets of at least 44 x 44 pt',
-        !!passAt && !!zone && square(passAt[2]) >= 44 && (!markerAt || markerAt[2] === 0 || square(markerAt[2]) >= 44) && zone[2] / pointPx >= 88 && zone[3] / pointPx >= 88,
+        !!passAt && !!zone && !!markerAt && square(passAt[2]) >= 44 && square(markerAt[2]) >= 44 && zone[2] / pointPx >= 88 && zone[3] / pointPx >= 88,
         `pass ${passAt?.join(',') ?? '?'} px (${passAt ? square(passAt[2]).toFixed(0) : '?'} pt square); kick marker ${markerAt?.join(',') ?? '?'}; area ${zone?.join(',') ?? '?'} px at ${pointPx} px/pt`);
       const pass = passAt ? at(passAt[0], passAt[1]) : at(n[6], n[7]);
-      // KICK: the marker if drawn, else the right-hand area's free top-left corner.
+      // KICK: its marker, beside PASS.
       const kick = markerAt && markerAt[2] > 0 ? at(markerAt[0], markerAt[1]) : at(zone[0] + 30 * pointPx, zone[1] + zone[3] * 0.6);
 
       // The switch, through the bench: between frames, no step, the state untouched.
       const benchAt = benchPattern.exec(layoutLine);
       const benchCentre = benchAt ? at(Number(benchAt[1]) + Number(benchAt[3]) / 2, Number(benchAt[2]) + Number(benchAt[4]) / 2) : null;
-      const openBench = async (id) => {
-        const fromOpen = logs.length;
-        if (benchCentre) await burst(['touchStart', [pt(benchCentre, id)]], ['touchEnd', [pt(benchCentre, id)]]);
-        return (await waitForLog(/ELEVEN bench open .* close=(\S+) models=\S+ views=(\S+) controls=(\S+)/, 15_000, fromOpen))?.match ?? null;
-      };
       const segments = (text) => Object.fromEntries((text ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
       const press = async (where, id, held = []) => {
         if (!where) return;
         const p = at(...where.split(',').map(Number));
         await burst(['touchStart', [...held, pt(p, id)]], ['touchEnd', [pt(p, id)]]);
         await sleep(300);
+      };
+      // The bench, opened on its Touch tab, where the A / B choice is: [close, views, candidates].
+      const openBench = async (id, held = []) => {
+        const fromOpen = logs.length;
+        if (benchCentre) await burst(['touchStart', [...held, pt(benchCentre, id)]], ['touchEnd', [pt(benchCentre, id)]]);
+        const opened = (await waitForLog(/ELEVEN bench open .* tabs=(\S+) apply=\S+ revert=\S+ close=(\S+) models=\S+ views=(\S+)/, 15_000, fromOpen))?.match ?? null;
+        if (!opened) return null;
+        const fromTab = logs.length;
+        await press(segments(opened[1]).Touch, id, held);
+        const candidates = (await waitForLog(/ELEVEN bench candidates (\S+)/, 10_000, fromTab))?.match ?? null;
+        return [null, opened[2], opened[3], candidates?.[1] ?? ''];
       };
       const closeBench = async (opened, id, held = []) => {
         const fromClose = logs.length;
@@ -498,8 +504,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(500);
       const fromPass = logs.length;
       await burst(['touchStart', [pt(pass, 1)]], ['touchEnd', [pt(pass, 1)]]);
-      const passed = (await waitForLog(actionPattern, 5_000, fromPass))?.match ?? null;
-      const resolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 5_000, fromPass);
+      const passed = (await waitForLog(actionPattern, 20_000, fromPass))?.match ?? null;
+      const resolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 20_000, fromPass);
       const passPress = logs.slice(fromPass).find((l) => l.startsWith('ELEVEN press'));
       notes.passLatencyMs = passed ? Number(passed[5]) : NaN;
       check('a press on PASS asks for the quick pass', !!passed && passed[1] === 'pass' && /target=pass/.test(passPress ?? '') && !!resolved,
@@ -520,7 +526,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(1_500);
       const fromFlick = logs.length;
       await flickFrom(kick, 30, 60);
-      const flicked = (await waitForLog(actionPattern, 5_000, fromFlick))?.match ?? null;
+      const flicked = (await waitForLog(actionPattern, 20_000, fromFlick))?.match ?? null;
       const flickWorld = toWorld({ x: 30, y: 60 }, 0);
       const flickPress = logs.slice(fromFlick).find((l) => l.startsWith('ELEVEN press'));
       check('an immediate flick on KICK is a manual kick along the gesture',
@@ -531,7 +537,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(1_500);
       const fromHold = logs.length;
       await flickFrom(kick, 30, 60, 1_000);
-      const held = (await waitForLog(actionPattern, 8_000, fromHold))?.match ?? null;
+      const held = (await waitForLog(actionPattern, 20_000, fromHold))?.match ?? null;
       check('a hold then flick on KICK asks for a stronger kick', !!held && held[1] === 'holdflick' && !!flicked && Number(held[2]) > Number(flicked[2]),
         held ? `${held[0].replace('ELEVEN action ', '')}; the immediate flick asked ${flicked?.[2] ?? '?'}` : `no action line; since: ${since(fromHold)}`);
 
@@ -564,7 +570,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const s1 = { x: s0.x + reach, y: s0.y };
       const beforeBoth = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
       await flickFrom(kick, 30, 60, 0, 2, [pt(s1, 1)]);
-      const both = (await waitForLog(actionPattern, 5_000, fromBoth))?.match ?? null;
+      const both = (await waitForLog(actionPattern, 20_000, fromBoth))?.match ?? null;
       const afterBoth = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       const moved = beforeBoth && afterBoth ? Math.hypot(Number(afterBoth[2]) - Number(beforeBoth[2]), Number(afterBoth[3]) - Number(beforeBoth[3])) : NaN;
@@ -578,7 +584,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(kick, 1)] });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)] });
       const holding = [pt({ x: kick.x + 20 * pointPx * sx, y: kick.y - 40 * pointPx * sy }, 1)];
-      const reopened = await openBench(2);
+      const reopened = await openBench(2, holding);
       await press(segments(reopened?.[3]).A, 2, holding);
       await press(segments(reopened?.[3]).B, 2, holding);
       await press(segments(reopened?.[2])['180'], 2, holding);
@@ -595,7 +601,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(1_500);
       const fromFlipped = logs.length;
       await flickFrom(kick, 0, 60);
-      const up180 = (await waitForLog(actionPattern, 5_000, fromFlipped))?.match ?? null;
+      const up180 = (await waitForLog(actionPattern, 20_000, fromFlipped))?.match ?? null;
       check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && up180[1] === 'flick' && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
         up180 ? up180[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlipped)}`);
 

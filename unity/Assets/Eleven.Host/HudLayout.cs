@@ -82,18 +82,19 @@ namespace Eleven.Host
         public readonly Rect StatusArea;
 
         /// <summary>
-        /// Candidate B's PASS (#76): a bounded disc at the right thumb's rest, where A's ACTION disc
-        /// is drawn, the same size. A press on it is the quick pass.
+        /// Candidate B's PASS (#76): a bounded disc in the right-hand control area's bottom corner,
+        /// under the resting thumb. A press on it is the quick pass.
         /// </summary>
-        public Vector2 PassCentre => KickCentre;
+        public readonly Vector2 PassCentre;
 
-        public float PassRadius => KickRadius;
+        public readonly float PassRadius;
 
         /// <summary>
-        /// Where Candidate B's KICK is marked (#76). KICK is the whole right-hand control area outside
-        /// PASS; the marker is drawn beside PASS where it fits whole in that area, clear of PASS and
-        /// the capture actions: to its left, up and to its left, or above it. A radius of 0 means
-        /// nothing fits, and KICK is labelled on PASS's left edge instead.
+        /// Where Candidate B's KICK is marked (#76), the same size as PASS. KICK is the whole
+        /// right-hand control area outside PASS; the marker is drawn beside PASS where it fits whole
+        /// in that area, clear of PASS and the capture actions: to its left, up and to its left, or
+        /// above it, a little smaller if it must. A radius of 0 means nothing fits, and KICK is
+        /// labelled on PASS's left instead.
         /// </summary>
         public readonly Vector2 KickMarker;
 
@@ -198,21 +199,29 @@ namespace Eleven.Host
             float statusWidth = Mathf.Min(PlayArea.width - 2 * Padding, needs.Status.x);
             StatusArea = new Rect(PlayArea.center.x - statusWidth * 0.5f, PlayArea.yMin + Padding * 0.5f, statusWidth, needs.Status.y);
 
-            // Candidate B's KICK marker (#76): the first place beside PASS where it fits.
+            // Candidate B (#76): PASS in the right-hand area's bottom corner, under the resting
+            // thumb, and KICK's marker the first place beside it that fits whole, clear of PASS and
+            // the capture actions; a little smaller where the full size doesn't fit.
+            PassRadius = 0.9f * Unit;
+            PassCentre = new Vector2(safe.xMax - Padding - PassRadius, safe.yMax - Padding - PassRadius);
             KickMarker = Vector2.zero;
             KickMarkerRadius = 0;
-            float markerRadius = 0.8f * Unit;
-            float gap = KickRadius + Padding + markerRadius;
-            float diagonal = gap * 0.7071f;
-            foreach (Vector2 offset in new[] { new Vector2(-gap, 0), new Vector2(-diagonal, -diagonal), new Vector2(0, -gap) })
+            foreach (float markerRadius in new[] { PassRadius, 0.7f * Unit })
             {
-                Vector2 c = KickCentre + offset;
-                var box = new Rect(c.x - markerRadius, c.y - markerRadius, 2 * markerRadius, 2 * markerRadius);
-                bool inside = box.xMin >= ActionZone.xMin && box.xMax <= ActionZone.xMax && box.yMin >= ActionZone.yMin && box.yMax <= ActionZone.yMax;
-                if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton)) continue;
-                KickMarker = c;
-                KickMarkerRadius = markerRadius;
-                break;
+                float gap = PassRadius + Padding + markerRadius;
+                float diagonal = gap * 0.7071f;
+                foreach (Vector2 offset in new[] { new Vector2(-gap, 0), new Vector2(-diagonal, -diagonal), new Vector2(0, -gap) })
+                {
+                    Vector2 c = PassCentre + offset;
+                    var box = new Rect(c.x - markerRadius, c.y - markerRadius, 2 * markerRadius, 2 * markerRadius);
+                    bool inside = box.xMin >= ActionZone.xMin && box.xMax <= ActionZone.xMax && box.yMin >= ActionZone.yMin && box.yMax <= ActionZone.yMax;
+                    if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton)) continue;
+                    KickMarker = c;
+                    KickMarkerRadius = markerRadius;
+                    break;
+                }
+
+                if (KickMarkerRadius > 0) break;
             }
 
             // Last resort for cramped screens: the stick shrinks to fit its zone, and rests inside it,

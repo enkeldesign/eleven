@@ -33,7 +33,7 @@ namespace Eleven.Host
         private static readonly string[] Groups =
         {
             TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup,
-            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, SplitSettings.Group,
+            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
         };
 
         private readonly UiRoot _ui;
@@ -58,6 +58,7 @@ namespace Eleven.Host
         private readonly UiKit.Segmented _models;
         private readonly UiKit.Segmented _views;
         private readonly UiKit.Segmented _controls;
+        private readonly VisualElement _controlsBlock;
         private readonly UiKit.Segmented _tabs;
         private readonly ScrollView _list;
         private readonly UiKit.Action _close;
@@ -136,16 +137,19 @@ namespace Eleven.Host
             _views.Element.style.flexShrink = 0;
             _sheet.Content.Add(_views.Element);
 
-            // The touch candidates (#28, #76): a choice anyone can make without a gesture. It acts at
-            // once and the run goes on; only the touch adapter changes, and gestures in progress are
-            // cancelled.
+            // The touch candidates (#28, #76): a choice anyone can make without a gesture, at the top
+            // of the Touch tab with both candidates' knobs. It acts at once and the run goes on; only
+            // the touch adapter changes, and gestures in progress are cancelled. In the tab rather
+            // than above the tabs, so a phone's knob list keeps its room.
+            _controlsBlock = new VisualElement { name = "Touch controls" };
             Label controlsLabel = UiKit.Text(_theme, TypeScale.Body, "Touch controls. Switches now; the run goes on.", Role.Text);
             controlsLabel.style.marginBottom = Spacing.Xs;
-            _sheet.Content.Add(controlsLabel);
+            _controlsBlock.Add(controlsLabel);
             _controls = UiKit.MakeSegmented(ui, _theme, Controls, 0, index => _switchControls(index));
             _controls.Element.style.marginBottom = Spacing.M;
             _controls.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_controls.Element);
+            _controlsBlock.Add(_controls.Element);
+            _controls.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
 
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
@@ -216,9 +220,9 @@ namespace Eleven.Host
             var order = new List<VisualElement>();
             foreach (UiKit.Raised model in _models.Segments) order.Add(model.Element);
             foreach (UiKit.Raised view in _views.Segments) order.Add(view.Element);
-            foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
-            foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[_group]))
+            if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
+            foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
             {
                 if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
                 order.Add(v.Less.Element);
@@ -238,7 +242,13 @@ namespace Eleven.Host
             _list.Clear();
             _shown.Clear();
             BenchCandidate applied = _applied();
-            foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[index]))
+            if (TouchShown)
+            {
+                UiKit.Select(_theme, _controls, _activeControls());
+                _list.Add(_controlsBlock);
+            }
+
+            foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, index)))
             {
                 TunableParameter p = knob.Parameter;
                 double value = Value(knob, applied);
@@ -253,6 +263,12 @@ namespace Eleven.Host
             _reportControls = true;
             if (_trace) Log($"ELEVEN bench group name={Groups[index]}");
         }
+
+        // The Touch tab holds both candidates' knobs, A's then B's, under the A / B choice (#76).
+        private bool TouchShown => Groups[_group] == ActionSurfaceSettings.Group;
+
+        private static bool InGroup(BenchKnob knob, int group) =>
+            knob.Group == Groups[group] || (Groups[group] == ActionSurfaceSettings.Group && knob.Group == SplitSettings.Group);
 
         private void Changed(BenchKnob knob, double value)
         {
@@ -338,8 +354,7 @@ namespace Eleven.Host
                 string tabs = string.Join(";", Groups.Select((g, i) => $"{g}={P(_tabs.Segments[i].Element)}"));
                 string models = string.Join(";", Models.Select((m, i) => $"{m}={P(_models.Segments[i].Element)}"));
                 string views = string.Join(";", new[] { "0", "180" }.Select((v, i) => $"{v}={P(_views.Segments[i].Element)}"));
-                string controls = string.Join(";", new[] { "A", "B" }.Select((c, i) => $"{c}={P(_controls.Segments[i].Element)}"));
-                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)} models={models} views={views} controls={controls}");
+                Log($"ELEVEN bench open knobs={BenchCandidate.Knobs.Count} group={Groups[_group]} tabs={tabs} apply={P(_applyAction.Element)} revert={P(_revert.Element)} close={P(_close.Element)} models={models} views={views}");
 
                 float screen = _ui.Root.layout.width;
                 float smallest = float.MaxValue;
@@ -375,7 +390,12 @@ namespace Eleven.Host
             if (_reportControls && _trace)
             {
                 _reportControls = false;
-                foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => k.Group == Groups[_group]))
+                if (TouchShown)
+                {
+                    Log($"ELEVEN bench candidates A={P(_controls.Segments[0].Element)};B={P(_controls.Segments[1].Element)}");
+                }
+
+                foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
                 {
                     if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
                     Rect track = v.Track.worldBound;

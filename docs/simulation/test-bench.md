@@ -43,12 +43,13 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - It is a presentation setting, not a knob: in no config, candidate or capture. Reset and APPLY / RETRY keep it. [visual-system.md](../ui/visual-system.md) has the contract.
 
 **Touch controls (#76):**
-- "A · Action / B · Pass + Kick" sits below the Pitch view. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
+- "A · Action / B · Pass + Kick" sits at the top of the Touch tab, above both candidates' knobs. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
+- It is in the tab rather than above the tabs, so a phone's knob list keeps its room.
 - A gesture in progress is cancelled, and fingers already down are ignored until they lift.
 - It is the non-gesture way to switch, in Tab's order with the other choices. Reset and APPLY / RETRY keep it.
 - A capture records the active candidate and every one of its values.
 
-**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player, Touch (Candidate A's gestures) and Split (Candidate B's).
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch. Touch holds the A / B choice, then Candidate A's gesture knobs, then B's (the `Split` group).
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
@@ -143,8 +144,8 @@ Candidate B from #28 and #76, after Super Soccer Champs: the convenience pass an
 
 **Where a finger lands decides its role, fixed for that finger's life:**
 - **Stick zone, left:** the floating stick, as in A.
-- **PASS:** a bounded disc at the right thumb's rest, A's ACTION disc's place and size (`HudLayout.PassCentre`, `PassRadius`).
-- **KICK:** the rest of the right-hand control area. It is marked by a smaller disc beside PASS: to its left, up and left, or above, wherever it fits clear of PASS and the capture actions (`HudLayout.KickMarker`). A press on a UI action inside the area belongs to the UI.
+- **PASS:** a bounded disc, 0.9 units across its radius, in the right-hand control area's bottom corner, under the resting thumb (`HudLayout.PassCentre`, `PassRadius`).
+- **KICK:** the rest of the right-hand control area. It is marked by a disc the same size beside PASS, wherever it fits whole clear of PASS and the capture actions: to its left, up and left, or above, a little smaller if it must (`HudLayout.KickMarker`). On an iPhone 13 that is to the left in portrait and up and left in landscape, each holding a square of about 50 pt. A press on a UI action inside the area belongs to the UI.
 
 | Control | Gesture | Command |
 | --- | --- | --- |
