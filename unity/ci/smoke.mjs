@@ -471,10 +471,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       else await page.mouse.move(p.x, p.y);
       await sleep(20);
     }
+    // Released before the screenshot: a large viewport's screenshot can take seconds, and a held
+    // stick kept running the player through it, past the goal line on the phone (#75's first run).
     await sleep(2500);
-    await page.screenshot({ path: path.join(outDir, `${name}-playing.png`) });
     if (useTouch) await touch('touchEnd');
     else await page.mouse.up();
+    await page.screenshot({ path: path.join(outDir, `${name}-playing.png`) });
     const after = (await waitForLog(tracePattern, 5_000, logs.length))?.match ?? null;
     notes.stickMovedMetres = before && after ? Number(after[2]) - Number(before[2]) : NaN;
     const view = after?.input.match(/view=player:(\w+),ball:(\w+)/);
