@@ -134,7 +134,7 @@ Every touch stays one bounded change of the ball's velocity. The ball moves only
 - **Feel for Erik.** At the reference, 0.3 keeps every half-stick cut and struggles only at a sprint. `cutStrength` and `touchError` are the knobs.
 - **Cross-runtime determinism.**
   - The cut uses only the operations the touch already uses: ADR-0002's maths model.
-  - The WebGL smoke test cuts with the ball after its reversal, and the build's recording of that session replays to the live state under .NET.
+  - The WebGL smoke test cuts with the ball after its reversal. On desktop, the felt-wrong capture taken after it holds the cut, and CI replays it exactly under .NET: on build 148, ticks 660 to 1264, with the cut touch at 1140.
 
 ## The properties tested
 
