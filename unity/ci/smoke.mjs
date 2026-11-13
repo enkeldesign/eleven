@@ -473,7 +473,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         ...(markerAt && markerAt[2] > 0 ? [['marker', markerAt[0], markerAt[1]]] : []),
         ...(zone ? [['lower left', zone[0] + 30 * pointPx, zone[1] + zone[3] - 30 * pointPx]] : []),
       ];
-      const kickStart = kickStarts.find(([, cx, cy]) => offPass([cx, cy]) && flicksClear([cx, cy])) ?? kickStarts[0];
+      const kickStart = kickStarts.find(([, cx, cy]) => offPass([cx, cy]) && flicksClear([cx, cy])) ?? kickStarts[0] ?? ["old ACTION disc's centre", n[6], n[7]];
       const kick = at(kickStart[1], kickStart[2]);
       const kickWhere = `KICK from its ${kickStart[0]} at ${kickStart[1].toFixed(0)},${kickStart[2].toFixed(0)}`;
 
@@ -646,6 +646,29 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
       const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromSwitch))?.match ?? null;
       check('the recording across the switches replays to the live state', !!replay && replay[4] === 'match', replay ? replay[0].replace('ELEVEN ', '') : 'no recording check');
+
+      // The screen turns with a finger held on KICK (#76): the host cancels gestures in progress,
+      // so the finger, moved and lifted on the new screen, kicks nothing. Last, in the portrait
+      // pass: every place above was read from the layout before the turn.
+      if (!startsOnB) {
+        await settle();
+        const fromTurn = logs.length;
+        const size = page.viewportSize();
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(kick, 1)] });
+        await sleep(300);
+        const turnPress = logs.slice(fromTurn).find((l) => l.startsWith('ELEVEN press'));
+        await page.setViewportSize({ width: size.height, height: size.width });
+        const cancelled = (await waitForLog(/ELEVEN gestures cancelled reason=resize screen=(\d+)x(\d+)/, 20_000, fromTurn))?.match ?? null;
+        // A flick's worth of travel on the turned screen, then the lift.
+        const turnedTo = { x: size.height * 0.5, y: size.width * 0.5 };
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(turnedTo, 1)] }).catch(() => {});
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }).catch(() => {});
+        await settle();
+        const turnActions = logs.slice(fromTurn).filter((l) => l.startsWith('ELEVEN action'));
+        check('a KICK finger held while the screen turns makes nothing', /target=kick/.test(turnPress ?? '') && !!cancelled && turnActions.length === 0,
+          `${turnPress ?? 'no press'}; ${cancelled ? cancelled[0].replace('ELEVEN ', '') : 'no cancel line'}; ${turnActions.length} action(s) after: ${turnActions.join(' | ') || 'none'}`);
+      }
+
       const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
       return;

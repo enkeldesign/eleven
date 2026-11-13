@@ -46,6 +46,7 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - "A · Action / B · Pass + Kick" sits at the top of the Touch tab, above both candidates' knobs. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
 - It is in the tab rather than above the tabs, so a phone's knob list keeps its room.
 - A gesture in progress is cancelled, and fingers already down are ignored until they lift.
+- **A new screen size cancels gestures the same way**, for every candidate: when the device turns, a finger held across the turn was pressed in the old screen's coordinates, and its lift would read as a flick. The host logs `ELEVEN gestures cancelled reason=resize`. A change of the result panel's size alone cancels nothing.
 - It is the non-gesture way to switch, in Tab's order with the other choices. Reset and APPLY / RETRY keep it.
 - A capture records the active candidate and every one of its values.
 - `?controls=split` starts on B, before the first step: a link for a device comparison.
@@ -191,7 +192,8 @@ The .NET tests (`ActionSurfaceTests`) cover the rest of the gesture reading: hol
 - the stick and KICK work at the same time;
 - a KICK finger held while the controls switch to A and back (portrait) and the view flips makes nothing when lifted;
 - at 180°, a flick up the screen on KICK kicks up-field;
-- the session's recording, across the switches, replays to the live state.
+- the session's recording, across the switches, replays to the live state;
+- in portrait, a KICK finger held while the screen turns, then moved and lifted, kicks nothing.
 
 The test sends each flick in one go. At the few frames a second a 3× phone draws on the runner, the UI then sees the press where the flick ends, and a flick ending on THIS FELT WRONG opens the note sheet. So KICK is pressed at its marker unless a flick from there would end on a HUD action; otherwise at the right-hand area's lower left, which is KICK too (in landscape). A finger takes many frames, so on a device the UI sees the press where it lands.
 

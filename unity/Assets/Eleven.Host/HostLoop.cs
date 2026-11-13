@@ -544,8 +544,19 @@ namespace Eleven.Host
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
                 && _layout.ResultLines == _resultLines) return;
 
+            // A new screen size, as when the device turns (#76): a finger held across it was pressed
+            // in the old screen's coordinates, so its lift would read as a flick along a line nobody
+            // drew, and a held stick would steer the wrong way. Gestures in progress are cancelled,
+            // and those fingers are ignored until they lift. Not when only the result panel's size
+            // changed: the screen is the same, and a held stick keeps steering.
+            bool resized = _layout.ScreenWidth != 0 && (_layout.ScreenWidth != Screen.width || _layout.ScreenHeight != Screen.height);
             _layout = Layout();
             _input.Place(_layout, PixelsPerPoint());
+            if (resized)
+            {
+                _input.Clear();
+                Log($"ELEVEN gestures cancelled reason=resize screen={Screen.width}x{Screen.height}");
+            }
             if (_ui != null && _hud != null)
             {
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
