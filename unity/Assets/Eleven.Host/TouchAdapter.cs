@@ -12,8 +12,10 @@ namespace Eleven.Host
 {
     /// <summary>
     /// The touch input adapter (INV-10): reads raw pointers through the Input System and hands them
-    /// to Candidate A's gesture reading (<see cref="ActionSurfaceAdapter"/>, #28), which turns them
-    /// into owned commands for one controller. It does no assistance; that belongs in the simulation.
+    /// to the active candidate's gesture reading (#28), Candidate A's ACTION SURFACE
+    /// (<see cref="ActionSurfaceAdapter"/>) or B's SPLIT (<see cref="SplitAdapter"/>, #76), which
+    /// turns them into owned commands for one controller. The candidates switch live
+    /// (<see cref="TouchCandidates"/>). It does no assistance; that belongs in the simulation.
     ///
     /// The stick floats: a press anywhere in the stick zone becomes its centre, and dragging away
     /// from it gives the move vector, full stick at <see cref="HudLayout.StickRadius"/>. The right
@@ -33,7 +35,7 @@ namespace Eleven.Host
     {
         private const int MousePointer = -1;
 
-        private readonly ActionSurfaceAdapter _gestures;
+        private readonly TouchCandidates _gestures;
         private readonly InputAction _pressAction;
         private readonly InputAction _moveAction;
         // Who owns each finger that is down, fixed at its press until it lifts: the UI's, or the
@@ -43,9 +45,9 @@ namespace Eleven.Host
         private int _screenHeight;
         private bool _touchSeen;
 
-        public TouchAdapter(int controllerId, ActionSurfaceSettings settings)
+        public TouchAdapter(int controllerId, ActionSurfaceSettings actionSurface, SplitSettings split)
         {
-            _gestures = new ActionSurfaceAdapter(controllerId, settings);
+            _gestures = new TouchCandidates(controllerId, actionSurface, split);
 
             // Pass-through reports every value change of every bound control separately, so two
             // fingers pressing in the same frame are two presses, and every move is a sample.
@@ -78,16 +80,29 @@ namespace Eleven.Host
         /// <summary>Whether a HUD point lands on the UI (#48): those presses belong to the UI, not to play.</summary>
         public Func<Vector2, bool> OverUi { get; set; }
 
-        public ActionSurfaceSettings Settings => _gestures.Settings;
+        /// <summary>The active candidate (#76).</summary>
+        public ControlCandidate Active => _gestures.Active;
 
-        public bool StickActive => _gestures.StickActive;
-        public Vector2 StickOrigin => new Vector2((float)_gestures.StickOriginX, (float)_gestures.StickOriginY);
-        public Vector2 StickKnob => new Vector2((float)_gestures.StickKnobX, (float)_gestures.StickKnobY);
-        public bool ActionHeld => _gestures.ActionHeld;
-        public bool Shaping => _gestures.Shaping;
+        /// <summary>The active candidate's name: <c>action-surface</c> or <c>split</c>.</summary>
+        public string Name => _gestures.Name;
 
-        /// <summary>How far a hold on ACTION has charged now: 0 to 1.</summary>
-        public double Charge => _gestures.Charge(Now);
+        /// <summary>The active candidate and every value, for a capture.</summary>
+        public string Describe() => _gestures.Describe();
+
+        public bool StickActive => _gestures.Current.StickActive;
+        public Vector2 StickOrigin => new Vector2((float)_gestures.Current.StickOriginX, (float)_gestures.Current.StickOriginY);
+        public Vector2 StickKnob => new Vector2((float)_gestures.Current.StickKnobX, (float)_gestures.Current.StickKnobY);
+
+        /// <summary>Whether a finger is on the control that makes a kick: A's ACTION, or B's KICK.</summary>
+        public bool ActionHeld => _gestures.Current.ActionHeld;
+
+        /// <summary>Whether a finger holds B's PASS.</summary>
+        public bool PassHeld => _gestures.Active == ControlCandidate.Split && _gestures.Split.PassHeld;
+
+        public bool Shaping => _gestures.Current.Shaping;
+
+        /// <summary>How far a hold has charged now: 0 to 1.</summary>
+        public double Charge => _gestures.Current.Charge(Now);
 
         /// <summary>Whether a press on ACTION shapes the ball now: set from the state after each frame's steps.</summary>
         public bool ShapingOpen
@@ -102,11 +117,22 @@ namespace Eleven.Host
         public void Place(in HudLayout layout, float pixelsPerPoint)
         {
             _screenHeight = layout.ScreenHeight;
-            _gestures.SetLayout(Region(layout.StickZone), Region(layout.ActionZone), layout.StickRadius, pixelsPerPoint);
+            _gestures.SetLayout(new TouchLayout(Region(layout.StickZone), Region(layout.ActionZone), layout.StickRadius, pixelsPerPoint,
+                layout.PassCentre.x, layout.PassCentre.y, layout.PassRadius));
         }
 
-        /// <summary>New gesture settings (APPLY / RETRY); any gesture in progress is cancelled.</summary>
-        public void Use(ActionSurfaceSettings settings) => _gestures.Use(settings);
+        /// <summary>New gesture settings for both candidates (APPLY / RETRY); any gesture in progress is cancelled.</summary>
+        public void Use(ActionSurfaceSettings actionSurface, SplitSettings split)
+        {
+            _gestures.ActionSurface.Use(actionSurface);
+            _gestures.Split.Use(split);
+        }
+
+        /// <summary>
+        /// The live switch (#76): another candidate at once. Gestures in progress are cancelled, and
+        /// fingers already down are ignored until they lift.
+        /// </summary>
+        public void Switch(ControlCandidate to) => _gestures.Switch(to);
 
         /// <summary>
         /// How the pitch is shown (#72): gestures read on screen go up-field the way the screen shows
@@ -207,6 +233,8 @@ namespace Eleven.Host
             TouchRole.Stick => "stick",
             TouchRole.Action => "action",
             TouchRole.Shaping => "shaping",
+            TouchRole.Pass => "pass",
+            TouchRole.Kick => "kick",
             _ => "none",
         };
 

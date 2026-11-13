@@ -102,7 +102,11 @@ namespace Eleven.Host
             int aheadAt = url.IndexOf("ahead=", StringComparison.Ordinal);
             if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
-            _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface);
+            _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split);
+            // ?controls=split: start on Candidate B (#76), before the first step. A link for a device
+            // comparison, and the route to B where the bench's Touch tab has no room (a landscape
+            // phone, until #31).
+            if (url.Contains("controls=split")) _input.Switch(ControlCandidate.Split);
             _view.Orient(_orientation);
             _input.Orient(_orientation);
             _input.Delivered += GestureDelivered;
@@ -138,6 +142,7 @@ namespace Eleven.Host
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
             Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
             Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m goal={_view.Goal}"));
+            Log($"ELEVEN controls candidate={_input.Name} {_input.Describe()}");
 
             if (url.Contains("autorun")) RunScenario();
         }
@@ -247,7 +252,7 @@ namespace Eleven.Host
         private void GestureDelivered(ActionReport report)
         {
             double latency = (TouchAdapter.Now - report.ReleaseTime) * 1000;
-            _lastGesture = report.Gesture == ActionGesture.Tap
+            _lastGesture = report.Gesture == ActionGesture.Tap || report.Gesture == ActionGesture.Pass
                 ? FormattableString.Invariant($"PASS\n{latency:F0} ms")
                 : FormattableString.Invariant($"KICK {report.Strength * 100:F0}%\n{latency:F0} ms");
             _lastGestureUntil = Time.realtimeSinceStartupAsDouble + 1.2;
@@ -310,7 +315,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, _input.Settings.Describe(), "");
+            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, _input.Describe(), "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -353,7 +358,7 @@ namespace Eleven.Host
             _bench = candidate;
             _config = candidate.Config;
             _view.Use(_config);
-            _input.Use(candidate.ActionSurface);
+            _input.Use(candidate.ActionSurface, candidate.Split);
             ResetMatch();
             _accumulator = 0;
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
@@ -408,6 +413,25 @@ namespace Eleven.Host
             _hud?.ShowStatus(secondHalf
                 ? "Pitch view 180°: ends switched, attacking up."
                 : "Pitch view 0°: attacking up.");
+        }
+
+        /// <summary>
+        /// The bench's touch controls (#28, #76): Candidate A or B, at once. Only the touch adapter
+        /// changes, between frames: no step and no command, the config, the state and possession
+        /// untouched. A gesture in progress is cancelled, and fingers already down are ignored until
+        /// they lift. The tick and the state hash are logged either side.
+        /// </summary>
+        private void SwitchControls(ControlCandidate to)
+        {
+            if (to == _input.Active) return;
+            long tick = _simulator.Tick;
+            ulong before = _simulator.StateHash();
+            _input.Switch(to);
+            Log(FormattableString.Invariant(
+                $"ELEVEN controls switched to={_input.Name} tick={tick} before={before:x16} after={_simulator.StateHash():x16} steps={_simulator.Tick - tick} config={_config.Hash:x16}"));
+            _hud?.ShowStatus(to == ControlCandidate.Split
+                ? "Controls B: PASS and KICK. The run goes on."
+                : "Controls A: one ACTION surface. The run goes on.");
         }
 
         private static string ModelName(ControlModel model) => model switch
@@ -465,7 +489,7 @@ namespace Eleven.Host
                 }
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
-                    () => _orientation != PitchOrientation.Practice, SwitchView);
+                    () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index));
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -520,8 +544,19 @@ namespace Eleven.Host
             if (!force && _layout.ScreenWidth == Screen.width && _layout.ScreenHeight == Screen.height
                 && _layout.ResultLines == _resultLines) return;
 
+            // A new screen size, as when the device turns (#76): a finger held across it was pressed
+            // in the old screen's coordinates, so its lift would read as a flick along a line nobody
+            // drew, and a held stick would steer the wrong way. Gestures in progress are cancelled,
+            // and those fingers are ignored until they lift. Not when only the result panel's size
+            // changed: the screen is the same, and a held stick keeps steering.
+            bool resized = _layout.ScreenWidth != 0 && (_layout.ScreenWidth != Screen.width || _layout.ScreenHeight != Screen.height);
             _layout = Layout();
             _input.Place(_layout, PixelsPerPoint());
+            if (resized)
+            {
+                _input.Clear();
+                Log($"ELEVEN gestures cancelled reason=resize screen={Screen.width}x{Screen.height}");
+            }
             if (_ui != null && _hud != null)
             {
                 _ui.SetPixelsPerPoint(PixelsPerPoint());
@@ -545,19 +580,43 @@ namespace Eleven.Host
             Disc(stickCentre, _layout.StickRadius, HostPalette.ControlIdle);
             Disc(knob, _layout.StickRadius * 0.45f, HostPalette.ControlActive);
 
+            double charge = _input.Charge;
+            bool recent = Time.realtimeSinceStartupAsDouble < _lastGestureUntil;
+            string kicking = _input.Shaping ? "SHAPE"
+                : _input.ActionHeld && charge > 0 ? FormattableString.Invariant($"HOLD\n{charge * 100:F0}%")
+                : null;
+            if (_input.Active == ControlCandidate.Split)
+            {
+                // B (#76): PASS, a disc at the thumb's rest, and KICK, the rest of the right-hand
+                // area, marked beside PASS.
+                Disc(_layout.PassCentre, _layout.PassRadius, _input.PassHeld ? HostPalette.ControlActive : HostPalette.ControlIdle);
+                bool passShown = recent && _lastGesture.StartsWith("PASS", StringComparison.Ordinal);
+                GUI.Label(Square(_layout.PassCentre, _layout.PassRadius), passShown ? _lastGesture : "PASS", _buttonStyle);
+
+                string kickLabel = kicking ?? (recent && !passShown ? _lastGesture : "KICK");
+                if (_layout.KickMarkerRadius > 0)
+                {
+                    Disc(_layout.KickMarker, _layout.KickMarkerRadius, _input.ActionHeld || _input.Shaping ? HostPalette.ControlActive : HostPalette.ControlIdle);
+                    GUI.Label(Square(_layout.KickMarker, _layout.KickMarkerRadius), kickLabel, _buttonStyle);
+                }
+                else
+                {
+                    var beside = new Rect(_layout.ActionZone.xMin, _layout.PassCentre.y - _layout.PassRadius, _layout.PassCentre.x - _layout.PassRadius - _layout.ActionZone.xMin, _layout.PassRadius * 2);
+                    GUI.Label(beside, kickLabel, _buttonStyle);
+                }
+
+                return;
+            }
+
             // ACTION (#28): the whole right-hand area takes the gestures; the disc marks where the
             // thumb rests and says what the surface is doing.
             bool active = _input.ActionHeld || _input.Shaping;
             Disc(_layout.KickCentre, _layout.KickRadius, active ? HostPalette.ControlActive : HostPalette.ControlIdle);
-            var actionLabel = new Rect(_layout.KickCentre.x - _layout.KickRadius, _layout.KickCentre.y - _layout.KickRadius,
-                _layout.KickRadius * 2, _layout.KickRadius * 2);
-            double charge = _input.Charge;
-            string label = _input.Shaping ? "SHAPE"
-                : _input.ActionHeld && charge > 0 ? FormattableString.Invariant($"HOLD\n{charge * 100:F0}%")
-                : Time.realtimeSinceStartupAsDouble < _lastGestureUntil ? _lastGesture
-                : "ACTION";
-            GUI.Label(actionLabel, label, _buttonStyle);
+            string label = kicking ?? (recent ? _lastGesture : "ACTION");
+            GUI.Label(Square(_layout.KickCentre, _layout.KickRadius), label, _buttonStyle);
         }
+
+        private static Rect Square(Vector2 centre, float radius) => new Rect(centre.x - radius, centre.y - radius, radius * 2, radius * 2);
 
         private void EnsureStyles()
         {

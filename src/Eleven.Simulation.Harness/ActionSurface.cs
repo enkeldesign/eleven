@@ -96,6 +96,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>Drag from the re-touch that gives full aftertouch: its sensitivity.</summary>
         public double AftertouchRange { get; }
 
+        /// <summary>The values the ACTION surface reads a flick with.</summary>
+        public FlickValues Flick => new FlickValues(HoldSeconds, FlickDistance, FastFlickDistance, FastFlickSpeed, FlickStrength, ChargeSeconds, ChargedStrength, Loft);
+
         /// <summary>A value, by parameter name.</summary>
         public double Get(string name) => name switch
         {
@@ -202,8 +205,14 @@ namespace Eleven.Simulation.Harness
         /// <summary>A gesture on the ACTION surface: tap, flick or hold → flick.</summary>
         Action,
 
-        /// <summary>A re-touch on the ACTION surface while a kick is winding up or its aftertouch window is open.</summary>
+        /// <summary>A re-touch that shapes the ball while a kick is winding up or its aftertouch window is open.</summary>
         Shaping,
+
+        /// <summary>Candidate B's PASS (#76).</summary>
+        Pass,
+
+        /// <summary>A gesture on Candidate B's KICK (#76): a flick or hold → flick.</summary>
+        Kick,
     }
 
     /// <summary>What a gesture on the ACTION surface became.</summary>
@@ -219,6 +228,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>A manual kick charged by the hold.</summary>
         HoldFlick,
+
+        /// <summary>The assisted quick pass, from Candidate B's PASS (#76).</summary>
+        Pass,
     }
 
     /// <summary>A gesture's command as it was delivered, for the HUD and the trace. Not part of any command.</summary>
@@ -226,7 +238,7 @@ namespace Eleven.Simulation.Harness
     {
         public readonly ActionGesture Gesture;
 
-        /// <summary>When the finger lifted, on the samples' clock.</summary>
+        /// <summary>When the gesture was made, on the samples' clock: the lift, or B's PASS press.</summary>
         public readonly double ReleaseTime;
 
         public readonly double Strength;
@@ -242,101 +254,32 @@ namespace Eleven.Simulation.Harness
     }
 
     /// <summary>
-    /// Candidate A, ACTION SURFACE (#28): the touch adapter's gesture reading, engine-free so .NET
-    /// tests it and every runtime reads the same samples the same way. It turns raw pointer samples
-    /// into owned commands for one controller (INV-10). It never sees teammates or picks a
-    /// receiver: a tap asks the simulation for the footballer's quick pass, and a flick asks for a
-    /// manual kick along the gesture, kept exactly.
-    ///
-    /// A pointer's role is fixed where it begins: in the stick zone it is the stick, on the ACTION
-    /// surface a gesture, or shaping while a kick is winding up, its aftertouch window is open or a
-    /// gesture waits for its tick. Each control belongs to its first finger; a second finger on it
-    /// is ignored. Nothing depends on the order fingers land in, only on where each began.
+    /// Candidate A, ACTION SURFACE (#28): one right-thumb surface. A tap asks the simulation for the
+    /// footballer's quick pass, a flick for a manual kick along the gesture, kept exactly, a hold →
+    /// flick for a harder one, and a re-touch while a kick winds up or its window is open shapes it.
+    /// The stick, shaping, cancelling and the screen-to-world mapping are <see cref="GestureAdapter"/>'s.
     ///
     /// docs/simulation/test-bench.md spells out the gesture reading; <see cref="ActionSurfaceSettings"/> holds
     /// its values.
     /// </summary>
-    public sealed class ActionSurfaceAdapter
+    public sealed class ActionSurfaceAdapter : GestureAdapter
     {
-        /// <summary>
-        /// Release speed is measured over at least this long before the finger lifts, so one jittery
-        /// last sample can't make a slow drag fast. A technical constant, not a feel value.
-        /// </summary>
-        public const double SpeedWindowSeconds = 0.03;
+        /// <summary>See <see cref="FlickReader.SpeedWindowSeconds"/>.</summary>
+        public const double SpeedWindowSeconds = FlickReader.SpeedWindowSeconds;
 
-        private const int NoPointer = int.MinValue;
-
-        private readonly int _controllerId;
-        private readonly List<int> _ignored = new List<int>(4);
-        private readonly List<TouchSample> _recent = new List<TouchSample>(16);
-
-        private TouchRegion _stickZone;
-        private TouchRegion _actionZone;
-        private double _stickRadius = 1;
-        private double _pixelsPerPoint = 1;
-
-        private int _stickPointer = NoPointer;
-        private Vec2 _move;
-
+        private readonly FlickReader _flick = new FlickReader();
         private int _actionPointer = NoPointer;
-        private TouchSample _press;
-        private double? _flickStart;
-
-        private int _shapingPointer = NoPointer;
-        private double _shapingOriginX;
-        private double _shapingOriginY;
-        private Vec2 _aftertouch;
-
-        private bool _pending;
-        private KickIntent? _pendingKick;
-        private ActionReport _pendingReport;
 
         public ActionSurfaceAdapter(int controllerId, ActionSurfaceSettings settings)
+            : base(controllerId)
         {
-            _controllerId = controllerId;
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public ActionSurfaceSettings Settings { get; private set; }
 
-        /// <summary>
-        /// How the pitch is shown (#72). Gestures are read in screen space, and the stick, a flick's
-        /// line and aftertouch become world directions through it before a command is made, so the
-        /// commands recorded are in world coordinates whatever the view (INV-10).
-        /// </summary>
-        public PitchOrientation Orientation { get; private set; } = PitchOrientation.Practice;
-
-        /// <summary>A new view, such as a half-time flip: every gesture in progress is cancelled, as on a reset.</summary>
-        public void Orient(PitchOrientation orientation)
-        {
-            Orientation = orientation;
-            Cancel();
-        }
-
-        /// <summary>
-        /// Whether the controlled player's kick is winding up or its aftertouch window is open, read
-        /// from the state each frame: a press on the ACTION surface then shapes the ball instead of
-        /// starting a gesture.
-        /// </summary>
-        public bool ShapingOpen { get; set; }
-
-        /// <summary>Raised when <see cref="CommandFor"/> delivers a gesture's command.</summary>
-        public event Action<ActionReport>? Delivered;
-
-        public bool StickActive => _stickPointer != NoPointer;
-        public double StickOriginX { get; private set; }
-        public double StickOriginY { get; private set; }
-        public double StickKnobX { get; private set; }
-        public double StickKnobY { get; private set; }
-
-        /// <summary>The stick's move vector on screen, length at most 1: +x right, +y up the screen.</summary>
-        public Vec2 Move => _move;
-
         /// <summary>Whether a finger is on the ACTION surface for a gesture.</summary>
-        public bool ActionHeld => _actionPointer != NoPointer;
-
-        /// <summary>Whether a re-touch on the ACTION surface is shaping the ball.</summary>
-        public bool Shaping => _shapingPointer != NoPointer;
+        public override bool ActionHeld => _actionPointer != NoPointer;
 
         /// <summary>New settings; any gesture in progress is cancelled.</summary>
         public void Use(ActionSurfaceSettings settings)
@@ -346,246 +289,67 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>Where the controls are this frame, in screen pixels, and how many pixels make a point.</summary>
-        public void SetLayout(TouchRegion stickZone, TouchRegion actionZone, double stickRadius, double pixelsPerPoint)
+        public void SetLayout(TouchRegion stickZone, TouchRegion actionZone, double stickRadius, double pixelsPerPoint) =>
+            SetLayout(new TouchLayout(stickZone, actionZone, stickRadius, pixelsPerPoint));
+
+        public override double Charge(double now) => _actionPointer == NoPointer ? 0 : _flick.Charge(now, Settings.Flick);
+
+        public override string Describe() => Settings.Describe();
+
+        protected override double AftertouchRange => Settings.AftertouchRange;
+
+        protected override TouchRole? HeldRole(int pointer) => pointer == _actionPointer ? TouchRole.Action : (TouchRole?)null;
+
+        protected override IEnumerable<int> ControlPointers()
         {
-            _stickZone = stickZone;
-            _actionZone = actionZone;
-            _stickRadius = stickRadius > 0 ? stickRadius : 1;
-            _pixelsPerPoint = pixelsPerPoint > 0 ? pixelsPerPoint : 1;
+            if (_actionPointer != NoPointer) yield return _actionPointer;
         }
 
-        /// <summary>One sample, in arrival order. Returns the role a beginning pointer was given, or the role it has.</summary>
-        public TouchRole Feed(in TouchSample sample)
+        protected override void CancelControls()
         {
-            if (sample.Phase == TouchPhase.Began) return Begin(sample);
-
-            if (_ignored.Contains(sample.Pointer))
-            {
-                if (sample.Phase != TouchPhase.Moved) _ignored.Remove(sample.Pointer);
-                return TouchRole.None;
-            }
-
-            bool ends = sample.Phase != TouchPhase.Moved;
-            if (sample.Pointer == _stickPointer)
-            {
-                if (ends) ReleaseStick();
-                else MoveStick(sample);
-                return TouchRole.Stick;
-            }
-
-            if (sample.Pointer == _shapingPointer)
-            {
-                if (ends)
-                {
-                    // Lifting a re-touch is never a tap.
-                    _shapingPointer = NoPointer;
-                    _aftertouch = Vec2.Zero;
-                }
-                else _aftertouch = AftertouchAt(sample);
-
-                return TouchRole.Shaping;
-            }
-
-            if (sample.Pointer == _actionPointer)
-            {
-                if (sample.Phase == TouchPhase.Moved) Track(sample);
-                else if (sample.Phase == TouchPhase.Ended) Release(sample);
-                else _actionPointer = NoPointer; // the system took the touch: no command
-                return TouchRole.Action;
-            }
-
-            return TouchRole.None;
-        }
-
-        /// <summary>How far a hold has charged at <paramref name="now"/>: 0 before the hold threshold, 1 at full charge.</summary>
-        public double Charge(double now) => _actionPointer == NoPointer ? 0 : ChargeFor((_flickStart ?? now) - _press.Time);
-
-        /// <summary>The owned command for <paramref name="tick"/>. A gesture's kick or pass is delivered once.</summary>
-        public Command CommandFor(long tick)
-        {
-            // Read on screen, sent in the world: what the screen shows up is up-field (#72).
-            Vec2 move = Orientation.ToWorld(_move);
-            Vec2 aftertouch = _shapingPointer != NoPointer ? Orientation.ToWorld(_aftertouch) : Vec2.Zero;
-            if (!_pending) return new Command(_controllerId, tick, move, null, aftertouch);
-
-            var command = new Command(_controllerId, tick, move, _pendingKick, aftertouch, quickPass: !_pendingKick.HasValue);
-            ActionReport report = _pendingReport;
-            _pending = false;
-            _pendingKick = null;
-            Delivered?.Invoke(report);
-            return command;
-        }
-
-        /// <summary>
-        /// Forgets every gesture in progress, for a reset, a retry or new settings: nothing pending
-        /// is delivered, and fingers already down are ignored until they lift, so none can end as a
-        /// phantom kick, pass or aftertouch.
-        /// </summary>
-        public void Cancel()
-        {
-            Ignore(_stickPointer);
-            Ignore(_actionPointer);
-            Ignore(_shapingPointer);
-            _stickPointer = NoPointer;
             _actionPointer = NoPointer;
-            _shapingPointer = NoPointer;
-            _move = Vec2.Zero;
-            _aftertouch = Vec2.Zero;
-            _flickStart = null;
-            _recent.Clear();
-            _pending = false;
-            _pendingKick = null;
+            _flick.Reset();
         }
 
-        private TouchRole Begin(in TouchSample sample)
+        protected override TouchRole BeginControl(in TouchSample sample)
         {
-            // A finger already down that is reported pressed again (Unity does whenever its phase
-            // changes) keeps its role and its press, and one held across a cancel stays ignored
-            // until it lifts. Platforms give every touch a fresh id, so a repeated id is the same
-            // finger.
-            if (sample.Pointer == _stickPointer) return TouchRole.Stick;
-            if (sample.Pointer == _actionPointer) return TouchRole.Action;
-            if (sample.Pointer == _shapingPointer) return TouchRole.Shaping;
-            if (_ignored.Contains(sample.Pointer)) return TouchRole.None;
-
-            if (_stickZone.Contains(sample.X, sample.Y))
-            {
-                if (_stickPointer != NoPointer) return TouchRole.None;
-                _stickPointer = sample.Pointer;
-                StickOriginX = StickKnobX = sample.X;
-                StickOriginY = StickKnobY = sample.Y;
-                _move = Vec2.Zero;
-                return TouchRole.Stick;
-            }
-
-            if (!_actionZone.Contains(sample.X, sample.Y) || _actionPointer != NoPointer || _shapingPointer != NoPointer) return TouchRole.None;
-
-            if (ShapingOpen || _pending)
-            {
-                _shapingPointer = sample.Pointer;
-                _shapingOriginX = sample.X;
-                _shapingOriginY = sample.Y;
-                _aftertouch = Vec2.Zero;
-                return TouchRole.Shaping;
-            }
+            if (!Layout.ActionZone.Contains(sample.X, sample.Y) || _actionPointer != NoPointer || ShapingHeld) return TouchRole.None;
+            if (ShapingWanted) return StartShaping(sample);
 
             _actionPointer = sample.Pointer;
-            _press = sample;
-            _flickStart = null;
-            _recent.Clear();
-            _recent.Add(sample);
+            _flick.Begin(sample);
             return TouchRole.Action;
         }
 
-        private void MoveStick(in TouchSample sample)
+        protected override TouchRole FeedControl(in TouchSample sample)
         {
-            double dx = sample.X - StickOriginX;
-            double dy = sample.Y - StickOriginY;
-            double length = SimMath.Sqrt(dx * dx + dy * dy);
-            if (length > _stickRadius)
-            {
-                dx *= _stickRadius / length;
-                dy *= _stickRadius / length;
-            }
-
-            StickKnobX = StickOriginX + dx;
-            StickKnobY = StickOriginY + dy;
-            // Screen y grows downwards; the pitch's y grows up the screen.
-            _move = new Vec2(dx / _stickRadius, (StickOriginY - StickKnobY) / _stickRadius);
-        }
-
-        private void ReleaseStick()
-        {
-            _stickPointer = NoPointer;
-            _move = Vec2.Zero;
-        }
-
-        // Points from the press, and when the travel first reached a flick's: where a hold ends.
-        private void Track(in TouchSample sample)
-        {
-            if (!_flickStart.HasValue && Travel(sample) >= Settings.FastFlickDistance) _flickStart = sample.Time;
-
-            // Keep the newest sample at least the speed window old, and everything after it.
-            _recent.Add(sample);
-            while (_recent.Count >= 2 && _recent[1].Time <= sample.Time - SpeedWindowSeconds) _recent.RemoveAt(0);
+            if (sample.Pointer != _actionPointer) return TouchRole.None;
+            if (sample.Phase == TouchPhase.Moved) _flick.Track(sample, Settings.Flick, Layout.PixelsPerPoint);
+            else if (sample.Phase == TouchPhase.Ended) Release(sample);
+            else _actionPointer = NoPointer; // the system took the touch: no command
+            return TouchRole.Action;
         }
 
         private void Release(in TouchSample sample)
         {
             _actionPointer = NoPointer;
-            ActionSurfaceSettings s = Settings;
-            double distance = Travel(sample);
-            bool flick = distance >= s.FlickDistance || (distance >= s.FastFlickDistance && ReleaseSpeed(sample) >= s.FastFlickSpeed);
-
-            if (!flick)
+            FlickRelease release = _flick.Release(sample, Settings.Flick, Layout.PixelsPerPoint, out double strength, out Vec2 line);
+            switch (release)
             {
-                // A tap goes at once, at release. A press held past the threshold without a flick is let go.
-                if (sample.Time - _press.Time < s.HoldSeconds) Pend(null, new ActionReport(ActionGesture.Tap, sample.Time, 0, Vec2.Zero));
-                return;
+                case FlickRelease.Tap:
+                    // A tap goes at once, at release.
+                    Pend(null, new ActionReport(ActionGesture.Tap, sample.Time, 0, Vec2.Zero));
+                    break;
+                case FlickRelease.Hold:
+                    // A press held past the threshold without a flick is let go.
+                    break;
+                default:
+                    // The gesture's line, kept exactly, in the world direction the screen shows it (#72).
+                    Vec2 direction = Orientation.ToWorld(line);
+                    Pend(new KickIntent(direction, strength, Settings.Loft),
+                        new ActionReport(release == FlickRelease.HoldFlick ? ActionGesture.HoldFlick : ActionGesture.Flick, sample.Time, strength, direction));
+                    break;
             }
-
-            double hold = (_flickStart ?? sample.Time) - _press.Time;
-            bool charged = hold >= s.HoldSeconds;
-            double strength = charged ? Lerp(s.FlickStrength, s.ChargedStrength, ChargeFor(hold)) : s.FlickStrength;
-            // The gesture's line, kept exactly, in the world direction the screen shows it (#72).
-            Vec2 direction = Orientation.ToWorld(new Vec2(sample.X - _press.X, _press.Y - sample.Y));
-            Pend(new KickIntent(direction, strength, s.Loft), new ActionReport(charged ? ActionGesture.HoldFlick : ActionGesture.Flick, sample.Time, strength, direction));
-        }
-
-        private void Pend(KickIntent? kick, in ActionReport report)
-        {
-            _pending = true;
-            _pendingKick = kick;
-            _pendingReport = report;
-        }
-
-        // 0 at the hold threshold, 1 a charge time later.
-        private double ChargeFor(double hold)
-        {
-            double c = (hold - Settings.HoldSeconds) / Settings.ChargeSeconds;
-            return c <= 0 ? 0 : c >= 1 ? 1 : c;
-        }
-
-        private static double Lerp(double from, double to, double t) => t >= 1 ? to : from + (to - from) * t;
-
-        private double Travel(in TouchSample sample)
-        {
-            double dx = sample.X - _press.X;
-            double dy = sample.Y - _press.Y;
-            return SimMath.Sqrt(dx * dx + dy * dy) / _pixelsPerPoint;
-        }
-
-        // Points per second over the last stretch: from the newest sample at least the speed window
-        // before the release, or from the press if the gesture is shorter than that.
-        private double ReleaseSpeed(in TouchSample release)
-        {
-            TouchSample from = _press;
-            foreach (TouchSample s in _recent)
-            {
-                if (s.Time <= release.Time - SpeedWindowSeconds) from = s;
-            }
-
-            double dx = release.X - from.X;
-            double dy = release.Y - from.Y;
-            double distance = SimMath.Sqrt(dx * dx + dy * dy) / _pixelsPerPoint;
-            double seconds = release.Time - from.Time;
-            if (seconds <= 0) return distance > 0 ? double.PositiveInfinity : 0;
-            return distance / seconds;
-        }
-
-        // Full aftertouch a sensitivity's drag from the re-touch, at most full.
-        private Vec2 AftertouchAt(in TouchSample sample)
-        {
-            double range = Settings.AftertouchRange * _pixelsPerPoint;
-            double x = (sample.X - _shapingOriginX) / range;
-            double y = (_shapingOriginY - sample.Y) / range;
-            double length = SimMath.Sqrt(x * x + y * y);
-            return length > 1 ? new Vec2(x / length, y / length) : new Vec2(x, y);
-        }
-
-        private void Ignore(int pointer)
-        {
-            if (pointer != NoPointer && !_ignored.Contains(pointer)) _ignored.Add(pointer);
         }
     }
 }

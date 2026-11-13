@@ -70,7 +70,7 @@ namespace Eleven.Simulation.Harness
         /// <summary>The preset the run was played under (technical-reference until #46).</summary>
         public string ActivePreset = "";
 
-        /// <summary>The touch control candidate (none until #10).</summary>
+        /// <summary>The active touch control candidate and every one of its values (#28, #76): <c>action-surface/v1 …</c> or <c>split/v1 …</c>.</summary>
         public string ControlCandidate = "";
 
         /// <summary>What felt wrong, in the player's words; may be empty.</summary>
