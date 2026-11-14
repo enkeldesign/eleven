@@ -10,6 +10,39 @@ Slice 1. The engine spike is done and its decisions are accepted:
 
 Football work (Slice 1) can start, issue by issue.
 
+**The one-shot run is under way** (#80): from Slice 1's end to a complete offline v1, without device tests. Its rules are in the next section.
+
+## The one-shot run (#80)
+
+From 13 November 2026 Erik asked for ELEVEN to be finished in one continuous run: "One-shot, no device tests, merge on green." [#80](https://github.com/enkeldesign/eleven/issues/80) is the roadmap (M0–M8) and the register of product defaults. While the run lasts, the rules in this section replace the ones they name. Everything else in this file stands, and no invariant changes.
+
+- **Keep going.** Work through #80's milestones in dependency order. Don't wait for a device test, a play session, an approval or an answer.
+- **Opus writes the specs SOL hasn't.** SOL wrote M0's and M1's issues and has handed the rest to Opus (Erik, 13 November). For each later step Opus writes a short issue first, from #80's defaults and the research: what is built, its acceptance criteria as tests, and the starting values. This replaces SOL's part in *Issues first*.
+- **One PR per playable step.** A PR may close several issues when they make one behaviour that is tested together. It stays small enough for Codex to review whole. This replaces *One issue, one branch, one PR*. PRs are made one at a time: each merges before the next starts.
+- **Less paperwork.** No design comment before a change, and a PR description that says what changed, what was checked and what is left. Decisions that later work depends on still go in the repo: the docs, an ADR or the issue.
+- **Decide routine detail.** Where an issue or #80 is silent on an implementation or football detail, take the research answer, expose a knob where feel is open, and record the choice and its evidence on the PR. This replaces "ask" in *Issues first* and "surface it to Erik" in *Don't broaden scope* for everything except the stop conditions below.
+- **Product defaults come from #80.** Its register marks each as Erik's decision (E), a research-informed working default (D) or a retained experiment (H). A working default is built behind config, a profile or a switch, and is never reported as approved feel.
+- **Merge on green.** Opus squash-merges a PR when all of these hold at its current head:
+  - the .NET tests pass;
+  - the Unity Web build and the Chromium smoke test pass;
+  - Codex's review is complete with no unresolved blocker or should-fix;
+  - the lenses the issue names have been applied.
+
+  A red check is fixed and rerun, never merged. This replaces Erik's approval in *Merging* for product defaults recorded in #80.
+- **No device gate.** *Device verification* doesn't hold a PR or a milestone during the run. Device-facing work is reported as not device-validated, and Erik's device findings afterwards become issues.
+- **Baselines.** Recorded curves, golden data and hash baselines for untuned technical references may move without Erik's sign-off, still in their own commits with a stated reason. A value Erik has tuned is never changed.
+- **Stop only for:**
+  - a change one of the 15 invariants needs, which takes an ADR Erik approves;
+  - a true contradiction with an explicit earlier decision of Erik's;
+  - research or evidence that can't be reconciled.
+
+  Known limits and deferred choices are written down, not waited on.
+- **At each milestone's end:** run the automated regression, the seed-based AI evaluation, the cross-runtime replay, screenshots at phone and tablet sizes and the offline checks, as far as each exists. Then review current `main` as one product and file each finding as its own issue.
+- **The final report** says plainly that v1 was not device-validated and that its feel is not approved.
+- **What doesn't change:** rules are tested first, baselines move in their own commits, Codex reviews every PR, every build shows its build id, and a milestone that passes its automated checks is not Erik's approval of its feel.
+
+When the run ends, this section is removed in its own PR and the rules it replaced apply again.
+
 ## Where things are
 
 | Path | What it holds |
