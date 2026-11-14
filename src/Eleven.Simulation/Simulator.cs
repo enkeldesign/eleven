@@ -1457,6 +1457,24 @@ namespace Eleven.Simulation
                 if (k.Phase != KeeperPhase.Position && k.PhaseTicks == 0) throw new ArgumentException($"{owner}: a {k.Phase} phase needs steps left.", nameof(state));
             }
 
+            // The sides (#82): none, for practice, or two that attack opposite ways, with every
+            // player on one of them.
+            if (state.Teams.Length != 0)
+            {
+                if (state.Teams.Length != 2) throw new ArgumentException($"A state has no teams or two, not {state.Teams.Length}.", nameof(state));
+                TeamState first = state.Teams[0], second = state.Teams[1];
+                if (first.Id <= 0 || second.Id <= first.Id) throw new ArgumentException("Teams must have positive ids, in strictly ascending order.", nameof(state));
+                if ((first.AttackSign != 1 && first.AttackSign != -1) || second.AttackSign != -first.AttackSign)
+                {
+                    throw new ArgumentException("The two teams must attack opposite ways: one +1, the other −1.", nameof(state));
+                }
+
+                foreach (PlayerState p in state.Players)
+                {
+                    if (p.TeamId != first.Id && p.TeamId != second.Id) throw new ArgumentException($"Player {p.Id}'s team {p.TeamId} isn't one of the state's two.", nameof(state));
+                }
+            }
+
             if (state.Ball.HeldBy != 0 && Array.FindIndex(state.Keepers, k => k.PlayerId == state.Ball.HeldBy) < 0)
             {
                 throw new ArgumentException($"The ball is held by {state.Ball.HeldBy}, who isn't a keeper.", nameof(state));

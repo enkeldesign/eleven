@@ -27,9 +27,16 @@ namespace Eleven.Simulation
         /// <summary>The keepers (#69), in ascending player id order, each one of <see cref="Players"/>.</summary>
         public KeeperState[] Keepers = Array.Empty<KeeperState>();
 
+        /// <summary>
+        /// The two sides of a match (#82), in ascending id order; empty for practice, which has one
+        /// goal, at +x, and no sides. Each player's <see cref="PlayerState.TeamId"/> is one of them.
+        /// </summary>
+        public TeamState[] Teams = Array.Empty<TeamState>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
+            copy.Teams = (TeamState[])Teams.Clone();
             copy.Players = (PlayerState[])Players.Clone();
             copy.Keepers = (KeeperState[])Keepers.Clone();
             return copy;
@@ -37,9 +44,9 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
-        /// each player, keeper count (int32), each keeper. Field order within the ball, players and
-        /// keepers is as declared, capabilities in their own declaration order. Fails on NaN or
-        /// ±Infinity anywhere.
+        /// each player, keeper count (int32), each keeper, team count (int32), each team. Field order
+        /// within the ball, players, keepers and teams is as declared, capabilities in their own
+        /// declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
         {
@@ -95,6 +102,13 @@ namespace Eleven.Simulation
                 w.WriteDouble(keeper.Capabilities.DiveSpeed, "Keeper.Capabilities.DiveSpeed");
                 w.WriteDouble(keeper.Capabilities.Reach, "Keeper.Capabilities.Reach");
                 w.WriteDouble(keeper.Capabilities.Handling, "Keeper.Capabilities.Handling");
+            }
+
+            w.WriteInt32(Teams.Length);
+            foreach (TeamState team in Teams)
+            {
+                w.WriteInt32(team.Id);
+                w.WriteInt32(team.AttackSign);
             }
         }
 
@@ -173,6 +187,14 @@ namespace Eleven.Simulation
                 };
             }
 
+            int teams = r.ReadInt32();
+            if (teams != 0 && teams != 2) throw new FormatException($"A state has no teams or two, not {teams}.");
+            state.Teams = new TeamState[teams];
+            for (int i = 0; i < teams; i++)
+            {
+                state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32() };
+            }
+
             return state;
         }
 
@@ -211,6 +233,22 @@ namespace Eleven.Simulation
 
         private static Vec2 ReadVec2(CanonicalReader r, string field) =>
             new Vec2(r.ReadDouble(field), r.ReadDouble(field));
+    }
+
+    /// <summary>
+    /// One side of a match (#82): plain data. Which goal a team attacks is state, not a property of
+    /// the team or of the screen, so the sides can change ends between halves.
+    /// </summary>
+    public struct TeamState
+    {
+        /// <summary>The side's id in this match, positive. Players carry it as <see cref="PlayerState.TeamId"/>; it is not a controller's id.</summary>
+        public int Id;
+
+        /// <summary>
+        /// +1 or −1: the sign of world x this side attacks toward. It scores in the goal on that
+        /// line, and its keeper guards the goal on the other.
+        /// </summary>
+        public int AttackSign;
     }
 
     public struct BallState
