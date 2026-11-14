@@ -161,14 +161,40 @@ namespace Eleven.Simulation.Harness
 
         protected override void CancelControls() => _firePointer = NoPointer;
 
-        // Not read yet: the tests come first (#77).
         protected override TouchRole BeginControl(in TouchSample sample)
         {
+            if (!Layout.ActionZone.Contains(sample.X, sample.Y) || _firePointer != NoPointer || ShapingHeld) return TouchRole.None;
+            if (ShapingWanted) return StartShaping(sample);
+
+            _firePointer = sample.Pointer;
             _pressTime = sample.Time;
-            return TouchRole.None;
+            return TouchRole.Fire;
         }
 
-        protected override TouchRole FeedControl(in TouchSample sample) => TouchRole.None;
+        protected override TouchRole FeedControl(in TouchSample sample)
+        {
+            if (sample.Pointer != _firePointer) return TouchRole.None;
+            if (sample.Phase == TouchPhase.Ended) Release(sample);
+            else if (sample.Phase == TouchPhase.Canceled) _firePointer = NoPointer; // the system took the touch: no command
+            return TouchRole.Fire; // a drag aims nothing: only the time held counts
+        }
+
+        private void Release(in TouchSample sample)
+        {
+            _firePointer = NoPointer;
+            double held = sample.Time - _pressTime;
+            if (held < Settings.HoldSeconds)
+            {
+                // A tap goes at once, at release.
+                Pend(null, new ActionReport(ActionGesture.Tap, sample.Time, 0, Vec2.Zero));
+                return;
+            }
+
+            // Along the heading the footballer has when the simulation accepts the command.
+            double charge = ChargeFor(held);
+            double strength = charge >= 1 ? Settings.ChargedStrength : Settings.HoldStrength + (Settings.ChargedStrength - Settings.HoldStrength) * charge;
+            Pend(KickIntent.AlongHeading(strength, Settings.Loft), new ActionReport(ActionGesture.HoldKick, sample.Time, strength, Vec2.Zero));
+        }
 
         // 0 at the hold threshold, 1 a charge time later.
         private double ChargeFor(double held)
