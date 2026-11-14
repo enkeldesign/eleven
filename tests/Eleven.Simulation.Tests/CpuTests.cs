@@ -406,6 +406,15 @@ namespace Eleven.Simulation.Tests
         // ---- CPU against CPU ------------------------------------------------------------------------------
 
         [Fact]
+        public void The_trials_match_the_recorded_technical_reference()
+        {
+            var csv = new System.IO.StringWriter();
+            CpuTrials.WriteCsv(csv, C, CpuTrials.Run(C));
+            string reference = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "cpu-trials-reference.csv");
+            Assert.Equal(System.IO.File.ReadAllText(reference), csv.ToString());
+        }
+
+        [Fact]
         public void Cpu_against_cpu_they_shoot_the_ball_changes_feet_and_no_one_is_stuck()
         {
             List<CpuTrial> trials = CpuTrials.Run(C);

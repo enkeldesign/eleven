@@ -200,6 +200,21 @@ jobs:
           path: push-curves/
           if-no-files-found: error
 
+      # CPU against CPU in the 1v1 world, every difficulty tier (#83), and the two ends compared (#82).
+      - name: Run the CPU trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll cpu cpu-trials | tee cpu.txt
+          echo "::notice title=CPU trials::$(sed 's| -> .*||' cpu.txt)"
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll sides | tee sides.txt
+          echo "::notice title=Two ends::$(tr '\n' ' ' < sides.txt)"
+
+      - name: Publish CPU trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-trials
+          path: cpu-trials/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |
