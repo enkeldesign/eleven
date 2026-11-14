@@ -581,9 +581,11 @@ namespace Eleven.Simulation
             }
 
             if (toucher < 0) return;
+            // An ordinary touch at a sprint may be a push (#63); a turn's or a cut's never is.
+            bool pushed = false;
             bool touched = kind == TurnTouch.Trap
                 ? Trap(toucher, tick, true)
-                : Touch(toucher, tick, kind == TurnTouch.Out ? Config.TurnStrength : cut ? Config.CutStrength : Config.TouchStrength);
+                : Touch(toucher, tick, kind == TurnTouch.Out ? Config.TurnStrength : cut ? Config.CutStrength : Config.TouchStrength, kind == TurnTouch.None && !cut, out pushed);
             if (!touched) return;
 
             ref PlayerState player = ref _state.Players[toucher];
@@ -601,6 +603,7 @@ namespace Eleven.Simulation
             events.Add(new SimEvent(tick, SimEventKind.Touched, player.Id));
             if (kind != TurnTouch.None) events.Add(new SimEvent(tick, SimEventKind.Turned, player.Id, other: (int)kind));
             if (cut) events.Add(new SimEvent(tick, SimEventKind.Cut, player.Id));
+            if (pushed) events.Add(new SimEvent(tick, SimEventKind.Pushed, player.Id));
         }
 
         // ---- The cut with the ball under FREE (#75, docs/simulation/cut.md) ------------------------
@@ -801,8 +804,9 @@ namespace Eleven.Simulation
         /// error grows with the turn and the overload and shrinks with ball control. Returns false
         /// when there is nothing to do: a standing player, not moving off, with the ball at rest.
         /// </summary>
-        private bool Touch(int index, long tick, double strength)
+        private bool Touch(int index, long tick, double strength, bool mayPush, out bool pushed)
         {
+            pushed = false;
             ref PlayerState player = ref _state.Players[index];
             ref BallState ball = ref _state.Ball;
             Command? command = FindAccepted(player.OwnerControllerId);
@@ -812,6 +816,12 @@ namespace Eleven.Simulation
             if (Standing(player, move)) return false;
 
             Vec2 wanted = TouchTarget(player, move, Config.DribbleLeadSlow, Config.DribbleLeadFast);
+            if (mayPush && Config.PushSpeed > 0 && PushWanted(player, move, out Vec2 push))
+            {
+                wanted = push;
+                pushed = true;
+            }
+
             double turn = TurnBetween(ballVelocity, wanted);
 
             // Bounded. For a ball coming at the player, the part of the change that cushions it,
@@ -846,6 +856,29 @@ namespace Eleven.Simulation
 
             // The ball has a new controller, so no earlier kicker shapes it now, as on a new kick.
             for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
+            return true;
+        }
+
+        // Push-and-chase (#63, an experiment; docs/simulation/push.md). At a sprint the touch is a
+        // push: the ball leaves along the footballer's line of travel, the push speed faster than
+        // they will be running by their next touch. Nothing else is added: the ball then slows
+        // under its own rolling friction, beyond their reach, and they catch it by running, if they
+        // can. A sprint is the stick asking for at least the push-from share of full speed, and the
+        // footballer reaching that share of their max speed by their next touch (INV-13: the
+        // simulation's own movement predicts it).
+        private bool PushWanted(in PlayerState player, Vec2 move, out Vec2 push)
+        {
+            push = Vec2.Zero;
+            double from = Config.PushFromSpeed;
+            if (move.LengthSquared < from * from) return false;
+
+            double dt = Config.TickSeconds;
+            Vec2 velocity = player.Velocity;
+            for (int k = 1; k < Config.TouchIntervalTicks; k++) velocity = Accelerate(velocity, move, player.Capabilities, dt);
+            double speed = SimMath.Sqrt(velocity.LengthSquared);
+            if (speed < from * player.Capabilities.MaxSpeed || speed < TrapSpeed) return false;
+
+            push = velocity * ((speed + Config.PushSpeed) / speed);
             return true;
         }
 

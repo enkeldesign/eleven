@@ -61,7 +61,8 @@ namespace Eleven.Host
         public Hud(UiRoot ui, bool trace, System.Action relayout, System.Action reset, System.Action run,
             System.Action feltWrong, System.Action saveCapture, Action<string> noteDone, Func<Vector2> visible,
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
-            Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls)
+            Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
+            Func<string> benchLoadPresets, Action<string> benchStorePresets, Func<string> benchBuild)
         {
             _ui = ui;
             _trace = trace;
@@ -154,7 +155,7 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
-            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, BenchClosed);
+            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, benchLoadPresets, benchStorePresets, benchBuild, BenchClosed);
 
             // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
             // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel
@@ -276,6 +277,17 @@ namespace Eleven.Host
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
+
+            // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe
+            // edges, in points, are added to their margins.
+            float s = Mathf.Max(0.01f, _ui.PixelsPerPoint);
+            float top = Mathf.Max(0, layout.Safe.yMin) / s, left = Mathf.Max(0, layout.Safe.xMin) / s;
+            float right = Mathf.Max(0, layout.ScreenWidth - layout.Safe.xMax) / s, bottom = Mathf.Max(0, layout.ScreenHeight - layout.Safe.yMax) / s;
+            _scrim.style.paddingTop = Spacing.L + top;
+            _scrim.style.paddingRight = Spacing.L + right;
+            _scrim.style.paddingBottom = Spacing.L + bottom;
+            _scrim.style.paddingLeft = Spacing.L + left;
+            Bench.Inset(top, right, bottom, left);
             _reportBuild = _reportResult = true;
         }
 
@@ -385,9 +397,9 @@ namespace Eleven.Host
             float height = _ui.Root.layout.height;
             if (!(height > 0)) return;
             float s = _ui.PixelsPerPoint;
-            Rect safe = Screen.safeArea;
-            float safeTop = (Screen.height - safe.yMax) / s;
-            float safeBottom = safe.yMin / s;
+            // The layout's safe area, in HUD pixels from the top (#31).
+            float safeTop = Mathf.Max(0, _layout.Safe.yMin) / s;
+            float safeBottom = Mathf.Max(0, _layout.ScreenHeight - _layout.Safe.yMax) / s;
             Vector2 shown = _visible();
             float top = Mathf.Max(safeTop, shown.x) + Spacing.L;
             float bottom = Mathf.Max(safeBottom, height - shown.y) + Spacing.L;

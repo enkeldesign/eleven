@@ -78,6 +78,7 @@ namespace Eleven.Host
         // What the last ACTION gesture became, shown on the disc for a moment (#28).
         private string _lastGesture = "";
         private double _lastGestureUntil;
+        private readonly float[] _safeInsets = new float[4];
 
         private void Awake()
         {
@@ -101,7 +102,22 @@ namespace Eleven.Host
             float ahead = 0;
             int aheadAt = url.IndexOf("ahead=", StringComparison.Ordinal);
             if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
-            _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
+            // ?maxview=25: the widest view, in metres either side of the play area's centre (#31).
+            float maxView = PitchView.MaxHalfExtent;
+            int maxViewAt = url.IndexOf("maxview=", StringComparison.Ordinal);
+            if (maxViewAt >= 0) float.TryParse(url.Substring(maxViewAt + 8).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out maxView);
+            _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40), Mathf.Clamp(maxView, 7, 60));
+            // ?safe=47,0,34,0: safe-area insets to try, in points: top, right, bottom, left (#31).
+            // A browser on a desktop has none, so this stands in for a notch and a home indicator.
+            int safeAt = url.IndexOf("safe=", StringComparison.Ordinal);
+            if (safeAt >= 0)
+            {
+                string[] parts = url.Substring(safeAt + 5).Split('&', '#')[0].Split(',');
+                for (int i = 0; i < 4 && i < parts.Length; i++)
+                {
+                    float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _safeInsets[i]);
+                }
+            }
             _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split, _bench.Fire);
             // ?controls=split or ?controls=one-fire: start on Candidate B (#76) or C (#77), before
             // the first step. A link for a device comparison, and the route to a candidate where
@@ -142,7 +158,7 @@ namespace Eleven.Host
             _loadSeconds = PageSeconds();
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
-            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
+            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={ActivePreset()} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
             Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m goal={_view.Goal}"));
             Log($"ELEVEN controls candidate={_input.Name} {_input.Describe()}");
 
@@ -317,7 +333,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, _input.Describe(), "");
+            _pending = _feel.Capture(_simulator, _buildId, ActivePreset(), _input.Describe(), "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -366,7 +382,7 @@ namespace Eleven.Host
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
 
             Log(FormattableString.Invariant(
-                $"ELEVEN bench applied changes={changes} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
+                $"ELEVEN bench applied changes={changes} preset={ActivePreset().Replace(' ', '_')} config={_config.Hash:x16} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
             _hud.ShowStatus(FormattableString.Invariant($"Applied {changes} change{(changes == 1 ? "" : "s")}, fresh run in {Math.Max(1, milliseconds):F0} ms."));
         }
 
@@ -436,6 +452,13 @@ namespace Eleven.Host
                 : "Controls A: one ACTION surface. The run goes on.");
         }
 
+        // Where the named presets are kept on the device (#46).
+        private const string PresetsKey = "eleven.presets";
+
+        // The preset a capture records (#46): the saved preset the running values are, the
+        // technical reference, or "unsaved".
+        private string ActivePreset() => BenchSheet.PresetNameOf(_bench, _input.Active, ReadStored(PresetsKey));
+
         private static string ModelName(ControlModel model) => model switch
         {
             ControlModel.Free => "free",
@@ -491,7 +514,11 @@ namespace Eleven.Host
                 }
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
-                    () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index));
+                    () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
+                    () => ReadStored(PresetsKey), text =>
+                    {
+                        if (!WriteStored(PresetsKey, text)) _hud?.ShowStatus("This device wouldn't keep the preset.");
+                    }, () => _buildId);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -539,7 +566,17 @@ namespace Eleven.Host
             if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
         }
 
-        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines, _hud?.Needs);
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, _hud?.Needs);
+
+        // The screen's safe area, in pixels with the origin at the bottom left, less any insets
+        // ?safe= asks to try (#31).
+        private Rect SafeArea()
+        {
+            Rect safe = Screen.safeArea;
+            float s = PixelsPerPoint();
+            float top = _safeInsets[0] * s, right = _safeInsets[1] * s, bottom = _safeInsets[2] * s, left = _safeInsets[3] * s;
+            return new Rect(safe.x + left, safe.y + bottom, Mathf.Max(0, safe.width - left - right), Mathf.Max(0, safe.height - top - bottom));
+        }
 
         private void UpdateLayout(bool force)
         {
@@ -697,6 +734,17 @@ namespace Eleven.Host
 
         private static bool HasKeptCapture() => ElevenHasKeptCapture() != 0;
 
+        [DllImport("__Internal")]
+        private static extern string ElevenReadStored(string key);
+
+        [DllImport("__Internal")]
+        private static extern int ElevenWriteStored(string key, string value);
+
+        // A text the page keeps on the device (#46): the named presets.
+        private static string ReadStored(string key) => ElevenReadStored(key) ?? "";
+
+        private static bool WriteStored(string key, string value) => ElevenWriteStored(key, value) != 0;
+
         private static void SaveCapture() => ElevenSaveCapture();
 
         private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
@@ -721,6 +769,17 @@ namespace Eleven.Host
         }
 
         private static bool HasKeptCapture() => false;
+
+        // Outside the web build, kept texts last as long as the player runs.
+        private static readonly Dictionary<string, string> s_stored = new Dictionary<string, string>();
+
+        private static string ReadStored(string key) => s_stored.TryGetValue(key, out string value) ? value : "";
+
+        private static bool WriteStored(string key, string value)
+        {
+            s_stored[key] = value;
+            return true;
+        }
 
         private static void SaveCapture() { }
 
