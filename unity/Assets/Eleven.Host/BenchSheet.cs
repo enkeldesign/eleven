@@ -436,12 +436,16 @@ namespace Eleven.Host
             }
         }
 
+        // Whether a preset is what is running: its values, its ball control model and its touch candidate.
+        private bool Running(BenchPreset preset, BenchCandidate applied) =>
+            preset.Candidate.ChangesFrom(applied) == 0 && preset.Model == applied.Config.ControlModel && (int)preset.Controls == _activeControls();
+
         private void PresetRow(BenchPreset preset, BenchCandidate applied, bool deletable)
         {
             int fromReference = preset.Candidate.ChangesFrom(BenchCandidate.Reference);
             string about = !deletable ? "The untuned reference values."
-                : $"{fromReference} changed from the reference · {Controls[(int)preset.Controls]} · build {(preset.Build.Length > 0 ? preset.Build : "unknown")}";
-            if (preset.Candidate.ChangesFrom(applied) == 0) about += " · running";
+                : $"{fromReference} changed from the reference · {Controls[(int)preset.Controls]} · {(preset.Model == ControlModel.Attached ? "Attached" : "Free")} · build {(preset.Build.Length > 0 ? preset.Build : "unknown")}";
+            if (Running(preset, applied)) about += " · running";
 
             var row = new VisualElement { name = $"Preset {preset.Name}" };
             row.style.marginTop = Spacing.S;
@@ -480,10 +484,13 @@ namespace Eleven.Host
             });
         }
 
-        // Load: the preset's values become the pending changes, whole, and its touch candidate the
-        // active one. Nothing runs under them until APPLY / RETRY.
+        // Load: the preset's touch candidate and ball control model become the active ones at once,
+        // as their live switches would, and its values the pending changes, whole. Nothing runs
+        // under the values until APPLY / RETRY.
         private void LoadPreset(BenchPreset preset)
         {
+            _switchModel(preset.Model);
+            UiKit.Select(_theme, _models, preset.Model == ControlModel.Attached ? 1 : 0);
             BenchCandidate applied = _applied();
             _pending.Clear();
             foreach (BenchKnob k in BenchCandidate.Knobs)
@@ -498,7 +505,7 @@ namespace Eleven.Host
             _presetStatus.text = _pending.Count == 0
                 ? $"\"{preset.Name}\" is what is running."
                 : $"\"{preset.Name}\" loaded as {_pending.Count} pending change{(_pending.Count == 1 ? "" : "s")}. APPLY / RETRY starts a fresh run with {(_pending.Count == 1 ? "it" : "them")}.";
-            Log(FormattableString.Invariant($"ELEVEN bench preset loaded name={preset.Name.Replace(' ', '_')} pending={_pending.Count} controls={TouchCandidates.NameOf(preset.Controls)} config={preset.ConfigHash:x16}"));
+            Log(FormattableString.Invariant($"ELEVEN bench preset loaded name={preset.Name.Replace(' ', '_')} pending={_pending.Count} controls={TouchCandidates.NameOf(preset.Controls)} model={BenchPreset.ModelName(preset.Model)} config={preset.ConfigHash:x16}"));
             Describe();
         }
 
@@ -538,10 +545,10 @@ namespace Eleven.Host
         }
 
         /// <summary>The name of the saved preset these values are, the technical reference's, or "unsaved": what a capture records (#46).</summary>
-        public static string PresetNameOf(BenchCandidate candidate, string stored)
+        public static string PresetNameOf(BenchCandidate candidate, ControlCandidate controls, string stored)
         {
             if (candidate.ChangesFrom(BenchCandidate.Reference) == 0) return BenchCandidate.ReferencePreset;
-            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate);
+            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate, controls);
             return saved != null ? saved.Name : BenchCandidate.UnsavedPreset;
         }
 
@@ -598,7 +605,7 @@ namespace Eleven.Host
         {
             BenchCandidate applied = _applied();
             int fromReference = applied.ChangesFrom(BenchCandidate.Reference);
-            BenchPreset running = fromReference == 0 ? null : _shelf.Matching(applied);
+            BenchPreset running = fromReference == 0 ? null : _shelf.Matching(applied, (ControlCandidate)_activeControls());
             _state.text = fromReference == 0 ? "Running the technical reference values."
                 : running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
                 : $"Running unsaved values: {fromReference} changed from the technical reference.";

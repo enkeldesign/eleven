@@ -50,7 +50,10 @@ namespace Eleven.Simulation.Harness
         /// <summary>The build that saved it.</summary>
         public string Build { get; }
 
-        /// <summary>The hash of the config its values make.</summary>
+        /// <summary>The ball control model that was running when it was saved (#60).</summary>
+        public ControlModel Model => Candidate.Config.ControlModel;
+
+        /// <summary>The hash of the config its values make, under its ball control model.</summary>
         public ulong ConfigHash => Candidate.Config.Hash;
 
         /// <summary>The built-in preset: <see cref="BenchCandidate.Reference"/> under Candidate A.</summary>
@@ -92,8 +95,8 @@ namespace Eleven.Simulation.Harness
         public static bool SameName(string a, string b) => string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// The text form: the format, the name, the build, the active touch candidate, the config's
-        /// format and hash, the number of knobs, then every value as its bits.
+        /// The text form: the format, the name, the build, the active touch candidate, the ball
+        /// control model, the config's format and hash, the number of knobs, then every value as its bits.
         /// </summary>
         public string Write()
         {
@@ -102,6 +105,7 @@ namespace Eleven.Simulation.Harness
             text.Append("name=").Append(Name).Append('\n');
             text.Append("build=").Append(Build).Append('\n');
             text.Append("controls=").Append(TouchCandidates.NameOf(Controls)).Append('\n');
+            text.Append("model=").Append(ModelName(Model)).Append('\n');
             text.Append("configFormat=").Append(SimConfig.FormatVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
             text.Append("configHash=").Append(ConfigHash.ToString("x16", CultureInfo.InvariantCulture)).Append('\n');
             text.Append("knobs=").Append(BenchCandidate.Knobs.Count.ToString(CultureInfo.InvariantCulture)).Append('\n');
@@ -143,7 +147,7 @@ namespace Eleven.Simulation.Harness
                 head[lines[at].Substring(0, equals)] = lines[at].Substring(equals + 1);
             }
 
-            foreach (string key in new[] { "name", "build", "controls", "configFormat", "configHash", "knobs" })
+            foreach (string key in new[] { "name", "build", "controls", "model", "configFormat", "configHash", "knobs" })
             {
                 if (!head.ContainsKey(key) || at >= lines.Length)
                 {
@@ -169,6 +173,13 @@ namespace Eleven.Simulation.Harness
                 return false;
             }
 
+            ControlModel? model = ModelNamed(head["model"]);
+            if (!model.HasValue)
+            {
+                problem = $"\"{name}\" was saved under ball control \"{head["model"]}\", which this build doesn't have.";
+                return false;
+            }
+
             string values = string.Join("\n", lines, at + 1, lines.Length - at - 1);
             if (!BenchCandidate.TryParse(values, out BenchCandidate? candidate, out string valueProblem))
             {
@@ -176,6 +187,8 @@ namespace Eleven.Simulation.Harness
                 return false;
             }
 
+            // The knobs don't hold the model: the hash is of the config under it.
+            candidate = candidate!.WithControlModel(model.Value);
             if (!ulong.TryParse(head["configHash"], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out ulong hash) || hash != candidate!.Config.Hash)
             {
                 problem = $"\"{name}\" recorded config {head["configHash"]}, but its values make {candidate!.Config.Hash:x16} in this build. It can't be loaded.";
@@ -186,6 +199,12 @@ namespace Eleven.Simulation.Harness
             problem = "";
             return true;
         }
+
+        /// <summary>A ball control model's name in a preset.</summary>
+        public static string ModelName(ControlModel model) => model == ControlModel.Attached ? "attached" : "free";
+
+        private static ControlModel? ModelNamed(string name) =>
+            name == "free" ? ControlModel.Free : name == "attached" ? ControlModel.Attached : (ControlModel?)null;
 
         private static string Clean(string? build) => (build ?? "").Replace("\n", " ").Replace("\r", " ").Trim();
     }
@@ -226,12 +245,15 @@ namespace Eleven.Simulation.Harness
             return null;
         }
 
-        /// <summary>The saved preset whose values and touch settings are exactly these, or null.</summary>
-        public BenchPreset? Matching(BenchCandidate candidate)
+        /// <summary>
+        /// The saved preset that is exactly this: the same values and touch settings, the same ball
+        /// control model and the same active touch candidate. Null if none is.
+        /// </summary>
+        public BenchPreset? Matching(BenchCandidate candidate, ControlCandidate controls)
         {
             foreach (BenchPreset p in _presets)
             {
-                if (p.Candidate.ChangesFrom(candidate) == 0) return p;
+                if (p.Controls == controls && p.Model == candidate.Config.ControlModel && p.Candidate.ChangesFrom(candidate) == 0) return p;
             }
 
             return null;

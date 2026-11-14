@@ -1513,7 +1513,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       shelf = await presetsLine(fromSave);
       let fromLoad = logs.length;
       if (shelf.items.TECHNICAL_REFERENCE) await tap(at(...point(shelf.items.TECHNICAL_REFERENCE.load)));
-      const loadedReference = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) config=([0-9a-f]{16})/, 5_000, fromLoad);
+      const loadedReference = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) model=\S+ config=([0-9a-f]{16})/, 5_000, fromLoad);
       if (first.open) await tap(at(...point(first.open[4])));
       const appliedReference = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
       check('TECHNICAL REFERENCE restores the reference values',
@@ -1526,7 +1526,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       shelf = await presetsLine(second.from);
       fromLoad = logs.length;
       if (shelf.items.Smoke_1) await tap(at(...point(shelf.items.Smoke_1.load)));
-      const loadedPreset = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) config=([0-9a-f]{16})/, 5_000, fromLoad);
+      const loadedPreset = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) model=\S+ config=([0-9a-f]{16})/, 5_000, fromLoad);
       if (second.open) await tap(at(...point(second.open[4])));
       const appliedPreset = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
       check('a saved preset is recalled and applied, hashed as in .NET, and the run is named after it',

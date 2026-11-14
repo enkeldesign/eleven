@@ -118,9 +118,9 @@ internal static class Program
         if (result == 0) result = Movement(directory, config, profile);
         if (result == 0) result = Kicks(directory, config, profile);
         if (result == 0) result = Passes(directory, config, profile);
-        if (result == 0) result = Dribble(directory, config);
-        if (result == 0) result = Turns(directory, config);
-        if (result == 0) result = Push(directory, config);
+        if (result == 0) result = Dribble(directory, config, profile);
+        if (result == 0) result = Turns(directory, config, profile);
+        if (result == 0) result = Push(directory, config, profile);
         if (result == 0) result = Goal(directory, config);
         if (result == 0) result = Keeper(directory, config);
         if (result == 0) Console.WriteLine($"curves for \"{preset.Name}\" written to {directory}");
@@ -304,12 +304,12 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        return Dribble(directory, SpikeScenario.Config().With(overrides));
+        return Dribble(directory, SpikeScenario.Config().With(overrides), PlayerCapabilities.Reference);
     }
 
-    private static int Dribble(string directory, SimConfig config)
+    private static int Dribble(string directory, SimConfig config, PlayerCapabilities profile)
     {
-        List<DribbleCurve> curves = DribbleCurves.Characterise(config);
+        List<DribbleCurve> curves = DribbleCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "dribble-curves.csv")))
         {
@@ -325,12 +325,12 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        return Turns(directory, SpikeScenario.Config().With(overrides));
+        return Turns(directory, SpikeScenario.Config().With(overrides), PlayerCapabilities.Reference);
     }
 
-    private static int Turns(string directory, SimConfig config)
+    private static int Turns(string directory, SimConfig config, PlayerCapabilities profile)
     {
-        List<TurnCurve> curves = TurnCurves.Characterise(config);
+        List<TurnCurve> curves = TurnCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "turn-curves.csv")))
         {
@@ -347,12 +347,12 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        return Push(directory, SpikeScenario.Config().With(overrides));
+        return Push(directory, SpikeScenario.Config().With(overrides), PlayerCapabilities.Reference);
     }
 
-    private static int Push(string directory, SimConfig config)
+    private static int Push(string directory, SimConfig config, PlayerCapabilities profile)
     {
-        List<PushCurve> curves = PushCurves.Characterise(config);
+        List<PushCurve> curves = PushCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "push-curves.csv")))
         {

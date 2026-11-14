@@ -75,14 +75,17 @@ namespace Eleven.Simulation.Harness
         /// <summary>s. A push not followed by a touch within this long counts as lost.</summary>
         public const double LostSeconds = 6;
 
-        public static List<PushCurve> Characterise(SimConfig config)
+        public static List<PushCurve> Characterise(SimConfig config) => Characterise(config, PlayerCapabilities.Reference);
+
+        /// <summary>The same cases for this footballer: his own ball control is the "bench" profile, and "good" and "poor" are him with that one value changed.</summary>
+        public static List<PushCurve> Characterise(SimConfig config, PlayerCapabilities body)
         {
             var curves = new List<PushCurve>();
-            double bench = PlayerCapabilities.Reference.BallControl;
+            double bench = body.BallControl;
             foreach (double pushSpeed in Speeds)
             foreach ((string profile, double control) in new[] { ("good", GoodControl), ("bench", bench), ("poor", PoorControl) })
             {
-                curves.Add(Case(ConfigOf(config, pushSpeed), pushSpeed, profile, control));
+                curves.Add(Case(ConfigOf(config, pushSpeed), pushSpeed, profile, body, control));
             }
 
             return curves;
@@ -92,9 +95,9 @@ namespace Eleven.Simulation.Harness
         public static SimConfig ConfigOf(SimConfig config, double pushSpeed) =>
             config.WithControlModel(ControlModel.Free).With("pushSpeed", pushSpeed);
 
-        private static SimState Start(SimConfig config, double control)
+        private static SimState Start(SimConfig config, PlayerCapabilities body, double control)
         {
-            PlayerCapabilities capabilities = PlayerCapabilities.Reference.With("ballControl", control);
+            PlayerCapabilities capabilities = body.With("ballControl", control);
             return new SimState
             {
                 Seed = Seed,
@@ -103,10 +106,10 @@ namespace Eleven.Simulation.Harness
             };
         }
 
-        private static PushCurve Case(SimConfig config, double pushSpeed, string profile, double control)
+        private static PushCurve Case(SimConfig config, double pushSpeed, string profile, PlayerCapabilities body, double control)
         {
             var curve = new PushCurve { PushSpeed = pushSpeed, Profile = profile, BallControl = control };
-            var sim = new Simulator(config, Start(config, control));
+            var sim = new Simulator(config, Start(config, body, control));
             var events = new List<SimEvent>();
             long ticks = (long)(RunSeconds * config.TickRate);
             long pushedAt = -1, flickFrom = -1, flickSpan = -1;
@@ -177,7 +180,7 @@ namespace Eleven.Simulation.Harness
             bool missedYet = false;
             for (long offset = 0; offset < span; offset++)
             {
-                bool hit = FlickConnects(config, control, from + offset);
+                bool hit = FlickConnects(config, body, control, from + offset);
                 if (hit)
                 {
                     connected++;
@@ -207,9 +210,9 @@ namespace Eleven.Simulation.Harness
         }
 
         // Whether a sprint flick asked for on this step connects.
-        private static bool FlickConnects(SimConfig config, double control, long kickAt)
+        private static bool FlickConnects(SimConfig config, PlayerCapabilities body, double control, long kickAt)
         {
-            var sim = new Simulator(config, Start(config, control));
+            var sim = new Simulator(config, Start(config, body, control));
             var events = new List<SimEvent>();
             long until = kickAt + config.KickWindUpTicks + 2;
             for (long t = 0; t <= until; t++)

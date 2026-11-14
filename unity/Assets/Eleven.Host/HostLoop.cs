@@ -457,7 +457,7 @@ namespace Eleven.Host
 
         // The preset a capture records (#46): the saved preset the running values are, the
         // technical reference, or "unsaved".
-        private string ActivePreset() => BenchSheet.PresetNameOf(_bench, ReadStored(PresetsKey));
+        private string ActivePreset() => BenchSheet.PresetNameOf(_bench, _input.Active, ReadStored(PresetsKey));
 
         private static string ModelName(ControlModel model) => model switch
         {

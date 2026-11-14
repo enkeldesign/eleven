@@ -2,6 +2,7 @@ eleven-preset/1
 name=Example
 build=fixture
 controls=one-fire
+model=free
 configFormat=13
 configHash=20d50d46865126bf
 knobs=86

@@ -140,6 +140,64 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_preset_saved_under_attached_ball_control_reads_back_under_it()
+        {
+            BenchCandidate attached = Changed(Set("kickSpeed", 18.5)).WithControlModel(ControlModel.Attached);
+            BenchPreset saved = Preset("Attached one", attached);
+            Assert.Equal(ControlModel.Attached, saved.Model);
+            Assert.Contains("\nmodel=attached\n", saved.Write());
+
+            Assert.True(BenchPreset.TryRead(saved.Write(), out BenchPreset? read, out string problem), problem);
+            Assert.Equal(ControlModel.Attached, read!.Model);
+            Assert.Equal(attached.Config.Hash, read.ConfigHash);
+            Assert.Equal(saved.Write(), read.Write());
+
+            // FREE is recorded too, and a model this build doesn't have is refused.
+            Assert.Contains("\nmodel=free\n", Preset("Free one").Write());
+            Assert.False(BenchPreset.TryRead(saved.Write().Replace("model=attached", "model=glued"), out _, out problem));
+            Assert.Contains("glued", problem);
+            Assert.False(BenchPreset.TryRead(saved.Write().Replace("model=attached\n", ""), out _, out problem));
+            Assert.Contains("model", problem);
+
+            // The model is part of what the hash checks.
+            Assert.False(BenchPreset.TryRead(saved.Write().Replace("model=attached", "model=free"), out _, out problem));
+            Assert.Contains("can't be loaded", problem);
+        }
+
+        [Fact]
+        public void The_matching_preset_has_the_same_values_model_and_touch_candidate()
+        {
+            BenchCandidate values = Changed(Set("maxSpeed", 7.5));
+            var shelf = new PresetShelf();
+            shelf.Save(Preset("under A", values, ControlCandidate.ActionSurface));
+            shelf.Save(Preset("under C", values, ControlCandidate.OneFire));
+            shelf.Save(Preset("attached C", values.WithControlModel(ControlModel.Attached), ControlCandidate.OneFire));
+
+            Assert.Equal("under A", shelf.Matching(values, ControlCandidate.ActionSurface)!.Name);
+            Assert.Equal("under C", shelf.Matching(values, ControlCandidate.OneFire)!.Name);
+            Assert.Equal("attached C", shelf.Matching(values.WithControlModel(ControlModel.Attached), ControlCandidate.OneFire)!.Name);
+            Assert.Null(shelf.Matching(values, ControlCandidate.Split));
+            Assert.Null(shelf.Matching(values.WithControlModel(ControlModel.Attached), ControlCandidate.ActionSurface));
+        }
+
+        [Fact]
+        public void The_ball_control_tools_measure_the_footballer_they_are_given()
+        {
+            SimConfig config = SpikeScenario.Config();
+            PlayerCapabilities slow = PlayerCapabilities.Reference.With("maxSpeed", 5);
+
+            DribbleCurve stop = DribbleCurves.Characterise(config).First(c => c.Case == "sprint-stop");
+            DribbleCurve slowStop = DribbleCurves.Characterise(config, slow).First(c => c.Case == "sprint-stop");
+            Assert.NotEqual(stop.MaxSeparationMetres, slowStop.MaxSeparationMetres);
+
+            Assert.NotEqual(TurnCurves.KeyNumbers(TurnCurves.Characterise(config)), TurnCurves.KeyNumbers(TurnCurves.Characterise(config, slow)));
+            Assert.NotEqual(PushCurves.KeyNumbers(PushCurves.Characterise(config)), PushCurves.KeyNumbers(PushCurves.Characterise(config, slow)));
+
+            // The "bench" profile is the given footballer's own ball control.
+            Assert.Contains(PushCurves.Characterise(config, slow.With("ballControl", 0.55)), c => c.Profile == "bench" && c.BallControl == 0.55);
+        }
+
+        [Fact]
         public void The_shelf_saves_recalls_replaces_and_deletes_by_name()
         {
             var shelf = new PresetShelf();
@@ -153,8 +211,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(new[] { "FIRST", "second" }, shelf.Presets.Select(p => p.Name));
             Assert.Equal(0, shelf.Find("first")!.Candidate.ChangesFrom(newer));
 
-            Assert.Same(shelf.Find("second"), shelf.Matching(Changed(Set("maxSpeed", 7.5))));
-            Assert.Null(shelf.Matching(BenchCandidate.Reference));
+            Assert.Same(shelf.Find("second"), shelf.Matching(Changed(Set("maxSpeed", 7.5)), ControlCandidate.Split));
+            Assert.Null(shelf.Matching(BenchCandidate.Reference, ControlCandidate.Split));
 
             Assert.True(shelf.Delete("First"));
             Assert.False(shelf.Delete("first"));

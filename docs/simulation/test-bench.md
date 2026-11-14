@@ -191,10 +191,10 @@ Issue #46. A preset is a bench candidate saved under a short name: every value t
 
 **On the Presets tab:**
 - **Save** keeps the values shown, pending changes included, under the name typed, with the active touch candidate and the build. A name already saved is replaced.
-- **Load** sets a preset's values as the pending changes, whole, and makes its touch candidate the active one. Nothing runs under them until APPLY / RETRY, which starts a fresh run as for any edit.
+- **Load** makes a preset's touch candidate and ball control model the active ones at once, as their live switches do, and sets its values as the pending changes, whole. Nothing runs under the values until APPLY / RETRY, which starts a fresh run as for any edit.
 - **TECHNICAL REFERENCE** is built in: it loads the current untuned reference values. It can't be deleted or replaced.
 - **Delete** removes a saved preset.
-- The sheet says in words which preset is running, and a felt-wrong capture records its name: a saved preset's name, `technical-reference`, or `unsaved`.
+- The sheet says in words which preset is running, and a felt-wrong capture records its name: a saved preset's name, `technical-reference`, or `unsaved`. A saved preset is running only when its values, its ball control model and its touch candidate all are.
 
 **A name** is 1 to 24 characters: letters, digits, spaces, hyphens and underscores. Case doesn't tell two names apart.
 
@@ -205,12 +205,14 @@ Issue #46. A preset is a bench candidate saved under a short name: every value t
 | `eleven-preset/1` | The preset format. |
 | `name=`, `build=` | Its name, and the build that saved it. |
 | `controls=` | The touch candidate that was active: `action-surface`, `split` or `one-fire`. |
-| `configFormat=`, `configHash=` | The config's format, and the hash of the config its values make. |
+| `model=` | The ball control model that was running: `free` or `attached`. |
+| `configFormat=`, `configHash=` | The config's format, and the hash of the config its values make under that model. |
 | `knobs=` | How many knobs it holds. |
 | `values:` then one `name=bits` line per knob | Every value, as its IEEE-754 bits. |
 
 **A preset loads whole or not at all.** Each of these is refused with the reason, and nothing is applied:
 - another preset format, or another config format;
+- a touch candidate or a ball control model this build doesn't have;
 - a touch candidate this build doesn't have;
 - a knob missing, unknown, given twice or outside its valid range;
 - values that don't make the config hash the preset recorded.

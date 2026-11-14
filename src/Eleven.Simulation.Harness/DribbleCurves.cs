@@ -93,7 +93,10 @@ namespace Eleven.Simulation.Harness
         private const ulong Seed = 0x0E1E7E2059UL;
 
         /// <summary>Every case under FREE, then under ATTACHED, with <paramref name="config"/>'s values.</summary>
-        public static List<DribbleCurve> Characterise(SimConfig config)
+        public static List<DribbleCurve> Characterise(SimConfig config) => Characterise(config, PlayerCapabilities.Reference);
+
+        /// <summary>The same cases for this footballer: "good" and "poor" are him with his ball control changed.</summary>
+        public static List<DribbleCurve> Characterise(SimConfig config, PlayerCapabilities body)
         {
             var curves = new List<DribbleCurve>();
             foreach (ControlModel model in new[] { ControlModel.Free, ControlModel.Attached })
@@ -101,16 +104,16 @@ namespace Eleven.Simulation.Harness
                 SimConfig c = config.WithControlModel(model);
                 foreach ((string profile, double control) in new[] { ("good", GoodControl), ("poor", PoorControl) })
                 {
-                    curves.Add(Straight(c, "straight-jog", profile, control, 0.5));
-                    curves.Add(Straight(c, "sprint", profile, control, 1));
-                    curves.Add(SprintStop(c, profile, control));
-                    curves.Add(Turn(c, "turn-45", profile, control, 45));
-                    curves.Add(Turn(c, "turn-90", profile, control, 90));
-                    curves.Add(Receive(c, "receive-and-go", profile, control, 8));
-                    curves.Add(Receive(c, "difficult-first-touch", profile, control, 16));
-                    curves.Add(KickRelease(c, profile, control));
-                    curves.Add(SprintFlick(c, profile, control));
-                    curves.Add(SwitchIn(c, profile, control));
+                    curves.Add(Straight(c, "straight-jog", profile, body, control, 0.5));
+                    curves.Add(Straight(c, "sprint", profile, body, control, 1));
+                    curves.Add(SprintStop(c, profile, body, control));
+                    curves.Add(Turn(c, "turn-45", profile, body, control, 45));
+                    curves.Add(Turn(c, "turn-90", profile, body, control, 90));
+                    curves.Add(Receive(c, "receive-and-go", profile, body, control, 8));
+                    curves.Add(Receive(c, "difficult-first-touch", profile, body, control, 16));
+                    curves.Add(KickRelease(c, profile, body, control));
+                    curves.Add(SprintFlick(c, profile, body, control));
+                    curves.Add(SwitchIn(c, profile, body, control));
                 }
             }
 
@@ -119,16 +122,16 @@ namespace Eleven.Simulation.Harness
 
         private static string Name(ControlModel model) => model == ControlModel.Attached ? "attached" : "free";
 
-        private static DribbleCurve New(SimConfig config, string name, string profile, double control) =>
+        private static DribbleCurve New(SimConfig config, string name, string profile, PlayerCapabilities body, double control) =>
             new DribbleCurve { Model = Name(config.ControlModel), Case = name, Profile = profile, BallControl = control };
 
         private static bool IsControl(SimEventKind kind) => kind == SimEventKind.Touched || kind == SimEventKind.Attached;
 
-        private static SimState Start(SimConfig config, double control, Vec2 ball, Vec2 ballVelocity) => new SimState
+        private static SimState Start(SimConfig config, PlayerCapabilities body, double control, Vec2 ball, Vec2 ballVelocity) => new SimState
         {
             Seed = Seed,
             Ball = new BallState { Id = 100, Position = new Vec3(ball.X, ball.Y, config.BallRadius), Velocity = new Vec3(ballVelocity.X, ballVelocity.Y, 0) },
-            Players = new[] { new PlayerState { Id = 1, OwnerControllerId = Controller, Capabilities = PlayerCapabilities.Reference.With("ballControl", control) } },
+            Players = new[] { new PlayerState { Id = 1, OwnerControllerId = Controller, Capabilities = body.With("ballControl", control) } },
         };
 
         // Steps the simulation, measuring from `from` on; returns the events.
@@ -182,41 +185,41 @@ namespace Eleven.Simulation.Harness
             return all;
         }
 
-        private static DribbleCurve Straight(SimConfig config, string name, string profile, double control, double stick)
+        private static DribbleCurve Straight(SimConfig config, string name, string profile, PlayerCapabilities body, double control, double stick)
         {
-            DribbleCurve curve = New(config, name, profile, control);
-            var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+            DribbleCurve curve = New(config, name, profile, body, control);
+            var sim = new Simulator(config, Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
             Measure(sim, config, tick => new Command(Controller, tick, new Vec2(stick, 0)), 5 * config.TickRate, 2 * config.TickRate, curve);
             return curve;
         }
 
         // Full stick for 2 s, then the stick released: does the ball stop with the player?
-        private static DribbleCurve SprintStop(SimConfig config, string profile, double control)
+        private static DribbleCurve SprintStop(SimConfig config, string profile, PlayerCapabilities body, double control)
         {
-            DribbleCurve curve = New(config, "sprint-stop", profile, control);
+            DribbleCurve curve = New(config, "sprint-stop", profile, body, control);
             long stopAt = 2 * config.TickRate;
-            var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+            var sim = new Simulator(config, Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
             Measure(sim, config, tick => new Command(Controller, tick, tick < stopAt ? new Vec2(1, 0) : Vec2.Zero), stopAt + 2 * config.TickRate, stopAt, curve);
             curve.MeanLeadMetres = curve.MaxLeadMetres = double.NaN;
             return curve;
         }
 
-        private static DribbleCurve Turn(SimConfig config, string name, string profile, double control, double degrees)
+        private static DribbleCurve Turn(SimConfig config, string name, string profile, PlayerCapabilities body, double control, double degrees)
         {
-            DribbleCurve curve = New(config, name, profile, control);
+            DribbleCurve curve = New(config, name, profile, body, control);
             double r = degrees * Math.PI / 180;
             var turned = new Vec2(SimMath.Cos(r), SimMath.Sin(r));
             long turnAt = 2 * config.TickRate;
-            var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+            var sim = new Simulator(config, Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
             Measure(sim, config, tick => new Command(Controller, tick, tick < turnAt ? new Vec2(1, 0) : turned), turnAt + 2 * config.TickRate, turnAt, curve);
             return curve;
         }
 
         // A ball rolled head-on at a player who jogs on to meet it and goes.
-        private static DribbleCurve Receive(SimConfig config, string name, string profile, double control, double ballSpeed)
+        private static DribbleCurve Receive(SimConfig config, string name, string profile, PlayerCapabilities body, double control, double ballSpeed)
         {
-            DribbleCurve curve = New(config, name, profile, control);
-            var sim = new Simulator(config, Start(config, control, new Vec2(10, 0), new Vec2(-ballSpeed, 0)));
+            DribbleCurve curve = New(config, name, profile, body, control);
+            var sim = new Simulator(config, Start(config, body, control, new Vec2(10, 0), new Vec2(-ballSpeed, 0)));
             var step = new List<Command>(1);
             var events = new List<SimEvent>();
             long ticks = 4 * config.TickRate;
@@ -262,11 +265,11 @@ namespace Eleven.Simulation.Harness
             return curve;
         }
 
-        private static DribbleCurve KickRelease(SimConfig config, string profile, double control)
+        private static DribbleCurve KickRelease(SimConfig config, string profile, PlayerCapabilities body, double control)
         {
-            DribbleCurve curve = New(config, "kick-release", profile, control);
+            DribbleCurve curve = New(config, "kick-release", profile, body, control);
             long kickAt = 2 * config.TickRate;
-            var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+            var sim = new Simulator(config, Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
             var step = new List<Command>(1);
             var events = new List<SimEvent>();
             long contact = -1;
@@ -301,9 +304,9 @@ namespace Eleven.Simulation.Harness
         // Flicks while sprinting with the ball (SOL on #59): one started at each step of a touch
         // interval, from 2 s of sprinting, each in its own run, so every phase of the touch cycle is
         // tried once.
-        private static DribbleCurve SprintFlick(SimConfig config, string profile, double control)
+        private static DribbleCurve SprintFlick(SimConfig config, string profile, PlayerCapabilities body, double control)
         {
-            DribbleCurve curve = New(config, "sprint-flick", profile, control);
+            DribbleCurve curve = New(config, "sprint-flick", profile, body, control);
             int attempts = Math.Max(1, config.TouchIntervalTicks);
             long first = 2 * config.TickRate;
             var step = new List<Command>(1);
@@ -312,7 +315,7 @@ namespace Eleven.Simulation.Harness
             for (int k = 0; k < attempts; k++)
             {
                 long kickAt = first + k;
-                var sim = new Simulator(config, Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+                var sim = new Simulator(config, Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
                 bool resolved = false;
                 for (long t = 0; !resolved && t <= kickAt + config.KickWindUpTicks + 2; t++)
                 {
@@ -338,12 +341,12 @@ namespace Eleven.Simulation.Harness
 
         // A sprint dribble under the other model, switched into this one at 2 s (#60): how soon it
         // takes control, and the 2 s after the switch measured as a sprint.
-        private static DribbleCurve SwitchIn(SimConfig config, string profile, double control)
+        private static DribbleCurve SwitchIn(SimConfig config, string profile, PlayerCapabilities body, double control)
         {
-            DribbleCurve curve = New(config, "switch-in", profile, control);
+            DribbleCurve curve = New(config, "switch-in", profile, body, control);
             ControlModel other = config.ControlModel == ControlModel.Attached ? ControlModel.Free : ControlModel.Attached;
             long switchAt = 2 * config.TickRate;
-            var sim = new Simulator(config.WithControlModel(other), Start(config, control, new Vec2(0.6, 0), Vec2.Zero));
+            var sim = new Simulator(config.WithControlModel(other), Start(config, body, control, new Vec2(0.6, 0), Vec2.Zero));
             var step = new List<Command>(1);
             var events = new List<SimEvent>();
             for (long t = 0; t < switchAt; t++)
