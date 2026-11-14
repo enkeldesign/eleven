@@ -6,6 +6,10 @@ namespace Eleven.Simulation
     /// What a keeper perceives (#69, INV-9): his own body, phase and capabilities, and the ball as
     /// seen now. No command, no other controller's input, no wind-up intent, no seed and no
     /// reference to state: his brain decides on this alone.
+    ///
+    /// Positions and directions are in his own goal's frame (#82): the pitch as seen with the goal
+    /// he guards on +x. For the keeper of the −x goal that is the world turned half a turn about
+    /// the centre spot. So one brain keeps either goal, and never needs to know which.
     /// </summary>
     public readonly struct KeeperObservation
     {
@@ -85,9 +89,41 @@ namespace Eleven.Simulation
             KeeperState k = state.Keepers[keeper];
             PlayerState body = Array.Find(state.Players, p => p.Id == k.PlayerId);
             BallState ball = state.Ball;
-            return new KeeperObservation(state.Tick, body.Position, body.Velocity, body.Heading, k.Phase, k.PhaseTicks, k.Capabilities,
-                body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId);
+            if (GuardedEnd(state, keeper) > 0)
+            {
+                return new KeeperObservation(state.Tick, body.Position, body.Velocity, body.Heading, k.Phase, k.PhaseTicks, k.Capabilities,
+                    body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId);
+            }
+
+            // The −x goal's keeper: the world turned half a turn about the centre spot.
+            return new KeeperObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
+                k.Phase, k.PhaseTicks, k.Capabilities, body.Capabilities.MaxSpeed, Turn(ball.Position), Turn(ball.Velocity), Turn(ball.Spin),
+                ball.HeldBy != 0, ball.HeldBy == k.PlayerId);
         }
+
+        /// <summary>
+        /// The end the keeper at <paramref name="keeper"/> guards (#82): the one his side doesn't
+        /// attack, +1 for the +x goal and −1 for the −x goal. Practice, with no sides, has the +x goal only.
+        /// </summary>
+        public static int GuardedEnd(SimState state, int keeper)
+        {
+            int team = Array.Find(state.Players, p => p.Id == state.Keepers[keeper].PlayerId).TeamId;
+            foreach (TeamState side in state.Teams)
+            {
+                if (side.Id == team) return -side.AttackSign;
+            }
+
+            return 1;
+        }
+
+        /// <summary>A keeper's decision, made in his own goal's frame, as a command in the world's.</summary>
+        public static KeeperDecision InWorld(KeeperDecision decision, int guardedEnd) =>
+            guardedEnd > 0 ? decision : new KeeperDecision(Turn(decision.Move), decision.Dive.HasValue ? Turn(decision.Dive.Value) : (Vec3?)null);
+
+        // Half a turn about the centre spot. Spin, an axial vector, turns as any vector does.
+        private static Vec2 Turn(Vec2 v) => new Vec2(-v.X, -v.Y);
+
+        private static Vec3 Turn(Vec3 v) => new Vec3(-v.X, -v.Y, v.Z);
     }
 
     /// <summary>
@@ -103,7 +139,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < state.Keepers.Length; i++)
             {
                 KeeperObservation seen = Perception.OfKeeper(state, i);
-                KeeperDecision decision = AI.KeeperBrain.Decide(seen, simulator.Config);
+                KeeperDecision decision = Perception.InWorld(AI.KeeperBrain.Decide(seen, simulator.Config), Perception.GuardedEnd(state, i));
                 int controller = Array.Find(state.Players, p => p.Id == state.Keepers[i].PlayerId).OwnerControllerId;
                 commands.Add(new Command(controller, state.Tick, decision.Move, dive: decision.Dive));
             }

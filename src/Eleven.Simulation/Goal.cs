@@ -26,9 +26,9 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The parts of the goal's frame (#68), as the attacker sees them, facing the goal from the
-    /// pitch: the right post is at −y, the left at +y. The <see cref="SimEvent.Other"/> of a
-    /// <see cref="SimEventKind.HitFrame"/>.
+    /// The parts of a goal's frame (#68), as the attacker sees them, facing the goal from the
+    /// pitch. At the +x goal the right post is at −y and the left at +y; at the −x goal (#82) they
+    /// are the other way round. The <see cref="SimEvent.Other"/> of a <see cref="SimEventKind.HitFrame"/>.
     /// </summary>
     public enum FramePart
     {
@@ -39,9 +39,14 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
-    /// The goal's frame (#68): two posts and a crossbar, round, as three capsules whose axes run
+    /// A goal's frame (#68): two posts and a crossbar, round, as three capsules whose axes run
     /// from the posts' feet to their tops and between the tops, at the ball's radius plus half the
     /// post width. docs/simulation/goal.md has the rule.
+    ///
+    /// <c>end</c> is the goal: +1 for the one on +x, −1 for the one on −x (#82), which is the first
+    /// turned half a turn about the centre spot. Every coordinate of the frame is the +x goal's
+    /// times <c>end</c>, and the parts are taken in the same order, so a shot at one goal and the
+    /// same shot turned at the other give the same result to the bit.
     /// </summary>
     internal static class GoalFrame
     {
@@ -58,11 +63,11 @@ namespace Eleven.Simulation
         /// rest and the spin. So the path stays one straight segment, from <paramref name="start"/>
         /// to where the ball ends. Returns the parts hit, at most two (a corner), first first.
         /// </summary>
-        public static void Resolve(Vec3 start, ref BallState ball, SimConfig config, out FramePart first, out FramePart second)
+        public static void Resolve(Vec3 start, ref BallState ball, SimConfig config, out FramePart first, out FramePart second, int end = 1)
         {
             second = FramePart.None;
-            TouchAtStart(start, ref ball, config, out first);
-            double soonest = FirstContact(start, ball.Position - start, config, out FramePart hit, out Vec3 a, out Vec3 b);
+            TouchAtStart(start, ref ball, config, end, out first);
+            double soonest = FirstContact(start, ball.Position - start, config, end, out FramePart hit, out Vec3 a, out Vec3 b);
             if (hit == FramePart.None) return;
             StopAndTurn(start + (ball.Position - start) * soonest, ref ball, a, b, config.FrameRestitution);
             if (first == FramePart.None) first = hit;
@@ -74,22 +79,22 @@ namespace Eleven.Simulation
         /// moving into it is turned at once, and moves the whole step from <paramref name="start"/>
         /// along its new velocity. Returns the part it was touching, or none.
         /// </summary>
-        public static void TouchAtStart(Vec3 start, ref BallState ball, SimConfig config, out FramePart part)
+        public static void TouchAtStart(Vec3 start, ref BallState ball, SimConfig config, int end, out FramePart part)
         {
             part = FramePart.None;
             double reach = Reach(config);
-            if (!NearFrame(start, ball.Position, config, reach + Touch)) return;
+            if (!NearFrame(start, ball.Position, config, end, reach + Touch)) return;
 
             Vec3 path = ball.Position - start;
             for (int i = 0; i < 3; i++)
             {
-                Axis(i, config, out Vec3 a, out Vec3 b, out FramePart touched);
+                Axis(i, config, end, out Vec3 a, out Vec3 b, out FramePart touched);
                 Vec3 off = start - Closest(start, a, b);
                 if (off.LengthSquared > (reach + Touch) * (reach + Touch) || off.LengthSquared == 0 || Dot(off, path) >= 0) continue;
 
                 Turn(ref ball, off * (1 / SimMath.Sqrt(off.LengthSquared)), config.FrameRestitution);
-                Vec3 end = start + ball.Velocity * config.TickSeconds;
-                ball.Position = end.Z < config.BallRadius ? new Vec3(end.X, end.Y, config.BallRadius) : end;
+                Vec3 moved = start + ball.Velocity * config.TickSeconds;
+                ball.Position = moved.Z < config.BallRadius ? new Vec3(moved.X, moved.Y, config.BallRadius) : moved;
                 part = touched;
                 return;
             }
@@ -100,17 +105,17 @@ namespace Eleven.Simulation
         /// <paramref name="path"/> at which the ball first meets the frame, with the part and its
         /// axis; infinity and none when it doesn't.
         /// </summary>
-        public static double FirstContact(Vec3 start, Vec3 path, SimConfig config, out FramePart part, out Vec3 axisA, out Vec3 axisB)
+        public static double FirstContact(Vec3 start, Vec3 path, SimConfig config, int end, out FramePart part, out Vec3 axisA, out Vec3 axisB)
         {
             double soonest = double.PositiveInfinity;
             part = FramePart.None;
             axisA = axisB = Vec3.Zero;
             double reach = Reach(config);
-            if (!NearFrame(start, start + path, config, reach + Touch)) return soonest;
+            if (!NearFrame(start, start + path, config, end, reach + Touch)) return soonest;
 
             for (int i = 0; i < 3; i++)
             {
-                Axis(i, config, out Vec3 a, out Vec3 b, out FramePart hit);
+                Axis(i, config, end, out Vec3 a, out Vec3 b, out FramePart hit);
                 double s = Sweep(start, path, a, b, reach);
                 if (s < soonest)
                 {
@@ -135,17 +140,18 @@ namespace Eleven.Simulation
         private static double Reach(SimConfig config) => config.BallRadius + config.PostWidth / 2;
 
         /// <summary>
-        /// Whether the ball's centre at <paramref name="at"/> is inside the goal mouth, as the goal
-        /// line judges it where the centre crosses x = <see cref="SimConfig.GoalLineX"/>: between
-        /// the posts' axes and below the crossbar's.
+        /// Whether the ball's centre at <paramref name="at"/> is inside a goal's mouth, as the goal
+        /// line judges it where the centre crosses the line: between the posts' axes and below the
+        /// crossbar's. The same at either goal.
         /// </summary>
         public static bool InMouth(Vec3 at, SimConfig config) =>
             (at.Y < 0 ? -at.Y : at.Y) < config.PostAxisY && at.Z < config.CrossbarAxisZ;
 
         // The posts' axes run from their feet to their tops, the crossbar's between the tops.
-        private static void Axis(int i, SimConfig config, out Vec3 a, out Vec3 b, out FramePart part)
+        // At the −x goal x and y change sign together: the frame turned half a turn.
+        private static void Axis(int i, SimConfig config, int end, out Vec3 a, out Vec3 b, out FramePart part)
         {
-            double x = config.FrameAxisX, y = config.PostAxisY, z = config.CrossbarAxisZ;
+            double x = end * config.FrameAxisX, y = end * config.PostAxisY, z = config.CrossbarAxisZ;
             switch (i)
             {
                 case 0: a = new Vec3(x, -y, 0); b = new Vec3(x, -y, z); part = FramePart.RightPost; break;
@@ -155,8 +161,14 @@ namespace Eleven.Simulation
         }
 
         // Whether the step's segment's box meets the frame's box, grown by `margin`.
-        private static bool NearFrame(Vec3 p, Vec3 q, SimConfig config, double margin)
+        private static bool NearFrame(Vec3 p, Vec3 q, SimConfig config, int end, double margin)
         {
+            if (end < 0)
+            {
+                p = new Vec3(-p.X, p.Y, p.Z);
+                q = new Vec3(-q.X, q.Y, q.Z);
+            }
+
             double minX = p.X < q.X ? p.X : q.X, maxX = p.X < q.X ? q.X : p.X;
             double minY = p.Y < q.Y ? p.Y : q.Y, maxY = p.Y < q.Y ? q.Y : p.Y;
             double minZ = p.Z < q.Z ? p.Z : q.Z;

@@ -1083,11 +1083,12 @@ namespace Eleven.Simulation
             }
 
             if (IntegrateBall(ref ball, Config, dt)) events.Add(new SimEvent(tick, SimEventKind.Bounced, ball.Id));
-            GoalFrame.TouchAtStart(start, ref ball, Config, out FramePart touched);
+            int end = EndOf(start);
+            GoalFrame.TouchAtStart(start, ref ball, Config, end, out FramePart touched);
             if (touched != FramePart.None) events.Add(new SimEvent(tick, SimEventKind.HitFrame, ball.Id, other: (int)touched));
 
             Vec3 path = ball.Position - start;
-            double frame = GoalFrame.FirstContact(start, path, Config, out FramePart part, out Vec3 a, out Vec3 b);
+            double frame = GoalFrame.FirstContact(start, path, Config, end, out FramePart part, out Vec3 a, out Vec3 b);
             // A keeper moves through the step too, so his contact is swept in his frame: the ball's
             // path relative to his, against his envelope where he started the step.
             double soonest = double.PositiveInfinity;
@@ -1354,12 +1355,20 @@ namespace Eleven.Simulation
         /// wide, where it crossed; the whole ball over it scores or goes out, once. The state returns
         /// to in play only when the centre is back in front of the line. docs/simulation/goal.md.
         /// </summary>
+        ///
+        /// In a match (#82) each end has a line, the −x end's the +x end's turned half a turn. The
+        /// ball is judged against the line of the half it started the step in, on its distance
+        /// toward that end, so the one state serves both: the ball can only be over one line. A goal
+        /// names the side attacking that end.
         private void CheckGoalLine(long tick, Vec3 start, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
             double line = Config.GoalLineX;
-            Vec3 end = ball.Position;
-            if (end.X <= line)
+            int goal = EndOf(start);
+
+            // Toward the goal: x at the +x end, −x at the −x end.
+            double from = goal * start.X, to = goal * ball.Position.X;
+            if (to <= line)
             {
                 ball.Line = LineState.InPlay;
                 return;
@@ -1367,21 +1376,38 @@ namespace Eleven.Simulation
 
             // A ball whose centre started the step in front of the line was in play, whatever its
             // state says. One placed over the line in play is judged where it was placed.
-            LineState state = start.X <= line ? LineState.InPlay : ball.Line;
+            LineState state = from <= line ? LineState.InPlay : ball.Line;
             if (state == LineState.InPlay)
             {
-                Vec3 at = start.X <= line ? start + (end - start) * ((line - start.X) / (end.X - start.X)) : start;
+                Vec3 at = from <= line ? start + (ball.Position - start) * ((line - from) / (to - from)) : start;
                 state = GoalFrame.InMouth(at, Config) ? LineState.CrossingMouth : LineState.CrossingWide;
             }
 
-            if (end.X - Config.BallRadius > line && (state == LineState.CrossingMouth || state == LineState.CrossingWide))
+            if (to - Config.BallRadius > line && (state == LineState.CrossingMouth || state == LineState.CrossingWide))
             {
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
-                if (state == LineState.CrossingMouth) events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id));
+                if (state == LineState.CrossingMouth) events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
                 state = state == LineState.CrossingMouth ? LineState.Goal : LineState.Out;
             }
 
             ball.Line = state;
+        }
+
+        /// <summary>
+        /// The end a ball at <paramref name="at"/> is at (#82): +1 for the +x goal, −1 for the −x
+        /// goal. Practice, with no sides, has the +x goal only.
+        /// </summary>
+        private int EndOf(Vec3 at) => _state.Teams.Length == 2 && at.X < 0 ? -1 : 1;
+
+        // The id of the side attacking an end; 0 with no sides.
+        private int Attacking(int end)
+        {
+            foreach (TeamState team in _state.Teams)
+            {
+                if (team.AttackSign == end) return team.Id;
+            }
+
+            return 0;
         }
 
         private static double Decay(double perSecond, double dt)

@@ -146,9 +146,9 @@ namespace Eleven.Simulation.Tests
             // The same events on the same ticks, a post named as the attacker sees it; and the ball,
             // step for step, exactly the near shot's turned.
             Assert.True(nearEvents.Count(e => e.Kind != SimEventKind.Bounced) > 0 || name.Contains("over"), $"{name}: nothing happened at the near goal");
-            Assert.Equal(
-                Kinds(nearEvents.Select(e => e.Kind == SimEventKind.Goal ? new SimEvent(e.Tick, e.Kind, e.Subject, other: 3 - e.Other) : e)),
-                Kinds(farEvents));
+            // The turned world's sides attack the other way, so the same side scores.
+            Assert.Equal(Kinds(nearEvents), Kinds(farEvents));
+            Assert.All(nearEvents.Where(e => e.Kind == SimEventKind.Goal), e => Assert.Equal(1, e.Other));
             for (int i = 0; i < nearStates.Count; i++) AssertTurned(nearStates[i], farStates[i], 0, $"{name}, step {i}");
         }
 
@@ -196,6 +196,41 @@ namespace Eleven.Simulation.Tests
             Assert.Equal((int)FramePart.RightPost, right.First(e => e.Kind == SimEventKind.HitFrame).Other);
             List<SimEvent> left = Run(new Simulator(C, BallOnly(new Vec3(-(C.GoalLineX - 6), -post, R), new Vec3(-20, 0, 0))), 60);
             Assert.Equal((int)FramePart.LeftPost, left.First(e => e.Kind == SimEventKind.HitFrame).Other);
+        }
+
+        [Fact]
+        public void A_prediction_with_both_goals_is_the_step_at_either_end()
+        {
+            // INV-13: what a step does to a ball no one touches, a prediction says, at −x too.
+            foreach (double y in new[] { 0.0, C.PostAxisY, -(C.PostAxisY - 0.1) })
+            {
+                var at = new Vec3(-(C.GoalLineX - 6), y, R);
+                var velocity = new Vec3(-20, 0.3, 2);
+                var states = new List<SimState>();
+                Run(new Simulator(C, BallOnly(at, velocity)), 90, states);
+                var predicted = new List<Vec3>();
+                BallFlight.Predict(C, at, velocity, Vec3.Zero, 90, predicted, bothGoals: true);
+                Assert.Equal(states.Select(s => s.Ball.Position), predicted);
+            }
+        }
+
+        [Fact]
+        public void The_same_shots_score_hit_the_frame_and_are_saved_alike_at_both_ends()
+        {
+            List<SideCount> ends = SideParity.Measure(SpikeScenario.Config());
+            SideCount near = ends[0], far = ends[1];
+            Assert.Equal(156, near.Shots);
+            Assert.Equal((near.Shots, near.Goals, near.FrameHits, near.Held, near.Parried), (far.Shots, far.Goals, far.FrameHits, far.Held, far.Parried));
+
+            // Every kind of outcome happens, so the parity means something.
+            Assert.True(near.Goals > 0 && near.FrameHits > 0 && near.Held > 0 && near.Parried > 0, near.ToString());
+
+            // Home attacks the end shot at, both times.
+            Assert.Equal((near.Goals, 0), (near.GoalsForHome, near.GoalsForAway));
+            Assert.Equal((far.Goals, 0), (far.GoalsForHome, far.GoalsForAway));
+
+            // The same again gives the same runs.
+            Assert.Equal(near.Digest, SideParity.Measure(SpikeScenario.Config())[0].Digest);
         }
 
         // ---- Practice keeps its one goal ------------------------------------------------------------
@@ -339,20 +374,12 @@ namespace Eleven.Simulation.Tests
             List<SimEvent> farEvents = RunWithBrains(new Simulator(C, Turned(near)), 150, farStates);
 
             Assert.Contains(nearEvents, e => e.Kind == SimEventKind.KeeperDived || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried);
-            Assert.Equal(
-                string.Join(" ", nearEvents.Select(e => $"{e.Tick}:{e.Kind}:{(e.Subject == OneVOne.AwayKeeper ? "keeper" : e.Subject.ToString())}")),
-                string.Join(" ", farEvents.Select(e => $"{e.Tick}:{e.Kind}:{(e.Subject == OneVOne.HomeKeeper ? "keeper" : e.Subject.ToString())}")));
-
-            // The far goal's keeper is home's: the turned world's players are the same ids, so the
-            // states compare with the two keepers exchanged.
-            for (int i = 0; i < nearStates.Count; i++)
-            {
-                SimState n = nearStates[i], f = farStates[i];
-                Assert.True(Math.Abs(n.Ball.Position.X + f.Ball.Position.X) < 1e-6 && Math.Abs(n.Ball.Position.Y + f.Ball.Position.Y) < 1e-6 && Math.Abs(n.Ball.Position.Z - f.Ball.Position.Z) < 1e-6,
-                    $"step {i}: ball {n.Ball.Position.X:R},{n.Ball.Position.Y:R},{n.Ball.Position.Z:R} against {f.Ball.Position.X:R},{f.Ball.Position.Y:R},{f.Ball.Position.Z:R}");
-                Assert.True(Math.Abs(n.Players[3].Position.X + f.Players[1].Position.X) < 1e-6 && Math.Abs(n.Players[3].Position.Y + f.Players[1].Position.Y) < 1e-6, $"step {i}: the keepers differ");
-                Assert.Equal(n.Keepers[1].Phase, f.Keepers[0].Phase);
-            }
+            // The turned world keeps its footballers, so the same keeper, away's, faces both shots:
+            // at +x, then at −x.
+            Assert.Equal(Kinds(nearEvents), Kinds(farEvents));
+            Assert.Equal(string.Join(" ", nearEvents.Select(e => e.Subject)), string.Join(" ", farEvents.Select(e => e.Subject)));
+            Assert.True(farStates[0].Players[3].Position.X < 0);
+            for (int i = 0; i < nearStates.Count; i++) AssertTurned(nearStates[i], farStates[i], 1e-6, $"step {i}");
         }
 
         private static List<SimEvent> RunWithBrains(Simulator sim, int ticks, List<SimState>? states = null, List<ulong>? hashes = null, List<Command[]>? recorded = null, Func<long, IEnumerable<Command>>? others = null)
@@ -374,11 +401,14 @@ namespace Eleven.Simulation.Tests
 
         // ---- Four actors, deterministic ---------------------------------------------------------------
 
+        // The bench's config: FREE ball control, so the outfielders touch the ball as they run.
+        private static readonly SimConfig Free = SpikeScenario.Config();
+
         // Home runs at the ball and shoots at +x; away runs at the ball and shoots at −x.
         private static IEnumerable<Command> Script(long tick)
         {
             Vec2 homeMove = tick < 150 ? new Vec2(1, 0.1) : new Vec2(0.4, -1);
-            KickIntent? homeKick = tick == 150 ? new KickIntent(new Vec2(1, 0.08), 1, 0.3) : (KickIntent?)null;
+            KickIntent? homeKick = tick % 60 == 30 ? new KickIntent(new Vec2(1, 0.08), 1, 0.3) : (KickIntent?)null;
             yield return new Command(OneVOne.HomeController, tick, homeMove, homeKick);
             Vec2 awayMove = tick < 200 ? new Vec2(-1, 0.05) : new Vec2(-0.5, 1);
             KickIntent? awayKick = tick % 90 == 45 ? new KickIntent(new Vec2(-1, -0.05), 0.9, 0.2) : (KickIntent?)null;
@@ -391,7 +421,7 @@ namespace Eleven.Simulation.Tests
             const int Ticks = 900;
             var first = new List<ulong>();
             var recorded = new List<Command[]>();
-            var sim = new Simulator(C, OneVOne.Start(C, seed: 0xE11));
+            var sim = new Simulator(Free, OneVOne.Start(Free, seed: 0xE11));
             List<SimEvent> events = RunWithBrains(sim, 300, hashes: first, recorded: recorded, others: Script);
             byte[] snapshot = Snapshot.Capture(sim);
             events.AddRange(RunWithBrains(sim, Ticks - 300, hashes: first, recorded: recorded, others: Script));
@@ -403,16 +433,16 @@ namespace Eleven.Simulation.Tests
 
             // Twice.
             var second = new List<ulong>();
-            RunWithBrains(new Simulator(C, OneVOne.Start(C, seed: 0xE11)), Ticks, hashes: second, others: Script);
+            RunWithBrains(new Simulator(Free, OneVOne.Start(Free, seed: 0xE11)), Ticks, hashes: second, others: Script);
             Assert.Equal(first, second);
 
             // From the snapshot at tick 300.
             var resumed = new List<ulong>();
-            RunWithBrains(Snapshot.Restore(snapshot, C), Ticks - 300, hashes: resumed, others: Script);
+            RunWithBrains(Snapshot.Restore(snapshot, Free), Ticks - 300, hashes: resumed, others: Script);
             Assert.Equal(first.Skip(300), resumed);
 
             // From the recorded commands, with no brain running.
-            var replay = new Simulator(C, OneVOne.Start(C, seed: 0xE11));
+            var replay = new Simulator(Free, OneVOne.Start(Free, seed: 0xE11));
             var replayed = new List<ulong>();
             foreach (Command[] commands in recorded)
             {
@@ -428,8 +458,8 @@ namespace Eleven.Simulation.Tests
         {
             var a = new List<SimState>();
             var b = new List<SimState>();
-            List<SimEvent> ea = RunWithBrains(new Simulator(C, OneVOne.Start(C, seed: 0xE11)), 600, states: a, others: Script);
-            List<SimEvent> eb = RunWithBrains(new Simulator(C, OneVOne.Start(C, seed: 0xE11, homeAttackSign: -1)), 600, states: b, others: t => Script(t).Select(Turned));
+            List<SimEvent> ea = RunWithBrains(new Simulator(Free, OneVOne.Start(Free, seed: 0xE11)), 600, states: a, others: Script);
+            List<SimEvent> eb = RunWithBrains(new Simulator(Free, OneVOne.Start(Free, seed: 0xE11, homeAttackSign: -1)), 600, states: b, others: t => Script(t).Select(Turned));
 
             // Kick errors are drawn as angles, so the two runs agree to rounding, not to the bit.
             for (int i = 0; i < a.Count; i++) AssertTurned(a[i], b[i], 1e-6, $"step {i}");

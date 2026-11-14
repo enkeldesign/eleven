@@ -103,7 +103,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// A second value where the kind has one: the receiver of <see cref="SimEventKind.QuickPassResolved"/>,
-        /// or the <see cref="FramePart"/> of <see cref="SimEventKind.HitFrame"/>; otherwise 0.
+        /// the <see cref="FramePart"/> of <see cref="SimEventKind.HitFrame"/>, or the id of the side a
+        /// <see cref="SimEventKind.Goal"/> is scored for (#82; 0 in practice, which has no sides); otherwise 0.
         /// </summary>
         public readonly int Other;
 
@@ -125,7 +126,7 @@ namespace Eleven.Simulation
 
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
-            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned ? $"{Tick} {Kind} {Subject} {Other}"
+            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0) ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }
