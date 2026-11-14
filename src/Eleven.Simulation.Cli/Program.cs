@@ -66,6 +66,8 @@ internal static class Program
                 return Keeper(args[1], args.Skip(2));
             case "turns" when args.Length >= 2:
                 return Turns(args[1], args.Skip(2));
+            case "push" when args.Length >= 2:
+                return Push(args[1], args.Skip(2));
             case "replay" when args.Length == 2:
                 return Replay(args[1]);
             case "candidate":
@@ -75,7 +77,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir]");
                 return 2;
         }
     }
@@ -118,6 +120,7 @@ internal static class Program
         if (result == 0) result = Passes(directory, config, profile);
         if (result == 0) result = Dribble(directory, config);
         if (result == 0) result = Turns(directory, config);
+        if (result == 0) result = Push(directory, config);
         if (result == 0) result = Goal(directory, config);
         if (result == 0) result = Keeper(directory, config);
         if (result == 0) Console.WriteLine($"curves for \"{preset.Name}\" written to {directory}");
@@ -335,6 +338,28 @@ internal static class Program
         }
 
         Console.WriteLine($"config {config.Hash:x16}, {TurnCurves.KeyNumbers(curves)} -> {directory}");
+        return 0;
+    }
+
+    // Push-and-chase beside FREE's short touches (#63).
+    private static int Push(string directory, IEnumerable<string> settings)
+    {
+        List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
+        if (overrides == null) return 2;
+
+        return Push(directory, SpikeScenario.Config().With(overrides));
+    }
+
+    private static int Push(string directory, SimConfig config)
+    {
+        List<PushCurve> curves = PushCurves.Characterise(config);
+        Directory.CreateDirectory(directory);
+        using (var csv = new StreamWriter(Path.Combine(directory, "push-curves.csv")))
+        {
+            PushCurves.WriteCsv(csv, config, curves);
+        }
+
+        Console.WriteLine($"config {config.Hash:x16}, {PushCurves.KeyNumbers(curves)} -> {directory}");
         return 0;
     }
 
