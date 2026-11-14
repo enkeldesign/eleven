@@ -103,10 +103,14 @@ namespace Eleven.Host
         /// <summary>Lines the result panel was laid out for.</summary>
         public readonly int ResultLines;
 
+        /// <summary>The screen's safe area (#31): everything above is laid out inside it.</summary>
+        public readonly Rect Safe;
+
         private HudLayout(int width, int height, Rect safe, int resultLines, HudNeeds needs)
         {
             ScreenWidth = width;
             ScreenHeight = height;
+            Safe = safe;
             Unit = Mathf.Min(safe.width, safe.height) / 9f;
             Padding = Unit * 0.3f;
             FontSize = Mathf.Max(12, Mathf.RoundToInt(Unit * 0.36f));
@@ -287,7 +291,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0} safe={Box(Safe)} stickZone={Box(StickZone)} kickRadius={KickRadius:F0}");
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 

@@ -52,8 +52,8 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - `?controls=split` starts on B and `?controls=one-fire` on C, before the first step: links for a device comparison.
 - **On a landscape phone the bench's knob list gets almost no room**, on every tab. The sheet's fixed rows (ball control, view, two rows of tabs) take its height, so the A / B choice can't be reached there. The bench in landscape is #31's. Until then, switch in portrait and turn the phone, or open with `?controls=split` or `?controls=one-fire`.
 
-**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch. Touch holds the A / B / C choice, then Candidate A's gesture knobs, then B's (the `Split` group), then C's (the `Fire` group).
-- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch, then Presets ([below](#named-presets)). Touch holds the A / B / C choice, then Candidate A's gesture knobs, then B's (the `Split` group), then C's (the `Fire` group).
+- Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each. It also holds the push-and-chase experiment's `pushSpeed` (0 is off) and `pushFromSpeed` (#63, [push.md](push.md)).
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
 - Keeper holds the practice keeper's four capabilities and the config's five keeper values (#69, [keeper.md](keeper.md)). The capabilities change the practice keeper, never the config.
@@ -182,6 +182,56 @@ Candidate C from #28 and #77, after Sensible Soccer and Kick Off: one fire contr
 **The disc says what the control does:** FIRE, HOLD with the charge past the threshold, SHAPE, then PASS or the last kick's strength with the milliseconds from the release to the command.
 
 **Starting values** are Candidate A's where the two share a meaning, so the three compare on the same numbers. They are technical references, not approved feel: `fireHoldSeconds` 0.18 (#28's range 0.12–0.25), `fireHoldStrength` 0.6 (A's immediate flick), `fireChargeSeconds` 0.5, `fireChargedStrength` 1.0, `fireLoft` 0.43 and `fireAftertouchRange` 40.
+
+## Named presets
+
+Issue #46. A preset is a bench candidate saved under a short name: every value the bench owns, with what a later build needs to tell whether it can still read it. `BenchPreset` and `PresetShelf` (harness, engine-free) hold the format and the rules; the bench's Presets tab is the way in.
+
+**A preset is not approved feel.** Saving one says nothing about feel, and there is no approved flag to set. Promoting a preset to an approved feel baseline is Erik's explicit act, recorded in the owning issue. Later changes to an approved baseline are separate, reasoned baseline updates under AGENTS.md.
+
+**On the Presets tab:**
+- **Save** keeps the values shown, pending changes included, under the name typed, with the active touch candidate and the build. A name already saved is replaced.
+- **Load** sets a preset's values as the pending changes, whole, and makes its touch candidate the active one. Nothing runs under them until APPLY / RETRY, which starts a fresh run as for any edit.
+- **TECHNICAL REFERENCE** is built in: it loads the current untuned reference values. It can't be deleted or replaced.
+- **Delete** removes a saved preset.
+- The sheet says in words which preset is running, and a felt-wrong capture records its name: a saved preset's name, `technical-reference`, or `unsaved`.
+
+**A name** is 1 to 24 characters: letters, digits, spaces, hyphens and underscores. Case doesn't tell two names apart.
+
+**What a preset records** (`BenchPreset.Write`):
+
+| Line | What it is |
+| --- | --- |
+| `eleven-preset/1` | The preset format. |
+| `name=`, `build=` | Its name, and the build that saved it. |
+| `controls=` | The touch candidate that was active: `action-surface`, `split` or `one-fire`. |
+| `configFormat=`, `configHash=` | The config's format, and the hash of the config its values make. |
+| `knobs=` | How many knobs it holds. |
+| `values:` then one `name=bits` line per knob | Every value, as its IEEE-754 bits. |
+
+**A preset loads whole or not at all.** Each of these is refused with the reason, and nothing is applied:
+- another preset format, or another config format;
+- a touch candidate this build doesn't have;
+- a knob missing, unknown, given twice or outside its valid range;
+- values that don't make the config hash the preset recorded.
+
+A stored preset this build can't read stays stored, and the Presets tab lists it with the reason. So it fails visibly, and a build that can read it still finds it.
+
+**Where they are kept:** in the browser's `localStorage` under `eleven.presets`, on the device, for every build served from the same origin. No network.
+
+**From a preset to its curves.** `eleven-sim preset <file>` reads a preset's text, says what it is and lists what differs from the technical reference. `eleven-sim preset <file> <dir>` also runs every characterisation tool under the preset's own config and footballer: ball, movement, kicks, passes, dribble, turns, goal and keeper. The curves describe the preset; they are no baseline until Erik promotes it.
+
+**An example preset** is `tests/Eleven.Simulation.Tests/Fixtures/example-preset.txt`: `kickSpeed` 18.5, `maxSpeed` 7.5 and `fireHoldSeconds` 0.2 under Candidate C, config `20d50d46865126bf`.
+
+**Known limit:** there is no way yet to export a preset's text from a phone. A felt-wrong capture taken under the preset carries its name and its whole config, and SAVE CAPTURE exports that.
+
+**What the smoke test checks,** on the desktop pass:
+- a name that can't be used is refused, and the running candidate is saved under a good one, with the config hash .NET gives;
+- TECHNICAL REFERENCE loads as two pending changes and applies to the boot's config and start;
+- the saved preset loads and applies to the config and practice start .NET gives, and the run is named after it;
+- after a reload the preset is still there, and can be deleted.
+
+`BenchPresetTests` covers the format, every refusal and the shelf in .NET.
 
 ## Measured
 
