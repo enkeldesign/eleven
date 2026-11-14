@@ -158,7 +158,7 @@ namespace Eleven.Host
             _loadSeconds = PageSeconds();
 
             Log(FormattableString.Invariant($"ELEVEN host ready build={_buildId} tickRate={_config.TickRate} config={_config.Hash:x16} loadMs={_loadSeconds * 1000:F0}"));
-            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
+            Log(FormattableString.Invariant($"ELEVEN bench knobs={BenchCandidate.Knobs.Count} preset={ActivePreset()} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
             Log(FormattableString.Invariant($"ELEVEN pitch mowing={_view.Grass.ToString().ToLowerInvariant()} band={PitchView.MownBand}m goal={_view.Goal}"));
             Log($"ELEVEN controls candidate={_input.Name} {_input.Describe()}");
 
@@ -333,7 +333,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, _bench.PresetName, _input.Describe(), "");
+            _pending = _feel.Capture(_simulator, _buildId, ActivePreset(), _input.Describe(), "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -382,7 +382,7 @@ namespace Eleven.Host
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
 
             Log(FormattableString.Invariant(
-                $"ELEVEN bench applied changes={changes} preset={_bench.PresetName} config={_config.Hash:x16} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
+                $"ELEVEN bench applied changes={changes} preset={ActivePreset().Replace(' ', '_')} config={_config.Hash:x16} start={_simulator.StateHash():x16} hostMs={milliseconds:F1}"));
             _hud.ShowStatus(FormattableString.Invariant($"Applied {changes} change{(changes == 1 ? "" : "s")}, fresh run in {Math.Max(1, milliseconds):F0} ms."));
         }
 
@@ -452,6 +452,13 @@ namespace Eleven.Host
                 : "Controls A: one ACTION surface. The run goes on.");
         }
 
+        // Where the named presets are kept on the device (#46).
+        private const string PresetsKey = "eleven.presets";
+
+        // The preset a capture records (#46): the saved preset the running values are, the
+        // technical reference, or "unsaved".
+        private string ActivePreset() => BenchSheet.PresetNameOf(_bench, ReadStored(PresetsKey));
+
         private static string ModelName(ControlModel model) => model switch
         {
             ControlModel.Free => "free",
@@ -507,7 +514,11 @@ namespace Eleven.Host
                 }
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
-                    () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index));
+                    () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
+                    () => ReadStored(PresetsKey), text =>
+                    {
+                        if (!WriteStored(PresetsKey, text)) _hud?.ShowStatus("This device wouldn't keep the preset.");
+                    }, () => _buildId);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -723,6 +734,17 @@ namespace Eleven.Host
 
         private static bool HasKeptCapture() => ElevenHasKeptCapture() != 0;
 
+        [DllImport("__Internal")]
+        private static extern string ElevenReadStored(string key);
+
+        [DllImport("__Internal")]
+        private static extern int ElevenWriteStored(string key, string value);
+
+        // A text the page keeps on the device (#46): the named presets.
+        private static string ReadStored(string key) => ElevenReadStored(key) ?? "";
+
+        private static bool WriteStored(string key, string value) => ElevenWriteStored(key, value) != 0;
+
         private static void SaveCapture() => ElevenSaveCapture();
 
         private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
@@ -747,6 +769,17 @@ namespace Eleven.Host
         }
 
         private static bool HasKeptCapture() => false;
+
+        // Outside the web build, kept texts last as long as the player runs.
+        private static readonly Dictionary<string, string> s_stored = new Dictionary<string, string>();
+
+        private static string ReadStored(string key) => s_stored.TryGetValue(key, out string value) ? value : "";
+
+        private static bool WriteStored(string key, string value)
+        {
+            s_stored[key] = value;
+            return true;
+        }
 
         private static void SaveCapture() { }
 

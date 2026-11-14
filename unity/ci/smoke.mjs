@@ -1453,6 +1453,73 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     check('felt-wrong captures under the candidate, which the capture names', !!benchBytes && benchBytes.includes(Buffer.from('unsaved', 'utf8')),
       benchCaptured ? `${benchCaptured.match[0].replace('ELEVEN ', '')}; preset "unsaved" ${benchBytes?.includes(Buffer.from('unsaved', 'utf8')) ? 'recorded' : 'NOT recorded'}` : 'no capture line');
 
+    // Named presets (#46), on the desktop, where there is a keyboard to type a name with: the
+    // running candidate saved under a name, TECHNICAL REFERENCE loaded and applied, then the
+    // preset recalled and applied, hashed as in .NET. Deleted after the reload, which it survives.
+    const presetsPattern = /ELEVEN bench presets count=(\d+) unread=(\d+) name=(\S+) save=(\S+) items=(\S*)/;
+    const openPresets = async () => {
+      const from = logs.length;
+      const layoutNow = benchPattern.exec(lastLog(layoutPattern)?.input ?? '');
+      if (layoutNow) await tap(centre(...layoutNow.slice(1, 5)));
+      const open = await waitForLog(/ELEVEN bench open knobs=(\d+) group=(\S+) tabs=(\S+) apply=(\S+) revert=(\S+) close=(\S+)/, 8_000, from);
+      const tabsNow = Object.fromEntries((open?.match[3] ?? '').split(';').filter(Boolean).map((t) => t.split('=')));
+      if (tabsNow.Presets && open.match[2] !== 'Presets') await tap(at(...point(tabsNow.Presets)));
+      return { open: open?.match ?? null, from };
+    };
+    // The latest presets line once the list has settled, with each preset's Load and Delete places.
+    const presetsLine = async (from) => {
+      await waitForLog(presetsPattern, 8_000, from);
+      await sleep(800);
+      const lines = logs.slice(from).map((l) => presetsPattern.exec(l)).filter(Boolean);
+      const line = lines[lines.length - 1] ?? null;
+      const items = Object.fromEntries((line?.[5] ?? '').split(';').filter(Boolean).map((i) => i.split(':')).map(([n, load, del]) => [n, { load, del }]));
+      return { line, items };
+    };
+    if (name === 'desktop') {
+      const first = await openPresets();
+      let shelf = await presetsLine(first.from);
+      // Save: a name the build refuses, then one it takes.
+      let fromSave = logs.length;
+      if (shelf.line) await tap(at(...point(shelf.line[3])));
+      await page.keyboard.type('bad/name');
+      if (shelf.line) await tap(at(...point(shelf.line[4])));
+      const refused = await waitForLog(/ELEVEN bench preset refused (.*)/, 5_000, fromSave);
+      for (let i = 0; i < 'bad/name'.length; i++) await page.keyboard.press('Backspace');
+      fromSave = logs.length;
+      await page.keyboard.type('Smoke 1');
+      if (shelf.line) await tap(at(...point(shelf.line[4])));
+      const saved = await waitForLog(/ELEVEN bench preset saved name=(\S+) replaced=(\w+) count=(\d+) config=([0-9a-f]{16})/, 5_000, fromSave);
+      check('the running candidate is saved under a name, and a name that can\'t be used is refused',
+        !!shelf.line && shelf.line[1] === '0' && !!refused && /letters, digits/.test(refused.match[1]) && !!saved && saved.match[1] === 'Smoke_1' && saved.match[2] === 'no' && saved.match[3] === '1' && saved.match[4] === expected?.[1],
+        `${shelf.line ? `${shelf.line[1]} preset(s) at first` : 'no presets line'}; ${refused ? `refused: ${refused.match[1].trim()}` : 'the bad name was not refused'}; ${saved ? saved.match[0].replace('ELEVEN bench ', '') : 'no saved line'}; .NET config ${expected?.[1] ?? '?'}`);
+
+      // TECHNICAL REFERENCE: loaded as pending changes, then applied.
+      shelf = await presetsLine(fromSave);
+      let fromLoad = logs.length;
+      if (shelf.items.TECHNICAL_REFERENCE) await tap(at(...point(shelf.items.TECHNICAL_REFERENCE.load)));
+      const loadedReference = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) config=([0-9a-f]{16})/, 5_000, fromLoad);
+      if (first.open) await tap(at(...point(first.open[4])));
+      const appliedReference = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
+      check('TECHNICAL REFERENCE restores the reference values',
+        !!loadedReference && loadedReference.match[1] === 'TECHNICAL_REFERENCE' && loadedReference.match[2] === '2' && !!appliedReference && appliedReference.match[1] === '0'
+          && appliedReference.match[2] === 'technical-reference' && appliedReference.match[3] === knobsLine?.[3] && appliedReference.match[4] === knobsLine?.[4],
+        `${loadedReference ? loadedReference.match[0].replace('ELEVEN bench ', '') : 'no loaded line'}; ${appliedReference ? appliedReference.match[0].replace('ELEVEN bench ', '') : 'no applied line'}; at boot config ${knobsLine?.[3]} start ${knobsLine?.[4]}`);
+
+      // The preset recalled: its values pending, then applied, hashed as in .NET, and named.
+      const second = await openPresets();
+      shelf = await presetsLine(second.from);
+      fromLoad = logs.length;
+      if (shelf.items.Smoke_1) await tap(at(...point(shelf.items.Smoke_1.load)));
+      const loadedPreset = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) config=([0-9a-f]{16})/, 5_000, fromLoad);
+      if (second.open) await tap(at(...point(second.open[4])));
+      const appliedPreset = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
+      check('a saved preset is recalled and applied, hashed as in .NET, and the run is named after it',
+        !!loadedPreset && loadedPreset.match[1] === 'Smoke_1' && loadedPreset.match[2] === '2' && !!appliedPreset && appliedPreset.match[1] === '2'
+          && appliedPreset.match[2] === 'Smoke_1' && appliedPreset.match[3] === expected?.[1] && appliedPreset.match[4] === expected?.[2],
+        `${loadedPreset ? loadedPreset.match[0].replace('ELEVEN bench ', '') : 'no loaded line'}; ${appliedPreset ? appliedPreset.match[0].replace('ELEVEN bench ', '') : 'no applied line'}; .NET config ${expected?.[1]} start ${expected?.[2]}`);
+      await waitForLog(/ELEVEN bench closed/, 3_000, fromLoad);
+    }
+
     // Tabular HUD data doesn't jitter (#53): the build panel keeps its size while the dropped-frame
     // count changes through play.
     const huds = logs.map((l) => /ELEVEN trace .* dropped=(\d+) .* hud=(\d+x\d+)/.exec(l)).filter(Boolean);
@@ -1555,6 +1622,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const downs = logs.slice(fromSave).filter((l) => l.startsWith('ELEVEN ui pointer down')).map((l) => l.replace('ELEVEN ui pointer down ', ''));
       check('after a reload SAVE CAPTURE still exports the newest kept capture', offered && !!download && download.suggestedFilename() === newest,
         `${!offered ? 'SAVE CAPTURE not offered after reload' : download ? `${download.suggestedFilename()} (newest kept: ${newest})` : 'no download'}; page: ${saves.join(' | ') || 'no save lines'}; ui: ${downs.join(' | ') || 'no pointer down'}`);
+
+      // The preset saved before the reload is still on the device (#46), and can be deleted.
+      const kept = await openPresets();
+      const shelfAfter = await presetsLine(kept.from);
+      const fromDelete = logs.length;
+      if (shelfAfter.items.Smoke_1 && shelfAfter.items.Smoke_1.del !== 'none') await tap(at(...point(shelfAfter.items.Smoke_1.del)));
+      const deleted = await waitForLog(/ELEVEN bench preset deleted name=(\S+) count=(\d+)/, 5_000, fromDelete);
+      check('a saved preset is still there after a reload, and can be deleted',
+        shelfAfter.line?.[1] === '1' && !!shelfAfter.items.Smoke_1 && !!deleted && deleted.match[1] === 'Smoke_1' && deleted.match[2] === '0',
+        `${shelfAfter.line ? `${shelfAfter.line[1]} preset(s) after the reload: ${Object.keys(shelfAfter.items).join(', ')}` : 'no presets line'}; ${deleted ? deleted.match[0].replace('ELEVEN bench ', '') : 'no deleted line'}`);
     }
   } catch (e) {
     check('ran to completion', false, e.message);

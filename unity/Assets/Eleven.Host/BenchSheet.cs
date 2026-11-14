@@ -33,8 +33,11 @@ namespace Eleven.Host
         private static readonly string[] Groups =
         {
             TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup,
-            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
+            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, PresetsTab,
         };
+
+        // The last tab (#46): named presets, not a group of knobs.
+        private const string PresetsTab = "Presets";
 
         private readonly UiRoot _ui;
         private readonly bool _trace;
@@ -46,6 +49,15 @@ namespace Eleven.Host
         private readonly Func<int> _activeControls;
         private readonly Action<int> _switchControls;
         private readonly System.Action _closed;
+        private readonly Func<string> _loadPresets;
+        private readonly Action<string> _storePresets;
+        private readonly Func<string> _build;
+        private readonly UiKit.TextInput _presetName;
+        private readonly UiKit.Action _presetSave;
+        private readonly Label _presetStatus;
+        private readonly List<VisualElement> _presetStops = new List<VisualElement>();
+        private readonly List<string> _presetPlaces = new List<string>();
+        private PresetShelf _shelf = new PresetShelf();
         private readonly Dictionary<string, double> _pending = new Dictionary<string, double>();
         private readonly Dictionary<string, UiKit.Value> _shown = new Dictionary<string, UiKit.Value>();
         private readonly Theme _theme = Theme.Ordinary;
@@ -76,8 +88,12 @@ namespace Eleven.Host
         private bool _reportControls;
 
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
-            Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls, System.Action closed)
+            Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls,
+            Func<string> loadPresets, Action<string> storePresets, Func<string> build, System.Action closed)
         {
+            _loadPresets = loadPresets;
+            _storePresets = storePresets;
+            _build = build;
             _secondHalf = secondHalf;
             _switchView = switchView;
             _activeControls = activeControls;
@@ -150,6 +166,17 @@ namespace Eleven.Host
             _controls.Element.style.flexShrink = 0;
             _controlsBlock.Add(_controls.Element);
             _controls.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
+
+            // Named presets (#46): a name to save the current values under, and what happened last.
+            _presetName = UiKit.MakeTextInput(_theme, "Preset name", BenchPreset.MaxNameLength);
+            _presetName.Element.style.flexGrow = 1;
+            _presetName.Element.style.flexShrink = 1;
+            _presetName.Element.style.marginRight = Spacing.S;
+            _presetSave = UiKit.MakeAction(ui, _theme, ActionRole.Supporting, "Save preset", SavePreset, "Save");
+            _presetStatus = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
+            _presetStatus.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _presetStatus.style.marginBottom = Spacing.S;
+            _presetSave.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
 
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
@@ -304,6 +331,8 @@ namespace Eleven.Host
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
+            _shelf = PresetShelf.Read(_loadPresets());
+            _presetStatus.text = "";
             ShowGroup(_group);
             _reportOpen = true;
             Describe();
@@ -331,6 +360,7 @@ namespace Eleven.Host
             foreach (UiKit.Raised view in _views.Segments) order.Add(view.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
             if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
+            if (PresetsShown) order.AddRange(_presetStops);
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
             {
                 if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
@@ -369,8 +399,150 @@ namespace Eleven.Host
                 _list.Add(control.Element);
             }
 
+            if (PresetsShown) ShowPresets(applied);
             _reportControls = true;
             if (_trace) Log($"ELEVEN bench group name={Groups[index]}");
+        }
+
+        private bool PresetsShown => Groups[_group] == PresetsTab;
+
+        // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with
+        // Load and Delete, then any stored preset this build can't read, with the reason.
+        private void ShowPresets(BenchCandidate applied)
+        {
+            _presetStops.Clear();
+            _presetPlaces.Clear();
+            Label intro = UiKit.Text(_theme, TypeScale.Body,
+                "Save the values shown, pending changes included, under a short name. Load sets a preset's values as pending changes. A preset is not approved feel.", Role.Text);
+            intro.style.marginBottom = Spacing.S;
+            _list.Add(intro);
+
+            VisualElement save = UiKit.Row(Spacing.S);
+            save.style.marginBottom = Spacing.Xs;
+            save.Add(_presetName.Element);
+            save.Add(_presetSave.Element);
+            _list.Add(save);
+            _list.Add(_presetStatus);
+            _presetStops.Add(_presetName.Field);
+            _presetStops.Add(_presetSave.Element);
+
+            PresetRow(BenchPreset.TechnicalReference, applied, deletable: false);
+            foreach (BenchPreset preset in _shelf.Presets) PresetRow(preset, applied, deletable: true);
+            foreach (string problem in _shelf.Problems)
+            {
+                Label unread = UiKit.Text(_theme, TypeScale.Body, $"Can't be loaded. {problem}", Role.Text);
+                unread.style.marginTop = Spacing.S;
+                _list.Add(unread);
+            }
+        }
+
+        private void PresetRow(BenchPreset preset, BenchCandidate applied, bool deletable)
+        {
+            int fromReference = preset.Candidate.ChangesFrom(BenchCandidate.Reference);
+            string about = !deletable ? "The untuned reference values."
+                : $"{fromReference} changed from the reference · {Controls[(int)preset.Controls]} · build {(preset.Build.Length > 0 ? preset.Build : "unknown")}";
+            if (preset.Candidate.ChangesFrom(applied) == 0) about += " · running";
+
+            var row = new VisualElement { name = $"Preset {preset.Name}" };
+            row.style.marginTop = Spacing.S;
+            Label name = UiKit.Text(_theme, TypeScale.Label, preset.Name, Role.TextHeading);
+            Label meta = UiKit.Text(_theme, TypeScale.Body, about, Role.Text);
+            meta.style.marginBottom = Spacing.Xs;
+            row.Add(name);
+            row.Add(meta);
+            VisualElement actions = UiKit.Row(Spacing.S);
+            BenchPreset p = preset;
+            UiKit.Action load = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, $"Load {preset.Name}", () => LoadPreset(p), "Load");
+            actions.Add(load.Element);
+            _presetStops.Add(load.Element);
+            UiKit.Action delete = null;
+            if (deletable)
+            {
+                delete = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, $"Delete {preset.Name}", () => DeletePreset(p.Name), "Delete");
+                actions.Add(delete.Element);
+                _presetStops.Add(delete.Element);
+            }
+
+            UiKit.Gaps(actions);
+            row.Add(actions);
+            _list.Add(row);
+
+            // Where its actions are, for the smoke test, once they are laid out.
+            int place = _presetPlaces.Count;
+            _presetPlaces.Add("");
+            load.Element.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                float s = _ui.PixelsPerPoint;
+                string At(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
+                if (place < _presetPlaces.Count) _presetPlaces[place] = $"{p.Name.Replace(' ', '_')}:{At(load.Element)}:{(delete != null ? At(delete.Element) : "none")}";
+                _reportControls = true;
+                Report();
+            });
+        }
+
+        // Load: the preset's values become the pending changes, whole, and its touch candidate the
+        // active one. Nothing runs under them until APPLY / RETRY.
+        private void LoadPreset(BenchPreset preset)
+        {
+            BenchCandidate applied = _applied();
+            _pending.Clear();
+            foreach (BenchKnob k in BenchCandidate.Knobs)
+            {
+                double value = preset.Candidate.Get(k.Name);
+                if (BitConverter.DoubleToInt64Bits(value) != BitConverter.DoubleToInt64Bits(applied.Get(k.Name))) _pending[k.Name] = value;
+            }
+
+            _switchControls((int)preset.Controls);
+            UiKit.Select(_theme, _controls, _activeControls());
+            _problem.style.display = DisplayStyle.None;
+            _presetStatus.text = _pending.Count == 0
+                ? $"\"{preset.Name}\" is what is running."
+                : $"\"{preset.Name}\" loaded as {_pending.Count} pending change{(_pending.Count == 1 ? "" : "s")}. APPLY / RETRY starts a fresh run with {(_pending.Count == 1 ? "it" : "them")}.";
+            Log(FormattableString.Invariant($"ELEVEN bench preset loaded name={preset.Name.Replace(' ', '_')} pending={_pending.Count} controls={TouchCandidates.NameOf(preset.Controls)} config={preset.ConfigHash:x16}"));
+            Describe();
+        }
+
+        // Save: the values shown, pending changes included, under the name typed. A name already
+        // saved is replaced. Refused, with the reason, for a name or values that can't be used.
+        private void SavePreset()
+        {
+            BenchCandidate applied = _applied();
+            string problem;
+            BenchPreset preset = null;
+            bool made = applied.TryWith(_pending, out BenchCandidate candidate, out problem) && candidate != null
+                && BenchPreset.TryMake(_presetName.Field.value, candidate, (ControlCandidate)_activeControls(), _build(), out preset, out problem);
+            if (!made || preset == null)
+            {
+                _presetStatus.text = $"Not saved. {problem}";
+                Log($"ELEVEN bench preset refused {problem}");
+                return;
+            }
+
+            bool replaced = _shelf.Save(preset);
+            _storePresets(_shelf.Write());
+            _presetName.Field.value = "";
+            ShowGroup(_group);
+            _presetStatus.text = replaced ? $"Replaced \"{preset.Name}\"." : $"Saved \"{preset.Name}\".";
+            Log(FormattableString.Invariant($"ELEVEN bench preset saved name={preset.Name.Replace(' ', '_')} replaced={(replaced ? "yes" : "no")} count={_shelf.Presets.Count} config={preset.ConfigHash:x16}"));
+            Describe();
+        }
+
+        private void DeletePreset(string name)
+        {
+            if (!_shelf.Delete(name)) return;
+            _storePresets(_shelf.Write());
+            ShowGroup(_group);
+            _presetStatus.text = $"Deleted \"{name}\".";
+            Log(FormattableString.Invariant($"ELEVEN bench preset deleted name={name.Replace(' ', '_')} count={_shelf.Presets.Count}"));
+            Describe();
+        }
+
+        /// <summary>The name of the saved preset these values are, the technical reference's, or "unsaved": what a capture records (#46).</summary>
+        public static string PresetNameOf(BenchCandidate candidate, string stored)
+        {
+            if (candidate.ChangesFrom(BenchCandidate.Reference) == 0) return BenchCandidate.ReferencePreset;
+            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate);
+            return saved != null ? saved.Name : BenchCandidate.UnsavedPreset;
         }
 
         // The Touch tab holds every candidate's knobs, A's, B's then C's, under the A / B / C choice
@@ -426,8 +598,9 @@ namespace Eleven.Host
         {
             BenchCandidate applied = _applied();
             int fromReference = applied.ChangesFrom(BenchCandidate.Reference);
-            _state.text = fromReference == 0
-                ? "Running the technical reference values."
+            BenchPreset running = fromReference == 0 ? null : _shelf.Matching(applied);
+            _state.text = fromReference == 0 ? "Running the technical reference values."
+                : running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
                 : $"Running unsaved values: {fromReference} changed from the technical reference.";
             _pendingText.text = _pending.Count == 0
                 ? "No pending changes. APPLY / RETRY starts a fresh run with these values."
@@ -522,6 +695,12 @@ namespace Eleven.Host
             if (_reportControls && _trace)
             {
                 _reportControls = false;
+                if (PresetsShown)
+                {
+                    Log(FormattableString.Invariant(
+                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces)}"));
+                }
+
                 if (TouchShown)
                 {
                     Log($"ELEVEN bench candidates A={P(_controls.Segments[0].Element)};B={P(_controls.Segments[1].Element)};C={P(_controls.Segments[2].Element)}");
