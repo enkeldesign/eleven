@@ -81,6 +81,12 @@ namespace Eleven.Simulation
         /// with <see cref="Touched"/>. A later player model can animate it.
         /// </summary>
         Cut = 17,
+
+        /// <summary>
+        /// A sprint's touch was a push (#63): the ball sent ahead faster than the footballer, to be
+        /// chased. With <see cref="Touched"/>.
+        /// </summary>
+        Pushed = 18,
     }
 
     /// <summary>
