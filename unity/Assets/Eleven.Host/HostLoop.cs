@@ -78,6 +78,7 @@ namespace Eleven.Host
         // What the last ACTION gesture became, shown on the disc for a moment (#28).
         private string _lastGesture = "";
         private double _lastGestureUntil;
+        private readonly float[] _safeInsets = new float[4];
 
         private void Awake()
         {
@@ -101,7 +102,22 @@ namespace Eleven.Host
             float ahead = 0;
             int aheadAt = url.IndexOf("ahead=", StringComparison.Ordinal);
             if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
-            _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
+            // ?maxview=25: the widest view, in metres either side of the play area's centre (#31).
+            float maxView = PitchView.MaxHalfExtent;
+            int maxViewAt = url.IndexOf("maxview=", StringComparison.Ordinal);
+            if (maxViewAt >= 0) float.TryParse(url.Substring(maxViewAt + 8).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out maxView);
+            _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40), Mathf.Clamp(maxView, 7, 60));
+            // ?safe=47,0,34,0: safe-area insets to try, in points: top, right, bottom, left (#31).
+            // A browser on a desktop has none, so this stands in for a notch and a home indicator.
+            int safeAt = url.IndexOf("safe=", StringComparison.Ordinal);
+            if (safeAt >= 0)
+            {
+                string[] parts = url.Substring(safeAt + 5).Split('&', '#')[0].Split(',');
+                for (int i = 0; i < 4 && i < parts.Length; i++)
+                {
+                    float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _safeInsets[i]);
+                }
+            }
             _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split, _bench.Fire);
             // ?controls=split or ?controls=one-fire: start on Candidate B (#76) or C (#77), before
             // the first step. A link for a device comparison, and the route to a candidate where
@@ -539,7 +555,17 @@ namespace Eleven.Host
             if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
         }
 
-        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, Screen.safeArea, _resultLines, _hud?.Needs);
+        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, _hud?.Needs);
+
+        // The screen's safe area, in pixels with the origin at the bottom left, less any insets
+        // ?safe= asks to try (#31).
+        private Rect SafeArea()
+        {
+            Rect safe = Screen.safeArea;
+            float s = PixelsPerPoint();
+            float top = _safeInsets[0] * s, right = _safeInsets[1] * s, bottom = _safeInsets[2] * s, left = _safeInsets[3] * s;
+            return new Rect(safe.x + left, safe.y + bottom, Mathf.Max(0, safe.width - left - right), Mathf.Max(0, safe.height - top - bottom));
+        }
 
         private void UpdateLayout(bool force)
         {

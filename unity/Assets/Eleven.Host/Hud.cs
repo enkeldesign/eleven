@@ -276,6 +276,17 @@ namespace Eleven.Host
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
+
+            // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe
+            // edges, in points, are added to their margins.
+            float s = Mathf.Max(0.01f, _ui.PixelsPerPoint);
+            float top = Mathf.Max(0, layout.Safe.yMin) / s, left = Mathf.Max(0, layout.Safe.xMin) / s;
+            float right = Mathf.Max(0, layout.ScreenWidth - layout.Safe.xMax) / s, bottom = Mathf.Max(0, layout.ScreenHeight - layout.Safe.yMax) / s;
+            _scrim.style.paddingTop = Spacing.L + top;
+            _scrim.style.paddingRight = Spacing.L + right;
+            _scrim.style.paddingBottom = Spacing.L + bottom;
+            _scrim.style.paddingLeft = Spacing.L + left;
+            Bench.Inset(top, right, bottom, left);
             _reportBuild = _reportResult = true;
         }
 
@@ -385,9 +396,9 @@ namespace Eleven.Host
             float height = _ui.Root.layout.height;
             if (!(height > 0)) return;
             float s = _ui.PixelsPerPoint;
-            Rect safe = Screen.safeArea;
-            float safeTop = (Screen.height - safe.yMax) / s;
-            float safeBottom = safe.yMin / s;
+            // The layout's safe area, in HUD pixels from the top (#31).
+            float safeTop = Mathf.Max(0, _layout.Safe.yMin) / s;
+            float safeBottom = Mathf.Max(0, _layout.ScreenHeight - _layout.Safe.yMax) / s;
             Vector2 shown = _visible();
             float top = Mathf.Max(safeTop, shown.x) + Spacing.L;
             float bottom = Mathf.Max(safeBottom, height - shown.y) + Spacing.L;

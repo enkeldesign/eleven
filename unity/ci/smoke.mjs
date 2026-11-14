@@ -444,8 +444,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
     // Candidate B, SPLIT (#76): switched on through the bench, live; PASS at the press, KICK's
     // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
-    // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`.
-    if (url.includes('split=1') || url.includes('fire=1')) {
+    // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`. So does the layout matrix
+    // (#31): `layout=1`.
+    if (url.includes('split=1') || url.includes('fire=1') || url.includes('layout=1')) {
       const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
       const layoutLine = lastLog(layoutPattern)?.input ?? '';
       const zone = actionZonePattern.exec(layoutLine)?.slice(1, 5).map(Number) ?? null;
@@ -516,6 +517,115 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const first = await waitForLog(tracePattern, 20_000, logs.length);
         if (first) await waitForLog(tracePattern, 20_000, first.index + 1);
       };
+
+      // The layout matrix (#31): one viewport of the phone and tablet sizes ELEVEN is laid out
+      // for. Every control inside the safe area, the play area clear of them, targets of 44 pt,
+      // the footballer and the ball in the play area at a useful size, and a bench every part of
+      // which is in reach.
+      if (url.includes('layout=1')) {
+        const boxOf = (k, line = layoutLine) => new RegExp(`${k}=(-?\\d+),(-?\\d+),(\\d+),(\\d+)`).exec(line)?.slice(1, 5).map(Number) ?? null;
+        const inside = (a, b) => !!a && !!b && a[0] >= b[0] - 1 && a[1] >= b[1] - 1 && a[0] + a[2] <= b[0] + b[2] + 1 && a[1] + a[3] <= b[1] + b[3] + 1;
+        const apart = (a, b) => !!a && !!b && (a[0] + a[2] <= b[0] + 1 || b[0] + b[2] <= a[0] + 1 || a[1] + a[3] <= b[1] + 1 || b[1] + b[3] <= a[1] + 1);
+        const disc = (cx, cy, r) => [cx - r, cy - r, 2 * r, 2 * r];
+        const pts = (b) => (b ? `${(b[2] / pointPx).toFixed(0)}x${(b[3] / pointPx).toFixed(0)}` : '?');
+        const measure = (line) => {
+          const m = layoutPattern.exec(line)?.slice(1).map(Number) ?? [];
+          const kickRadius = Number(/kickRadius=(\d+)/.exec(line)?.[1] ?? 0);
+          const passDisc = /pass=(-?\d+),(-?\d+),(\d+)/.exec(line)?.slice(1, 4).map(Number) ?? null;
+          const marker = /kickMarker=(-?\d+),(-?\d+),(\d+)/.exec(line)?.slice(1, 4).map(Number) ?? null;
+          return {
+            screen: [0, 0, m[0], m[1]], safe: boxOf('safe', line), play: boxOf('play', line), action: boxOf('action', line), stickZone: boxOf('stickZone', line),
+            felt: boxOf('feltWrong', line), save: boxOf('save', line), bench: boxOf('bench', line),
+            stick: disc(m[8], m[9], m[10]), kick: disc(m[6], m[7], kickRadius),
+            pass: passDisc ? disc(...passDisc) : null, marker: marker && marker[2] > 0 ? disc(...marker) : null,
+          };
+        };
+        const controlsInSafe = (l) => Object.entries({ stick: l.stick, 'stick zone': l.stickZone, 'right-hand area': l.action, ACTION: l.kick, PASS: l.pass, 'felt wrong': l.felt, save: l.save, bench: l.bench })
+          .filter(([, b]) => !inside(b, l.safe)).map(([k, b]) => `${k} ${b?.join(',') ?? 'missing'}`);
+        const L = measure(layoutLine);
+
+        const outside = controlsInSafe(L);
+        check('every control is inside the safe area', !!L.safe && inside(L.safe, L.screen) && outside.length === 0,
+          `safe ${L.safe?.join(',') ?? '?'} of screen ${L.screen.slice(2).join('x')} px; outside: ${outside.join(' | ') || 'none'}`);
+
+        const over = Object.entries({ 'stick zone': L.stickZone, 'right-hand area': L.action, 'felt wrong': L.felt, save: L.save, bench: L.bench })
+          .filter(([, b]) => !apart(L.play, b)).map(([k]) => k);
+        check('the play area is clear of the controls and the HUD\'s actions', !!L.play && inside(L.play, L.safe) && over.length === 0 && L.play[2] / pointPx >= 150 && L.play[3] / pointPx >= 150,
+          `play area ${L.play?.join(',') ?? '?'} px, ${pts(L.play)} pt; over it: ${over.join(', ') || 'nothing'}`);
+
+        const small = Object.entries({ 'felt wrong': L.felt, save: L.save, bench: L.bench, stick: L.stick, ACTION: L.kick, PASS: L.pass && disc(0, 0, L.pass[2] / 2 / Math.SQRT2), 'KICK marker': L.marker && disc(0, 0, L.marker[2] / 2 / Math.SQRT2) })
+          .filter(([, b]) => !b || b[2] / pointPx < 44 || b[3] / pointPx < 44).map(([k, b]) => `${k} ${pts(b)}`);
+        check('bounded controls are at least 44 x 44 pt', small.length === 0 && L.action[2] / pointPx >= 88 && L.action[3] / pointPx >= 88,
+          `stick ${pts(L.stick)}, ACTION ${pts(L.kick)}, PASS square ${L.pass ? (L.pass[2] / Math.SQRT2 / pointPx).toFixed(0) : '?'}, KICK marker square ${L.marker ? (L.marker[2] / Math.SQRT2 / pointPx).toFixed(0) : '?'}, felt wrong ${pts(L.felt)}, bench ${pts(L.bench)}, right-hand area ${pts(L.action)} pt; too small: ${small.join(' | ') || 'none'}`);
+
+        // The footballer and the ball: in the play area, at a useful size, with room ahead.
+        const viewPattern = /ELEVEN view tick=(\d+) .* ahead=([\d.]+)m across=([\d.]+)m ppm=([\d.]+) playerPx=([\d.]+) ballPx=([\d.]+) maxview=([\d.]+)m/;
+        const seen = await waitForLog(/ELEVEN trace tick=(\d+) .* view=(\S+) /, 30_000, logs.length);
+        const view = (await waitForLog(viewPattern, 30_000, seen ? seen.index : logs.length))?.match ?? null;
+        const playerPt = view ? Number(view[5]) / pointPx : NaN, ballPt = view ? Number(view[6]) / pointPx : NaN;
+        check('the footballer and the ball are in the play area at a useful size, with room ahead',
+          !!seen && seen.match[2] === 'player:in,ball:in' && !!view && playerPt >= 12 && ballPt >= 4 && Number(view[2]) >= 7,
+          `${seen ? `view=${seen.match[2]}` : 'no trace'}; ${view ? `footballer ${playerPt.toFixed(1)} pt, ball ${ballPt.toFixed(1)} pt, ${view[4]} px/m, ${view[2]} m ahead, ${view[3]} m across, widest view ${view[7]} m` : 'no view line'}`);
+        await page.screenshot({ path: path.join(outDir, `${name}.png`), timeout: 60_000 }).catch(() => {});
+
+        // The bench: the arrangement the screen calls for, with every switch, tab and action in
+        // reach without scrolling, and room for the knobs.
+        const css = page.viewportSize();
+        const wantWide = css.height < 480 && css.width > css.height;
+        const fromBench = logs.length;
+        const openedL = await openBench(2, [], false);
+        const reach = (await waitForLog(/ELEVEN bench reach arranged=(\w+) clipped=(\d+) names=(\S*) list=([\d.]+)x([\d.]+)/, 10_000, fromBench))?.match ?? null;
+        const targets = (await waitForLog(/ELEVEN bench targets=(\d+) smallest=([\d.]+) smallestName=(\S+) overflow=(\S+)/, 5_000, fromBench))?.match ?? null;
+        check('the bench is arranged for the screen, with every switch, tab and action in reach',
+          !!reach && reach[1] === (wantWide ? 'wide' : 'stacked') && reach[2] === '0' && Number(reach[5]) >= 100 && !!targets && Number(targets[2]) >= 44 && targets[4] === 'none',
+          `${reach ? reach[0].replace('ELEVEN bench reach ', '') : 'no reach line'}; ${targets ? targets[0].replace('ELEVEN bench ', '') : 'no targets line'}; wanted ${wantWide ? 'wide' : 'stacked'} at ${css.width}x${css.height} pt`);
+        await page.screenshot({ path: path.join(outDir, `${name}-bench.png`), timeout: 60_000 }).catch(() => {});
+
+        // Through the bench: the Touch tab, its first knob in view, and a live switch to B and back.
+        const fromTouch = logs.length;
+        const tabsL = (await waitForLog(/ELEVEN bench open .* tabs=(\S+) /, 1, fromBench))?.match ?? null;
+        await press(segments(tabsL?.[1]).Touch, 2);
+        const candidatesL = (await waitForLog(/ELEVEN bench candidates (\S+)/, 10_000, fromTouch))?.match ?? null;
+        const knob = (await waitForLog(/ELEVEN bench control name=actionHoldSeconds value=\S+ less=(\d+),(\d+) more=(\d+),(\d+)/, 10_000, fromTouch))?.match ?? null;
+        await press(segments(candidatesL?.[1]).B, 2);
+        const toB = (await waitForLog(switchPattern('split'), 5_000, fromTouch))?.match ?? null;
+        await press(segments(candidatesL?.[1]).A, 2);
+        const toA = (await waitForLog(switchPattern('action-surface'), 5_000, fromTouch))?.match ?? null;
+        const knobIn = !!knob && [[knob[1], knob[2]], [knob[3], knob[4]]].every(([x, y]) => Number(x) > 0 && Number(x) < L.screen[2] && Number(y) > 0 && Number(y) < L.screen[3]);
+        check('the Touch tab, its knobs and the live switch work through the bench', !!candidatesL && knobIn && !!toB && toB[4] === '0' && !!toA && toA[4] === '0',
+          `${candidatesL ? `candidates ${candidatesL[1]}` : 'no candidates line'}; ${knob ? `first knob − at ${knob[1]},${knob[2]}, + at ${knob[3]},${knob[4]}` : 'no knob line'}; ${toB ? 'to B' : 'no switch to B'}, ${toA ? 'back to A' : 'no switch back'}; since: ${since(fromTouch)}`);
+        await closeBench(openedL, 2);
+
+        // The screen turns: the layout follows at once, every control is inside the new safe
+        // area, and the run goes on from where it was.
+        const tickPattern = /ELEVEN trace tick=(\d+) /;
+        const tickBefore = Number((await waitForLog(tickPattern, 20_000, logs.length))?.match[1] ?? NaN);
+        const fromTurnL = logs.length;
+        await page.setViewportSize({ width: css.height, height: css.width });
+        let turned = null;
+        for (let from = fromTurnL, until = Date.now() + 30_000; Date.now() < until;) {
+          const line = await waitForLog(layoutPattern, Math.max(1, until - Date.now()), from);
+          if (!line) break;
+          from = line.index + 1;
+          if (Number(line.match[1]) !== L.screen[2]) turned = line.match.input;
+          if (turned && !(await waitForLog(layoutPattern, 1_500, from))) break;
+        }
+        const T = turned ? measure(turned) : null;
+        const outsideT = T ? controlsInSafe(T) : ['no layout'];
+        const tickAfter = Number((await waitForLog(tickPattern, 20_000, logs.length))?.match[1] ?? NaN);
+        const viewAfter = (await waitForLog(/ELEVEN trace tick=(\d+) .* view=(\S+) /, 20_000, logs.length))?.match ?? null;
+        check('turning the screen re-lays the controls and the run goes on', !!T && outsideT.length === 0 && apart(T.play, T.action) && apart(T.play, T.stickZone) && tickAfter > tickBefore && viewAfter?.[2] === 'player:in,ball:in',
+          `${T ? `screen ${T.screen.slice(2).join('x')}, play ${T.play?.join(',')}` : 'no layout for the turned screen'}; outside the safe area: ${outsideT.join(' | ') || 'none'}; tick ${tickBefore} → ${tickAfter}; ${viewAfter ? `view=${viewAfter[2]}` : 'no trace'}`);
+        await page.screenshot({ path: path.join(outDir, `${name}-turned.png`), timeout: 60_000 }).catch(() => {});
+
+        notes.layout = `${css.width}x${css.height} pt at ${pointPx} px/pt: safe ${pts(L.safe)}, play area ${pts(L.play)}, stick ${pts(L.stick)}, ACTION ${pts(L.kick)}, right-hand area ${pts(L.action)}; `
+          + (view ? `footballer ${playerPt.toFixed(1)} pt, ball ${ballPt.toFixed(1)} pt, ${(Number(view[4]) / pointPx).toFixed(1)} pt/m, ${view[2]} m ahead, ${view[3]} m across; ` : '')
+          + `bench ${reach ? `${reach[1]}, knob list ${Number(reach[4]).toFixed(0)}x${Number(reach[5]).toFixed(0)} pt` : '?'}`;
+        console.log(`::notice title=layout ${name}::${notes.layout}`);
+        const errorsL = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+        check('no page errors or exceptions', errorsL.length === 0, errorsL.length ? errorsL.slice(0, 5).join(' | ') : 'none');
+        return;
+      }
 
       // Candidate C, ONE FIRE (#77): a tap on FIRE is the quick pass at its release, a hold is a
       // kick along the footballer's heading, harder the longer it is held, and a re-touch shapes.
@@ -1560,6 +1670,20 @@ try {
   await runPass(browser, `${base}?trace=1&split=1&controls=split`, 'split-phone-landscape', phoneLandscape, true);
   // Candidate C, ONE FIRE (#77), on an iPhone in portrait.
   await runPass(browser, `${base}?trace=1&fire=1`, 'fire-phone', phone, true);
+
+  // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
+  // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at
+  // most: the layout is in points, and the runner draws a large canvas slowly.
+  const sized = (width, height, scale = 2) => ({ ...phone, viewport: { width, height }, screen: { width, height }, deviceScaleFactor: scale });
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-phone-portrait', sized(390, 664), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-phone-landscape', sized(750, 342), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-phone-compact', sized(320, 568), true);
+  await runPass(browser, `${base}?trace=1&layout=1&safe=47,0,34,0`, 'layout-phone-portrait-notch', sized(390, 844), true);
+  await runPass(browser, `${base}?trace=1&layout=1&safe=0,47,21,47`, 'layout-phone-landscape-notch', sized(844, 390), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-tablet-portrait', sized(810, 1080, 1), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-tablet-landscape', sized(1080, 810, 1), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-tablet-large-portrait', sized(1024, 1366, 1), true);
+  await runPass(browser, `${base}?trace=1&layout=1`, 'layout-tablet-large-landscape', sized(1366, 1024, 1), true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });

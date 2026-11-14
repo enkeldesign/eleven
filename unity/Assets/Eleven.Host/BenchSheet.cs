@@ -61,6 +61,13 @@ namespace Eleven.Host
         private readonly VisualElement _controlsBlock;
         private readonly UiKit.Segmented _tabs;
         private readonly ScrollView _list;
+        private readonly Label _modelsLabel;
+        private readonly Label _viewsLabel;
+        // The wide arrangement's columns (#31): the live switches over the actions, then the tabs.
+        private readonly VisualElement _switchColumn;
+        private readonly ScrollView _switchScroll;
+        private readonly ScrollView _tabScroll;
+        private bool? _wide;
         private readonly UiKit.Action _close;
         private readonly UiKit.Action _revert;
         private readonly UiKit.Action _applyAction;
@@ -112,30 +119,23 @@ namespace Eleven.Host
             _problem = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _problem.style.display = DisplayStyle.None;
             _problem.style.marginBottom = Spacing.S;
-            _sheet.Content.Add(_state);
-            _sheet.Content.Add(_pendingText);
-            _sheet.Content.Add(_problem);
 
             // The live FREE ↔ ATTACHED switch (#60): it acts at once and the run goes on, unlike the
             // knobs below, which wait for APPLY / RETRY and a fresh run.
-            Label modelsLabel = UiKit.Text(_theme, TypeScale.Body, "Ball control. Switches now; the run goes on.", Role.Text);
-            modelsLabel.style.marginBottom = Spacing.Xs;
-            _sheet.Content.Add(modelsLabel);
+            _modelsLabel = UiKit.Text(_theme, TypeScale.Body, ModelsText, Role.Text);
+            _modelsLabel.style.marginBottom = Spacing.Xs;
             _models = UiKit.MakeSegmented(ui, _theme, Models, 0, index => _switchModel(index == 1 ? ControlModel.Attached : ControlModel.Free));
             _models.Element.style.marginBottom = Spacing.M;
             _models.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_models.Element);
 
             // The half-time flip, to test (#72): 180° shows a second half's switched ends, still
             // attacking up. It acts at once and the run goes on; only the view and the stick's
             // mapping change.
-            Label viewsLabel = UiKit.Text(_theme, TypeScale.Body, "Pitch view. 180° is a second half: ends switched, still attacking up.", Role.Text);
-            viewsLabel.style.marginBottom = Spacing.Xs;
-            _sheet.Content.Add(viewsLabel);
+            _viewsLabel = UiKit.Text(_theme, TypeScale.Body, ViewsText, Role.Text);
+            _viewsLabel.style.marginBottom = Spacing.Xs;
             _views = UiKit.MakeSegmented(ui, _theme, Views, 0, index => _switchView(index == 1));
             _views.Element.style.marginBottom = Spacing.M;
             _views.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_views.Element);
 
             // The touch candidates (#28, #76): a choice anyone can make without a gesture, at the top
             // of the Touch tab with both candidates' knobs. It acts at once and the run goes on; only
@@ -156,7 +156,6 @@ namespace Eleven.Host
             // The tabs wrap onto a second row on a phone. They must never shrink: squeezed to one
             // row's height, the second row overflows under the knob list, which takes its presses.
             _tabs.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_tabs.Element);
 
             _list = UiKit.MakeScroll();
             _list.style.flexGrow = 1;
@@ -167,7 +166,23 @@ namespace Eleven.Host
                 if (e.target is VisualElement focused && _list.contentContainer.Contains(focused)) _list.ScrollTo(focused);
             });
             _list.style.minHeight = 0;
-            _sheet.Content.Add(_list);
+            _list.style.minWidth = 0;
+
+            // The wide arrangement (#31), for a screen too short to stack all of this: a landscape
+            // phone. Three columns side by side, each scrolling on its own if it must.
+            _switchScroll = UiKit.MakeScroll();
+            _switchScroll.style.flexGrow = 1;
+            _switchScroll.style.flexShrink = 1;
+            _switchScroll.style.minHeight = 0;
+            _switchColumn = new VisualElement { name = "Bench switches" };
+            _switchColumn.style.width = Length.Percent(30);
+            _switchColumn.style.flexShrink = 0;
+            _switchColumn.style.marginRight = Spacing.M;
+            _tabScroll = UiKit.MakeScroll();
+            _tabScroll.name = "Bench tabs";
+            _tabScroll.style.width = Length.Percent(27);
+            _tabScroll.style.flexShrink = 0;
+            _tabScroll.style.marginRight = Spacing.M;
 
             _close = UiKit.MakeAction(ui, _theme, ActionRole.Navigation, "Close", Close);
             _revert = UiKit.MakeAction(ui, _theme, ActionRole.Utility, "Revert", Revert);
@@ -182,9 +197,102 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
             _sheet.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
+            Arrange();
+            // The screen turned or was resized with the sheet open: the other arrangement, at once.
+            _scrim.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                if (Open) Arrange();
+            });
+        }
+
+        private const string ModelsText = "Ball control. Switches now; the run goes on.";
+        private const string ViewsText = "Pitch view. 180° is a second half: ends switched, still attacking up.";
+
+        /// <summary>A screen shorter than this many points, and wider than it is tall, gets the wide arrangement (#31).</summary>
+        public const float WideBelowHeight = 480;
+
+        /// <summary>
+        /// Lays the sheet out for the screen it has (#31).
+        ///
+        /// Stacked, where there is height for it: the state, the live switches, the tabs, the knob
+        /// list and the actions, one over the other, with the list taking what is left.
+        ///
+        /// Wide, on a screen too short for that (a landscape phone, where the stacked rows left the
+        /// knob list no room at all): three columns. The live switches over the actions; the tabs;
+        /// and the knob list at the sheet's full height. The title goes and the labels shorten, so
+        /// every switch, every tab and every action is in reach without scrolling.
+        /// </summary>
+        private void Arrange()
+        {
+            Rect screen = _ui.Root.layout;
+            bool wide = screen.height > 0 && screen.height < WideBelowHeight && screen.width > screen.height;
+            if (_wide == wide) return;
+            _wide = wide;
+
+            _sheet.Content.Clear();
+            if (wide)
+            {
+                _modelsLabel.text = "Ball control";
+                _viewsLabel.text = "Pitch view (180°: second half)";
+                _switchScroll.Add(_modelsLabel);
+                _switchScroll.Add(_models.Element);
+                _switchScroll.Add(_viewsLabel);
+                _switchScroll.Add(_views.Element);
+                _switchScroll.Add(_state);
+                _switchScroll.Add(_pendingText);
+                _switchScroll.Add(_problem);
+                _switchColumn.Add(_switchScroll);
+                _switchColumn.Add(_sheet.Actions);
+                _sheet.Actions.style.marginTop = Spacing.S;
+                _sheet.Actions.style.justifyContent = Justify.FlexStart;
+                _tabScroll.Add(_tabs.Element);
+                _sheet.Content.style.flexDirection = FlexDirection.Row;
+                _sheet.Content.Add(_switchColumn);
+                _sheet.Content.Add(_tabScroll);
+                _sheet.Content.Add(_list);
+                _sheet.Element.style.maxWidth = StyleKeyword.None;
+                if (_sheet.Title != null) _sheet.Title.style.display = DisplayStyle.None;
+            }
+            else
+            {
+                _modelsLabel.text = ModelsText;
+                _viewsLabel.text = ViewsText;
+                _sheet.Content.style.flexDirection = FlexDirection.Column;
+                _sheet.Content.Add(_state);
+                _sheet.Content.Add(_pendingText);
+                _sheet.Content.Add(_problem);
+                _sheet.Content.Add(_modelsLabel);
+                _sheet.Content.Add(_models.Element);
+                _sheet.Content.Add(_viewsLabel);
+                _sheet.Content.Add(_views.Element);
+                _sheet.Content.Add(_tabs.Element);
+                _sheet.Content.Add(_list);
+                _sheet.Body.Add(_sheet.Actions);
+                _sheet.Actions.style.marginTop = Spacing.L;
+                _sheet.Actions.style.justifyContent = Justify.FlexEnd;
+                _sheet.Element.style.maxWidth = 560;
+                if (_sheet.Title != null) _sheet.Title.style.display = DisplayStyle.Flex;
+            }
+
+            // Wrapped onto two rows in the wide arrangement's narrow column, the actions need a gap
+            // between the rows.
+            foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) action.Element.style.marginBottom = wide ? Spacing.Xs : 0;
+
+            _reportOpen = Open;
+            _reportControls = Open;
+            if (_trace) Log($"ELEVEN bench arranged={(wide ? "wide" : "stacked")} screen={screen.width:F0}x{screen.height:F0}");
         }
 
         public bool Open { get; private set; }
+
+        /// <summary>The screen's unsafe edges, in points (#31): the sheet keeps clear of them.</summary>
+        public void Inset(float top, float right, float bottom, float left)
+        {
+            _scrim.style.paddingTop = Spacing.M + top;
+            _scrim.style.paddingRight = Spacing.M + right;
+            _scrim.style.paddingBottom = Spacing.M + bottom;
+            _scrim.style.paddingLeft = Spacing.M + left;
+        }
 
         /// <summary>Opens the sheet on the applied values and any edits still pending from before.</summary>
         public void Show()
@@ -192,6 +300,7 @@ namespace Eleven.Host
             if (Open) return;
             Open = true;
             _scrim.style.display = DisplayStyle.Flex;
+            Arrange();
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
@@ -382,6 +491,27 @@ namespace Eleven.Host
                 });
                 Log(FormattableString.Invariant(
                     $"ELEVEN bench targets={targets} smallest={(targets > 0 ? smallest : 0):F1} smallestName={(smallestName ?? "none").Replace(' ', '_')} overflow={overflow.Replace(' ', '_')}"));
+
+                // Whether every switch, tab and action is in reach without scrolling (#31), and the
+                // room the knob list has, in points.
+                var clipped = new List<string>();
+                void Reach(VisualElement e, VisualElement within)
+                {
+                    Rect r = e.worldBound, b = within.worldBound;
+                    bool shown = r.width > 0 && r.xMin >= b.xMin - 0.5f && r.xMax <= b.xMax + 0.5f && r.yMin >= b.yMin - 0.5f && r.yMax <= b.yMax + 0.5f;
+                    if (!shown) clipped.Add((e.name ?? "").Replace(' ', '_'));
+                }
+
+                bool wide = _wide == true;
+                VisualElement switchesIn = wide ? _switchScroll.contentViewport : _sheet.Body;
+                VisualElement tabsIn = wide ? _tabScroll.contentViewport : _sheet.Body;
+                foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
+                foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                foreach (UiKit.Raised tab in _tabs.Segments) Reach(tab.Element, tabsIn);
+                foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) Reach(action.Element, _sheet.Body);
+                Rect list = _list.contentViewport.worldBound;
+                Log(FormattableString.Invariant(
+                    $"ELEVEN bench reach arranged={(wide ? "wide" : "stacked")} clipped={clipped.Count} names={string.Join(",", clipped)} list={list.width:F0}x{list.height:F0}"));
 
                 // Where Tab goes while the sheet is open, and how many of those stops can't be seen.
                 List<VisualElement> order = FocusOrder();
