@@ -65,13 +65,26 @@ namespace Eleven.Simulation.Harness
         public static bool TryMake(string name, BenchCandidate candidate, ControlCandidate controls, string build, out BenchPreset? preset, out string problem)
         {
             preset = null;
-            problem = "Not read yet: the tests come first (#46).";
-            return false;
+            if (candidate == null) throw new ArgumentNullException(nameof(candidate));
+            name = (name ?? "").Trim();
+            problem = NameProblem(name);
+            if (problem.Length > 0) return false;
+            preset = new BenchPreset(name, candidate, controls, Clean(build));
+            return true;
         }
 
         /// <summary>Why a name can't be used, or empty if it can.</summary>
         public static string NameProblem(string name)
         {
+            name = (name ?? "").Trim();
+            if (name.Length == 0) return "A preset needs a name.";
+            if (name.Length > MaxNameLength) return $"A preset's name is at most {MaxNameLength} characters.";
+            if (string.Equals(name, TechnicalReferenceName, StringComparison.OrdinalIgnoreCase)) return $"{TechnicalReferenceName} is the built-in preset's name.";
+            foreach (char c in name)
+            {
+                if (!(char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_')) return "A preset's name has letters, digits, spaces, hyphens and underscores only.";
+            }
+
             return "";
         }
 
@@ -84,7 +97,16 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public string Write()
         {
-            return "";
+            var text = new StringBuilder();
+            text.Append(Header).Append(Format.ToString(CultureInfo.InvariantCulture)).Append('\n');
+            text.Append("name=").Append(Name).Append('\n');
+            text.Append("build=").Append(Build).Append('\n');
+            text.Append("controls=").Append(TouchCandidates.NameOf(Controls)).Append('\n');
+            text.Append("configFormat=").Append(SimConfig.FormatVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
+            text.Append("configHash=").Append(ConfigHash.ToString("x16", CultureInfo.InvariantCulture)).Append('\n');
+            text.Append("knobs=").Append(BenchCandidate.Knobs.Count.ToString(CultureInfo.InvariantCulture)).Append('\n');
+            text.Append("values:\n").Append(Candidate.Values());
+            return text.ToString();
         }
 
         /// <summary>
@@ -94,8 +116,75 @@ namespace Eleven.Simulation.Harness
         public static bool TryRead(string text, out BenchPreset? preset, out string problem)
         {
             preset = null;
-            problem = "Not read yet: the tests come first (#46).";
-            return false;
+            string[] lines = (text ?? "").Replace("\r", "").Split('\n');
+            if (lines.Length == 0 || !lines[0].StartsWith(Header, StringComparison.Ordinal))
+            {
+                problem = "This isn't an ELEVEN preset.";
+                return false;
+            }
+
+            if (!int.TryParse(lines[0].Substring(Header.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int format) || format != Format)
+            {
+                problem = $"This preset is format {lines[0].Substring(Header.Length)}; this build reads format {Format}.";
+                return false;
+            }
+
+            var head = new Dictionary<string, string>();
+            int at = 1;
+            for (; at < lines.Length && lines[at] != "values:"; at++)
+            {
+                int equals = lines[at].IndexOf('=');
+                if (equals <= 0 || head.ContainsKey(lines[at].Substring(0, equals)))
+                {
+                    problem = $"This preset's line {at + 1} can't be read.";
+                    return false;
+                }
+
+                head[lines[at].Substring(0, equals)] = lines[at].Substring(equals + 1);
+            }
+
+            foreach (string key in new[] { "name", "build", "controls", "configFormat", "configHash", "knobs" })
+            {
+                if (!head.ContainsKey(key) || at >= lines.Length)
+                {
+                    problem = at >= lines.Length ? "This preset has no values." : $"This preset has no {key}.";
+                    return false;
+                }
+            }
+
+            string name = head["name"].Trim();
+            problem = NameProblem(name);
+            if (problem.Length > 0) return false;
+
+            if (!int.TryParse(head["configFormat"], NumberStyles.None, CultureInfo.InvariantCulture, out int configFormat) || configFormat != SimConfig.FormatVersion)
+            {
+                problem = $"\"{name}\" was saved under config format {head["configFormat"]}; this build's is {SimConfig.FormatVersion}. It can't be loaded.";
+                return false;
+            }
+
+            ControlCandidate? controls = TouchCandidates.Named(head["controls"]);
+            if (!controls.HasValue)
+            {
+                problem = $"\"{name}\" was saved under touch controls \"{head["controls"]}\", which this build doesn't have.";
+                return false;
+            }
+
+            string values = string.Join("\n", lines, at + 1, lines.Length - at - 1);
+            if (!BenchCandidate.TryParse(values, out BenchCandidate? candidate, out string valueProblem))
+            {
+                problem = $"\"{name}\" doesn't fit this build's knobs: {valueProblem}";
+                return false;
+            }
+
+            if (!ulong.TryParse(head["configHash"], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out ulong hash) || hash != candidate!.Config.Hash)
+            {
+                problem = $"\"{name}\" recorded config {head["configHash"]}, but its values make {candidate!.Config.Hash:x16} in this build. It can't be loaded.";
+                return false;
+            }
+
+            preset = new BenchPreset(name, candidate, controls.Value, Clean(head["build"]));
+            problem = "";
+            return true;
         }
 
         private static string Clean(string? build) => (build ?? "").Replace("\n", " ").Replace("\r", " ").Trim();
@@ -151,12 +240,28 @@ namespace Eleven.Simulation.Harness
         /// <summary>Saves a preset, in place of any of the same name. Returns whether it replaced one.</summary>
         public bool Save(BenchPreset preset)
         {
+            if (preset == null) throw new ArgumentNullException(nameof(preset));
+            for (int i = 0; i < _presets.Count; i++)
+            {
+                if (!BenchPreset.SameName(_presets[i].Name, preset.Name)) continue;
+                _presets[i] = preset;
+                return true;
+            }
+
+            _presets.Add(preset);
             return false;
         }
 
         /// <summary>Deletes the preset of this name. Returns whether there was one.</summary>
         public bool Delete(string name)
         {
+            for (int i = 0; i < _presets.Count; i++)
+            {
+                if (!BenchPreset.SameName(_presets[i].Name, name)) continue;
+                _presets.RemoveAt(i);
+                return true;
+            }
+
             return false;
         }
 
@@ -172,7 +277,24 @@ namespace Eleven.Simulation.Harness
         /// <summary>Reads <see cref="Write"/>. Never throws: what can't be read is kept and listed in <see cref="Problems"/>.</summary>
         public static PresetShelf Read(string? text)
         {
-            return new PresetShelf();
+            var shelf = new PresetShelf();
+            var one = new StringBuilder();
+            foreach (string line in (text ?? "").Replace("\r", "").Split('\n'))
+            {
+                if (line != Separator)
+                {
+                    one.Append(line).Append('\n');
+                    continue;
+                }
+
+                string preset = one.ToString();
+                one.Clear();
+                if (preset.Trim().Length == 0) continue;
+                if (BenchPreset.TryRead(preset, out BenchPreset? read, out string problem) && shelf.Find(read!.Name) == null) shelf._presets.Add(read);
+                else shelf._unread.Add(new KeyValuePair<string, string>(preset, problem.Length > 0 ? problem : "A second preset of the same name."));
+            }
+
+            return shelf;
         }
     }
 }
