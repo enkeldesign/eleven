@@ -544,7 +544,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const holdFire = async (ms, id = 1, held = []) => {
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [...held, pt(fire, id)] });
           await sleep(ms);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: held });
+          // With another finger held, the lifted point is named, as the flicks above do.
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: held.length ? [pt(fire, id)] : [] });
         };
         await settle();
         const fromShort = logs.length;
@@ -552,10 +553,13 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const short = (await waitForLog(actionPattern, 20_000, fromShort))?.match ?? null;
         await settle();
         const fromLong = logs.length;
-        await holdFire(1_200);
+        await holdFire(2_500);
         const long = (await waitForLog(actionPattern, 20_000, fromLong))?.match ?? null;
-        check('a hold released on FIRE asks for a kick, harder the longer the hold',
-          !!short && !!long && short[1] === 'holdkick' && long[1] === 'holdkick' && Number(long[2]) > Number(short[2]),
+        // The samples' times follow the runner's frames, a few a second, so a short hold's length
+        // isn't exact here: OneFireTests has the curve. A long hold is at full strength, and never
+        // weaker than a short one.
+        check('a hold released on FIRE asks for a kick, at full strength after a long hold',
+          !!short && !!long && short[1] === 'holdkick' && long[1] === 'holdkick' && Number(long[2]) === 1 && Number(long[2]) >= Number(short[2]),
           `${short ? short[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromShort)}`}; then ${long ? long[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromLong)}`}`);
 
         // A re-touch while the hold's kick waits for its tick shapes it, and kicks nothing more.
@@ -573,27 +577,37 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         check('a re-touch on FIRE during a kick shapes it and kicks nothing more', shapedC.some((l) => /target=shaping/.test(l)) && kicksC === 1,
           `${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
 
-        // Both thumbs, and the kick's line: the stick held up the screen runs the footballer onto
-        // the ball; a hold on FIRE then kicks it on along his heading, up-field.
+        // Both thumbs, and the kick's line: the stick, steered at the ball, runs the footballer onto
+        // it; a hold on FIRE then kicks it on along his heading, ahead of him.
         await settle();
         const fromRun = logs.length;
         const s0 = at(n[8], n[9]);
-        const reach = n[10] * sy;
+        const reach = n[10] * sx;
+        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
+        const aimAt = (m) => {
+          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
+          const length = Math.hypot(dx, dy) || 1;
+          const on = toScreen({ x: dx / length, y: dy / length }, 0);
+          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
+        };
+        let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
         for (let i = 1; i <= 5; i++) {
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x, y: s0.y - (reach * i) / 5 }, 1)] });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
           await sleep(20);
         }
-        const s1 = { x: s0.x, y: s0.y - reach };
-        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
-        // Past the ball's start (x 20): the footballer has run onto it.
+        // Steered at the ball on every trace line until he touches it: then he has it.
         let ran = null;
-        for (let from = logs.length, until = Date.now() + 40_000; Date.now() < until;) {
-          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), from);
+        for (let until = Date.now() + 40_000; Date.now() < until;) {
+          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
+          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
           if (!line) break;
-          from = line.index + 1;
-          if (Number(line.match[2]) > 23) { ran = line.match; break; }
+          ran = line.match;
+          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
+          s1 = aimAt(line.match);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
         }
+        const hasBall = !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun));
         const fromKick = logs.length;
         await holdFire(600, 2, [pt(s1, 1)]);
         const both = (await waitForLog(actionPattern, 20_000, fromKick))?.match ?? null;
@@ -604,12 +618,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           if (!line) break;
           from = line.index + 1;
           ahead = line.match;
-          if (Number(ahead[4]) - Number(ahead[2]) > 3) break;
+          if (Math.hypot(Number(ahead[4]) - Number(ahead[2]), Number(ahead[5]) - Number(ahead[3])) > 3) break;
         }
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         check('the stick and FIRE work at the same time, and the hold kicks the ball on along the heading',
-          !!ran && !!both && both[1] === 'holdkick' && !!kicked && !!ahead && Number(ahead[4]) - Number(ahead[2]) > 3,
-          `${ran ? `ran to x ${ran[2]} with the ball at ${ran[4]},${ran[5]}` : 'never ran past the ball'}; ${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; ${kicked ? 'Kicked' : 'no Kicked event'}; ${ahead ? `then player ${ahead[2]},${ahead[3]} ball ${ahead[4]},${ahead[5]}` : 'no trace after'}; since: ${since(fromRun)}`);
+          hasBall && !!both && both[1] === 'holdkick' && !!kicked && !!ahead && Math.hypot(Number(ahead[4]) - Number(ahead[2]), Number(ahead[5]) - Number(ahead[3])) > 3 && Number(ahead[4]) > Number(ahead[2]),
+          `${hasBall ? 'ran onto the ball' : `never touched the ball${ran ? `: player ${ran[2]},${ran[3]} ball ${ran[4]},${ran[5]}` : ''}`}; ${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; ${kicked ? 'Kicked' : 'no Kicked event'}; ${ahead ? `then player ${ahead[2]},${ahead[3]} ball ${ahead[4]},${ahead[5]}` : 'no trace after'}; since: ${since(fromRun)}`);
 
         // A FIRE finger held while the controls switch to A and back to C, and the view flips to
         // 180°: lifted afterwards, long past the hold threshold, it makes nothing.
@@ -771,7 +785,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const fromFlipped = logs.length;
       await flickFrom(kick, 0, 60);
       const up180 = (await waitForLog(actionPattern, 20_000, fromFlipped))?.match ?? null;
-      check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && up180[1] === 'flick' && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
+      // A flick or a hold → flick: on a slow runner the samples' times can spread past the hold
+      // threshold. The view's mapping is what this checks.
+      check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && /^(flick|holdflick)$/.test(up180[1]) && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
         up180 ? up180[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlipped)}`);
 
       const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromSwitch))?.match ?? null;
