@@ -566,7 +566,13 @@ namespace Eleven.Host
             if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
         }
 
-        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, _hud?.Needs);
+        private HudLayout Layout()
+        {
+            // An action is at least 44 pt high on any screen (#31).
+            HudNeeds needs = _hud?.Needs ?? new HudNeeds();
+            needs.Target = 44f * (_ui != null ? _ui.PixelsPerPoint : 1f);
+            return HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, needs);
+        }
 
         // The screen's safe area, in pixels with the origin at the bottom left, less any insets
         // ?safe= asks to try (#31).

@@ -122,7 +122,7 @@ internal static class Program
         if (result == 0) result = Turns(directory, config, profile);
         if (result == 0) result = Push(directory, config, profile);
         if (result == 0) result = Goal(directory, config);
-        if (result == 0) result = Keeper(directory, config);
+        if (result == 0) result = Keeper(directory, config, candidate.Keeper);
         if (result == 0) Console.WriteLine($"curves for \"{preset.Name}\" written to {directory}");
         return result;
     }
@@ -389,12 +389,12 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        return Keeper(directory, new SimConfig().With(overrides));
+        return Keeper(directory, new SimConfig().With(overrides), null);
     }
 
-    private static int Keeper(string directory, SimConfig config)
+    private static int Keeper(string directory, SimConfig config, KeeperCapabilities? bench)
     {
-        List<KeeperShot> shots = KeeperShots.Characterise(config);
+        List<KeeperShot> shots = KeeperShots.Characterise(config, bench);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "keeper-shots.csv")))
         {

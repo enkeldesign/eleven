@@ -57,10 +57,15 @@ namespace Eleven.Simulation.Harness
             ("centre", 0.4, -1), ("low-corner", 3.2, -1), ("high-corner", 3.0, 2.0), ("lofted", 0.4, -2),
         };
 
-        public static List<KeeperShot> Characterise(SimConfig config)
+        public static List<KeeperShot> Characterise(SimConfig config) => Characterise(config, null);
+
+        /// <summary>The same shots, and, given a keeper, at him too, as the "bench" profile: a preset's own keeper (#46).</summary>
+        public static List<KeeperShot> Characterise(SimConfig config, KeeperCapabilities? bench)
         {
             var shots = new List<KeeperShot>();
-            foreach ((string profile, KeeperCapabilities keeper) in new[] { ("reference", KeeperCapabilities.Reference), ("slow", KeeperCapabilities.Slow) })
+            var profiles = new List<(string, KeeperCapabilities)> { ("reference", KeeperCapabilities.Reference), ("slow", KeeperCapabilities.Slow) };
+            if (bench.HasValue) profiles.Add(("bench", bench.Value));
+            foreach ((string profile, KeeperCapabilities keeper) in profiles)
             {
                 foreach (double distance in new[] { 11.0, 16.0 })
                 {

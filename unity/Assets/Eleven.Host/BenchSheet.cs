@@ -79,7 +79,8 @@ namespace Eleven.Host
         private readonly VisualElement _switchColumn;
         private readonly ScrollView _switchScroll;
         private readonly ScrollView _tabScroll;
-        private bool? _wide;
+        private string _arranged;
+        private readonly VisualElement _liveBlock = new VisualElement { name = "Bench live" };
         private readonly UiKit.Action _close;
         private readonly UiKit.Action _revert;
         private readonly UiKit.Action _applyAction;
@@ -127,6 +128,11 @@ namespace Eleven.Host
             _sheet.Content.style.flexGrow = 1;
             _sheet.Content.style.flexShrink = 1;
             _sheet.Content.style.minHeight = 0;
+            // Only the knob list gives way when the sheet is short of room. Left to shrink, the
+            // title and the actions' row were squeezed in proportion, and the actions hung out of
+            // the sheet's bottom (#31).
+            _sheet.Actions.style.flexShrink = 0;
+            if (_sheet.Title != null) _sheet.Title.style.flexShrink = 0;
 
             _state = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _pendingText = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
@@ -135,11 +141,13 @@ namespace Eleven.Host
             _problem = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _problem.style.display = DisplayStyle.None;
             _problem.style.marginBottom = Spacing.S;
+            _state.style.flexShrink = _pendingText.style.flexShrink = _problem.style.flexShrink = 0;
 
             // The live FREE ↔ ATTACHED switch (#60): it acts at once and the run goes on, unlike the
             // knobs below, which wait for APPLY / RETRY and a fresh run.
             _modelsLabel = UiKit.Text(_theme, TypeScale.Body, ModelsText, Role.Text);
             _modelsLabel.style.marginBottom = Spacing.Xs;
+            _modelsLabel.style.flexShrink = 0;
             _models = UiKit.MakeSegmented(ui, _theme, Models, 0, index => _switchModel(index == 1 ? ControlModel.Attached : ControlModel.Free));
             _models.Element.style.marginBottom = Spacing.M;
             _models.Element.style.flexShrink = 0;
@@ -149,6 +157,7 @@ namespace Eleven.Host
             // mapping change.
             _viewsLabel = UiKit.Text(_theme, TypeScale.Body, ViewsText, Role.Text);
             _viewsLabel.style.marginBottom = Spacing.Xs;
+            _viewsLabel.style.flexShrink = 0;
             _views = UiKit.MakeSegmented(ui, _theme, Views, 0, index => _switchView(index == 1));
             _views.Element.style.marginBottom = Spacing.M;
             _views.Element.style.flexShrink = 0;
@@ -238,6 +247,15 @@ namespace Eleven.Host
         /// <summary>A screen shorter than this many points, and wider than it is tall, gets the wide arrangement (#31).</summary>
         public const float WideBelowHeight = 480;
 
+        /// <summary>A portrait screen shorter than this many points gets the compact arrangement (#31).</summary>
+        public const float CompactBelowHeight = 600;
+
+        /// <summary>The arrangement a screen of this size, in points, calls for: stacked, wide or compact.</summary>
+        public static string ArrangementFor(float width, float height) =>
+            height > 0 && height < WideBelowHeight && width > height ? "wide"
+            : height > 0 && height < CompactBelowHeight ? "compact"
+            : "stacked";
+
         /// <summary>
         /// Lays the sheet out for the screen it has (#31).
         ///
@@ -252,15 +270,17 @@ namespace Eleven.Host
         private void Arrange()
         {
             Rect screen = _ui.Root.layout;
-            bool wide = screen.height > 0 && screen.height < WideBelowHeight && screen.width > screen.height;
-            if (_wide == wide) return;
-            _wide = wide;
+            string arranged = ArrangementFor(screen.width, screen.height);
+            if (_arranged == arranged) return;
+            _arranged = arranged;
+            bool wide = arranged == "wide", compact = arranged == "compact";
 
             _sheet.Content.Clear();
+            _liveBlock.Clear();
+            _modelsLabel.text = wide || compact ? "Ball control" : ModelsText;
+            _viewsLabel.text = wide || compact ? "Pitch view (180°: second half)" : ViewsText;
             if (wide)
             {
-                _modelsLabel.text = "Ball control";
-                _viewsLabel.text = "Pitch view (180°: second half)";
                 _switchScroll.Add(_modelsLabel);
                 _switchScroll.Add(_models.Element);
                 _switchScroll.Add(_viewsLabel);
@@ -278,36 +298,38 @@ namespace Eleven.Host
                 _sheet.Content.Add(_tabScroll);
                 _sheet.Content.Add(_list);
                 _sheet.Element.style.maxWidth = StyleKeyword.None;
-                if (_sheet.Title != null) _sheet.Title.style.display = DisplayStyle.None;
             }
             else
             {
-                _modelsLabel.text = ModelsText;
-                _viewsLabel.text = ViewsText;
                 _sheet.Content.style.flexDirection = FlexDirection.Column;
-                _sheet.Content.Add(_state);
-                _sheet.Content.Add(_pendingText);
-                _sheet.Content.Add(_problem);
-                _sheet.Content.Add(_modelsLabel);
-                _sheet.Content.Add(_models.Element);
-                _sheet.Content.Add(_viewsLabel);
-                _sheet.Content.Add(_views.Element);
+                // Compact: only the tabs and the actions stay put. The state and the live switches
+                // scroll with the knobs, after them, so the list has room.
+                VisualElement live = compact ? _liveBlock : _sheet.Content;
+                live.Add(_state);
+                live.Add(_pendingText);
+                live.Add(_problem);
+                live.Add(_modelsLabel);
+                live.Add(_models.Element);
+                live.Add(_viewsLabel);
+                live.Add(_views.Element);
                 _sheet.Content.Add(_tabs.Element);
                 _sheet.Content.Add(_list);
                 _sheet.Body.Add(_sheet.Actions);
-                _sheet.Actions.style.marginTop = Spacing.L;
+                _sheet.Actions.style.marginTop = compact ? Spacing.S : Spacing.L;
                 _sheet.Actions.style.justifyContent = Justify.FlexEnd;
                 _sheet.Element.style.maxWidth = 560;
-                if (_sheet.Title != null) _sheet.Title.style.display = DisplayStyle.Flex;
             }
 
-            // Wrapped onto two rows in the wide arrangement's narrow column, the actions need a gap
-            // between the rows.
-            foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) action.Element.style.marginBottom = wide ? Spacing.Xs : 0;
+            if (_sheet.Title != null) _sheet.Title.style.display = wide || compact ? DisplayStyle.None : DisplayStyle.Flex;
 
+            // Wrapped onto two rows in a narrow column, the actions need a gap between the rows.
+            foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) action.Element.style.marginBottom = wide || compact ? Spacing.Xs : 0;
+
+            // The list holds the live block in the compact arrangement.
+            if (Open) ShowGroup(_group);
             _reportOpen = Open;
             _reportControls = Open;
-            if (_trace) Log($"ELEVEN bench arranged={(wide ? "wide" : "stacked")} screen={screen.width:F0}x{screen.height:F0}");
+            if (_trace) Log($"ELEVEN bench arranged={arranged} screen={screen.width:F0}x{screen.height:F0}");
         }
 
         public bool Open { get; private set; }
@@ -327,11 +349,11 @@ namespace Eleven.Host
             if (Open) return;
             Open = true;
             _scrim.style.display = DisplayStyle.Flex;
+            _shelf = PresetShelf.Read(_loadPresets());
             Arrange();
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
-            _shelf = PresetShelf.Read(_loadPresets());
             _presetStatus.text = "";
             ShowGroup(_group);
             _reportOpen = true;
@@ -400,6 +422,7 @@ namespace Eleven.Host
             }
 
             if (PresetsShown) ShowPresets(applied);
+            if (_arranged == "compact") _list.Add(_liveBlock);
             _reportControls = true;
             if (_trace) Log($"ELEVEN bench group name={Groups[index]}");
         }
@@ -522,6 +545,9 @@ namespace Eleven.Host
             {
                 _presetStatus.text = $"Not saved. {problem}";
                 Log($"ELEVEN bench preset refused {problem}");
+                // Back to the name, selected, so typing replaces it.
+                _presetName.Field.Focus();
+                _presetName.Field.SelectAll();
                 return;
             }
 
@@ -547,10 +573,15 @@ namespace Eleven.Host
         /// <summary>The name of the saved preset these values are, the technical reference's, or "unsaved": what a capture records (#46).</summary>
         public static string PresetNameOf(BenchCandidate candidate, ControlCandidate controls, string stored)
         {
-            if (candidate.ChangesFrom(BenchCandidate.Reference) == 0) return BenchCandidate.ReferencePreset;
+            // A saved preset first: one may hold the reference values under another ball control
+            // model or touch candidate. The technical reference is its values, FREE and Candidate A.
             BenchPreset saved = PresetShelf.Read(stored).Matching(candidate, controls);
-            return saved != null ? saved.Name : BenchCandidate.UnsavedPreset;
+            if (saved != null) return saved.Name;
+            return IsTechnicalReference(candidate, controls) ? BenchCandidate.ReferencePreset : BenchCandidate.UnsavedPreset;
         }
+
+        private static bool IsTechnicalReference(BenchCandidate candidate, ControlCandidate controls) =>
+            candidate.ChangesFrom(BenchCandidate.Reference) == 0 && candidate.Config.ControlModel == BenchPreset.TechnicalReference.Model && controls == BenchPreset.TechnicalReference.Controls;
 
         // The Touch tab holds every candidate's knobs, A's, B's then C's, under the A / B / C choice
         // (#76, #77).
@@ -605,9 +636,10 @@ namespace Eleven.Host
         {
             BenchCandidate applied = _applied();
             int fromReference = applied.ChangesFrom(BenchCandidate.Reference);
-            BenchPreset running = fromReference == 0 ? null : _shelf.Matching(applied, (ControlCandidate)_activeControls());
-            _state.text = fromReference == 0 ? "Running the technical reference values."
-                : running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
+            var controls = (ControlCandidate)_activeControls();
+            BenchPreset running = _shelf.Matching(applied, controls);
+            _state.text = running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
+                : IsTechnicalReference(applied, controls) ? "Running the technical reference values."
                 : $"Running unsaved values: {fromReference} changed from the technical reference.";
             _pendingText.text = _pending.Count == 0
                 ? "No pending changes. APPLY / RETRY starts a fresh run with these values."
@@ -682,16 +714,22 @@ namespace Eleven.Host
                     if (!shown) clipped.Add((e.name ?? "").Replace(' ', '_'));
                 }
 
-                bool wide = _wide == true;
+                // In the compact arrangement the live switches scroll with the knobs, so only the
+                // tabs and the actions are asked to be in reach without scrolling.
+                bool wide = _arranged == "wide";
                 VisualElement switchesIn = wide ? _switchScroll.contentViewport : _sheet.Body;
                 VisualElement tabsIn = wide ? _tabScroll.contentViewport : _sheet.Body;
-                foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
-                foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                if (_arranged != "compact")
+                {
+                    foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
+                    foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                }
+
                 foreach (UiKit.Raised tab in _tabs.Segments) Reach(tab.Element, tabsIn);
                 foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) Reach(action.Element, _sheet.Body);
                 Rect list = _list.contentViewport.worldBound;
                 Log(FormattableString.Invariant(
-                    $"ELEVEN bench reach arranged={(wide ? "wide" : "stacked")} clipped={clipped.Count} names={string.Join(",", clipped)} list={list.width:F0}x{list.height:F0}"));
+                    $"ELEVEN bench reach arranged={_arranged} clipped={clipped.Count} names={string.Join(",", clipped)} list={list.width:F0}x{list.height:F0}"));
 
                 // Where Tab goes while the sheet is open, and how many of those stops can't be seen.
                 List<VisualElement> order = FocusOrder();
