@@ -126,6 +126,19 @@ namespace Eleven.Simulation.Tests
             Refused(string.Join("\n", lines.TakeWhile(l => l != "values:")), "no values");
         }
 
+        // The example saved preset #46 records: `eleven-sim preset` reads it and writes its curves.
+        // When a knob or the config format changes, it must be regenerated, as a real one would be.
+        [Fact]
+        public void The_example_preset_fixture_reads_in_this_build()
+        {
+            string path = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "tests", "Eleven.Simulation.Tests", "Fixtures", "example-preset.txt");
+            Assert.True(BenchPreset.TryRead(System.IO.File.ReadAllText(path), out BenchPreset? example, out string problem), problem);
+            Assert.Equal("Example", example!.Name);
+            Assert.Equal(ControlCandidate.OneFire, example.Controls);
+            Assert.Equal(3, example.Candidate.ChangesFrom(BenchCandidate.Reference));
+            Assert.Equal(18.5, example.Candidate.Get("kickSpeed"));
+        }
+
         [Fact]
         public void The_shelf_saves_recalls_replaces_and_deletes_by_name()
         {

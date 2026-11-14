@@ -70,10 +70,12 @@ internal static class Program
                 return Replay(args[1]);
             case "candidate":
                 return Candidate(args.Skip(1));
+            case "preset" when args.Length >= 2:
+                return Preset(args[1], args.Length > 2 ? args[2] : null);
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir]");
                 return 2;
         }
     }
@@ -82,6 +84,46 @@ internal static class Program
     /// The candidate the test bench would apply for these changes, and the hashes that identify its
     /// run: the same values give the same hashes in every runtime.
     /// </summary>
+    // A saved preset (#46): what it is, how it differs from the technical reference, and, given a
+    // directory, every characterisation curve under its values. The curves describe the preset;
+    // they are no baseline until Erik promotes it.
+    private static int Preset(string path, string? directory)
+    {
+        if (!BenchPreset.TryRead(File.ReadAllText(path), out BenchPreset? preset, out string problem))
+        {
+            Console.Error.WriteLine($"{path}: {problem}");
+            return 1;
+        }
+
+        BenchCandidate candidate = preset!.Candidate;
+        Console.WriteLine($"preset: {preset.Name}, saved by build {(preset.Build.Length > 0 ? preset.Build : "unknown")}, controls {TouchCandidates.NameOf(preset.Controls)}");
+        Console.WriteLine($"config: {preset.ConfigHash:x16}, practice start {candidate.PracticeStartHash():x16}, {candidate.ChangesFrom(BenchCandidate.Reference)} change(s) from the technical reference");
+        var changed = new List<string>();
+        foreach (BenchKnob k in BenchCandidate.Knobs)
+        {
+            double value = candidate.Get(k.Name);
+            if (BitConverter.DoubleToInt64Bits(value) == BitConverter.DoubleToInt64Bits(BenchCandidate.Reference.Get(k.Name))) continue;
+            Console.WriteLine($"  {k.Name}={value.ToString("R", CultureInfo.InvariantCulture)}");
+            if (!k.OnPlayer && !k.OnKeeper && !k.OnAdapter && !k.OnSplit && !k.OnFire) changed.Add(k.Name);
+        }
+
+        if (directory == null) return 0;
+
+        // Every curve tool, under the preset's own config and footballer.
+        SimConfig config = candidate.Config;
+        PlayerCapabilities profile = candidate.Capabilities;
+        int result = Curves(directory, config, changed);
+        if (result == 0) result = Movement(directory, config, profile);
+        if (result == 0) result = Kicks(directory, config, profile);
+        if (result == 0) result = Passes(directory, config, profile);
+        if (result == 0) result = Dribble(directory, config);
+        if (result == 0) result = Turns(directory, config);
+        if (result == 0) result = Goal(directory, config);
+        if (result == 0) result = Keeper(directory, config);
+        if (result == 0) Console.WriteLine($"curves for \"{preset.Name}\" written to {directory}");
+        return result;
+    }
+
     private static int Candidate(IEnumerable<string> assignments)
     {
         var changes = new List<KeyValuePair<string, double>>();
@@ -233,7 +275,11 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = new SimConfig().With(overrides);
+        return Curves(directory, new SimConfig().With(overrides), overrides.Select(o => o.Key).ToList());
+    }
+
+    private static int Curves(string directory, SimConfig config, List<string> changed)
+    {
         List<BallCurve> curves = BallCurves.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "ball-curves.csv")))
@@ -243,7 +289,7 @@ internal static class Program
 
         using (var summary = new StreamWriter(Path.Combine(directory, "ball-curves.txt")))
         {
-            BallCurves.WriteSummary(summary, config, overrides.Select(o => o.Key).ToList(), curves);
+            BallCurves.WriteSummary(summary, config, changed, curves);
         }
 
         Console.WriteLine($"config {config.Hash:x16}: {BallCurves.KeyNumbers(config, curves)} -> {directory}");
@@ -255,7 +301,11 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = SpikeScenario.Config().With(overrides);
+        return Dribble(directory, SpikeScenario.Config().With(overrides));
+    }
+
+    private static int Dribble(string directory, SimConfig config)
+    {
         List<DribbleCurve> curves = DribbleCurves.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "dribble-curves.csv")))
@@ -272,7 +322,11 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = SpikeScenario.Config().With(overrides);
+        return Turns(directory, SpikeScenario.Config().With(overrides));
+    }
+
+    private static int Turns(string directory, SimConfig config)
+    {
         List<TurnCurve> curves = TurnCurves.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "turn-curves.csv")))
@@ -289,7 +343,11 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = new SimConfig().With(overrides);
+        return Goal(directory, new SimConfig().With(overrides));
+    }
+
+    private static int Goal(string directory, SimConfig config)
+    {
         List<GoalEdge> edges = GoalEdges.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "goal-edges.csv")))
@@ -306,7 +364,11 @@ internal static class Program
         List<KeyValuePair<string, double>>? overrides = ParseSettings(settings);
         if (overrides == null) return 2;
 
-        SimConfig config = new SimConfig().With(overrides);
+        return Keeper(directory, new SimConfig().With(overrides));
+    }
+
+    private static int Keeper(string directory, SimConfig config)
+    {
         List<KeeperShot> shots = KeeperShots.Characterise(config);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "keeper-shots.csv")))
@@ -326,7 +388,11 @@ internal static class Program
         PlayerCapabilities profile = PlayerCapabilities.Reference;
         foreach (KeyValuePair<string, double> o in overrides) profile = profile.With(o.Key, o.Value);
 
-        var config = new SimConfig();
+        return Movement(directory, new SimConfig(), profile);
+    }
+
+    private static int Movement(string directory, SimConfig config, PlayerCapabilities profile)
+    {
         List<MovementCurve> curves = MovementCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "movement-curves.csv")))
@@ -365,6 +431,11 @@ internal static class Program
     private static int Passes(string directory, IEnumerable<string> settings)
     {
         if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
+        return Passes(directory, config, profile);
+    }
+
+    private static int Passes(string directory, SimConfig config, PlayerCapabilities profile)
+    {
 
         List<PassCurve> curves = PassCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
@@ -392,6 +463,11 @@ internal static class Program
     private static int Kicks(string directory, IEnumerable<string> settings)
     {
         if (!SplitSettings(settings, out SimConfig config, out PlayerCapabilities profile)) return 2;
+        return Kicks(directory, config, profile);
+    }
+
+    private static int Kicks(string directory, SimConfig config, PlayerCapabilities profile)
+    {
         List<KickCurve> curves = KickCurves.Characterise(config, profile);
         Directory.CreateDirectory(directory);
         using (var csv = new StreamWriter(Path.Combine(directory, "kick-curves.csv")))
