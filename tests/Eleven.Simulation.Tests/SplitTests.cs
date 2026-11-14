@@ -315,7 +315,7 @@ namespace Eleven.Simulation.Tests
 
         private static TouchCandidates Candidates()
         {
-            var candidates = new TouchCandidates(Controller, ActionSurfaceSettings.Reference, S);
+            var candidates = new TouchCandidates(Controller, ActionSurfaceSettings.Reference, S, OneFireSettings.Reference);
             candidates.SetLayout(Layout);
             return candidates;
         }
