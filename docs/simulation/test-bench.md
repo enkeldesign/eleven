@@ -221,7 +221,7 @@ A stored preset this build can't read stays stored, and the Presets tab lists it
 
 **From a preset to its curves.** `eleven-sim preset <file>` reads a preset's text, says what it is and lists what differs from the technical reference. `eleven-sim preset <file> <dir>` also runs every characterisation tool under the preset's own config and footballer: ball, movement, kicks, passes, dribble, turns, goal and keeper. The curves describe the preset; they are no baseline until Erik promotes it.
 
-**An example preset** is `tests/Eleven.Simulation.Tests/Fixtures/example-preset.txt`: `kickSpeed` 18.5, `maxSpeed` 7.5 and `fireHoldSeconds` 0.2 under Candidate C, config `3f86855b8f062922`.
+**An example preset** is `tests/Eleven.Simulation.Tests/Fixtures/example-preset.txt`: `kickSpeed` 18.5, `maxSpeed` 7.5 and `fireHoldSeconds` 0.2 under Candidate C, config `20d50d46865126bf`.
 
 **Known limit:** there is no way yet to export a preset's text from a phone. A felt-wrong capture taken under the preset carries its name and its whole config, and SAVE CAPTURE exports that.
 
