@@ -32,9 +32,13 @@ namespace Eleven.Simulation.Harness
         /// <see cref="OpponentDistance"/> off, each facing the goal he attacks, and each keeper
         /// <see cref="KeeperStandOff"/> off the line he guards, facing the play. Home attacks
         /// <paramref name="homeAttackSign"/>; the whole start turns with it.
+        ///
+        /// Away's outfielder is a CPU footballer (#83) of <paramref name="awayCpu"/>'s skill, the
+        /// reference tier unless given. Home's is the human's, unless <paramref name="homeCpu"/>
+        /// makes him one too, for a match no one plays.
         /// </summary>
         public static SimState Start(SimConfig config, ulong seed, int homeAttackSign = 1, PlayerCapabilities? home = null, PlayerCapabilities? away = null,
-            KeeperCapabilities? homeKeeper = null, KeeperCapabilities? awayKeeper = null)
+            KeeperCapabilities? homeKeeper = null, KeeperCapabilities? awayKeeper = null, CpuSkill? awayCpu = null, CpuSkill? homeCpu = null)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (homeAttackSign != 1 && homeAttackSign != -1) throw new ArgumentOutOfRangeException(nameof(homeAttackSign), homeAttackSign, "A side attacks +1 or −1.");
@@ -57,6 +61,9 @@ namespace Eleven.Simulation.Harness
                     new PlayerState { Id = AwayPlayer, OwnerControllerId = AwayController, TeamId = AwayTeam, Capabilities = away ?? PlayerCapabilities.Reference, Position = new Vec2(s * OpponentDistance, 0), Heading = awayFacing },
                     new PlayerState { Id = AwayKeeper, OwnerControllerId = AwayKeeperController, TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(s * keeperX, 0), Heading = awayFacing },
                 },
+                Cpus = homeCpu.HasValue
+                    ? new[] { new CpuState { PlayerId = HomePlayer, Skill = homeCpu.Value }, new CpuState { PlayerId = AwayPlayer, Skill = awayCpu ?? CpuSkill.Pro } }
+                    : new[] { new CpuState { PlayerId = AwayPlayer, Skill = awayCpu ?? CpuSkill.Pro } },
                 Keepers = new[]
                 {
                     new KeeperState { PlayerId = HomeKeeper, Capabilities = homeKeeper ?? KeeperCapabilities.Reference },

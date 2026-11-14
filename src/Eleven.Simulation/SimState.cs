@@ -33,10 +33,14 @@ namespace Eleven.Simulation
         /// </summary>
         public TeamState[] Teams = Array.Empty<TeamState>();
 
+        /// <summary>The CPU outfielders (#83), in ascending player id order, each one of <see cref="Players"/> and not a keeper.</summary>
+        public CpuState[] Cpus = Array.Empty<CpuState>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
             copy.Teams = (TeamState[])Teams.Clone();
+            copy.Cpus = (CpuState[])Cpus.Clone();
             copy.Players = (PlayerState[])Players.Clone();
             copy.Keepers = (KeeperState[])Keepers.Clone();
             return copy;
@@ -44,8 +48,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
-        /// each player, keeper count (int32), each keeper, team count (int32), each team. Field order
-        /// within the ball, players, keepers and teams is as declared, capabilities in their own
+        /// each player, keeper count (int32), each keeper, team count (int32), each team, CPU count
+        /// (int32), each CPU outfielder. Field order within each is as declared, capabilities in their own
         /// declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
@@ -110,6 +114,51 @@ namespace Eleven.Simulation
                 w.WriteInt32(team.Id);
                 w.WriteInt32(team.AttackSign);
             }
+
+            w.WriteInt32(Cpus.Length);
+            foreach (CpuState cpu in Cpus)
+            {
+                w.WriteInt32(cpu.PlayerId);
+                w.WriteDouble(cpu.Skill.DecisionInterval, "Cpu.Skill.DecisionInterval");
+                w.WriteDouble(cpu.Skill.ReactionDelay, "Cpu.Skill.ReactionDelay");
+                w.WriteDouble(cpu.Skill.PerceptionError, "Cpu.Skill.PerceptionError");
+                w.WriteDouble(cpu.Skill.VisionRange, "Cpu.Skill.VisionRange");
+                w.WriteInt64(cpu.NextDecisionTick);
+                WritePlan(w, cpu.Plan);
+                w.WriteByte(cpu.HasNext ? (byte)1 : (byte)0);
+                WritePlan(w, cpu.Next);
+            }
+        }
+
+        private static void WritePlan(CanonicalWriter w, CpuPlanState plan)
+        {
+            w.WriteInt32((int)plan.Mode);
+            WriteVec2(w, plan.Move, "Cpu.Plan.Move");
+            w.WriteByte(plan.HasKick ? (byte)1 : (byte)0);
+            WriteVec2(w, plan.KickDirection, "Cpu.Plan.KickDirection");
+            w.WriteDouble(plan.KickStrength, "Cpu.Plan.KickStrength");
+            w.WriteDouble(plan.KickLoft, "Cpu.Plan.KickLoft");
+            w.WriteByte(plan.QuickPass ? (byte)1 : (byte)0);
+            w.WriteInt64(plan.ObservedTick);
+            w.WriteInt64(plan.ActsTick);
+        }
+
+        private static CpuPlanState ReadPlan(CanonicalReader r)
+        {
+            int mode = r.ReadInt32();
+            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Recover) throw new FormatException($"Unknown CPU mode {mode}.");
+            return new CpuPlanState
+            {
+                Mode = (CpuMode)mode,
+                Move = ReadVec2(r, "Cpu.Plan.Move"),
+                HasKick = ReadFlag(r.ReadByte(), "Cpu.Plan.HasKick"),
+                KickDirection = ReadVec2(r, "Cpu.Plan.KickDirection"),
+                KickStrength = r.ReadDouble("Cpu.Plan.KickStrength"),
+                KickLoft = r.ReadDouble("Cpu.Plan.KickLoft"),
+                QuickPass = ReadFlag(r.ReadByte(), "Cpu.Plan.QuickPass"),
+                ObservedTick = r.ReadInt64(),
+                ActsTick = r.ReadInt64(),
+            };
         }
 
         public static SimState Decode(CanonicalReader r)
@@ -193,6 +242,28 @@ namespace Eleven.Simulation
             for (int i = 0; i < teams; i++)
             {
                 state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32() };
+            }
+
+            int cpus = r.ReadInt32();
+            if (cpus < 0 || cpus > count) throw new FormatException($"Implausible CPU count {cpus}.");
+            state.Cpus = new CpuState[cpus];
+            for (int i = 0; i < cpus; i++)
+            {
+                state.Cpus[i] = new CpuState
+                {
+                    PlayerId = r.ReadInt32(),
+                    Skill = new CpuSkill
+                    {
+                        DecisionInterval = r.ReadDouble("Cpu.Skill.DecisionInterval"),
+                        ReactionDelay = r.ReadDouble("Cpu.Skill.ReactionDelay"),
+                        PerceptionError = r.ReadDouble("Cpu.Skill.PerceptionError"),
+                        VisionRange = r.ReadDouble("Cpu.Skill.VisionRange"),
+                    },
+                    NextDecisionTick = r.ReadInt64(),
+                    Plan = ReadPlan(r),
+                    HasNext = ReadFlag(r.ReadByte(), "Cpu.HasNext"),
+                    Next = ReadPlan(r),
+                };
             }
 
             return state;

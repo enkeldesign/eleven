@@ -374,8 +374,8 @@ namespace Eleven.Simulation.Tests
             byte[] bytes = w.ToArray();
 
             // The flag is the last player's last byte but their cut cooldown (#75), just before the
-            // keeper count and the team count (#82).
-            int flag = bytes.Length - 4 - 4 - 4 - 1;
+            // keeper count, the team count (#82) and the CPU count (#83).
+            int flag = bytes.Length - 4 - 4 - 4 - 4 - 1;
             Assert.Equal(1, bytes[flag]);
             bytes[flag] = 2;
             Assert.Throws<FormatException>(() => SimState.Decode(new Encoding.CanonicalReader(bytes)));

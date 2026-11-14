@@ -69,6 +69,7 @@ namespace Eleven.Simulation
             long tick = _state.Tick;
             _kickConnected = false;
             ResolveCommands(tick, commands, events);
+            StepCpus(tick);
 
             double dt = Config.TickSeconds;
             _keeperFrom.Clear();
@@ -157,12 +158,80 @@ namespace Eleven.Simulation
                 if (!IsFinite(kick.Direction) || !SimMath.IsFinite(kick.Strength) || !SimMath.IsFinite(kick.Loft)) return CommandRejection.Invalid;
             }
 
+            if (c.Plan.HasValue)
+            {
+                CpuPlan plan = c.Plan.Value;
+                if (!IsFinite(plan.Move)) return CommandRejection.Invalid;
+                if (plan.Kick.HasValue && !(IsFinite(plan.Kick.Value.Direction) && SimMath.IsFinite(plan.Kick.Value.Strength) && SimMath.IsFinite(plan.Kick.Value.Loft))) return CommandRejection.Invalid;
+            }
+
             foreach (PlayerState player in _state.Players)
             {
-                if (player.OwnerControllerId == c.ControllerId) return CommandRejection.None;
+                if (player.OwnerControllerId != c.ControllerId) continue;
+                if (!c.Plan.HasValue) return CommandRejection.None;
+
+                // A plan (#83) only from a CPU outfielder's controller, and only when he may decide.
+                int cpu = CpuOf(player.Id);
+                return cpu >= 0 && _state.Cpus[cpu].MayDecide(tick) ? CommandRejection.None : CommandRejection.PlanRefused;
             }
 
             return CommandRejection.Unowned;
+        }
+
+        private int CpuOf(int playerId)
+        {
+            for (int i = 0; i < _state.Cpus.Length; i++)
+            {
+                if (_state.Cpus[i].PlayerId == playerId) return i;
+            }
+
+            return -1;
+        }
+
+        /// <summary>A CPU outfielder's decision interval in whole steps, at least one (#83).</summary>
+        public static int DecisionTicksFor(CpuSkill skill, SimConfig config) => Math.Max(1, (int)Math.Round(skill.DecisionInterval * config.TickRate));
+
+        /// <summary>
+        /// A CPU outfielder's reaction delay in whole steps, at least one (#83): a plan decided on
+        /// one tick's observation can't act before the next.
+        /// </summary>
+        public static int ReactionTicksFor(CpuSkill skill, SimConfig config) => Math.Max(1, (int)Math.Round(skill.ReactionDelay * config.TickRate));
+
+        // The CPU outfielders' timers (#83, INV-12), before anyone moves. A waiting plan whose tick
+        // has come becomes the plan in effect. A plan accepted this tick waits out the reaction
+        // delay, and sets when he may decide next. The plan moves no one here: his controller
+        // sends its stick, kick and quick pass as ordinary commands.
+        private void StepCpus(long tick)
+        {
+            for (int i = 0; i < _state.Cpus.Length; i++)
+            {
+                ref CpuState cpu = ref _state.Cpus[i];
+                if (cpu.HasNext && tick >= cpu.Next.ActsTick)
+                {
+                    cpu.Plan = cpu.Next;
+                    cpu.HasNext = false;
+                    cpu.Next = default;
+                }
+
+                Command? command = FindAccepted(_state.Players[IndexOfPlayer(cpu.PlayerId)].OwnerControllerId);
+                if (!command.HasValue || !command.Value.Plan.HasValue) continue;
+
+                CpuPlan plan = command.Value.Plan.Value;
+                cpu.Next = new CpuPlanState
+                {
+                    Mode = plan.Mode,
+                    Move = plan.Move,
+                    HasKick = plan.Kick.HasValue,
+                    KickDirection = plan.Kick.HasValue ? plan.Kick.Value.Direction : Vec2.Zero,
+                    KickStrength = plan.Kick.HasValue ? plan.Kick.Value.Strength : 0,
+                    KickLoft = plan.Kick.HasValue ? plan.Kick.Value.Loft : 0,
+                    QuickPass = plan.QuickPass,
+                    ObservedTick = tick,
+                    ActsTick = tick + ReactionTicksFor(cpu.Skill, Config),
+                };
+                cpu.HasNext = true;
+                cpu.NextDecisionTick = tick + DecisionTicksFor(cpu.Skill, Config);
+            }
         }
 
         private static bool IsFinite(Vec2 v) => SimMath.IsFinite(v.X) && SimMath.IsFinite(v.Y);
@@ -176,7 +245,15 @@ namespace Eleven.Simulation
                 kick = new KickIntent(k.Direction, Clamp01(k.Strength), Clamp01(k.Loft));
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive);
+            CpuPlan? plan = null;
+            if (c.Plan.HasValue)
+            {
+                CpuPlan p = c.Plan.Value;
+                KickIntent? planned = p.Kick.HasValue ? new KickIntent(p.Kick.Value.Direction, Clamp01(p.Kick.Value.Strength), Clamp01(p.Kick.Value.Loft)) : (KickIntent?)null;
+                plan = new CpuPlan(p.Mode, AtMostUnit(p.Move), planned, p.QuickPass);
+            }
+
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)
@@ -1498,6 +1575,25 @@ namespace Eleven.Simulation
                 foreach (PlayerState p in state.Players)
                 {
                     if (p.TeamId != first.Id && p.TeamId != second.Id) throw new ArgumentException($"Player {p.Id}'s team {p.TeamId} isn't one of the state's two.", nameof(state));
+                }
+            }
+
+            // CPU outfielders (#83): each a player who isn't a keeper, once, in ascending id order,
+            // with a skill in range and plans this encoding knows.
+            for (int i = 0; i < state.Cpus.Length; i++)
+            {
+                CpuState c = state.Cpus[i];
+                if (i > 0 && c.PlayerId <= state.Cpus[i - 1].PlayerId) throw new ArgumentException("CPU outfielders must be in strictly ascending player id order.", nameof(state));
+                if (Array.FindIndex(state.Players, p => p.Id == c.PlayerId) < 0) throw new ArgumentException($"CPU outfielder {c.PlayerId} isn't a player in the state.", nameof(state));
+                if (Array.FindIndex(state.Keepers, k => k.PlayerId == c.PlayerId) >= 0) throw new ArgumentException($"Player {c.PlayerId} is a keeper, and can't be a CPU outfielder too.", nameof(state));
+                c.Skill.CheckRanges($"CPU outfielder {c.PlayerId}");
+                foreach (CpuPlanState plan in new[] { c.Plan, c.Next })
+                {
+                    if (plan.Mode < CpuMode.None || plan.Mode > CpuMode.Recover) throw new ArgumentException($"CPU outfielder {c.PlayerId}: unknown mode {(int)plan.Mode}.", nameof(state));
+                    if (plan.Move.LengthSquared > 1 + 1e-9 || plan.KickStrength < 0 || plan.KickStrength > 1 || plan.KickLoft < 0 || plan.KickLoft > 1)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(state), $"CPU outfielder {c.PlayerId}: a plan's stick is at most 1 long, and its kick's strength and loft within [0, 1].");
+                    }
                 }
             }
 

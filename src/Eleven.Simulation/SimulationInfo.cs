@@ -14,9 +14,10 @@ namespace Eleven.Simulation
         /// (#60), and version 8 replaced the ball's beyond-the-goal-line flag with its goal-line
         /// state (#68). Version 9 added the keepers and the held ball (#69). Version 10 added each
         /// player's turn with the ball (#66), version 11 their cut with it (#75),
-        /// and version 12 the two sides of a match and the way each attacks (#82).
+        /// version 12 the two sides of a match and the way each attacks (#82),
+        /// and version 13 the CPU outfielders, their plans and their timers (#83).
         /// </summary>
-        public const int StateSchemaVersion = 12;
+        public const int StateSchemaVersion = 13;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence
