@@ -878,6 +878,12 @@ namespace Eleven.Simulation
             double speed = SimMath.Sqrt(velocity.LengthSquared);
             if (speed < from * player.Capabilities.MaxSpeed || speed < TrapSpeed) return false;
 
+            // Only a ball they are already sprinting with: one rolling their way. A first touch on
+            // a ball at rest, across them or coming at them is a receiving touch, and never starts
+            // a chase.
+            Vec2 ball = _state.Ball.Velocity.Horizontal;
+            if (ball.X * velocity.X + ball.Y * velocity.Y < TrapSpeed * speed) return false;
+
             push = velocity * ((speed + Config.PushSpeed) / speed);
             return true;
         }

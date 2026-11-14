@@ -12,7 +12,7 @@ With `pushSpeed` above 0, **a sprint's ordinary touch is a push.** The ball leav
 
 **What counts as a sprint:** the stick asks for at least `pushFromSpeed` of full, and the footballer will be running at least `pushFromSpeed` of their max speed by their next touch. The simulation's own movement predicts that (INV-13).
 
-**What never pushes:** a turn's touches (#66), a cut's touch (#75), a jog, and a first touch on a ball they aren't sprinting with.
+**What never pushes:** a turn's touches (#66), a cut's touch (#75), a jog, and a first touch on a ball they aren't sprinting with. A ball they are sprinting with is one rolling their way, at 0.5 m/s or more along their run. A ball at rest, across them or coming at them gets a receiving touch.
 
 **The push is a touch,** so it is bounded and has an error like any other: the change of velocity is capped by `touchStrength` scaled by ball control, and its direction error grows as ball control falls. A poor footballer's push is weaker and less true.
 
