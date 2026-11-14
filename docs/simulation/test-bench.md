@@ -4,7 +4,7 @@ The test bench (#45, part of #27) is how values are tuned by playing. Research s
 
 ## Knobs
 
-`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick, pass and ball control), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28), then every `SplitSettings.Parameters` entry (Candidate B's, #76). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
+`BenchCandidate.Knobs` (harness) is every `SimConfig.Tunables` entry (ball, kick, pass and ball control), then every `PlayerCapabilities.Parameters` entry (the controlled player), then every `ActionSurfaceSettings.Parameters` entry (Candidate A's touch gestures, #28), then every `SplitSettings.Parameters` entry (Candidate B's, #76), then every `OneFireSettings.Parameters` entry (Candidate C's, #77). Nothing else lists them, so a new tunable appears on the bench by being added to the metadata.
 
 Each knob shows what its metadata holds:
 - its unit and valid range;
@@ -43,16 +43,16 @@ The bench sheet builds candidates directly, with `TryWith`. `Describe`, `Values`
 - It is a presentation setting, not a knob: in no config, candidate or capture. Reset and APPLY / RETRY keep it. [visual-system.md](../ui/visual-system.md) has the contract.
 
 **Touch controls (#76):**
-- "A · Action / B · Pass + Kick" sits at the top of the Touch tab, above both candidates' knobs. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
+- "A · Action / B · Pass + Kick / C · One fire" sits at the top of the Touch tab, above every candidate's knobs. It switches the touch candidate at once, between frames, and the run goes on: no step, no command, and the config, the state and possession untouched. The tick and the state hash are logged either side.
 - It is in the tab rather than above the tabs, so a phone's knob list keeps its room.
 - A gesture in progress is cancelled, and fingers already down are ignored until they lift.
 - **A new screen size cancels gestures the same way**, for every candidate: when the device turns, a finger held across the turn was pressed in the old screen's coordinates, and its lift would read as a flick. The host logs `ELEVEN gestures cancelled reason=resize`. A change of the result panel's size alone cancels nothing.
 - It is the non-gesture way to switch, in Tab's order with the other choices. Reset and APPLY / RETRY keep it.
 - A capture records the active candidate and every one of its values.
-- `?controls=split` starts on B, before the first step: a link for a device comparison.
-- **On a landscape phone the bench's knob list gets almost no room**, on every tab. The sheet's fixed rows (ball control, view, two rows of tabs) take its height, so the A / B choice can't be reached there. The bench in landscape is #31's. Until then, switch in portrait and turn the phone, or open with `?controls=split`.
+- `?controls=split` starts on B and `?controls=one-fire` on C, before the first step: links for a device comparison.
+- **On a landscape phone the bench's knob list gets almost no room**, on every tab. The sheet's fixed rows (ball control, view, two rows of tabs) take its height, so the A / B choice can't be reached there. The bench in landscape is #31's. Until then, switch in portrait and turn the phone, or open with `?controls=split` or `?controls=one-fire`.
 
-**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch. Touch holds the A / B choice, then Candidate A's gesture knobs, then B's (the `Split` group).
+**Group tabs:** Ball, Kick, Pass, Control, Attached, Goal, Keeper, Player and Touch. Touch holds the A / B / C choice, then Candidate A's gesture knobs, then B's (the `Split` group), then C's (the `Fire` group).
 - Control holds the FREE ball's touches (#59, [dribble.md](dribble.md)), the capture reach both models share, the turn both models share, `turnAngle` and `turnStrength` (#66, [turn.md](turn.md)), and FREE's cut, `cutAngle`, `cutStrength` and `cutInterval` (#75, [cut.md](cut.md)). `turnStrength` 0 turns the turn off and `cutStrength` 0 the cut, for comparing with and without each.
 - Attached holds the ATTACHED comparator's correction (#60, [attached.md](attached.md)).
 - Goal holds the goal's size, its posts' width and how its frame returns the ball (#68, [goal.md](goal.md)). The pitch draws the goal a candidate asks for.
@@ -162,6 +162,27 @@ Candidate B from #28 and #76, after Super Soccer Champs: the convenience pass an
 
 **Starting values** are Candidate A's, as #76 asks, so the two compare on the same reading. They are technical references, not approved feel: `splitHoldSeconds` 0.18, `splitFlickDistance` 20, `splitFastFlickDistance` 8, `splitFastFlickSpeed` 400, `splitFlickStrength` 0.6, `splitChargeSeconds` 0.5, `splitChargedStrength` 1.0, `splitLoft` 0.43 and `splitAftertouchRange` 40, with A's valid and research ranges.
 
+## Touch: Candidate C, ONE FIRE
+
+Candidate C from #28 and #77, after Sensible Soccer and Kick Off: one fire control and nothing to aim but the footballer. It tests whether a flick's explicit aim is needed at all. It is a comparator, not a replacement. `OneFireAdapter` (harness, engine-free) shares the stick, shaping, cancelling and screen-to-world mapping with A and B (`GestureAdapter`).
+
+**Where a finger lands decides its role, fixed for that finger's life:**
+- **Stick zone, left:** the floating stick, as in A. It always moves the footballer, also while a kick is shaped.
+- **FIRE:** the whole right-hand control area, marked by the disc at the thumb's rest. A press on a UI action inside the area belongs to the UI.
+
+| Gesture on FIRE | Command |
+| --- | --- |
+| a tap: released before `fireHoldSeconds` | the assisted quick pass, at the release. It doesn't wait for the hold threshold to pass. |
+| a hold, released | a manual kick along the footballer's heading: `fireHoldStrength` at the threshold, rising to `fireChargedStrength` over `fireChargeSeconds`, with `fireLoft`. Never a pass, and never aimed at anyone. |
+| a drag, in a tap or a hold | nothing of its own: only the time held counts |
+| a re-touch while a kick winds up, its window is open, or a gesture waits for its tick | shaping, as A's (`fireAftertouchRange`). Outside that, a touch is a fire gesture. |
+
+**Which heading the kick takes.** The command is `KickIntent.AlongHeading`: it carries no direction. The simulation reads the footballer's heading on the tick it accepts the command and holds that line through the wind-up, so a turn during the wind-up doesn't move it. The adapter never samples a heading, so the view (0° or 180°) can't change the line, and a recording replays it exactly. On screen the kick goes where the footballer faces.
+
+**The disc says what the control does:** FIRE, HOLD with the charge past the threshold, SHAPE, then PASS or the last kick's strength with the milliseconds from the release to the command.
+
+**Starting values** are Candidate A's where the two share a meaning, so the three compare on the same numbers. They are technical references, not approved feel: `fireHoldSeconds` 0.18 (#28's range 0.12–0.25), `fireHoldStrength` 0.6 (A's immediate flick), `fireChargeSeconds` 0.5, `fireChargedStrength` 1.0, `fireLoft` 0.43 and `fireAftertouchRange` 40.
+
 ## Measured
 
 **What is measured:**
@@ -198,5 +219,17 @@ The .NET tests (`ActionSurfaceTests`) cover the rest of the gesture reading: hol
 The test sends each flick in one go. At the few frames a second a 3× phone draws on the runner, the UI then sees the press where the flick ends, and a flick ending on THIS FELT WRONG opens the note sheet. So KICK is pressed at its marker unless a flick from there would end on a HUD action; otherwise at the right-hand area's lower left, which is KICK too (in landscape). A finger takes many frames, so on a device the UI sees the press where it lands.
 
 `SplitTests` covers the reading in .NET, with the live switch: a finger held across it makes nothing on either candidate, and a command waiting for its tick is dropped.
+
+**What the smoke test checks for Candidate C**, on an iPhone 13 in portrait:
+- switching to C through the bench changes no state and makes no step;
+- a tap on FIRE asks for the quick pass (`QuickPassResolved`), with the release-to-command time in `ELEVEN action gesture=tap ... latency=`;
+- a hold released on FIRE asks for a kick (`gesture=holdkick`), harder after a longer hold;
+- a re-touch on FIRE during a kick shapes it and kicks nothing more;
+- with the stick held up the screen the footballer runs onto the ball, and a hold on FIRE kicks it on ahead of him, along his heading;
+- a FIRE finger held while the controls switch to A and back, and the view flips, makes nothing when lifted long after;
+- at 180° a hold is still the kick along the heading;
+- the session's recording, across the switches, replays to the live state.
+
+`OneFireTests` covers the reading in .NET, with the three-way switch: a finger held across any of the six switches makes nothing, and a lift reaches every inactive candidate.
 
 **A capture under the candidate.** The smoke test then presses THIS FELT WRONG, and CI replays that capture under .NET with the rest.

@@ -444,7 +444,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
     // Candidate B, SPLIT (#76): switched on through the bench, live; PASS at the press, KICK's
     // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
-    if (url.includes('split=1')) {
+    // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`.
+    if (url.includes('split=1') || url.includes('fire=1')) {
       const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
       const layoutLine = lastLog(layoutPattern)?.input ?? '';
       const zone = actionZonePattern.exec(layoutLine)?.slice(1, 5).map(Number) ?? null;
@@ -506,6 +507,157 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       };
       const switchPattern = (to) => new RegExp(`ELEVEN controls switched to=${to} tick=(\\d+) before=([0-9a-f]{16}) after=([0-9a-f]{16}) steps=(\\d+)`);
 
+      // Between a candidate's checks, the last kick's wind-up and aftertouch window (a few tenths
+      // of a simulated second) must have closed, or the next press where a kick is made shapes it.
+      // The phone passes can step only about 13 times a wall-clock second, so wait on the
+      // simulation, not the clock: two fresh trace lines, which come once a simulated second, are
+      // 60 steps apart.
+      const settle = async () => {
+        const first = await waitForLog(tracePattern, 20_000, logs.length);
+        if (first) await waitForLog(tracePattern, 20_000, first.index + 1);
+      };
+
+      // Candidate C, ONE FIRE (#77): a tap on FIRE is the quick pass at its release, a hold is a
+      // kick along the footballer's heading, harder the longer it is held, and a re-touch shapes.
+      if (url.includes('fire=1')) {
+        const fire = at(n[6], n[7]);
+        const fromC = logs.length;
+        const openedC = await openBench(2);
+        await press(segments(openedC?.[3]).C, 2);
+        const toFire = (await waitForLog(switchPattern('one-fire'), 5_000, fromC))?.match ?? null;
+        check('switching to C through the bench changes no state and makes no step', !!toFire && toFire[2] === toFire[3] && toFire[4] === '0',
+          toFire ? toFire[0].replace('ELEVEN ', '') : `no switch line${openedC ? '' : ' (the bench did not open)'}; since: ${since(fromC)}`);
+        await closeBench(openedC, 2);
+
+        // A tap: the quick pass, at the release.
+        await settle();
+        const fromTap = logs.length;
+        await burst(['touchStart', [pt(fire, 1)]], ['touchEnd', [pt(fire, 1)]]);
+        const tapped = (await waitForLog(actionPattern, 20_000, fromTap))?.match ?? null;
+        const tapResolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 20_000, fromTap);
+        const tapPress = logs.slice(fromTap).find((l) => l.startsWith('ELEVEN press'));
+        notes.fireTapLatencyMs = tapped ? Number(tapped[5]) : NaN;
+        check('a tap on FIRE asks for the quick pass', !!tapped && tapped[1] === 'tap' && /target=fire/.test(tapPress ?? '') && !!tapResolved,
+          `${tapPress ?? 'no press logged'}; ${tapped ? tapped[0].replace('ELEVEN action ', '') : 'no action line'}; ${tapResolved ? 'QuickPassResolved' : 'no QuickPassResolved event'}; since: ${since(fromTap)}`);
+
+        // A hold, released: a kick, harder the longer the hold.
+        const holdFire = async (ms, id = 1, held = []) => {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [...held, pt(fire, id)] });
+          await sleep(ms);
+          // With another finger held, the lifted point is named, as the flicks above do.
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: held.length ? [pt(fire, id)] : [] });
+        };
+        await settle();
+        const fromShort = logs.length;
+        await holdFire(300);
+        const short = (await waitForLog(actionPattern, 20_000, fromShort))?.match ?? null;
+        await settle();
+        const fromLong = logs.length;
+        await holdFire(2_500);
+        const long = (await waitForLog(actionPattern, 20_000, fromLong))?.match ?? null;
+        // The samples' times follow the runner's frames, a few a second, so a short hold's length
+        // isn't exact here: OneFireTests has the curve. A long hold is at full strength, and never
+        // weaker than a short one.
+        check('a hold released on FIRE asks for a kick, at full strength after a long hold',
+          !!short && !!long && short[1] === 'holdkick' && long[1] === 'holdkick' && Number(long[2]) === 1 && Number(long[2]) >= Number(short[2]),
+          `${short ? short[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromShort)}`}; then ${long ? long[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromLong)}`}`);
+
+        // A re-touch while the hold's kick waits for its tick shapes it, and kicks nothing more.
+        await settle();
+        const fromShapeC = logs.length;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
+        await sleep(400);
+        const again = { x: fire.x, y: fire.y + 10 * pointPx * sy };
+        await burst(['touchEnd', []], ['touchStart', [pt(again, 2)]], ['touchMove', [pt({ x: again.x + 40 * pointPx * sx, y: again.y }, 2)]]);
+        await sleep(400);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await sleep(300);
+        const shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
+        const kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
+        check('a re-touch on FIRE during a kick shapes it and kicks nothing more', shapedC.some((l) => /target=shaping/.test(l)) && kicksC === 1,
+          `${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
+
+        // Both thumbs, and the kick's line: the stick, steered at the ball, runs the footballer onto
+        // it; a hold on FIRE then kicks it on along his heading, ahead of him.
+        await settle();
+        const fromRun = logs.length;
+        const s0 = at(n[8], n[9]);
+        const reach = n[10] * sx;
+        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
+        const aimAt = (m) => {
+          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
+          const length = Math.hypot(dx, dy) || 1;
+          const on = toScreen({ x: dx / length, y: dy / length }, 0);
+          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
+        };
+        let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
+        for (let i = 1; i <= 5; i++) {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
+          await sleep(20);
+        }
+        // Steered at the ball on every trace line until he touches it: then he has it.
+        let ran = null;
+        for (let until = Date.now() + 40_000; Date.now() < until;) {
+          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
+          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
+          if (!line) break;
+          ran = line.match;
+          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
+          s1 = aimAt(line.match);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
+        }
+        const hasBall = !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun));
+        const fromKick = logs.length;
+        await holdFire(600, 2, [pt(s1, 1)]);
+        const both = (await waitForLog(actionPattern, 20_000, fromKick))?.match ?? null;
+        const kicked = await waitForLog(/ELEVEN event \d+ Kicked/, 20_000, fromKick);
+        let ahead = null;
+        for (let from = kicked ? kicked.index : logs.length, until = Date.now() + 20_000; kicked && Date.now() < until;) {
+          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), from);
+          if (!line) break;
+          from = line.index + 1;
+          ahead = line.match;
+          if (Math.hypot(Number(ahead[4]) - Number(ahead[2]), Number(ahead[5]) - Number(ahead[3])) > 3) break;
+        }
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        check('the stick and FIRE work at the same time, and the hold kicks the ball on along the heading',
+          hasBall && !!both && both[1] === 'holdkick' && !!kicked && !!ahead && Math.hypot(Number(ahead[4]) - Number(ahead[2]), Number(ahead[5]) - Number(ahead[3])) > 3 && Number(ahead[4]) > Number(ahead[2]),
+          `${hasBall ? 'ran onto the ball' : `never touched the ball${ran ? `: player ${ran[2]},${ran[3]} ball ${ran[4]},${ran[5]}` : ''}`}; ${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; ${kicked ? 'Kicked' : 'no Kicked event'}; ${ahead ? `then player ${ahead[2]},${ahead[3]} ball ${ahead[4]},${ahead[5]}` : 'no trace after'}; since: ${since(fromRun)}`);
+
+        // A FIRE finger held while the controls switch to A and back to C, and the view flips to
+        // 180°: lifted afterwards, long past the hold threshold, it makes nothing.
+        await settle();
+        const fromHeldC = logs.length;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
+        const holdingC = [pt(fire, 1)];
+        const reopenedC = await openBench(2, holdingC);
+        await press(segments(reopenedC?.[3]).A, 2, holdingC);
+        await press(segments(reopenedC?.[3]).C, 2, holdingC);
+        await press(segments(reopenedC?.[2])['180'], 2, holdingC);
+        await closeBench(reopenedC, 2, holdingC);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await settle();
+        const toAfromC = (await waitForLog(switchPattern('action-surface'), 1, fromHeldC))?.match ?? null;
+        const backToC = (await waitForLog(switchPattern('one-fire'), 1, fromHeldC))?.match ?? null;
+        const heldActionsC = logs.slice(fromHeldC).filter((l) => l.startsWith('ELEVEN action'));
+        check('a FIRE finger held across a switch and back makes nothing', !!toAfromC && !!backToC && toAfromC[4] === '0' && backToC[4] === '0' && heldActionsC.length === 0,
+          `${toAfromC ? 'to A' : 'no switch to A'}, ${backToC ? 'back to C' : 'no switch back'}; ${heldActionsC.length} action(s) after: ${heldActionsC.join(' | ') || 'none'}; since: ${since(fromHeldC)}`);
+
+        // At 180° the gestures read the same: a hold is still the kick along the heading.
+        const fromFlippedC = logs.length;
+        await holdFire(500);
+        const held180 = (await waitForLog(actionPattern, 20_000, fromFlippedC))?.match ?? null;
+        check('at 180°: a hold released on FIRE is still the kick along the heading', !!held180 && held180[1] === 'holdkick',
+          held180 ? held180[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlippedC)}`);
+
+        const replayC = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromC))?.match ?? null;
+        check('the recording across the switches replays to the live state', !!replayC && replayC[4] === 'match', replayC ? replayC[0].replace('ELEVEN ', '') : 'no recording check');
+        const errorsC = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+        check('no page errors or exceptions', errorsC.length === 0, errorsC.length ? errorsC.slice(0, 5).join(' | ') : 'none');
+        return;
+      }
+
       // ?controls=split starts on B: a landscape phone's bench has no room for its Touch tab's
       // knob list until #31, so the portrait pass switches through the bench.
       const startsOnB = url.includes('controls=split');
@@ -545,14 +697,6 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         } else {
           await burst(['touchStart', [...held, pt(start, id)]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [...held, pt(along(f), id)]]), ['touchEnd', [pt(end, id)]]);
         }
-      };
-      // Between KICK's checks, the last kick's wind-up and aftertouch window (a few tenths of a
-      // simulated second) must have closed, or the next press on KICK shapes it. The phone passes
-      // can step only about 13 times a wall-clock second, so wait on the simulation, not the
-      // clock: two fresh trace lines, which come once a simulated second, are 60 steps apart.
-      const settle = async () => {
-        const first = await waitForLog(tracePattern, 20_000, logs.length);
-        if (first) await waitForLog(tracePattern, 20_000, first.index + 1);
       };
       await settle();
       const fromFlick = logs.length;
@@ -641,7 +785,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const fromFlipped = logs.length;
       await flickFrom(kick, 0, 60);
       const up180 = (await waitForLog(actionPattern, 20_000, fromFlipped))?.match ?? null;
-      check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && up180[1] === 'flick' && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
+      // A flick or a hold → flick: on a slow runner the samples' times can spread past the hold
+      // threshold. The view's mapping is what this checks.
+      check('at 180°: a flick up the screen on KICK kicks up-field', !!up180 && /^(flick|holdflick)$/.test(up180[1]) && Number(up180[3]) < 0 && Math.abs(Number(up180[4])) < Math.abs(Number(up180[3])) * 0.3,
         up180 ? up180[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromFlipped)}`);
 
       const replay = (await waitForLog(/ELEVEN recording from=(\d+) steps=(\d+) bytes=(\d+) replay=(\w+)/, 60_000, fromSwitch))?.match ?? null;
@@ -1428,6 +1574,8 @@ try {
   // Candidate B, SPLIT (#76): PASS and KICK on an iPhone, portrait and landscape.
   await runPass(browser, `${base}?trace=1&split=1`, 'split-phone', phone, true);
   await runPass(browser, `${base}?trace=1&split=1&controls=split`, 'split-phone-landscape', phoneLandscape, true);
+  // Candidate C, ONE FIRE (#77), on an iPhone in portrait.
+  await runPass(browser, `${base}?trace=1&fire=1`, 'fire-phone', phone, true);
 
   // The specimen: phone and tablet, both mappings, and a 320 pt phone with text at 150 %.
   const tall = (o, height) => ({ ...o, viewport: { ...o.viewport, height } });

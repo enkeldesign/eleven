@@ -13,8 +13,9 @@ namespace Eleven.Host
     /// <summary>
     /// The touch input adapter (INV-10): reads raw pointers through the Input System and hands them
     /// to the active candidate's gesture reading (#28), Candidate A's ACTION SURFACE
-    /// (<see cref="ActionSurfaceAdapter"/>) or B's SPLIT (<see cref="SplitAdapter"/>, #76), which
-    /// turns them into owned commands for one controller. The candidates switch live
+    /// (<see cref="ActionSurfaceAdapter"/>), B's SPLIT (<see cref="SplitAdapter"/>, #76) or C's ONE
+    /// FIRE (<see cref="OneFireAdapter"/>, #77), which turns them into owned commands for one
+    /// controller. The candidates switch live
     /// (<see cref="TouchCandidates"/>). It does no assistance; that belongs in the simulation.
     ///
     /// The stick floats: a press anywhere in the stick zone becomes its centre, and dragging away
@@ -45,9 +46,9 @@ namespace Eleven.Host
         private int _screenHeight;
         private bool _touchSeen;
 
-        public TouchAdapter(int controllerId, ActionSurfaceSettings actionSurface, SplitSettings split)
+        public TouchAdapter(int controllerId, ActionSurfaceSettings actionSurface, SplitSettings split, OneFireSettings oneFire)
         {
-            _gestures = new TouchCandidates(controllerId, actionSurface, split);
+            _gestures = new TouchCandidates(controllerId, actionSurface, split, oneFire);
 
             // Pass-through reports every value change of every bound control separately, so two
             // fingers pressing in the same frame are two presses, and every move is a sample.
@@ -83,7 +84,7 @@ namespace Eleven.Host
         /// <summary>The active candidate (#76).</summary>
         public ControlCandidate Active => _gestures.Active;
 
-        /// <summary>The active candidate's name: <c>action-surface</c> or <c>split</c>.</summary>
+        /// <summary>The active candidate's name: <c>action-surface</c>, <c>split</c> or <c>one-fire</c>.</summary>
         public string Name => _gestures.Name;
 
         /// <summary>The active candidate and every value, for a capture.</summary>
@@ -93,7 +94,7 @@ namespace Eleven.Host
         public Vector2 StickOrigin => new Vector2((float)_gestures.Current.StickOriginX, (float)_gestures.Current.StickOriginY);
         public Vector2 StickKnob => new Vector2((float)_gestures.Current.StickKnobX, (float)_gestures.Current.StickKnobY);
 
-        /// <summary>Whether a finger is on the control that makes a kick: A's ACTION, or B's KICK.</summary>
+        /// <summary>Whether a finger is on the control that makes a kick: A's ACTION, B's KICK or C's fire.</summary>
         public bool ActionHeld => _gestures.Current.ActionHeld;
 
         /// <summary>Whether a finger holds B's PASS.</summary>
@@ -121,11 +122,12 @@ namespace Eleven.Host
                 layout.PassCentre.x, layout.PassCentre.y, layout.PassRadius));
         }
 
-        /// <summary>New gesture settings for both candidates (APPLY / RETRY); any gesture in progress is cancelled.</summary>
-        public void Use(ActionSurfaceSettings actionSurface, SplitSettings split)
+        /// <summary>New gesture settings for every candidate (APPLY / RETRY); any gesture in progress is cancelled.</summary>
+        public void Use(ActionSurfaceSettings actionSurface, SplitSettings split, OneFireSettings oneFire)
         {
             _gestures.ActionSurface.Use(actionSurface);
             _gestures.Split.Use(split);
+            _gestures.OneFire.Use(oneFire);
         }
 
         /// <summary>
@@ -235,6 +237,7 @@ namespace Eleven.Host
             TouchRole.Shaping => "shaping",
             TouchRole.Pass => "pass",
             TouchRole.Kick => "kick",
+            TouchRole.Fire => "fire",
             _ => "none",
         };
 

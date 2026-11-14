@@ -27,11 +27,12 @@ namespace Eleven.Simulation.Tests
         public void The_knobs_are_the_config_tunables_then_the_player_and_keeper_capabilities_then_the_touch_gestures()
         {
             var expected = SimConfig.Tunables.Concat(PlayerCapabilities.Parameters).Concat(KeeperCapabilities.Parameters)
-                .Concat(ActionSurfaceSettings.Parameters).Concat(SplitSettings.Parameters).ToList();
+                .Concat(ActionSurfaceSettings.Parameters).Concat(SplitSettings.Parameters).Concat(OneFireSettings.Parameters).ToList();
             int players = SimConfig.Tunables.Count;
             int keeper = players + PlayerCapabilities.Parameters.Count;
             int touch = keeper + KeeperCapabilities.Parameters.Count;
             int split = touch + ActionSurfaceSettings.Parameters.Count;
+            int fire = split + SplitSettings.Parameters.Count;
             Assert.Equal(expected.Count, BenchCandidate.Knobs.Count);
             for (int i = 0; i < expected.Count; i++)
             {
@@ -39,7 +40,8 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(i >= players && i < keeper, BenchCandidate.Knobs[i].OnPlayer);
                 Assert.Equal(i >= keeper && i < touch, BenchCandidate.Knobs[i].OnKeeper);
                 Assert.Equal(i >= touch && i < split, BenchCandidate.Knobs[i].OnAdapter);
-                Assert.Equal(i >= split, BenchCandidate.Knobs[i].OnSplit);
+                Assert.Equal(i >= split && i < fire, BenchCandidate.Knobs[i].OnSplit);
+                Assert.Equal(i >= fire, BenchCandidate.Knobs[i].OnFire);
             }
         }
 
@@ -59,6 +61,25 @@ namespace Eleven.Simulation.Tests
             Assert.True(BenchCandidate.TryParse(changed.Values(), out BenchCandidate? parsed, out string problem), problem);
             Assert.Equal(changed.Split.Describe(), parsed!.Split.Describe());
             Assert.False(BenchCandidate.Reference.TryWith(new[] { Set("splitHoldSeconds", 9) }, out _, out problem));
+            Assert.Contains("hold seconds", problem);
+        }
+
+        // #77: Candidate C's knobs are bench knobs too, carried in the candidate and never in the config.
+        [Fact]
+        public void Candidate_c_knobs_change_its_settings_and_nothing_else()
+        {
+            BenchCandidate changed = Changed(Set("fireHoldStrength", 0.4), Set("fireHoldSeconds", 0.2));
+            Assert.Equal(0.4, changed.Fire.HoldStrength);
+            Assert.Equal(0.2, changed.Get("fireHoldSeconds"));
+            Assert.Equal(OneFireSettings.Reference.Describe(), BenchCandidate.Reference.Fire.Describe());
+            Assert.Equal(BenchCandidate.Reference.Config.Hash, changed.Config.Hash);
+            Assert.Equal(BenchCandidate.Reference.ActionSurface.Describe(), changed.ActionSurface.Describe());
+            Assert.Equal(BenchCandidate.Reference.Split.Describe(), changed.Split.Describe());
+            Assert.Equal(2, changed.ChangesFrom(BenchCandidate.Reference));
+
+            Assert.True(BenchCandidate.TryParse(changed.Values(), out BenchCandidate? parsed, out string problem), problem);
+            Assert.Equal(changed.Fire.Describe(), parsed!.Fire.Describe());
+            Assert.False(BenchCandidate.Reference.TryWith(new[] { Set("fireHoldSeconds", 9) }, out _, out problem));
             Assert.Contains("hold seconds", problem);
         }
 
@@ -100,7 +121,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Every_knob_has_a_group_a_label_and_a_step_inside_its_range()
         {
-            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, SplitSettings.Group };
+            var groups = new[] { TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup, TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, SplitSettings.Group, OneFireSettings.Group };
             Assert.NotEmpty(BenchCandidate.Knobs);
             foreach (BenchKnob k in BenchCandidate.Knobs)
             {
@@ -108,6 +129,7 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(k.OnPlayer, k.Group == TunableParameter.PlayerGroup);
                 Assert.Equal(k.OnAdapter, k.Group == ActionSurfaceSettings.Group);
                 Assert.Equal(k.OnSplit, k.Group == SplitSettings.Group);
+                Assert.Equal(k.OnFire, k.Group == OneFireSettings.Group);
                 Assert.False(string.IsNullOrWhiteSpace(k.Label), k.Name);
                 Assert.True(char.IsUpper(k.Label[0]), k.Label);
                 Assert.True(k.Step > 0 && k.Step <= k.Parameter.Max - k.Parameter.Min, $"{k.Name} step {k.Step}");
@@ -152,6 +174,7 @@ namespace Eleven.Simulation.Tests
             {
                 double expected = k.OnAdapter ? ActionSurfaceSettings.Reference.Get(k.Name)
                     : k.OnSplit ? SplitSettings.Reference.Get(k.Name)
+                    : k.OnFire ? OneFireSettings.Reference.Get(k.Name)
                     : k.OnPlayer ? PlayerCapabilities.Reference.Get(k.Name)
                     : k.OnKeeper ? KeeperCapabilities.Reference.Get(k.Name) : SpikeScenario.Config().Get(k.Name);
                 Assert.Equal(expected, reference.Get(k.Name));
