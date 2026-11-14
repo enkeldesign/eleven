@@ -2,6 +2,8 @@
 
 The goal (#68, part 1 of #30): its geometry, how its frame returns the ball, and when a ball is a goal. The keeper is #69. The goal's sizes are Law 1's. The frame's restitution is a technical reference for the test bench, not approved feel.
 
+**Two goals.** In a match there is a goal at each end (#82): the −x goal is this one turned half a turn about the centre spot, and everything below holds at both. See [sides.md](sides.md).
+
 ## The research starting answer
 
 #30's research, from IFAB [Law 1](https://www.theifab.com/laws/latest/the-field-of-play/) and [Law 10](https://www.thefa.com/football-rules-governance/lawsandrules/laws/football-11-11/law-10---determining-the-outcome-of-the-match):
