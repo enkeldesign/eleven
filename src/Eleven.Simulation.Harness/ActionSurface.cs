@@ -213,6 +213,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>A gesture on Candidate B's KICK (#76): a flick or hold → flick.</summary>
         Kick,
+
+        /// <summary>A gesture on Candidate C's fire control (#77): a tap or a hold.</summary>
+        Fire,
     }
 
     /// <summary>What a gesture on the ACTION surface became.</summary>
@@ -231,6 +234,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>The assisted quick pass, from Candidate B's PASS (#76).</summary>
         Pass,
+
+        /// <summary>A manual kick along the footballer's heading, charged by the hold: Candidate C's (#77).</summary>
+        HoldKick,
     }
 
     /// <summary>A gesture's command as it was delivered, for the HUD and the trace. Not part of any command.</summary>

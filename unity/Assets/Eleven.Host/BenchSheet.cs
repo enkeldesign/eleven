@@ -27,8 +27,8 @@ namespace Eleven.Host
         // The Pitch view (#72): attacking up, and a second half's switched ends.
         private static readonly string[] Views = { "0°", "180°" };
 
-        // The touch candidates (#28, #76), in ControlCandidate's order.
-        private static readonly string[] Controls = { "A · Action", "B · Pass + Kick" };
+        // The touch candidates (#28, #76, #77), in ControlCandidate's order.
+        private static readonly string[] Controls = { "A · Action", "B · Pass + Kick", "C · One fire" };
 
         private static readonly string[] Groups =
         {
@@ -264,11 +264,13 @@ namespace Eleven.Host
             if (_trace) Log($"ELEVEN bench group name={Groups[index]}");
         }
 
-        // The Touch tab holds both candidates' knobs, A's then B's, under the A / B choice (#76).
+        // The Touch tab holds every candidate's knobs, A's, B's then C's, under the A / B / C choice
+        // (#76, #77).
         private bool TouchShown => Groups[_group] == ActionSurfaceSettings.Group;
 
         private static bool InGroup(BenchKnob knob, int group) =>
-            knob.Group == Groups[group] || (Groups[group] == ActionSurfaceSettings.Group && knob.Group == SplitSettings.Group);
+            knob.Group == Groups[group]
+            || (Groups[group] == ActionSurfaceSettings.Group && (knob.Group == SplitSettings.Group || knob.Group == OneFireSettings.Group));
 
         private void Changed(BenchKnob knob, double value)
         {
@@ -392,7 +394,7 @@ namespace Eleven.Host
                 _reportControls = false;
                 if (TouchShown)
                 {
-                    Log($"ELEVEN bench candidates A={P(_controls.Segments[0].Element)};B={P(_controls.Segments[1].Element)}");
+                    Log($"ELEVEN bench candidates A={P(_controls.Segments[0].Element)};B={P(_controls.Segments[1].Element)};C={P(_controls.Segments[2].Element)}");
                 }
 
                 foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
