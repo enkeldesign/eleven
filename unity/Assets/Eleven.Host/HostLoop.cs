@@ -102,11 +102,13 @@ namespace Eleven.Host
             int aheadAt = url.IndexOf("ahead=", StringComparison.Ordinal);
             if (aheadAt >= 0) float.TryParse(url.Substring(aheadAt + 6).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ahead);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40));
-            _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split);
-            // ?controls=split: start on Candidate B (#76), before the first step. A link for a device
-            // comparison, and the route to B where the bench's Touch tab has no room (a landscape
-            // phone, until #31).
-            if (url.Contains("controls=split")) _input.Switch(ControlCandidate.Split);
+            _input = new TouchAdapter(SpikeScenario.ControllerId, _bench.ActionSurface, _bench.Split, _bench.Fire);
+            // ?controls=split or ?controls=one-fire: start on Candidate B (#76) or C (#77), before
+            // the first step. A link for a device comparison, and the route to a candidate where
+            // the bench's Touch tab has no room (a landscape phone, until #31).
+            int controlsAt = url.IndexOf("controls=", StringComparison.Ordinal);
+            ControlCandidate? asked = controlsAt >= 0 ? TouchCandidates.Named(url.Substring(controlsAt + 9).Split('&', '#')[0]) : null;
+            if (asked.HasValue) _input.Switch(asked.Value);
             _view.Orient(_orientation);
             _input.Orient(_orientation);
             _input.Delivered += GestureDelivered;
@@ -358,7 +360,7 @@ namespace Eleven.Host
             _bench = candidate;
             _config = candidate.Config;
             _view.Use(_config);
-            _input.Use(candidate.ActionSurface, candidate.Split);
+            _input.Use(candidate.ActionSurface, candidate.Split, candidate.Fire);
             ResetMatch();
             _accumulator = 0;
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
@@ -416,7 +418,7 @@ namespace Eleven.Host
         }
 
         /// <summary>
-        /// The bench's touch controls (#28, #76): Candidate A or B, at once. Only the touch adapter
+        /// The bench's touch controls (#28, #76, #77): Candidate A, B or C, at once. Only the touch adapter
         /// changes, between frames: no step and no command, the config, the state and possession
         /// untouched. A gesture in progress is cancelled, and fingers already down are ignored until
         /// they lift. The tick and the state hash are logged either side.
@@ -429,8 +431,8 @@ namespace Eleven.Host
             _input.Switch(to);
             Log(FormattableString.Invariant(
                 $"ELEVEN controls switched to={_input.Name} tick={tick} before={before:x16} after={_simulator.StateHash():x16} steps={_simulator.Tick - tick} config={_config.Hash:x16}"));
-            _hud?.ShowStatus(to == ControlCandidate.Split
-                ? "Controls B: PASS and KICK. The run goes on."
+            _hud?.ShowStatus(to == ControlCandidate.Split ? "Controls B: PASS and KICK. The run goes on."
+                : to == ControlCandidate.OneFire ? "Controls C: one FIRE. Tap to pass, hold to kick. The run goes on."
                 : "Controls A: one ACTION surface. The run goes on.");
         }
 
@@ -608,11 +610,11 @@ namespace Eleven.Host
                 return;
             }
 
-            // ACTION (#28): the whole right-hand area takes the gestures; the disc marks where the
-            // thumb rests and says what the surface is doing.
+            // ACTION (#28) or C's FIRE (#77): the whole right-hand area takes the gestures; the disc
+            // marks where the thumb rests and says what the surface is doing.
             bool active = _input.ActionHeld || _input.Shaping;
             Disc(_layout.KickCentre, _layout.KickRadius, active ? HostPalette.ControlActive : HostPalette.ControlIdle);
-            string label = kicking ?? (recent ? _lastGesture : "ACTION");
+            string label = kicking ?? (recent ? _lastGesture : _input.Active == ControlCandidate.OneFire ? "FIRE" : "ACTION");
             GUI.Label(Square(_layout.KickCentre, _layout.KickRadius), label, _buttonStyle);
         }
 
