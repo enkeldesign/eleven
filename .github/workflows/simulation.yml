@@ -213,6 +213,19 @@ jobs:
           path: challenge-bench/
           if-no-files-found: error
 
+      # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86).
+      - name: Play the match trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll matches match-trials | tee matches.txt
+          echo "::notice title=Match trials::$(sed 's| -> .*||' matches.txt)"
+
+      - name: Publish the match trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-trials
+          path: match-trials/
+          if-no-files-found: error
+
       # CPU-against-CPU matches with the referee on: restarts, dead-ball time, stalls (#85).
       - name: Run the restart trials
         run: |

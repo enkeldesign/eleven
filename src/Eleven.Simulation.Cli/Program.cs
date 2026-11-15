@@ -25,6 +25,7 @@ using Eleven.Simulation.Harness;
 /// eleven-sim cpu &lt;dir&gt;         CPU against CPU in the 1v1 world (#83): how each tier's trials end, kicks, recoveries, idle stretches
 /// eleven-sim challenge &lt;dir&gt;   the standing challenge (#84): approach angles, dribbler speeds and tackling profiles
 /// eleven-sim restarts &lt;dir&gt;    CPU-against-CPU matches with the referee on (#85): restarts by kind, dead-ball time, stalls
+/// eleven-sim matches &lt;dir&gt;     whole CPU-against-CPU matches (#86): scores, goals by half, length, stuck matches
 /// eleven-sim sides             the same shots at the +x goal and at the −x goal (#82): goals, frame hits and saves by end
 /// eleven-sim capture &lt;file&gt; [seconds]
 ///                              capture the last 10 s of the scripted spike session at `seconds` (default 20),
@@ -123,6 +124,22 @@ internal static class Program
                 return 0;
             }
 
+            case "matches" when args.Length >= 2:
+            {
+                // Whole CPU-against-CPU matches (#86).
+                SimConfig matchConfig = SpikeScenario.Config();
+                List<MatchTrial> played = MatchTrials.Run(matchConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "match-trials.csv")))
+                {
+                    MatchTrials.WriteCsv(csv, matchConfig, played);
+                }
+
+                File.WriteAllText(Path.Combine(args[1], "first-result.txt"), played[0].Result);
+                Console.WriteLine($"config {matchConfig.Hash:x16}, {MatchTrials.KeyNumbers(played)} -> {args[1]}");
+                return 0;
+            }
+
             case "sides":
                 // The two ends compared (#82): the same shots at +x and at −x.
                 foreach (SideCount count in SideParity.Measure(SpikeScenario.Config())) Console.WriteLine(count);
@@ -130,7 +147,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir>");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir>");
                 return 2;
         }
     }

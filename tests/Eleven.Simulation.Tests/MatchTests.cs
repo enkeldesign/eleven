@@ -172,6 +172,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_dozen_cpu_matches_at_the_reference_halves_all_finish_and_match_their_reference()
+        {
+            SimConfig reference = SpikeScenario.Config();
+            List<MatchTrial> trials = MatchTrials.Run(reference);
+            Assert.All(trials, t => Assert.True(t.Finished, $"{t.Seed:x} didn't finish"));
+            Assert.All(trials, t => Assert.Equal(t.HomeGoals + t.AwayGoals, t.FirstHalfGoals + t.SecondHalfGoals));
+            Assert.All(trials, t => Assert.InRange(t.LengthSeconds, 2 * reference.HalfLength + reference.HalfTimeBreak, 3 * 2 * reference.HalfLength));
+            Assert.True(trials.Sum(t => t.FirstHalfGoals) > 0 && trials.Sum(t => t.SecondHalfGoals) > 0);
+
+            var csv = new System.IO.StringWriter();
+            MatchTrials.WriteCsv(csv, reference, trials);
+            string path = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "match-trials-reference.csv");
+            Assert.Equal(System.IO.File.ReadAllText(path), csv.ToString());
+        }
+
+        [Fact]
         public void A_bad_match_state_is_refused_and_practice_has_no_clock()
         {
             SimState With(Action<SimState> change)
