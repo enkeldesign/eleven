@@ -602,18 +602,31 @@ namespace Eleven.Simulation
                 ball.Velocity = Vec3.Zero;
             }
 
+            // The ball's height decides what the kick is (#94): on the ground a kick, up to volley
+            // height a volley, in the head's band a header. Between the bands, and above them, the
+            // body can't play it.
             Vec2 offset = ball.Position.Horizontal - player.Position;
-            if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
+            double z = ball.Position.Z;
+            bool header = z >= Config.HeaderMinHeight && z <= Config.HeaderMaxHeight;
+            bool volley = !header && z > Config.KickMaxBallHeight && z <= Config.VolleyMaxHeight;
+            double reach = header ? Config.HeaderReach : Config.KickReach;
+            if (ball.HeldBy != 0 || (z > Config.KickMaxBallHeight && !header && !volley) || offset.LengthSquared > reach * reach)
             {
                 events.Add(new SimEvent(tick, SimEventKind.KickMissed, player.Id));
                 return;
             }
 
-            // The intended line plus the kicker's own bounded execution error: never retargeted.
+            // The intended line plus the kicker's own bounded execution error: never retargeted. A
+            // volley errs more the faster the ball comes; a header by the player's heading.
+            double incoming = SimMath.Sqrt(ball.Velocity.LengthSquared);
+            double bound = header ? player.Capabilities.KickError + Config.HeaderError * (1 - player.Capabilities.Heading)
+                : volley ? player.Capabilities.KickError + Config.VolleyError * incoming
+                : player.Capabilities.KickError;
             var draws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, player.Id);
-            double direction = line + (2 * draws.NextUniform() - 1) * player.Capabilities.KickError;
-            double speed = RestartSpeed(player, strength, strength * player.Capabilities.KickPower * Config.KickSpeed);
-            double elevation = loft * Config.KickLoft;
+            double direction = line + (2 * draws.NextUniform() - 1) * bound;
+            double speed = header ? strength * Config.HeaderSpeed * (0.6 + 0.4 * player.Capabilities.Heading) * Config.KickSpeed
+                : RestartSpeed(player, strength, strength * player.Capabilities.KickPower * Config.KickSpeed);
+            double elevation = (header ? 0.5 : 1) * loft * Config.KickLoft;
             double horizontal = speed * SimMath.Cos(elevation);
             ball.Velocity = new Vec3(horizontal * SimMath.Cos(direction), horizontal * SimMath.Sin(direction), speed * SimMath.Sin(elevation));
             ball.Spin = Vec3.Zero;
@@ -626,6 +639,8 @@ namespace Eleven.Simulation
             _kickConnected = true;
             _state.Ball.LastPlayedBy = player.Id;
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
+            if (header) events.Add(new SimEvent(tick, SimEventKind.Headed, player.Id));
+            else if (volley) events.Add(new SimEvent(tick, SimEventKind.Volleyed, player.Id));
             TakeRestart(player, tick, events);
         }
 
