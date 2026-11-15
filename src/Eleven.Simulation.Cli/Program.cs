@@ -142,6 +142,38 @@ internal static class Program
                 return 0;
             }
 
+            case "squads" when args.Length >= 2:
+            {
+                // N-a-side CPU-against-CPU matches (#92): eleven-sim squads <dir> [perSide] [count] [seat].
+                // With `seat`, home's first outfielder is a human seat that switches (#95).
+                SimConfig squadConfig = SpikeScenario.Config();
+                int perSide = args.Length >= 3 && int.TryParse(args[2], out int n) && n > 0 ? n : 2;
+                int seeds = args.Length >= 4 && int.TryParse(args[3], out int k) && k > 0 ? k : SquadTrials.Seeds;
+                bool seat = args.Length >= 5 && args[4] == "seat";
+                List<SquadTrial> squads = SquadTrials.Run(squadConfig, perSide, seeds, seat);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], $"squad-{perSide}v{perSide}{(seat ? "-seat" : "")}-trials.csv")))
+                {
+                    SquadTrials.WriteCsv(csv, squadConfig, squads);
+                }
+
+                Console.WriteLine($"config {squadConfig.Hash:x16}, {SquadTrials.KeyNumbers(squads, perSide)} -> {args[1]}");
+                return 0;
+            }
+
+            case "air" when args.Length >= 2:
+            {
+                // Headers and volleys (#94): contact by height, incoming speed and heading, and in CPU matches.
+                SimConfig airConfig = SpikeScenario.Config();
+                List<AirCurve> air = AirCurves.Characterise(airConfig, PlayerCapabilities.Reference);
+                List<AirTrial> inPlay = AirTrials.Run(airConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "air-curves.csv"))) AirCurves.WriteCsv(csv, airConfig, air);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "air-trials.csv"))) AirTrials.WriteCsv(csv, airConfig, inPlay);
+                Console.WriteLine($"config {airConfig.Hash:x16}, {AirCurves.KeyNumbers(air)}; {AirTrials.KeyNumbers(inPlay)} -> {args[1]}");
+                return 0;
+            }
+
             case "sides":
                 // The two ends compared (#82): the same shots at +x and at −x.
                 foreach (SideCount count in SideParity.Measure(SpikeScenario.Config())) Console.WriteLine(count);
@@ -149,7 +181,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir>");
                 return 2;
         }
     }

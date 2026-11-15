@@ -17,7 +17,7 @@ A plan moves no one. Only the stick, the kick and the quick pass do, and they ar
 
 | In the observation | Notes |
 | --- | --- |
-| His own body: position, velocity, heading, top speed, whether he is kicking | Exact. |
+| His own body: position, velocity, heading, top speed, whether he is kicking, his reaction delay | Exact. The reaction delay since #94, so he can time a ball in the air. |
 | The ball: position, velocity, spin, and whether a keeper holds it (his side's or theirs) | The position is where he places it. |
 | The other footballers within his sight: position, velocity, teammate or not, keeper or not | Positions are where he places them. Those beyond his `visionRange` are not there at all. |
 | Whether there is a goal at each end | So his reading of the ball's path includes both frames. |
@@ -64,6 +64,7 @@ In his own frame, attacking +x. Each decision takes the first that applies.
 | Mode | When | What he does |
 | --- | --- | --- |
 | `Recover` | A keeper holds the ball. | Theirs: drops to 12 m inside his own half. His side's: shows 8 m up the pitch, to one side. Eases in and stands. |
+| `Shoot`, `Carry` (in the air) | His kick would meet a ball in the volley or header band within reach (#94, [air.md](air.md)), and no teammate is nearer where it comes down. | A header or volley: at goal from within 22 m, up the pitch otherwise. |
 | `Shoot` | The ball is his, within 16 m of the goal, and he can kick. | A full kick at the spot 0.7 m inside the post further from their keeper. |
 | `Carry` | The ball is his. | Runs at the goal. An opponent within 6 m ahead: he goes round, on the side the opponent isn't. |
 | `SeekBall`, `Approach` | He meets the ball no later than the nearest opponent would, or it is within 4 m. | Runs to where he first meets the ball on its read path. `SeekBall` when that is over 1 s off. |

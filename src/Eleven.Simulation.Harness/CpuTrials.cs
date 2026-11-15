@@ -32,7 +32,7 @@ namespace Eleven.Simulation.Harness
         public double LongestIdleSeconds;
 
         /// <summary>Decisions made, by mode: none, seek, approach, carry, shoot, defend, recover.</summary>
-        public int[] Modes = new int[7];
+        public int[] Modes = new int[8];
 
         /// <summary>The run's last state hash.</summary>
         public ulong FinalHash;

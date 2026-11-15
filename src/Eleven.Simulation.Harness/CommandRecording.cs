@@ -23,11 +23,11 @@ namespace Eleven.Simulation.Harness
     /// aftertouch (#37); version 3 added the quick pass (#38); version 4 added a keeper's dive (#69):
     /// a bool, and if set its target x, y and z. Version 5 added a CPU outfielder's plan (#83): a
     /// bool, and if set its mode (int32), its move x and y, whether it has a kick and that kick as
-    /// above, and its quick pass (bool).
+    /// above, and its quick pass (bool). Version 6 added a switch's target (#93): an int32, 0 for none.
     /// </summary>
     public sealed class CommandRecording
     {
-        public const int FormatVersion = 5;
+        public const int FormatVersion = 6;
         private static readonly byte[] Magic = { (byte)'E', (byte)'L', (byte)'R', (byte)'C' };
 
         private readonly List<Command[]> _steps = new List<Command[]>();
@@ -131,6 +131,8 @@ namespace Eleven.Simulation.Harness
 
                         w.WriteBool(plan.QuickPass);
                     }
+
+                    w.WriteInt32(c.SwitchTo);
                 }
             }
 
@@ -189,7 +191,7 @@ namespace Eleven.Simulation.Harness
                         plan = new CpuPlan(mode, planMove, planKick, r.ReadBool());
                     }
 
-                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive, plan);
+                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive, plan, r.ReadInt32());
                 }
 
                 recording._steps.Add(step);

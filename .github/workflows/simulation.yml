@@ -200,6 +200,19 @@ jobs:
           path: push-curves/
           if-no-files-found: error
 
+      # Headers and volleys (#94): contact by height, incoming speed and heading, and in CPU matches.
+      - name: Characterise headers and volleys
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll air air-curves | tee air.txt
+          echo "::notice title=Air contact::$(sed 's| -> .*||' air.txt)"
+
+      - name: Publish air curves
+        uses: actions/upload-artifact@v4
+        with:
+          name: air-curves
+          path: air-curves/
+          if-no-files-found: error
+
       # The standing challenge (#84): approach angles, dribbler speeds, tackling.
       - name: Characterise the standing challenge
         run: |
@@ -211,6 +224,33 @@ jobs:
         with:
           name: challenge-bench
           path: challenge-bench/
+          if-no-files-found: error
+
+      # 2v2 CPU-against-CPU matches: passes, possessions, spacing and bunching (#92).
+      - name: Play the 2v2 trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-trials 2 | tee squads.txt
+          echo "::notice title=2v2 trials::$(sed 's| -> .*||' squads.txt)"
+
+      - name: Publish the 2v2 trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: squad-trials
+          path: squad-trials/
+          if-no-files-found: error
+
+      # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
+      - name: Evaluate 2v2 over fifty matches
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-evaluation 2 50 | tee squad-eval.txt
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-evaluation 2 50 seat | tee -a squad-eval.txt
+          echo "::notice title=2v2 evaluation::$(sed 's| -> .*||' squad-eval.txt | tr '\n' ' ')"
+
+      - name: Publish the 2v2 evaluation
+        uses: actions/upload-artifact@v4
+        with:
+          name: squad-evaluation
+          path: squad-evaluation/
           if-no-files-found: error
 
       # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86), fifty of

@@ -26,9 +26,16 @@ namespace Eleven.Host
         private bool _match;
         private bool _matchPaused;
         private MatchRecorder _recorder;
-        private Vector2 _previousOpponent;
-        private Vector2 _previousOpponentKeeper;
         private int _lastClockSecond = -1;
+
+        // Outfielders a side (#95): 1 for the 1v1 match, 2 for 2v2.
+        private int _perSide = 1;
+
+        // Who the human controls in a 2v2 match (#93): automatic at the ball's changes of hands, and
+        // SWITCH's own request, which the next step's command carries.
+        private SwitchController _switcher;
+        private bool _switchRequested;
+        private int _switches;
 
         /// <summary>Whether a match is being played rather than practice.</summary>
         public bool InMatch => _match;
@@ -51,15 +58,25 @@ namespace Eleven.Host
         // The bench's values, with the half's length asked for in the address.
         private SimConfig MatchConfig() => _halfLength > 0 ? _bench.Config.With("halfLength", _halfLength) : _bench.Config;
 
-        /// <summary>Starts a match at its kick-off, or a new one: the bench's values, the human's footballer.</summary>
-        private void StartMatch(string via)
+        /// <summary>
+        /// Starts a match at its kick-off, or a new one: the bench's values, the human's footballer,
+        /// <paramref name="perSide"/> outfielders a side (#95). At one a side it is M1's 1v1 match.
+        /// </summary>
+        private void StartMatch(string via, int perSide)
         {
             _match = true;
             _matchPaused = false;
+            _perSide = Math.Max(1, Math.Min(2, perSide));
             _config = MatchConfig();
             _view.Use(_config);
-            _view.ShowMatch(true);
-            _simulator = new Simulator(_config, OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill));
+            _view.ShowMatch(true, _perSide);
+            _simulator = new Simulator(_config, _perSide == 1
+                ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
+                : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities));
+            _switcher = new SwitchController(OneVOne.HomeController);
+            _switchRequested = false;
+            _switches = 0;
+            _hud?.ShowSwitch(_perSide > 1);
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             _recorder = new MatchRecorder();
@@ -71,8 +88,8 @@ namespace Eleven.Host
             UpdateMatchPanel();
             UpdateLayout(force: false);
             _hud?.SetMatchActions(true, false);
-            _hud?.ShowStatus("1v1 match: kick-off. Attacking up.");
-            Log(FormattableString.Invariant($"ELEVEN match started via={via} seed={_matchSeed} half={_config.HalfLength:F0}s tier={TierName(_opponentSkill)} config={_config.Hash:x16} start={_simulator.StateHash():x16}"));
+            _hud?.ShowStatus($"{_perSide}v{_perSide} match: kick-off. Attacking up.");
+            Log(FormattableString.Invariant($"ELEVEN match started via={via} seed={_matchSeed} half={_config.HalfLength:F0}s tier={TierName(_opponentSkill)} config={_config.Hash:x16} start={_simulator.StateHash():x16} side={_perSide}"));
         }
 
         /// <summary>Back to practice: the bench's values from the standard practice start.</summary>
@@ -84,6 +101,8 @@ namespace Eleven.Host
             _config = _bench.Config;
             _view.Use(_config);
             _view.ShowMatch(false);
+            _perSide = 1;
+            _hud?.ShowSwitch(false);
             _resultLines = 0;
             _hud?.HideMatch();
             _hud?.SetMatchActions(false, false);
@@ -93,11 +112,67 @@ namespace Eleven.Host
             Log("ELEVEN match ended to=practice");
         }
 
-        /// <summary>The bench's play switch (#87): 0 practice, 1 a 1v1 match.</summary>
+        /// <summary>The bench's play switch (#87, #95): 0 practice, 1 a 1v1 match, 2 a 2v2 match.</summary>
         private void SwitchPlay(int index)
         {
-            if (index == 1 && !_match) StartMatch("bench");
-            else if (index == 0 && _match) EndMatch();
+            if (index == 0)
+            {
+                if (_match) EndMatch();
+                return;
+            }
+
+            if (!_match || _perSide != index) StartMatch("bench", index);
+        }
+
+        // The footballer the human's controller owns: in practice the only one; in a match
+        // whoever he has switched to (#93).
+        private int Controlled(SimState s)
+        {
+            if (!_match) return 0;
+            int i = Array.FindIndex(s.Players, p => p.OwnerControllerId == OneVOne.HomeController);
+            return i >= 0 ? i : 0;
+        }
+
+        private Vector2 Previous(int index, SimState s) =>
+            index < _previousAll.Length ? _previousAll[index] : ToVector(s.Players[index].Position);
+
+        // Everyone but the controlled footballer and his keeper, between their last two steps.
+        private readonly System.Collections.Generic.List<Vector2> _mates = new System.Collections.Generic.List<Vector2>();
+        private readonly System.Collections.Generic.List<Vector2> _opponents = new System.Collections.Generic.List<Vector2>();
+
+        private void RenderSides(SimState s, int me, float alpha)
+        {
+            _mates.Clear();
+            _opponents.Clear();
+            Vector2 theirKeeper = Vector2.zero;
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (i == me) continue;
+                PlayerState p = s.Players[i];
+                bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == p.Id) >= 0;
+                Vector2 at = Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
+                if (p.TeamId == OneVOne.HomeTeam)
+                {
+                    if (!keeper) _mates.Add(at);
+                }
+                else if (keeper) theirKeeper = at;
+                else _opponents.Add(at);
+            }
+
+            _view.RenderSides(_mates, _opponents, theirKeeper);
+        }
+
+        // The human's command for this step, with the switch the switcher decides on the last
+        // step's events and SWITCH's request (#93): recorded with it, so a replay needs no switcher.
+        private Command WithSwitch(Command c)
+        {
+            if (!_match || _perSide < 2 || _switcher == null) return c;
+            bool manual = _switchRequested;
+            _switchRequested = false;
+            int target = _switcher.Decide(_simulator, _events, manual);
+            if (manual) Log(FormattableString.Invariant($"ELEVEN match switch asked tick={_simulator.Tick} to={target}"));
+            if (target == 0) return c;
+            return new Command(c.ControllerId, c.Tick, c.Move, c.Kick, c.Aftertouch, c.QuickPass, c.Dive, c.Plan, target);
         }
 
         private void TogglePause()
@@ -141,6 +216,12 @@ namespace Eleven.Host
                         OrientForSide();
                         _hud?.ShowStatus("Second half: ends changed. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match secondhalf tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
+                        break;
+                    case SimEventKind.Switched:
+                        // A gesture under way was for the footballer he left (#93).
+                        _input.Clear();
+                        _switches++;
+                        Log(FormattableString.Invariant($"ELEVEN match switched to={e.Subject} from={e.Other} count={_switches} tick={s.Tick}"));
                         break;
                     case SimEventKind.FullTime:
                         _hud?.ShowStatus($"Full time {Score(s)}");
