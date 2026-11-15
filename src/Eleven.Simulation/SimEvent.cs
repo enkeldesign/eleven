@@ -117,6 +117,12 @@ namespace Eleven.Simulation
 
         /// <summary>A controller took over a teammate (#93). Subject: the footballer taken over. <see cref="SimEvent.Other"/>: the one left to the CPU.</summary>
         Switched = 28,
+
+        /// <summary>A kick that connected was a header (#94). With <see cref="Kicked"/>.</summary>
+        Headed = 29,
+
+        /// <summary>A kick that connected was a volley (#94). With <see cref="Kicked"/>.</summary>
+        Volleyed = 30,
     }
 
     /// <summary>

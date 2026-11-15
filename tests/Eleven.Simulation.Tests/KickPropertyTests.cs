@@ -390,7 +390,12 @@ namespace Eleven.Simulation.Tests
                 Vec2 v = o.After.Ball.Velocity.Horizontal;
                 if (v.LengthSquared == 0) continue;
                 double off = Math.Abs(Wrap(Math.Atan2(v.Y, v.X) - kicker.AftertouchDirection));
-                if (off > kicker.Capabilities.KickError + 1e-12) return $"player {kicker.Id}: launched {off} rad off the line, error {kicker.Capabilities.KickError}";
+
+                // A header and a volley add their own bounded error (#94).
+                double bound = kicker.Capabilities.KickError;
+                if (o.Events.Any(f => f.Kind == SimEventKind.Headed && f.Subject == e.Subject)) bound += config.HeaderError * (1 - kicker.Capabilities.Heading);
+                if (o.Events.Any(f => f.Kind == SimEventKind.Volleyed && f.Subject == e.Subject)) bound += config.VolleyError * Math.Sqrt(o.Before.Ball.Velocity.LengthSquared);
+                if (off > bound + 1e-9) return $"player {kicker.Id}: launched {off} rad off the line, error {bound}";
             }
 
             return null;
