@@ -112,9 +112,10 @@ namespace Eleven.Simulation
             CheckGoalLine(tick, start, events);
 
             // Out of play, goals and restarts (#85), on where the ball ended the step, then the
-            // match's clock and halves (#86).
+            // match's clock and halves (#86), then who controls whom (#93).
             StepRestart(tick, events);
             StepMatch(tick, events);
+            StepSwitches(tick, events);
 
             _state.Tick = tick + 1;
         }
@@ -183,6 +184,7 @@ namespace Eleven.Simulation
             foreach (PlayerState player in _state.Players)
             {
                 if (player.OwnerControllerId != c.ControllerId) continue;
+                if (c.SwitchTo != 0 && !MaySwitch(player, c.SwitchTo)) return CommandRejection.SwitchRefused;
                 if (!c.Plan.HasValue) return CommandRejection.None;
 
                 // A plan (#83) only from a CPU outfielder's controller, and only when he may decide.
@@ -268,7 +270,7 @@ namespace Eleven.Simulation
                 plan = new CpuPlan(p.Mode, AtMostUnit(p.Move), planned, p.QuickPass);
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan);
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)

@@ -63,8 +63,18 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly CpuPlan? Plan;
 
-        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null, CpuPlan? plan = null)
+        /// <summary>
+        /// Player switching (#93): the id of a teammate this controller takes over at the end of
+        /// the step, or 0. The footballer it leaves is played by his side's CPU. Refused, as
+        /// <see cref="CommandRejection.SwitchRefused"/>, unless the target is a teammate of the
+        /// controller's footballer, not a keeper, and played by the CPU.
+        /// </summary>
+        public readonly int SwitchTo;
+
+        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null, CpuPlan? plan = null,
+            int switchTo = 0)
         {
+            SwitchTo = switchTo;
             Plan = plan;
             ControllerId = controllerId;
             Tick = tick;
@@ -120,5 +130,8 @@ namespace Eleven.Simulation
 
         /// <summary>The command carried a CPU plan (#83) from a controller with no CPU outfielder, or before he may decide again.</summary>
         PlanRefused = 6,
+
+        /// <summary>A switch (#93) to a footballer who isn't a CPU-played outfielder of the controller's side.</summary>
+        SwitchRefused = 7,
     }
 }
