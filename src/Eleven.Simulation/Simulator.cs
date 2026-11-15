@@ -72,6 +72,8 @@ namespace Eleven.Simulation
             long tick = _state.Tick;
             _kickConnected = false;
             _challengeWon = false;
+            _crossedEnd = 0;
+            _crossedMouth = false;
             ResolveCommands(tick, commands, events);
             StepCpus(tick);
 
@@ -108,6 +110,9 @@ namespace Eleven.Simulation
             Vec3 start = _state.Ball.Position;
             StepBall(tick, dt, start, events);
             CheckGoalLine(tick, start, events);
+
+            // Out of play, goals and restarts (#85), on where the ball ended the step.
+            StepRestart(tick, events);
 
             _state.Tick = tick + 1;
         }
@@ -306,6 +311,13 @@ namespace Eleven.Simulation
             // diving he flies at his dive's velocity; recovering he is on the ground.
             // In a challenge (#84) he keeps his line through the commit, and brakes through the recovery.
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
+            if (Held(player))
+            {
+                // Set up for a restart (#85): only its taker moves.
+                player.Velocity = Vec2.Zero;
+                return;
+            }
+
             if (player.Challenge == ChallengePhase.Commit) move = player.ChallengeLine;
             else if (player.Challenge == ChallengePhase.Recover) move = Vec2.Zero;
             KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
@@ -383,7 +395,7 @@ namespace Eleven.Simulation
             ref PlayerState player = ref _state.Players[index];
 
             // A footballer in a challenge (#84) starts no kick; one already winding up carries on.
-            bool ready = player.WindUpTicks == 0 && player.KickCooldown == 0 && player.Challenge == ChallengePhase.Ready;
+            bool ready = player.WindUpTicks == 0 && player.KickCooldown == 0 && player.Challenge == ChallengePhase.Ready && MayKick(player);
             if (command.HasValue && ready && command.Value.Kick.HasValue)
             {
                 // A manual kick, which also wins over a quick pass in the same command.
@@ -578,6 +590,14 @@ namespace Eleven.Simulation
             player.WindUpDirection = player.WindUpStrength = player.WindUpLoft = 0;
             player.WindUpTarget = 0;
 
+            // A keeper kicks the ball he holds out of his hands (#85): it drops at his feet, along his line.
+            if (ball.HeldBy == player.Id)
+            {
+                ball.HeldBy = 0;
+                ball.Position = new Vec3(player.Position.X + 0.3 * SimMath.Cos(line), player.Position.Y + 0.3 * SimMath.Sin(line), Config.BallRadius);
+                ball.Velocity = Vec3.Zero;
+            }
+
             Vec2 offset = ball.Position.Horizontal - player.Position;
             if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight || offset.LengthSquared > Config.KickReach * Config.KickReach)
             {
@@ -588,7 +608,7 @@ namespace Eleven.Simulation
             // The intended line plus the kicker's own bounded execution error: never retargeted.
             var draws = new StreamDraws(_state.Seed, tick, RandomStream.KickDirection, player.Id);
             double direction = line + (2 * draws.NextUniform() - 1) * player.Capabilities.KickError;
-            double speed = strength * player.Capabilities.KickPower * Config.KickSpeed;
+            double speed = RestartSpeed(player, strength, strength * player.Capabilities.KickPower * Config.KickSpeed);
             double elevation = loft * Config.KickLoft;
             double horizontal = speed * SimMath.Cos(elevation);
             ball.Velocity = new Vec3(horizontal * SimMath.Cos(direction), horizontal * SimMath.Sin(direction), speed * SimMath.Sin(elevation));
@@ -602,6 +622,7 @@ namespace Eleven.Simulation
             _kickConnected = true;
             _state.Ball.LastPlayedBy = player.Id;
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
+            TakeRestart(player, tick, events);
         }
 
         // ---- Ball control in possession (#59, docs/simulation/dribble.md) ---------------------------
@@ -674,6 +695,7 @@ namespace Eleven.Simulation
 
         private void StepChallenges(long tick, List<SimEvent> events)
         {
+            if (!Live) return;
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 ref PlayerState player = ref _state.Players[i];
@@ -775,6 +797,13 @@ namespace Eleven.Simulation
 
         private void StepControl(long tick, List<SimEvent> events)
         {
+            // A dead ball is no one's to touch (#85).
+            if (!Live)
+            {
+                _state.Ball.AttachedTo = 0;
+                return;
+            }
+
             if (Config.ControlModel == ControlModel.Attached)
             {
                 StepAttached(tick, events);
@@ -1347,7 +1376,7 @@ namespace Eleven.Simulation
             // path relative to his, against his envelope where he started the step.
             double soonest = double.PositiveInfinity;
             int saver = -1;
-            for (int k = 0; k < _state.Keepers.Length; k++)
+            for (int k = 0; k < _state.Keepers.Length && Live; k++)
             {
                 Vec2 moved = Body(k).Position - _keeperFrom[k];
                 Envelope(k, _keeperFrom[k], out Vec3 feet, out Vec3 top, out double reach);
@@ -1453,6 +1482,7 @@ namespace Eleven.Simulation
             {
                 ref KeeperState keeper = ref _state.Keepers[k];
                 ref PlayerState body = ref _state.Players[IndexOfPlayer(keeper.PlayerId)];
+                keeper.HoldTicks = _state.Ball.HeldBy == keeper.PlayerId ? keeper.HoldTicks + 1 : 0;
 
                 if (keeper.Phase != KeeperPhase.Position && --keeper.PhaseTicks == 0)
                 {
@@ -1619,6 +1649,7 @@ namespace Eleven.Simulation
         private void CheckGoalLine(long tick, Vec3 start, List<SimEvent> events)
         {
             ref BallState ball = ref _state.Ball;
+            if (!Live) return;
             double line = Config.GoalLineX;
             int goal = EndOf(start);
 
@@ -1641,8 +1672,13 @@ namespace Eleven.Simulation
 
             if (to - Config.BallRadius > line && (state == LineState.CrossingMouth || state == LineState.CrossingWide))
             {
+                // Straight from a throw-in, a ball through the mouth scores nothing (#85, Law 15): it is
+                // out of play over the goal line.
+                if (state == LineState.CrossingMouth && _state.Restart.On && _state.Restart.FromThrow) state = LineState.CrossingWide;
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
                 if (state == LineState.CrossingMouth) events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
+                _crossedEnd = goal;
+                _crossedMouth = state == LineState.CrossingMouth;
                 state = state == LineState.CrossingMouth ? LineState.Goal : LineState.Out;
             }
 

@@ -83,7 +83,8 @@ namespace Eleven.Simulation.AI
             // With the ball: shoot in range, otherwise carry it at the goal, round an opponent in the way.
             if (mine <= HasBall && mine <= theirs && seen.BallPosition.Z < 1)
             {
-                if (Length(theirGoal - ball) <= ShootRange && !seen.Kicking)
+                // Only with the ball within his kick's reach, or the kick misses (#85).
+                if (Length(theirGoal - ball) <= ShootRange && !seen.Kicking && mine <= config.KickReach)
                 {
                     // Inside the post further from their keeper; the nearer post to the ball if he sees none.
                     double side = theirKeeper.HasValue ? (theirKeeper.Value.Y > 0 ? -1 : 1) : (ball.Y >= 0 ? 1 : -1);
