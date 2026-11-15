@@ -71,10 +71,12 @@ In his own frame, attacking +x. Each decision takes the first that applies.
 
 - **"The ball is his"** means it is within 1.6 m, on the ground, and no opponent he sees is closer to it.
 - **He reads the ball's path** with `BallFlight.Predict`, the simulation's own flight, both goals' frames included (INV-13).
-- **He has no way to win the ball** but to get to it: the standing challenge is the next step (#84).
+- **He wins an opponent's ball by a standing challenge** (#84, [challenge.md](challenge.md)): on an opponent's ball within 4 m he runs at where it will be a commit's time on, and the challenge goes the way he runs.
 - **Technical constants,** in `OutfieldBrain`, not feel: the distances above, a 4 s reading horizon, a 5 m ease-in.
 
 ## Measured: CPU against CPU
+
+The table is from #83, before the standing challenge. Since #84 an opponent can't take the ball by being nearer, and the trials record challenges started and won: see [challenge.md](challenge.md).
 
 `eleven-sim cpu <dir>` plays 12 trials at each tier in the 1v1 world, both outfielders CPU footballers of that tier. The ball starts loose in the middle third, at a spot the seed picks. A trial ends at a goal, in a keeper's hands, with the ball out of play, or after 45 s. `docs/simulation/cpu-trials-reference.csv` is the record.
 

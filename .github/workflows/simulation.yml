@@ -200,6 +200,19 @@ jobs:
           path: push-curves/
           if-no-files-found: error
 
+      # The standing challenge (#84): approach angles, dribbler speeds, tackling.
+      - name: Characterise the standing challenge
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll challenge challenge-bench | tee challenge.txt
+          echo "::notice title=Challenge bench::$(sed 's| -> .*||' challenge.txt)"
+
+      - name: Publish the challenge bench
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenge-bench
+          path: challenge-bench/
+          if-no-files-found: error
+
       # CPU against CPU in the 1v1 world, every difficulty tier (#83), and the two ends compared (#82).
       - name: Run the CPU trials
         run: |
