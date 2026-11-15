@@ -377,6 +377,24 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_thrown_ball_another_player_kicks_in_on_the_step_it_crosses_is_a_goal()
+        {
+            // Home's throw, in play and untouched since, sits at the mouth; away kicks it in.
+            SimState s = Live(new Vec3(C.GoalLineX - 0.15, 0, R), Vec3.Zero, last: OneVOne.HomePlayer);
+            s.Restart.FromThrow = true;
+            s.Restart.TakerId = OneVOne.HomePlayer;
+            s.Players[2].Position = new Vec2(C.GoalLineX - 0.55, 0);
+            s.Players[2].Heading = 0;
+            s.Players[2].WindUpTicks = 1;
+            s.Players[2].WindUpDirection = 0;
+            s.Players[2].WindUpStrength = 1;
+            var sim = new Simulator(C, s);
+            List<SimEvent> events = Run(sim, 1);
+            Assert.Contains(events, e => e.Kind == SimEventKind.Kicked && e.Subject == OneVOne.AwayPlayer);
+            Assert.Contains(events, e => e.Kind == SimEventKind.Goal);
+        }
+
+        [Fact]
         public void The_restart_state_round_trips_mid_restart_and_a_bad_one_is_refused()
         {
             var sim = new Simulator(C, OneVOne.KickOff(C, seed: 3));
