@@ -43,3 +43,22 @@ Nothing here is approved feel, and none of it has been tried on a device.
 ## The milestone gate
 
 `eleven-sim matches <dir> 50` plays 50 CPU-against-CPU matches under the reference halves in CI. At this step all 50 finish: 344 goals (155 in the first half, 189 in the second), 18 home wins, 22 away, 10 draws, a mean length of 379 s.
+
+## The 2v2 match
+
+Issue #95, M2's exit. Two outfielders and a keeper a side ([squads.md](../simulation/squads.md)), the human switching between his two ([switching.md](../simulation/switching.md)), with headers and volleys ([air.md](../simulation/air.md)), under the same referee, clock and result.
+
+- **Starting it:** the Play switch's third segment, 2v2 match, or `?mode=match2`. NEW MATCH starts a fresh one of the same size.
+- **Six footballers are drawn.** His teammate wears his green, as in SWOS. The opponents' two outfielders are salmon and their keeper orchid; every footballer colour is a domain token, 3:1 or more on both grass shades.
+- **The controlled footballer is marked** by a white halo under him. The camera follows him.
+- **Switching is automatic** at the ball's changes of hands, to the teammate who reaches it first, and to a pass's receiver (#93).
+- **SWITCH** (at least 44 × 44 pt) asks for the teammate who reaches the ball first. Its switch holds until the next possession event. It sits in the right-hand area beside the action control: above the capture actions in portrait, left of THIS FELT WRONG in landscape. In a 1v1 match and in practice it has no place.
+- **At a switch,** a gesture under way is cancelled: it was for the footballer he left. The footballer he left goes back to his side's CPU.
+- **Each switch** is a field of his recorded command, so the match's recording replays with no switcher.
+
+**The smoke test.**
+- `match2-phone` (390 × 664) starts a 2v2 match through the bench and checks SWITCH's size. A press on it takes over the teammate. The match then plays to its result, with at least two switches on the way, and the recording replays.
+- `match2-phone-landscape` (750 × 342) starts from the address and checks SWITCH in landscape.
+- `match-phone` checks a 1v1 match shows no SWITCH.
+
+**The gate.** CI plays 50 2v2 matches CPU against CPU, and 50 with a human seat. The seat is a harness driver that runs at the ball and shoots, its switches decided as the host's are. See [squads.md](../simulation/squads.md).

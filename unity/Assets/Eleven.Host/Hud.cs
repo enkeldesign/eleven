@@ -63,7 +63,7 @@ namespace Eleven.Host
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
             Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
-            Func<int> benchPlay, Action<int> benchSwitchPlay)
+            Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer)
         {
             _ui = ui;
             _trace = trace;
@@ -117,6 +117,14 @@ namespace Eleven.Host
             SaveCapture = Action(ActionRole.Supporting, "Save capture", saveCapture, "Save\ncapture", (n, v) => n.SaveCapture = v, n => n.SaveCapture);
             SaveCapture.Element.style.visibility = Visibility.Hidden;
             SaveCapture.Element.focusable = false;
+
+            // SWITCH (#95): in a 2v2 match only, to take over the teammate who reaches the ball first.
+            Switch = Action(ActionRole.Supporting, "Switch", () =>
+            {
+                if (!ModalOpen) switchPlayer();
+            }, "Switch", (n, v) => n.Switch = v, n => n.Switch);
+            Switch.Element.style.display = DisplayStyle.None;
+            Switch.Element.focusable = false;
 
             _status = UiKit.MakeStatus(pitch);
             _status.Element.name = "Status";
@@ -251,6 +259,25 @@ namespace Eleven.Host
 
         public UiKit.Action FeltWrong { get; }
 
+        /// <summary>SWITCH (#95): shown in a 2v2 match.</summary>
+        public UiKit.Action Switch { get; }
+
+        private bool _switchShown;
+
+        /// <summary>Shows or hides SWITCH; the layout gives it a place only while it is shown.</summary>
+        public void ShowSwitch(bool shown)
+        {
+            if (_switchShown == shown) return;
+            _switchShown = shown;
+            Needs.ShowSwitch = shown;
+            Switch.Element.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
+            Switch.Element.focusable = shown && !ModalOpen;
+            _relayout();
+        }
+
+        // Whether an action takes focus when nothing covers the HUD: a hidden one doesn't.
+        private bool Focusable(UiKit.Action a) => a == SaveCapture ? _saveShown : a != Switch || _switchShown;
+
         public UiKit.Action SaveCapture { get; }
 
         /// <summary>Whether the note sheet is open: play waits, as it did under the browser's prompt (#44).</summary>
@@ -277,6 +304,7 @@ namespace Eleven.Host
             _ui.PlaceAuto(_result.Element, layout.Result.position, row);
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
+            if (layout.SwitchButton.width > 0) _ui.Place(Switch.Element, layout.SwitchButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
 
             // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe
@@ -432,7 +460,7 @@ namespace Eleven.Host
             _closedFrame = Time.frameCount;
             _note.Field.Blur();
             _scrim.style.display = DisplayStyle.None;
-            foreach (UiKit.Action a in _actions) a.Element.focusable = a != SaveCapture || _saveShown;
+            foreach (UiKit.Action a in _actions) a.Element.focusable = Focusable(a);
             Log("ELEVEN ui sheet closed");
             _noteDone(note);
         }
@@ -447,7 +475,7 @@ namespace Eleven.Host
 
         private void BenchClosed()
         {
-            foreach (UiKit.Action a in _actions) a.Element.focusable = a != SaveCapture || _saveShown;
+            foreach (UiKit.Action a in _actions) a.Element.focusable = Focusable(a);
         }
 
         // While the note sheet is open, it keeps within the safe area and the part of the canvas the
@@ -541,6 +569,9 @@ namespace Eleven.Host
         {
             action.Body.RegisterCallback<GeometryChangedEvent>(_ =>
             {
+                // A hidden action (SWITCH outside a 2v2 match) has no place to fit.
+                if (action.Element.resolvedStyle.display == DisplayStyle.None) return;
+
                 // What the text needs, not its laid-out size: layout squeezes a label to its parent,
                 // so an overflowing label never looks taller. Its width on one line, and its height
                 // at the width the body gives it.

@@ -22,6 +22,8 @@ namespace Eleven.Host
         // The match's opponents (#87), from the domain tokens: a salmon outfielder and an orchid keeper.
         public static readonly Color Opponent = Domain.Opponent.ToColor();
         public static readonly Color OpponentKeeper = Domain.OpponentKeeper.ToColor();
+        // The controlled footballer's marker in a 2v2 match (#95): a halo of the pitch lines' white under him.
+        public static readonly Color Marker = Domain.PitchLine.ToColor();
         // The match controls (#28's): the ACTION label and the discs. The UI around the match takes
         // its colours from the visual system's roles (#48, #53).
         public static readonly Color HudText = Color.white;

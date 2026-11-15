@@ -50,6 +50,25 @@ Since #94: headers and volleys, and the supporter's diagonal break. Before, 77 g
 
 Before the side rules, both teammates chased the ball, and stood bunched for up to 29 s at a time.
 
+## Fifty matches, and a human seat (#95)
+
+`eleven-sim squads <dir> 2 50` plays M2's gate: 50 2v2 matches CPU against CPU. `eleven-sim squads <dir> 2 50 seat` plays them with a **human seat** on home's first outfielder.
+- The seat is a harness driver, not an AI: it reads the state, as a test does. It runs at the ball, and within reach shoots at the goal its side attacks.
+- Its switches are `SwitchController`'s, as the host's are.
+- CI runs both and publishes `squad-evaluation`.
+
+| | CPU against CPU | With the seat |
+| --- | --- | --- |
+| Finished | 50 of 50 | 50 of 50 |
+| Goals, home – away | 181 – 194 | 19 – 123 |
+| Passes, completed | 187, 86 | 273, 62 |
+| Changes of side | 2300 | 2321 |
+| Switches | | 2111, none refused: 42 a match |
+| Longest bunched | 4.2 s | 9.3 s; over 6 s in 18 matches |
+
+- **The seat loses heavily.** It never defends, and it kicks at the goal from anywhere in reach. It is there to exercise switching, not to play well.
+- **Finding: a naive human crowds his CPU teammate.** The teammate reads the seat as he reads a CPU teammate, but the seat always chases the ball, so both go for it. A human who chases every ball will see the same.
+
 ## Tests
 
 `SquadTests`:

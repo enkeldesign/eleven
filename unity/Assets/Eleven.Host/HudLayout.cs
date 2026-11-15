@@ -18,6 +18,10 @@ namespace Eleven.Host
         public Vector2 SaveCapture;
         public Vector2 Result;
         public Vector2 Status;
+        public Vector2 Switch;
+
+        /// <summary>Whether SWITCH has a place (#95): only in a match with teammates to switch to.</summary>
+        public bool ShowSwitch;
 
         /// <summary>The least height of an action, in screen pixels (#31): 44 pt on this screen. 0 for none.</summary>
         public float Target;
@@ -80,6 +84,14 @@ namespace Eleven.Host
         /// it. Its place is kept while it is hidden, so nothing moves when a capture appears.
         /// </summary>
         public readonly Rect SaveCaptureButton;
+
+        /// <summary>
+        /// SWITCH (#95): in a 2v2 match, in the right-hand area beside the action control, as
+        /// Apple's game-controls guidance places a secondary action. Above the capture actions where
+        /// the play area is a band (portrait); beside THIS FELT WRONG where it is a column
+        /// (landscape). Empty, taking no room, when there is no one to switch to.
+        /// </summary>
+        public readonly Rect SwitchButton;
 
         /// <summary>The status line's place: centred at the top of the play area, over it. It takes no input.</summary>
         public readonly Rect StatusArea;
@@ -173,16 +185,31 @@ namespace Eleven.Host
             // above the capture actions; the column keeps left of them, so they stack there.
             float stickTop = StickRest.y - StickRadius;
             Rect bandSave = fitsRow ? saveBeside : saveAbove;
+
+            // SWITCH, when it is wanted: right-aligned above the capture actions over a band, or
+            // left of THIS FELT WRONG beside a column. As high as the capture actions.
+            float switchWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.Switch.x));
+            Rect switchBand = Rect.zero, switchColumn = Rect.zero;
+            if (needs.ShowSwitch)
+            {
+                float top = Mathf.Min(felt.y, bandSave.y);
+                switchBand = new Rect(safe.xMax - Padding - switchWidth, top - Padding * 0.5f - captureHeight, switchWidth, captureHeight);
+                switchColumn = new Rect(felt.x - Padding - switchWidth, felt.y, switchWidth, captureHeight);
+            }
+
             float controlsTop = Mathf.Min(Mathf.Min(KickCentre.y - KickRadius, stickTop), Mathf.Min(felt.y, bandSave.y)) - Padding;
+            if (needs.ShowSwitch) controlsTop = Mathf.Min(controlsTop, switchBand.y - Padding);
             var band = new Rect(safe.xMin, belowHud, safe.width, controlsTop - belowHud);
             float columnLeft = StickRest.x + StickRadius + Padding;
             float columnRight = Mathf.Min(KickCentre.x - KickRadius, Mathf.Min(felt.x, saveAbove.x)) - Padding;
+            if (needs.ShowSwitch) columnRight = Mathf.Min(columnRight, switchColumn.x - Padding);
             var column = new Rect(columnLeft, belowHud, columnRight - columnLeft, safe.yMax - belowHud);
             bool useBand = Area(band) >= Area(column);
             PlayArea = useBand ? band : column;
             if (PlayArea.width <= 0 || PlayArea.height <= 0) PlayArea = safe;
             FeltWrongButton = felt;
             SaveCaptureButton = useBand ? bandSave : saveAbove;
+            SwitchButton = useBand ? switchBand : switchColumn;
 
             // The floating stick may start anywhere in its zone, so the zone is kept out of the
             // play area: below the band, or left of the column. In the band it also starts below any
@@ -193,6 +220,7 @@ namespace Eleven.Host
                 float zoneRight = safe.xMin + safe.width * 0.5f;
                 if (FeltWrongButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, FeltWrongButton.yMax + Padding * 0.5f);
                 if (SaveCaptureButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SaveCaptureButton.yMax + Padding * 0.5f);
+                if (SwitchButton.width > 0 && SwitchButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SwitchButton.yMax + Padding * 0.5f);
                 StickZone = new Rect(safe.xMin, zoneTop, safe.width * 0.5f, safe.yMax - zoneTop);
                 ActionZone = new Rect(zoneRight, PlayArea.yMax, safe.xMax - zoneRight, safe.yMax - PlayArea.yMax);
             }
@@ -223,7 +251,7 @@ namespace Eleven.Host
                     Vector2 c = PassCentre + offset;
                     var box = new Rect(c.x - markerRadius, c.y - markerRadius, 2 * markerRadius, 2 * markerRadius);
                     bool inside = box.xMin >= ActionZone.xMin && box.xMax <= ActionZone.xMax && box.yMin >= ActionZone.yMin && box.yMax <= ActionZone.yMax;
-                    if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton)) continue;
+                    if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton) || (SwitchButton.width > 0 && box.Overlaps(SwitchButton))) continue;
                     KickMarker = c;
                     KickMarkerRadius = markerRadius;
                     break;
@@ -277,7 +305,7 @@ namespace Eleven.Host
         /// <summary>Whether every element sits where it does in <paramref name="other"/>.</summary>
         public bool SamePlaces(in HudLayout other) =>
             BuildLabel == other.BuildLabel && ResetButton == other.ResetButton && RunButton == other.RunButton && BenchButton == other.BenchButton
-            && Result == other.Result && FeltWrongButton == other.FeltWrongButton && SaveCaptureButton == other.SaveCaptureButton
+            && Result == other.Result && FeltWrongButton == other.FeltWrongButton && SaveCaptureButton == other.SaveCaptureButton && SwitchButton == other.SwitchButton
             && StatusArea == other.StatusArea && PlayArea == other.PlayArea && StickZone == other.StickZone && ActionZone == other.ActionZone;
 
         /// <summary>
@@ -295,7 +323,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0} safe={Box(Safe)} stickZone={Box(StickZone)} kickRadius={KickRadius:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0} safe={Box(Safe)} stickZone={Box(StickZone)} kickRadius={KickRadius:F0} switch={Box(SwitchButton)}");
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 
