@@ -13,10 +13,11 @@ namespace Eleven.Simulation
     public sealed partial class Simulator
     {
         // Whether the footballer `player` owns may be left for `target`: a teammate, not a keeper,
-        // played by the CPU.
+        // played by the CPU. Only a controller that isn't the CPU's, on an outfielder, switches: a
+        // CPU footballer or a keeper has a role of his own to keep (#104).
         private bool MaySwitch(in PlayerState player, int target)
         {
-            if (target == player.Id) return false;
+            if (target == player.Id || CpuOf(player.Id) >= 0 || KeeperOf(player.Id) >= 0) return false;
             int t = IndexOfPlayer(target);
             if (t < 0 || KeeperOf(target) >= 0 || CpuOf(target) < 0) return false;
             return _state.Players[t].TeamId == player.TeamId;

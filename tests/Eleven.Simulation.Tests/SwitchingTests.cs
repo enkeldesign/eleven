@@ -99,7 +99,7 @@ namespace Eleven.Simulation.Tests
                 var sim = new Simulator(C, s.Clone());
                 var events = new List<SimEvent>();
                 sim.Step(new[] { new Command(controller, 0, Vec2.Zero, switchTo: target) }, events);
-                Assert.Contains(events, e => e.Kind == SimEventKind.CommandRejected && e.Subject == controller && e.Other == (int)CommandRejection.SwitchRefused);
+                Assert.Contains(events, e => e.Kind == SimEventKind.CommandRejected && e.Subject == controller && e.Rejection == CommandRejection.SwitchRefused);
                 Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Switched);
                 Simulator back = Snapshot.Restore(Snapshot.Capture(sim), C);
                 Assert.Equal(sim.StateHash(), back.StateHash());
