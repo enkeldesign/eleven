@@ -88,6 +88,18 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_human_seat_plays_and_switches_and_every_match_finishes()
+        {
+            List<SquadTrial> trials = SquadTrials.Run(SpikeScenario.Config(), 2, seeds: 4, seat: true);
+            Assert.All(trials, t => Assert.True(t.Finished, $"{t.Seed:x} didn't finish"));
+            Assert.All(trials, t => Assert.Equal(0, t.SwitchesRefused));
+
+            // Every match he switches, and his side scores: the seat plays the ball, not stands by it.
+            Assert.All(trials, t => Assert.True(t.Switches >= 5, $"{t.Seed:x}: {t.Switches} switches"));
+            Assert.True(trials.Sum(t => t.HomeGoals) > 0, "the seat's side never scored");
+        }
+
+        [Fact]
         public void A_kick_off_places_six_footballers_legally()
         {
             // A goal, then the kick-off's set-up.
