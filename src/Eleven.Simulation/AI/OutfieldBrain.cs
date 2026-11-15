@@ -113,6 +113,14 @@ namespace Eleven.Simulation.AI
             double theirTime = double.PositiveInfinity;
             if (opponentSeen) Meet(seen, config, opponent, seen.MaxSpeed, out theirTime);
 
+            // On an opponent's ball he goes at where it will be as his challenge would reach it
+            // (#84): the challenge goes the way he is running.
+            if (theirs <= HasBall && mine <= Press)
+            {
+                Vec2 ahead = ball + seen.BallVelocity.Horizontal * config.ChallengeCommit;
+                return new CpuPlan(CpuMode.Approach, Unit(ahead - me));
+            }
+
             if (myTime <= theirTime || mine <= Press)
             {
                 return new CpuPlan(myTime > Near ? CpuMode.SeekBall : CpuMode.Approach, Unit(meet - me));
@@ -120,7 +128,9 @@ namespace Eleven.Simulation.AI
 
             // Out of possession and second to the ball: goal-side of it, on the line to his own goal.
             Vec2 spot = ball + Unit(ownGoal - ball) * GoalSide;
-            return new CpuPlan(CpuMode.Defend, Ease(spot - me));
+            // At full speed until he is there: the spot moves with the ball.
+            Vec2 toSpot = spot - me;
+            return new CpuPlan(CpuMode.Defend, Length(toSpot) > Stand * 2 ? Unit(toSpot) : Vec2.Zero);
         }
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the

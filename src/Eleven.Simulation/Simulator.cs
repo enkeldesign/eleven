@@ -36,6 +36,9 @@ namespace Eleven.Simulation
         // Whether a kick connected on this step: then no one touches the ball on it (#59).
         private bool _kickConnected;
 
+        // Whether a challenge won the ball this step (#84): scratch, like _kickConnected.
+        private bool _challengeWon;
+
         // Where each keeper's body started this step, so the ball's contact with him is swept in
         // his own frame (#69, Codex on #71). Rebuilt every step.
         private readonly List<Vec2> _keeperFrom = new List<Vec2>();
@@ -68,6 +71,7 @@ namespace Eleven.Simulation
         {
             long tick = _state.Tick;
             _kickConnected = false;
+            _challengeWon = false;
             ResolveCommands(tick, commands, events);
             StepCpus(tick);
 
@@ -89,6 +93,10 @@ namespace Eleven.Simulation
             {
                 StepKick(i, FindAccepted(_state.Players[i].OwnerControllerId), tick, events);
             }
+
+            // Standing challenges (#84), after kicks: a kick that connects first has taken the ball
+            // away, and a challenge that wins it keeps it from every touch this step.
+            StepChallenges(tick, events);
 
             // After kicks, so a kick's own step and its cooldown keep the ball free (#59): no one
             // touches on the step a kick connects, whatever the cooldown, and the kicker not through it.
@@ -296,7 +304,10 @@ namespace Eleven.Simulation
             // run and how quickly they get there, whether speeding up, braking or turning (#36).
             // A keeper's body follows his phase (#69): reacting he sets, braking whatever is asked;
             // diving he flies at his dive's velocity; recovering he is on the ground.
+            // In a challenge (#84) he keeps his line through the commit, and brakes through the recovery.
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
+            if (player.Challenge == ChallengePhase.Commit) move = player.ChallengeLine;
+            else if (player.Challenge == ChallengePhase.Recover) move = Vec2.Zero;
             KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
             if (phase == KeeperPhase.Dive) player.Velocity = _state.Keepers[keeper].DiveVelocity;
             else if (phase == KeeperPhase.Recover) player.Velocity = Vec2.Zero;
@@ -370,7 +381,9 @@ namespace Eleven.Simulation
         private void StepKick(int index, Command? command, long tick, List<SimEvent> events)
         {
             ref PlayerState player = ref _state.Players[index];
-            bool ready = player.WindUpTicks == 0 && player.KickCooldown == 0;
+
+            // A footballer in a challenge (#84) starts no kick; one already winding up carries on.
+            bool ready = player.WindUpTicks == 0 && player.KickCooldown == 0 && player.Challenge == ChallengePhase.Ready;
             if (command.HasValue && ready && command.Value.Kick.HasValue)
             {
                 // A manual kick, which also wins over a quick pass in the same command.
@@ -606,12 +619,159 @@ namespace Eleven.Simulation
         /// cooldown keep the ball free. A turn's two touches (#66) come when the turn starts and
         /// ends, not on the touch interval.
         /// </summary>
+        // m. How far past the control reach the last player to play the ball still controls it.
+        private const double ControlMargin = 1.25;
+
+        // The stick's share along the line to the ball that counts as closing on it.
+        private const double Closing = 0.5;
+
+        // rad. The largest error of a knock-away, for a challenger with no tackling at all.
+        private const double ChallengeError = 0.6;
+
+        /// <summary>
+        /// The index of the player who controls the ball (#84), or −1 when it is loose: the one it
+        /// is attached to, or the last to play it while it is on the ground within a little more
+        /// than their control reach. A keeper's ball, in his hands, is no one's to challenge, and
+        /// under the kick-only model no one controls it.
+        /// </summary>
+        private int ControllerOfBall()
+        {
+            // Only the ball control models have possession to contest; under the kick-only model
+            // no one controls the ball.
+            if (Config.ControlModel != ControlModel.Free && Config.ControlModel != ControlModel.Attached) return -1;
+            BallState ball = _state.Ball;
+            if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight) return -1;
+            int attached = IndexOfPlayer(ball.AttachedTo);
+            if (attached >= 0) return attached;
+            // A ball in a kick's flight, while anyone's aftertouch window is open, is no one's: a
+            // challenge never redirects a manual kick.
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.AftertouchTicks > 0) return -1;
+            }
+
+            // Nor is one knocked away by a challenger still recovering: the beaten player may play it.
+            int last = IndexOfPlayer(ball.LastPlayedBy);
+            if (last < 0 || KeeperOf(ball.LastPlayedBy) >= 0 || _state.Players[last].Challenge != ChallengePhase.Ready) return -1;
+            double reach = Config.ControlReach * ControlMargin;
+            return (ball.Position.Horizontal - _state.Players[last].Position).LengthSquared <= reach * reach ? last : -1;
+        }
+
+        /// <summary>
+        /// The standing challenge (#84, INV-12). A footballer closing on a ball an opponent controls
+        /// commits to it once it is within the challenge range: for the commit he keeps the line his
+        /// stick asked for as he committed, and can't steer. As the commit ends, a ball within his reach is
+        /// knocked away along that line; one that has gone is missed. Either way he recovers,
+        /// braking, and can't play the ball until it ends. Nothing moves anyone to the ball and no
+        /// chance decides it: the ball is won if it is still there. docs/simulation/challenge.md.
+        /// </summary>
         /// <summary>
         /// A challenge's commit in whole steps (#84): the config's commit time, shorter the better
         /// the challenger's tackling (0.8 of it at full tackling, 1.25 of it at none), at least one.
         /// </summary>
         public static int CommitTicksFor(double tackling, SimConfig config) =>
             Math.Max(1, (int)Math.Round(config.ChallengeCommit * (1.25 - 0.45 * tackling) * config.TickRate));
+
+        private void StepChallenges(long tick, List<SimEvent> events)
+        {
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                ref PlayerState player = ref _state.Players[i];
+                ref BallState ball = ref _state.Ball;
+                if (player.Challenge == ChallengePhase.Recover)
+                {
+                    if (--player.ChallengeTicks > 0) continue;
+                    player.Challenge = ChallengePhase.Ready;
+                    player.ChallengeLine = Vec2.Zero;
+                    continue;
+                }
+
+                if (player.Challenge == ChallengePhase.Commit)
+                {
+                    if (--player.ChallengeTicks > 0) continue;
+
+                    // The reach, a little longer the better his tackling. A ball kicked away, won by
+                    // someone else this step, held or in the air is out of it.
+                    double reach = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling);
+                    bool inFlight = false;
+                    foreach (PlayerState p in _state.Players) inFlight |= p.AftertouchTicks > 0;
+                    bool there = !_kickConnected && !_challengeWon && !inFlight && ball.HeldBy == 0 && ball.Position.Z <= Config.KickMaxBallHeight
+                        && (ball.Position.Horizontal - player.Position).LengthSquared <= reach * reach;
+                    if (there)
+                    {
+                        int had = ControllerOfBall();
+                        Vec2 line = player.ChallengeLine;
+                        double error = ChallengeError * (1 - player.Capabilities.Tackling);
+                        if (error > 0)
+                        {
+                            var draws = new StreamDraws(_state.Seed, tick, RandomStream.Challenge, player.Id);
+                            double angle = (2 * draws.NextUniform() - 1) * error;
+                            double c = SimMath.Cos(angle), s = SimMath.Sin(angle);
+                            line = new Vec2(line.X * c - line.Y * s, line.X * s + line.Y * c);
+                        }
+
+                        // Knocked along his line, unless that is into the dribbler's feet: then it
+                        // comes off them, the line mirrored about the way to him.
+                        if (had >= 0)
+                        {
+                            Vec2 away = _state.Players[had].Position - ball.Position.Horizontal;
+                            double length = SimMath.Sqrt(away.LengthSquared);
+                            if (length > 0)
+                            {
+                                Vec2 u = away * (1 / length);
+                                double into = line.X * u.X + line.Y * u.Y;
+                                if (into > 0) line -= u * (2 * into);
+                            }
+                        }
+
+                        if (ball.AttachedTo != 0) Release(tick, events);
+                        ball.Velocity = new Vec3(line.X * Config.ChallengeImpulse, line.Y * Config.ChallengeImpulse, 0);
+                        ball.Spin = Vec3.Zero;
+                        ball.LastPlayedBy = player.Id;
+                        for (int k = 0; k < _state.Players.Length; k++)
+                        {
+                            _state.Players[k].AftertouchTicks = 0;
+                            _state.Players[k].Turning = false;
+                        }
+
+                        // The beaten footballer may play the loose ball, but not on the next step:
+                        // he is a stride's touch from it, as after any touch of his own.
+                        if (had >= 0) _state.Players[had].TouchCooldown = Config.TouchIntervalTicks;
+
+                        _challengeWon = true;
+                        events.Add(new SimEvent(tick, SimEventKind.ChallengeWon, player.Id, other: had >= 0 ? _state.Players[had].Id : 0));
+                    }
+                    else
+                    {
+                        events.Add(new SimEvent(tick, SimEventKind.ChallengeMissed, player.Id));
+                    }
+
+                    player.Challenge = ChallengePhase.Recover;
+                    player.ChallengeTicks = Config.ChallengeRecoverTicks;
+                    continue;
+                }
+
+                // Ready: he commits when he is closing on a ball an opponent controls, within range.
+                if (player.WindUpTicks > 0 || KeeperOf(player.Id) >= 0) continue;
+                Command? command = FindAccepted(player.OwnerControllerId);
+                if (!command.HasValue) continue;
+                int controller = ControllerOfBall();
+                if (controller < 0 || controller == i || _state.Players[controller].TeamId == player.TeamId) continue;
+                Vec2 to = ball.Position.Horizontal - player.Position;
+                double distanceSquared = to.LengthSquared;
+                if (distanceSquared > Config.ChallengeRange * Config.ChallengeRange || distanceSquared == 0) continue;
+                Vec2 toward = to * (1 / SimMath.Sqrt(distanceSquared));
+                Vec2 stick = command.Value.Move;
+                if (stick.X * toward.X + stick.Y * toward.Y < Closing) continue;
+
+                // He goes the way his stick asks, so he can lead the tackle into the ball's path.
+                player.Challenge = ChallengePhase.Commit;
+                player.ChallengeTicks = CommitTicksFor(player.Capabilities.Tackling, Config);
+                player.ChallengeLine = stick * (1 / SimMath.Sqrt(stick.LengthSquared));
+                player.Turning = false;
+                events.Add(new SimEvent(tick, SimEventKind.ChallengeStarted, player.Id));
+            }
+        }
 
         private void StepControl(long tick, List<SimEvent> events)
         {
@@ -635,9 +795,11 @@ namespace Eleven.Simulation
                 if (_state.Players[i].Turning && (_state.Ball.Position.Horizontal - _state.Players[i].Position).LengthSquared > reachSquared) _state.Players[i].Turning = false;
             }
 
-            if (_kickConnected || _state.Ball.HeldBy != 0) return;
+            if (_kickConnected || _challengeWon || _state.Ball.HeldBy != 0) return;
             if (_state.Ball.Position.Z > Config.KickMaxBallHeight) return;
 
+            // A ball an opponent controls is not there for a touch (#84): it takes a challenge.
+            int controller = ControllerOfBall();
             double nearest = double.MaxValue;
             int toucher = -1;
             TurnTouch kind = TurnTouch.None;
@@ -646,6 +808,7 @@ namespace Eleven.Simulation
             {
                 PlayerState p = _state.Players[i];
                 if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
+                if (p.Challenge != ChallengePhase.Ready || (controller >= 0 && _state.Players[controller].TeamId != p.TeamId)) continue;
                 Command? command = FindAccepted(p.OwnerControllerId);
                 if (!command.HasValue) continue;
 
@@ -726,7 +889,7 @@ namespace Eleven.Simulation
                 return;
             }
 
-            if (_kickConnected)
+            if (_kickConnected || _challengeWon)
             {
                 Release(tick, events);
                 return;
@@ -758,6 +921,10 @@ namespace Eleven.Simulation
                     if (i == holder) continue;
                     PlayerState p = _state.Players[i];
                     if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
+
+                    // An opponent of its holder takes it by a challenge, not by being nearer, and a
+                    // footballer just beaten by one only after his stride (#84).
+                    if (p.TouchCooldown > 0 || p.Challenge != ChallengePhase.Ready || (holder >= 0 && _state.Players[holder].TeamId != p.TeamId)) continue;
                     if (!FindAccepted(p.OwnerControllerId).HasValue) continue;
                     double distanceSquared = (ball.Position.Horizontal - p.Position).LengthSquared;
                     if (distanceSquared > reachSquared || distanceSquared >= nearest) continue;
