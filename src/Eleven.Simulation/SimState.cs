@@ -141,6 +141,9 @@ namespace Eleven.Simulation
             w.WriteInt32(Restart.WaitTicks);
             w.WriteInt32(Restart.TakerId);
             w.WriteByte(Restart.FromThrow ? (byte)1 : (byte)0);
+            w.WriteInt32(Restart.AdvantageTeam);
+            w.WriteInt32(Restart.AdvantageTicks);
+            WriteVec2(w, Restart.AdvantagePoint, "Restart.AdvantagePoint");
 
             w.WriteByte((byte)Match.Phase);
             w.WriteInt32(Match.ClockTicks);
@@ -289,7 +292,7 @@ namespace Eleven.Simulation
             {
                 On = ReadFlag(r.ReadByte(), "Restart.On"),
                 Phase = r.ReadByte() is byte phase && phase <= (byte)RestartPhase.Ready ? (RestartPhase)phase : throw new FormatException("Unknown restart phase."),
-                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Corner ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
+                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Penalty ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
                 AwardedTeam = r.ReadInt32(),
                 LastTouchedTeam = r.ReadInt32(),
                 Point = ReadVec2(r, "Restart.Point"),
@@ -297,6 +300,9 @@ namespace Eleven.Simulation
                 WaitTicks = r.ReadInt32(),
                 TakerId = r.ReadInt32(),
                 FromThrow = ReadFlag(r.ReadByte(), "Restart.FromThrow"),
+                AdvantageTeam = r.ReadInt32(),
+                AdvantageTicks = r.ReadInt32(),
+                AdvantagePoint = ReadVec2(r, "Restart.AdvantagePoint"),
             };
 
             state.Match = new MatchState
@@ -452,6 +458,12 @@ namespace Eleven.Simulation
 
         /// <summary>From the corner, to the attackers, when a defender touched it last over his own goal line.</summary>
         Corner = 4,
+
+        /// <summary>A direct free kick where a foul was committed, to the fouled side (#99).</summary>
+        FreeKick = 5,
+
+        /// <summary>From the penalty mark, to the fouled side, for a foul in the offender's own penalty area (#99).</summary>
+        Penalty = 6,
     }
 
     /// <summary>
@@ -487,6 +499,16 @@ namespace Eleven.Simulation
 
         /// <summary>Whether the ball is live from a throw-in no one else has played yet: it can't score.</summary>
         public bool FromThrow;
+
+        /// <summary>
+        /// Advantage played after a foul (#99): the fouled side, 0 for none; the steps left in which,
+        /// if they lose the ball, the foul is given after all; and where it was committed.
+        /// </summary>
+        public int AdvantageTeam;
+
+        public int AdvantageTicks;
+
+        public Vec2 AdvantagePoint;
     }
 
     public struct BallState

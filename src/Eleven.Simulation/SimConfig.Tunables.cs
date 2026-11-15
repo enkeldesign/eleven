@@ -154,6 +154,8 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "slideTime", "s", 0.1, 1, 0.3, 0.5),
             new TunableParameter(TunableParameter.ControlGroup, "slideReach", "m", 0.3, 1.5, 0.7, 1.1),
             new TunableParameter(TunableParameter.ControlGroup, "slideRecover", "s", 0.2, 3, 0.8, 1.5),
+            new TunableParameter(TunableParameter.ControlGroup, "advantageTime", "s", 0, 6, 2, 4),
+            new TunableParameter(TunableParameter.ControlGroup, "challengeFoulReach", "m", 0, 1, 0.4, 0.6),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -239,6 +241,8 @@ namespace Eleven.Simulation
             "slideTime" => SlideTime,
             "slideReach" => SlideReach,
             "slideRecover" => SlideRecover,
+            "advantageTime" => AdvantageTime,
+            "challengeFoulReach" => ChallengeFoulReach,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -287,6 +291,7 @@ namespace Eleven.Simulation
             double dribbleSpeedPoor = DribbleSpeedPoor, dribbleSpeedGood = DribbleSpeedGood;
             double shieldSpeed = ShieldSpeed, shieldRange = ShieldRange, shieldHold = ShieldHold;
             double slideRange = SlideRange, slideSpeed = SlideSpeed, slideTime = SlideTime, slideReach = SlideReach, slideRecover = SlideRecover;
+            double advantageTime = AdvantageTime, challengeFoulReach = ChallengeFoulReach;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -363,6 +368,8 @@ namespace Eleven.Simulation
                     case "slideTime": slideTime = o.Value; break;
                     case "slideReach": slideReach = o.Value; break;
                     case "slideRecover": slideRecover = o.Value; break;
+                    case "advantageTime": advantageTime = o.Value; break;
+                    case "challengeFoulReach": challengeFoulReach = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -468,7 +475,9 @@ namespace Eleven.Simulation
                 slideSpeed: slideSpeed,
                 slideTime: slideTime,
                 slideReach: slideReach,
-                slideRecover: slideRecover);
+                slideRecover: slideRecover,
+                advantageTime: advantageTime,
+                challengeFoulReach: challengeFoulReach);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -558,7 +567,9 @@ namespace Eleven.Simulation
             slideSpeed: SlideSpeed,
             slideTime: SlideTime,
             slideReach: SlideReach,
-            slideRecover: SlideRecover);
+            slideRecover: SlideRecover,
+            advantageTime: AdvantageTime,
+            challengeFoulReach: ChallengeFoulReach);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

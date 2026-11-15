@@ -138,6 +138,12 @@ namespace Eleven.Simulation
 
         /// <summary>A slide ended meeting neither (#98). Subject: the slider.</summary>
         SlideMissed = 35,
+
+        /// <summary>A foul (#99). Subject: the offender. <see cref="SimEvent.Other"/>: the footballer fouled.</summary>
+        Foul = 36,
+
+        /// <summary>Play goes on after a foul: the fouled side keeps the ball (#99). Subject: the fouled side.</summary>
+        AdvantagePlayed = 37,
     }
 
     /// <summary>

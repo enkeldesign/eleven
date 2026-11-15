@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 20;
+        public const int FormatVersion = 21;
 
         public SimConfig(
             int tickRate = 60,
@@ -112,7 +112,9 @@ namespace Eleven.Simulation
             double slideSpeed = 8.0,
             double slideTime = 0.4,
             double slideReach = 0.9,
-            double slideRecover = 1.0)
+            double slideRecover = 1.0,
+            double advantageTime = 3.0,
+            double challengeFoulReach = 0.45)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -204,6 +206,8 @@ namespace Eleven.Simulation
             SlideTime = slideTime;
             SlideReach = slideReach;
             SlideRecover = slideRecover;
+            AdvantageTime = advantageTime;
+            ChallengeFoulReach = challengeFoulReach;
 
             CheckTunableRanges();
 
@@ -593,6 +597,12 @@ namespace Eleven.Simulation
         /// <summary>How long a footballer is on the ground after a slide (#98).</summary>
         public double SlideRecover { get; }
 
+        /// <summary>s. After a foul, how long the fouled side may keep the ball under advantage before the foul is no longer given (#99).</summary>
+        public double AdvantageTime { get; }
+
+        /// <summary>m. A standing challenge that ends this close to the man it challenged, missing the ball, is a foul (#99).</summary>
+        public double ChallengeFoulReach { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -729,7 +739,9 @@ namespace Eleven.Simulation
                 slideSpeed: r.ReadDouble(nameof(SlideSpeed)),
                 slideTime: r.ReadDouble(nameof(SlideTime)),
                 slideReach: r.ReadDouble(nameof(SlideReach)),
-                slideRecover: r.ReadDouble(nameof(SlideRecover)));
+                slideRecover: r.ReadDouble(nameof(SlideRecover)),
+                advantageTime: r.ReadDouble(nameof(AdvantageTime)),
+                challengeFoulReach: r.ReadDouble(nameof(ChallengeFoulReach)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -826,6 +838,8 @@ namespace Eleven.Simulation
             w.WriteDouble(SlideTime, nameof(SlideTime));
             w.WriteDouble(SlideReach, nameof(SlideReach));
             w.WriteDouble(SlideRecover, nameof(SlideRecover));
+            w.WriteDouble(AdvantageTime, nameof(AdvantageTime));
+            w.WriteDouble(ChallengeFoulReach, nameof(ChallengeFoulReach));
             return w.ToArray();
         }
 
