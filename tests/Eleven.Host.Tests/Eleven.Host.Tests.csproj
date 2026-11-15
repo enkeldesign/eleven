@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The host's engine-free pieces, compiled straight from unity/Assets (#55): they use System only,
-       so .NET can test them without Unity. -->
+  <!-- The host's engine-free pieces, compiled straight from unity/Assets (#55): they use System and the
+       engine-free assemblies only, so .NET can test them without Unity. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
@@ -16,6 +16,13 @@
 
   <ItemGroup>
     <Compile Include="../../unity/Assets/Eleven.Host/FramePacing.cs" Link="Host/FramePacing.cs" />
+    <Compile Include="../../unity/Assets/Eleven.Host/ActionPoses.cs" Link="Host/ActionPoses.cs" />
+  </ItemGroup>
+
+  <!-- ActionPoses (#101) reads the simulation's state and names the presentation's poses. -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Eleven.Simulation/Eleven.Simulation.csproj" />
+    <ProjectReference Include="../../src/Eleven.Presentation/Eleven.Presentation.csproj" />
   </ItemGroup>
 
 </Project>
