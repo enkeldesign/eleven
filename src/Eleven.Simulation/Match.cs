@@ -19,14 +19,49 @@ namespace Eleven.Simulation
         // Whether the match is between its halves or over: then the ball is dead.
         private bool MatchPaused => _state.Match.Phase == MatchPhase.HalfTime || _state.Match.Phase == MatchPhase.FullTime;
 
-        // Not written yet: the clock doesn't run.
         private void StepMatch(long tick, List<SimEvent> events)
         {
+            ref MatchState m = ref _state.Match;
+            switch (m.Phase)
+            {
+                case MatchPhase.FirstHalf:
+                case MatchPhase.SecondHalf:
+                    if (_state.Restart.Phase != RestartPhase.Live) return;
+                    if (++m.ClockTicks < Config.HalfTicks) return;
+                    _state.Ball.AttachedTo = 0;
+                    if (m.Phase == MatchPhase.FirstHalf)
+                    {
+                        m.Phase = MatchPhase.HalfTime;
+                        m.PhaseTicks = Config.HalfTimeTicks;
+                        events.Add(new SimEvent(tick, SimEventKind.HalfTime, 0));
+                    }
+                    else
+                    {
+                        m.Phase = MatchPhase.FullTime;
+                        events.Add(new SimEvent(tick, SimEventKind.FullTime, 0));
+                    }
+
+                    return;
+
+                case MatchPhase.HalfTime:
+                    if (--m.PhaseTicks > 0) return;
+                    for (int i = 0; i < _state.Teams.Length; i++) _state.Teams[i].AttackSign = -_state.Teams[i].AttackSign;
+                    m.Phase = MatchPhase.SecondHalf;
+                    m.ClockTicks = 0;
+                    events.Add(new SimEvent(tick, SimEventKind.SecondHalf, 0));
+                    Stop(RestartKind.KickOff, Opponents(m.FirstKickOff), Vec2.Zero, tick, events);
+                    return;
+            }
         }
 
         // A goal in a match is credited to the side that scored it (#86).
         private void Credit(int team)
         {
+            if (_state.Match.Phase == MatchPhase.None) return;
+            for (int i = 0; i < _state.Teams.Length; i++)
+            {
+                if (_state.Teams[i].Id == team) _state.Teams[i].Goals++;
+            }
         }
 
         private static void ValidateMatch(SimState state, SimConfig config)
