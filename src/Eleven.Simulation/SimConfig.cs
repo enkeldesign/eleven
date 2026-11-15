@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 17;
+        public const int FormatVersion = 18;
 
         public SimConfig(
             int tickRate = 60,
@@ -102,7 +102,9 @@ namespace Eleven.Simulation
             double headerSpeed = 0.55,
             double headerReach = 0.6,
             double volleyError = 0.02,
-            double headerError = 0.25)
+            double headerError = 0.25,
+            double dribbleSpeedPoor = 0.85,
+            double dribbleSpeedGood = 0.95)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -184,6 +186,8 @@ namespace Eleven.Simulation
             HeaderReach = headerReach;
             VolleyError = volleyError;
             HeaderError = headerError;
+            DribbleSpeedPoor = dribbleSpeedPoor;
+            DribbleSpeedGood = dribbleSpeedGood;
 
             CheckTunableRanges();
 
@@ -543,6 +547,12 @@ namespace Eleven.Simulation
         /// <summary>rad. A header's error at no heading at all, shrinking to nothing at full heading (#94).</summary>
         public double HeaderError { get; }
 
+        /// <summary>Fraction of his top speed a footballer of no ball control reaches while he has the ball (#96).</summary>
+        public double DribbleSpeedPoor { get; }
+
+        /// <summary>Fraction of his top speed a footballer of full ball control reaches while he has the ball (#96).</summary>
+        public double DribbleSpeedGood { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -663,7 +673,9 @@ namespace Eleven.Simulation
                 headerSpeed: r.ReadDouble(nameof(HeaderSpeed)),
                 headerReach: r.ReadDouble(nameof(HeaderReach)),
                 volleyError: r.ReadDouble(nameof(VolleyError)),
-                headerError: r.ReadDouble(nameof(HeaderError)));
+                headerError: r.ReadDouble(nameof(HeaderError)),
+                dribbleSpeedPoor: r.ReadDouble(nameof(DribbleSpeedPoor)),
+                dribbleSpeedGood: r.ReadDouble(nameof(DribbleSpeedGood)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -750,6 +762,8 @@ namespace Eleven.Simulation
             w.WriteDouble(HeaderReach, nameof(HeaderReach));
             w.WriteDouble(VolleyError, nameof(VolleyError));
             w.WriteDouble(HeaderError, nameof(HeaderError));
+            w.WriteDouble(DribbleSpeedPoor, nameof(DribbleSpeedPoor));
+            w.WriteDouble(DribbleSpeedGood, nameof(DribbleSpeedGood));
             return w.ToArray();
         }
 

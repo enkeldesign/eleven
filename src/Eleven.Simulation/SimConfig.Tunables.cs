@@ -144,6 +144,8 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.KickGroup, "headerReach", "m", 0.2, 1.2),
             new TunableParameter(TunableParameter.KickGroup, "volleyError", "rad per m/s", 0, 0.1),
             new TunableParameter(TunableParameter.KickGroup, "headerError", "rad", 0, 0.8),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedPoor", "fraction of top speed", 0.5, 1, 0.8, 0.9),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedGood", "fraction of top speed", 0.5, 1, 0.9, 1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -219,6 +221,8 @@ namespace Eleven.Simulation
             "headerReach" => HeaderReach,
             "volleyError" => VolleyError,
             "headerError" => HeaderError,
+            "dribbleSpeedPoor" => DribbleSpeedPoor,
+            "dribbleSpeedGood" => DribbleSpeedGood,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -264,6 +268,7 @@ namespace Eleven.Simulation
             double touchlineY = TouchlineY, restartStop = RestartStop, restartReady = RestartReady, restartAuto = RestartAuto, throwSpeed = ThrowSpeed;
             double halfLength = HalfLength, halfTimeBreak = HalfTimeBreak;
             double volleyMaxHeight = VolleyMaxHeight, headerMinHeight = HeaderMinHeight, headerMaxHeight = HeaderMaxHeight, headerSpeed = HeaderSpeed, headerReach = HeaderReach, volleyError = VolleyError, headerError = HeaderError;
+            double dribbleSpeedPoor = DribbleSpeedPoor, dribbleSpeedGood = DribbleSpeedGood;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -330,6 +335,8 @@ namespace Eleven.Simulation
                     case "headerReach": headerReach = o.Value; break;
                     case "volleyError": volleyError = o.Value; break;
                     case "headerError": headerError = o.Value; break;
+                    case "dribbleSpeedPoor": dribbleSpeedPoor = o.Value; break;
+                    case "dribbleSpeedGood": dribbleSpeedGood = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -425,7 +432,9 @@ namespace Eleven.Simulation
                 headerSpeed: headerSpeed,
                 headerReach: headerReach,
                 volleyError: volleyError,
-                headerError: headerError);
+                headerError: headerError,
+                dribbleSpeedPoor: dribbleSpeedPoor,
+                dribbleSpeedGood: dribbleSpeedGood);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -505,7 +514,9 @@ namespace Eleven.Simulation
             headerSpeed: HeaderSpeed,
             headerReach: HeaderReach,
             volleyError: VolleyError,
-            headerError: HeaderError);
+            headerError: HeaderError,
+            dribbleSpeedPoor: DribbleSpeedPoor,
+            dribbleSpeedGood: DribbleSpeedGood);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.
