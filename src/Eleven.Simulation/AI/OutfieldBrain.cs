@@ -45,11 +45,23 @@ namespace Eleven.Simulation.AI
         // across, toward the middle; marking, this far goal-side of the opponent he marks.
         private const double SupportAhead = 6, SupportWide = 10, MarkGoalSide = 2.5;
 
+        // m. A supporter alongside the carrier breaks wide aiming this far ahead of where he is (#94).
+        private const double SupportBreak = 4;
+
         // m. A teammate with no opponent this close to him is open for a pass (#92).
         private const double Open = 4;
 
         // rad. A pass goes only to a teammate within this of his heading: his quick pass's own cone.
         private const double PassCone = 0.9;
+
+        // m. A header or volley goes at goal from this much further out than a shot on the ground (#94).
+        private const double AirShotExtra = 6;
+
+        // 0–1. A header cleared up the pitch is lofted this much.
+        private const double ClearLoft = 0.5;
+
+        // Fraction of reach. Within this much of his reach, at the moment his kick would connect, he goes for a ball in the air.
+        private const double AirReach = 0.8;
 
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
@@ -133,6 +145,25 @@ namespace Eleven.Simulation.AI
 
             double mates = mateSeen ? SimMath.Sqrt(mateNearest) : double.PositiveInfinity;
 
+            // A ball coming to him in the air (#94): if his kick, made on this plan, would meet it
+            // at a height his body can play, he heads or volleys it: at goal within range, up the
+            // pitch otherwise. The same kick intent as on the ground.
+            // Only one of a side goes up for it: a teammate nearer where it comes down leaves it to him.
+            if (!seen.Kicking && AirContact(seen, config, out Vec3 contact)
+                && (!mateSeen || (mate - contact.Horizontal).LengthSquared >= (me - contact.Horizontal).LengthSquared))
+            {
+                Vec2 from = contact.Horizontal;
+                bool header = contact.Z >= config.HeaderMinHeight;
+                if (Length(theirGoal - from) <= ShootRange + AirShotExtra)
+                {
+                    double side = from.Y >= 0 ? 1 : -1;
+                    var target = new Vec2(config.GoalLineX, side * (config.GoalWidth / 2 - InsidePost));
+                    return new CpuPlan(CpuMode.Shoot, Unit(from - me), new KickIntent(target - from, ShotStrength, header ? 0 : ShotLoft));
+                }
+
+                return new CpuPlan(CpuMode.Carry, Unit(from - me), new KickIntent(theirGoal - from, ShotStrength, header ? ClearLoft : ShotLoft));
+            }
+
             // With the ball: shoot in range, otherwise carry it at the goal, round an opponent in the way.
             // Only the nearer of two teammates has it (#92); on a tie, the one further toward −y.
             bool mineNotMates = !mateSeen || mine < mates || (mine == mates && me.Y <= mate.Y);
@@ -190,7 +221,10 @@ namespace Eleven.Simulation.AI
                     double across = mate.Y >= 0 ? -1 : 1;
                     double y = mate.Y + across * SupportWide;
                     double most = config.TouchlineY - 4;
-                    place = new Vec2(mate.X + SupportAhead, y > most ? most : y < -most ? -most : y);
+                    // Alongside him, he breaks wide on a diagonal first: making for a place ahead of
+                    // the carrier at the carrier's own speed, he would stay at his shoulder (#94's trials).
+                    double ahead = Length(mate - me) < SupportWide / 2 ? me.X - mate.X + SupportBreak : SupportAhead;
+                    place = new Vec2(mate.X + ahead, y > most ? most : y < -most ? -most : y);
                 }
                 else if (SecondOpponent(seen, opponent, out Vec2 marked))
                 {
@@ -267,6 +301,29 @@ namespace Eleven.Simulation.AI
             }
 
             return false;
+        }
+
+        // Where the ball will be, on his read of its flight, when a kick he decided on now would
+        // connect: his reaction, then the wind-up. Whether that is in a band his body plays, the
+        // feet's excepted, and within reach of where his run takes him by then (#94).
+        private static bool AirContact(OutfieldObservation seen, SimConfig config, out Vec3 contact)
+        {
+            contact = seen.BallPosition;
+            if (seen.BallPosition.Z <= config.KickMaxBallHeight && seen.BallVelocity.Z <= 0) return false;
+            int lead = (int)System.Math.Round(seen.ReactionDelay * config.TickRate);
+            if (lead < 1) lead = 1;
+            lead += config.KickWindUpTicks;
+            var path = new List<Vec3>();
+            BallFlight.Predict(config, seen.BallPosition, seen.BallVelocity, seen.BallSpin, lead, path, bothGoals: seen.BothGoals);
+            if (path.Count < lead - 1 || lead < 2) return false;
+            contact = path[lead - 2];
+            double z = contact.Z;
+            bool header = z >= config.HeaderMinHeight && z <= config.HeaderMaxHeight;
+            bool volley = !header && z > config.KickMaxBallHeight && z <= config.VolleyMaxHeight;
+            if (!header && !volley) return false;
+            Vec2 there = seen.Position + seen.Velocity * (lead * config.TickSeconds);
+            double reach = AirReach * (header ? config.HeaderReach : config.KickReach);
+            return (contact.Horizontal - there).LengthSquared <= reach * reach;
         }
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the
