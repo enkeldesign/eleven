@@ -239,6 +239,20 @@ jobs:
           path: squad-trials/
           if-no-files-found: error
 
+      # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
+      - name: Evaluate 2v2 over fifty matches
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-evaluation 2 50 | tee squad-eval.txt
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-evaluation 2 50 seat | tee -a squad-eval.txt
+          echo "::notice title=2v2 evaluation::$(sed 's| -> .*||' squad-eval.txt | tr '\n' ' ')"
+
+      - name: Publish the 2v2 evaluation
+        uses: actions/upload-artifact@v4
+        with:
+          name: squad-evaluation
+          path: squad-evaluation/
+          if-no-files-found: error
+
       # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86), fifty of
       # them for M1's gate (#87).
       - name: Play the match trials

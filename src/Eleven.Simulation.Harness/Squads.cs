@@ -126,7 +126,22 @@ namespace Eleven.Simulation.Harness
         public static Command Seat(Simulator sim, int controllerId, int switchTo)
         {
             SimState s = sim.PeekState();
-            return new Command(controllerId, s.Tick, Vec2.Zero, switchTo: switchTo);
+            int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == controllerId);
+            if (me < 0) return new Command(controllerId, s.Tick, Vec2.Zero, switchTo: switchTo);
+            PlayerState body = s.Players[me];
+            SimConfig config = sim.Config;
+            Vec2 toBall = s.Ball.Position.Horizontal - body.Position;
+            double away = Eleven.Simulation.Maths.SimMath.Sqrt(toBall.LengthSquared);
+            Vec2 move = away > 0.3 ? toBall * (1 / away) : Vec2.Zero;
+            KickIntent? kick = null;
+            bool ready = body.WindUpTicks == 0 && body.KickCooldown == 0 && s.Ball.HeldBy == 0;
+            if (ready && away <= 0.8 * config.KickReach && s.Ball.Position.Z <= config.KickMaxBallHeight)
+            {
+                int sign = Array.Find(s.Teams, t => t.Id == body.TeamId).AttackSign;
+                kick = new KickIntent(new Vec2(sign * config.GoalLineX, 0) - s.Ball.Position.Horizontal, 1, 0.12);
+            }
+
+            return new Command(controllerId, s.Tick, move, kick, switchTo: switchTo);
         }
 
         public static SquadTrial One(SimConfig config, int perSide, ulong seed, bool seat = false)
@@ -134,6 +149,7 @@ namespace Eleven.Simulation.Harness
             var sim = new Simulator(config, Squads.Match(config, seed, perSide, bothCpu: !seat));
             var recorder = new MatchRecorder();
             var trial = new SquadTrial { Seed = seed, Seat = seat };
+            SwitchController? switcher = seat ? new SwitchController(SeatController) : null;
             var commands = new List<Command>();
             var events = new List<SimEvent>();
             int limit = 3 * 2 * config.HalfTicks;
@@ -144,7 +160,7 @@ namespace Eleven.Simulation.Harness
             while (sim.Tick < limit && recorder.Result == null)
             {
                 commands.Clear();
-                if (seat) commands.Add(Seat(sim, SeatController, 0));
+                if (seat) commands.Add(Seat(sim, SeatController, switcher!.Decide(sim, events, manual: false)));
                 events.Clear();
                 KeeperControllers.Append(sim, commands);
                 CpuControllers.Append(sim, commands);
@@ -154,6 +170,8 @@ namespace Eleven.Simulation.Harness
                 recorder.Observe(config, s, events);
                 foreach (SimEvent e in events)
                 {
+                    if (e.Kind == SimEventKind.Switched) trial.Switches++;
+                    if (e.Kind == SimEventKind.CommandRejected && e.Subject == SeatController && e.Other == (int)CommandRejection.SwitchRefused) trial.SwitchesRefused++;
                     int team = TeamOf(s, e.Subject);
                     if (e.Kind == SimEventKind.QuickPassResolved)
                     {
