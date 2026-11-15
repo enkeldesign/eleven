@@ -135,6 +135,32 @@ namespace Eleven.Simulation.Tests
             Assert.Contains(events, e => e.Kind == SimEventKind.Touched && e.Subject == A && e.Tick > events.First(x => x.Kind == SimEventKind.ChallengeMissed).Tick);
         }
 
+        // #96: a defender running alongside a dribbler, as a chase ends. He commits only when his
+        // commit will reach the ball, so he waits until he can, and then wins it.
+        [Theory]
+        [InlineData(ControlModel.Free)]
+        [InlineData(ControlModel.Attached)]
+        public void Chasing_alongside_he_commits_only_when_he_can_reach_the_ball_and_wins_it(ControlModel model)
+        {
+            SimConfig c = Free.WithControlModel(model);
+            double speed = 6.4;
+            SimState s = World(c, 0, dribblerVelocity: new Vec2(speed, 0));
+            s.Players[1].Position = new Vec2(-0.3, 0.6);
+            s.Players[1].Velocity = new Vec2(7, 0);
+            s.Players[1].Heading = 0;
+            var sim = new Simulator(c, s);
+            List<SimEvent> events = Run(sim, 4 * c.TickRate, _ => new Vec2(1, 0), t =>
+            {
+                SimState now = sim.PeekState();
+                Vec2 to = now.Ball.Position.Horizontal - P(now, B).Position;
+                return to * (1 / Math.Sqrt(to.LengthSquared));
+            });
+
+            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeWon && e.Subject == B);
+            long won = events.First(e => e.Kind == SimEventKind.ChallengeWon && e.Subject == B).Tick;
+            Assert.DoesNotContain(events, e => e.Kind == SimEventKind.ChallengeMissed && e.Tick < won);
+        }
+
         [Fact]
         public void Better_tackling_reaches_further_and_commits_sooner()
         {
