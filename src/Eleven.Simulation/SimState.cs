@@ -36,6 +36,9 @@ namespace Eleven.Simulation
         /// <summary>The restart sequencer's state (#85): off in practice, on in a match.</summary>
         public RestartState Restart;
 
+        /// <summary>The match's clock and halves (#86): none in practice.</summary>
+        public MatchState Match;
+
         /// <summary>The CPU outfielders (#83), in ascending player id order, each one of <see cref="Players"/> and not a keeper.</summary>
         public CpuState[] Cpus = Array.Empty<CpuState>();
 
@@ -122,6 +125,7 @@ namespace Eleven.Simulation
             {
                 w.WriteInt32(team.Id);
                 w.WriteInt32(team.AttackSign);
+                w.WriteInt32(team.Goals);
             }
 
             w.WriteByte(Restart.On ? (byte)1 : (byte)0);
@@ -134,6 +138,11 @@ namespace Eleven.Simulation
             w.WriteInt32(Restart.WaitTicks);
             w.WriteInt32(Restart.TakerId);
             w.WriteByte(Restart.FromThrow ? (byte)1 : (byte)0);
+
+            w.WriteByte((byte)Match.Phase);
+            w.WriteInt32(Match.ClockTicks);
+            w.WriteInt32(Match.PhaseTicks);
+            w.WriteInt32(Match.FirstKickOff);
 
             w.WriteInt32(Cpus.Length);
             foreach (CpuState cpu in Cpus)
@@ -267,7 +276,7 @@ namespace Eleven.Simulation
             state.Teams = new TeamState[teams];
             for (int i = 0; i < teams; i++)
             {
-                state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32() };
+                state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32() };
             }
 
             state.Restart = new RestartState
@@ -282,6 +291,14 @@ namespace Eleven.Simulation
                 WaitTicks = r.ReadInt32(),
                 TakerId = r.ReadInt32(),
                 FromThrow = ReadFlag(r.ReadByte(), "Restart.FromThrow"),
+            };
+
+            state.Match = new MatchState
+            {
+                Phase = r.ReadByte() is byte matchPhase && matchPhase <= (byte)MatchPhase.FullTime ? (MatchPhase)matchPhase : throw new FormatException("Unknown match phase."),
+                ClockTicks = r.ReadInt32(),
+                PhaseTicks = r.ReadInt32(),
+                FirstKickOff = r.ReadInt32(),
             };
 
             int cpus = r.ReadInt32();
@@ -363,6 +380,41 @@ namespace Eleven.Simulation
         /// line, and its keeper guards the goal on the other.
         /// </summary>
         public int AttackSign;
+
+        /// <summary>Goals this side has scored in the match (#86).</summary>
+        public int Goals;
+    }
+
+    /// <summary>Where a match is (#86). Numeric values are stable and encoded as one byte.</summary>
+    public enum MatchPhase : byte
+    {
+        /// <summary>No match clock: practice, or a world without halves.</summary>
+        None = 0,
+
+        FirstHalf = 1,
+
+        /// <summary>The break: the ball is dead, the clock stopped, and the sides then change ends.</summary>
+        HalfTime = 2,
+
+        SecondHalf = 3,
+
+        /// <summary>The match is over: the ball is dead for good.</summary>
+        FullTime = 4,
+    }
+
+    /// <summary>A match's clock and halves (#86): plain data. docs/simulation/match.md.</summary>
+    public struct MatchState
+    {
+        public MatchPhase Phase;
+
+        /// <summary>Steps of match clock played in this half: it runs only while the ball is in play.</summary>
+        public int ClockTicks;
+
+        /// <summary>Steps left of the half-time break.</summary>
+        public int PhaseTicks;
+
+        /// <summary>The side that kicked off the first half; the other kicks off the second.</summary>
+        public int FirstKickOff;
     }
 
     /// <summary>Where the restart sequencer is (#85). Numeric values are stable and encoded as one byte.</summary>

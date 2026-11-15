@@ -135,6 +135,8 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.GoalGroup, "restartReady", "s", 0.1, 2, 0.2, 1.0),
             new TunableParameter(TunableParameter.GoalGroup, "restartAuto", "s", 0.2, 5, 0.33, 1.5),
             new TunableParameter(TunableParameter.GoalGroup, "throwSpeed", "m/s", 3, 25),
+            new TunableParameter(TunableParameter.GoalGroup, "halfLength", "s", 60, 600, 120, 600),
+            new TunableParameter(TunableParameter.GoalGroup, "halfTimeBreak", "s", 0.5, 30),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -201,6 +203,8 @@ namespace Eleven.Simulation
             "restartReady" => RestartReady,
             "restartAuto" => RestartAuto,
             "throwSpeed" => ThrowSpeed,
+            "halfLength" => HalfLength,
+            "halfTimeBreak" => HalfTimeBreak,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -244,6 +248,7 @@ namespace Eleven.Simulation
             double pushSpeed = PushSpeed, pushFromSpeed = PushFromSpeed;
             double challengeRange = ChallengeRange, challengeCommit = ChallengeCommit, challengeRecover = ChallengeRecover, challengeReach = ChallengeReach, challengeImpulse = ChallengeImpulse;
             double touchlineY = TouchlineY, restartStop = RestartStop, restartReady = RestartReady, restartAuto = RestartAuto, throwSpeed = ThrowSpeed;
+            double halfLength = HalfLength, halfTimeBreak = HalfTimeBreak;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -301,6 +306,8 @@ namespace Eleven.Simulation
                     case "restartReady": restartReady = o.Value; break;
                     case "restartAuto": restartAuto = o.Value; break;
                     case "throwSpeed": throwSpeed = o.Value; break;
+                    case "halfLength": halfLength = o.Value; break;
+                    case "halfTimeBreak": halfTimeBreak = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -387,7 +394,9 @@ namespace Eleven.Simulation
                 restartStop: restartStop,
                 restartReady: restartReady,
                 restartAuto: restartAuto,
-                throwSpeed: throwSpeed);
+                throwSpeed: throwSpeed,
+                halfLength: halfLength,
+                halfTimeBreak: halfTimeBreak);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -458,7 +467,9 @@ namespace Eleven.Simulation
             restartStop: RestartStop,
             restartReady: RestartReady,
             restartAuto: RestartAuto,
-            throwSpeed: ThrowSpeed);
+            throwSpeed: ThrowSpeed,
+            halfLength: HalfLength,
+            halfTimeBreak: HalfTimeBreak);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

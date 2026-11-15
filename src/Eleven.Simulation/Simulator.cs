@@ -111,8 +111,10 @@ namespace Eleven.Simulation
             StepBall(tick, dt, start, events);
             CheckGoalLine(tick, start, events);
 
-            // Out of play, goals and restarts (#85), on where the ball ended the step.
+            // Out of play, goals and restarts (#85), on where the ball ended the step, then the
+            // match's clock and halves (#86).
             StepRestart(tick, events);
+            StepMatch(tick, events);
 
             _state.Tick = tick + 1;
         }
@@ -1676,7 +1678,12 @@ namespace Eleven.Simulation
                 // out of play over the goal line.
                 if (state == LineState.CrossingMouth && _state.Restart.On && _state.Restart.FromThrow) state = LineState.CrossingWide;
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
-                if (state == LineState.CrossingMouth) events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
+                if (state == LineState.CrossingMouth)
+                {
+                    events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
+                    Credit(Attacking(goal));
+                }
+
                 _crossedEnd = goal;
                 _crossedMouth = state == LineState.CrossingMouth;
                 state = state == LineState.CrossingMouth ? LineState.Goal : LineState.Out;
@@ -1830,6 +1837,7 @@ namespace Eleven.Simulation
             }
 
             ValidateRestart(state, config);
+            ValidateMatch(state, config);
 
             // A goal-line state the encoding knows (#68).
             if (state.Ball.Line > LineState.CrossingWide) throw new ArgumentException($"Unknown goal-line state {(byte)state.Ball.Line}.", nameof(state));

@@ -31,7 +31,7 @@ namespace Eleven.Simulation
         private bool _crossedMouth;
 
         /// <summary>Whether the ball is in play: always without a referee, and only when live with one.</summary>
-        private bool Live => !_state.Restart.On || _state.Restart.Phase == RestartPhase.Live;
+        private bool Live => (!_state.Restart.On || _state.Restart.Phase == RestartPhase.Live) && !MatchPaused;
 
         // Whether this player is held still while a restart is set up: everyone but its taker.
         private bool Held(in PlayerState player) =>
@@ -105,7 +105,7 @@ namespace Eleven.Simulation
         private void StepRestart(long tick, List<SimEvent> events)
         {
             ref RestartState r = ref _state.Restart;
-            if (!r.On) return;
+            if (!r.On || MatchPaused) return;
             switch (r.Phase)
             {
                 case RestartPhase.Live:

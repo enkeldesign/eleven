@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 15;
+        public const int FormatVersion = 16;
 
         public SimConfig(
             int tickRate = 60,
@@ -93,7 +93,9 @@ namespace Eleven.Simulation
             double restartStop = 0.5,
             double restartReady = 0.4,
             double restartAuto = 1.0,
-            double throwSpeed = 12.0)
+            double throwSpeed = 12.0,
+            double halfLength = 180.0,
+            double halfTimeBreak = 2.0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -166,6 +168,8 @@ namespace Eleven.Simulation
             RestartReady = restartReady;
             RestartAuto = restartAuto;
             ThrowSpeed = throwSpeed;
+            HalfLength = halfLength;
+            HalfTimeBreak = halfTimeBreak;
 
             CheckTunableRanges();
 
@@ -498,6 +502,18 @@ namespace Eleven.Simulation
         /// <summary>m/s. A throw-in's speed at full strength (#85): a throw is a kick intent, released by the hands.</summary>
         public double ThrowSpeed { get; }
 
+        /// <summary>s. A half's length on the match clock (#86): the brief's 2 × 3 minutes. The clock runs only while the ball is in play.</summary>
+        public double HalfLength { get; }
+
+        /// <summary>s. The pause at half-time before the second half's kick-off is set up (#86). It is not match time.</summary>
+        public double HalfTimeBreak { get; }
+
+        /// <summary>A half's length in steps of match clock (#86).</summary>
+        public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
+
+        /// <summary>Steps of the half-time break (#86), at least one.</summary>
+        public int HalfTimeTicks => Math.Max(1, (int)Math.Round(HalfTimeBreak * TickRate));
+
         /// <summary>Steps the ball is dead before a restart is set up, at least one (#85).</summary>
         public int RestartStopTicks => Math.Max(1, (int)Math.Round(RestartStop * TickRate));
 
@@ -603,7 +619,9 @@ namespace Eleven.Simulation
                 restartStop: r.ReadDouble(nameof(RestartStop)),
                 restartReady: r.ReadDouble(nameof(RestartReady)),
                 restartAuto: r.ReadDouble(nameof(RestartAuto)),
-                throwSpeed: r.ReadDouble(nameof(ThrowSpeed)));
+                throwSpeed: r.ReadDouble(nameof(ThrowSpeed)),
+                halfLength: r.ReadDouble(nameof(HalfLength)),
+                halfTimeBreak: r.ReadDouble(nameof(HalfTimeBreak)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -681,6 +699,8 @@ namespace Eleven.Simulation
             w.WriteDouble(RestartReady, nameof(RestartReady));
             w.WriteDouble(RestartAuto, nameof(RestartAuto));
             w.WriteDouble(ThrowSpeed, nameof(ThrowSpeed));
+            w.WriteDouble(HalfLength, nameof(HalfLength));
+            w.WriteDouble(HalfTimeBreak, nameof(HalfTimeBreak));
             return w.ToArray();
         }
 

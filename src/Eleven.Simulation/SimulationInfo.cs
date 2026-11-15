@@ -17,9 +17,9 @@ namespace Eleven.Simulation
         /// version 12 the two sides of a match and the way each attacks (#82),
         /// version 13 the CPU outfielders, their plans and their timers (#83),
         /// version 14 the standing challenge: each player's tackling, phase and line, and who last played the ball (#84),
-        /// and version 15 the restart sequencer (#85).
+        /// version 15 the restart sequencer (#85), and version 16 the match's clock, halves and score (#86).
         /// </summary>
-        public const int StateSchemaVersion = 15;
+        public const int StateSchemaVersion = 16;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

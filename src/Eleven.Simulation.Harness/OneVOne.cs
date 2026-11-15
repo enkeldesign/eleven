@@ -94,5 +94,14 @@ namespace Eleven.Simulation.Harness
             };
             return s;
         }
+
+        /// <summary>A whole match's start (#86): the kick-off of the first half, with the clock at nought.</summary>
+        public static SimState Match(SimConfig config, ulong seed, int kickOffTeam = HomeTeam, int homeAttackSign = 1, bool bothCpu = false,
+            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null)
+        {
+            SimState s = KickOff(config, seed, kickOffTeam, homeAttackSign, bothCpu, awayCpu, homeCpu);
+            s.Match = new MatchState { Phase = MatchPhase.FirstHalf, FirstKickOff = kickOffTeam };
+            return s;
+        }
     }
 }

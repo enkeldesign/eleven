@@ -105,6 +105,15 @@ namespace Eleven.Simulation
 
         /// <summary>The taker kicked the ball: it is in play (#85). Subject: the taker. <see cref="SimEvent.Other"/>: the <see cref="RestartKind"/>.</summary>
         RestartTaken = 24,
+
+        /// <summary>The first half is over (#86): the ball is dead for the break.</summary>
+        HalfTime = 25,
+
+        /// <summary>The second half has started its kick-off's set-up, with the ends changed (#86).</summary>
+        SecondHalf = 26,
+
+        /// <summary>The match is over (#86).</summary>
+        FullTime = 27,
     }
 
     /// <summary>
