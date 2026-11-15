@@ -73,6 +73,34 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_cpu_slides_by_the_same_intent_and_wins_more_than_it_fouls()
+        {
+            SimConfig config = SpikeScenario.Config().With("halfLength", 60);
+            int started = 0, won = 0, fouled = 0;
+            for (ulong seed = 1; seed <= 3; seed++)
+            {
+                var sim = new Simulator(config, Squads.Match(config, 0x98000000UL + seed, 5, bothCpu: true));
+                var commands = new List<Command>();
+                var events = new List<SimEvent>();
+                while (sim.Tick < 4 * config.HalfTicks && sim.PeekState().Match.Phase != MatchPhase.FullTime)
+                {
+                    commands.Clear();
+                    events.Clear();
+                    KeeperControllers.Append(sim, commands);
+                    CpuControllers.Append(sim, commands);
+                    RestartControllers.Append(sim, commands);
+                    sim.Step(commands, events);
+                    started += events.Count(e => e.Kind == SimEventKind.SlideStarted);
+                    won += events.Count(e => e.Kind == SimEventKind.SlideWon);
+                    fouled += events.Count(e => e.Kind == SimEventKind.SlideFouled);
+                }
+            }
+
+            Assert.True(started > 0, "no CPU slide");
+            Assert.True(won > fouled, $"{won} won, {fouled} fouled, of {started}");
+        }
+
+        [Fact]
         public void A_slide_that_meets_the_ball_first_wins_it()
         {
             // From in front and to the side, the line through the ball before the man.
