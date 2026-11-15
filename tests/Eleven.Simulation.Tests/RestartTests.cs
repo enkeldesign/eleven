@@ -331,6 +331,52 @@ namespace Eleven.Simulation.Tests
         // ---- Plain data, checked; practice untouched ---------------------------------------------------------
 
         [Fact]
+        public void A_human_taker_who_wanders_off_is_brought_back_and_the_restart_is_still_taken()
+        {
+            // Home (human) awarded a throw; he runs away from the ball through the set-up and the
+            // wait, and keeps pushing the stick away after it.
+            var sim = new Simulator(C, Live(new Vec3(10, C.TouchlineY - 1, R), new Vec3(0, 10, 0), 3));
+            List<SimEvent> events = Run(sim, 20 * 60, brains: true, others: t => new[] { new Command(OneVOne.HomeController, t, new Vec2(-1, 0)) });
+            Assert.Contains(events, e => e.Kind == SimEventKind.RestartPlaced);
+            SimEvent placed = events.First(e => e.Kind == SimEventKind.RestartPlaced);
+            Assert.Contains(events, e => e.Kind == SimEventKind.RestartTaken && e.Tick > placed.Tick);
+            SimEvent taken = events.First(e => e.Kind == SimEventKind.RestartTaken && e.Tick > placed.Tick);
+            Assert.True(taken.Tick <= placed.Tick + C.RestartReadyTicks + C.RestartAutoTicks + 10 * 60, $"taken {taken.Tick - placed.Tick} steps after it was placed");
+        }
+
+        [Fact]
+        public void A_keeper_holding_the_ball_at_half_time_leaves_every_state_restorable()
+        {
+            SimConfig config = C.With("halfLength", 60);
+            SimState s = OneVOne.Match(config, seed: 5, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            s.Match.ClockTicks = config.HalfTicks - 2;
+            int keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == OneVOne.HomeKeeper);
+            Vec2 hands = s.Players.Single(p => p.Id == OneVOne.HomeKeeper).Position;
+            s.Ball.Position = new Vec3(hands.X, hands.Y, 1);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Ball.HeldBy = OneVOne.HomeKeeper;
+            s.Keepers[keeper].HoldTicks = 1;
+
+            var sim = new Simulator(config, s);
+            bool secondHalf = false;
+            for (int i = 0; i < config.HalfTimeTicks + 4 * 60 && !(secondHalf && sim.PeekState().Restart.Phase == RestartPhase.Ready); i++)
+            {
+                List<SimEvent> events = Run(sim, 1, brains: true);
+                secondHalf |= events.Any(e => e.Kind == SimEventKind.SecondHalf);
+                Simulator back = Snapshot.Restore(Snapshot.Capture(sim), config);
+                Assert.Equal(sim.StateHash(), back.StateHash());
+            }
+
+            Assert.True(secondHalf);
+            Assert.Equal(RestartPhase.Ready, sim.PeekState().Restart.Phase);
+        }
+
+        [Fact]
         public void The_restart_state_round_trips_mid_restart_and_a_bad_one_is_refused()
         {
             var sim = new Simulator(C, OneVOne.KickOff(C, seed: 3));
