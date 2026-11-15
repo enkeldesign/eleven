@@ -85,6 +85,28 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_switch_from_a_cpu_footballer_or_a_keeper_is_refused_and_the_state_stays_restorable()
+        {
+            // Every outfielder a CPU's: no controller here may hand his footballer to another CPU.
+            SimState s = Squads.Match(C, 5, 2, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            foreach ((int controller, int target) in new[] { (Human, Mate), (Keeper, Mate) })
+            {
+                var sim = new Simulator(C, s.Clone());
+                var events = new List<SimEvent>();
+                sim.Step(new[] { new Command(controller, 0, Vec2.Zero, switchTo: target) }, events);
+                Assert.Contains(events, e => e.Kind == SimEventKind.CommandRejected && e.Subject == controller && e.Other == (int)CommandRejection.SwitchRefused);
+                Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Switched);
+                Simulator back = Snapshot.Restore(Snapshot.Capture(sim), C);
+                Assert.Equal(sim.StateHash(), back.StateHash());
+            }
+        }
+
+        [Fact]
         public void A_pass_hands_the_human_its_receiver()
         {
             // The human on the ball, his teammate open ahead.
