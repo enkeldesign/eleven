@@ -50,6 +50,43 @@ Since #94: headers and volleys, and the supporter's diagonal break. Before, 77 g
 
 Before the side rules, both teammates chased the ball, and stood bunched for up to 29 s at a time.
 
+## Five a side: a shape (#96)
+
+From three a side (`Squads.ShapeFrom`), each outfielder has a place in his side's shape: `PlayerState.Slot` (state schema 18).
+- **Slots run from the back.** The kick-off's taker is the furthest forward. A footballer keeps his slot whoever controls him.
+- **His observation carries it,** with his side's size. It is his own, as his reaction delay is.
+
+| Role | Who | Where |
+| --- | --- | --- |
+| **Presser** | The first of the side to the ball, by its own flight (INV-13) | At the ball, as before |
+| **Cover** | The second, when the opponents have it | 6 m goal-side of the ball |
+| **Shape** | Everyone else | His slot's place |
+
+**The slot's place.**
+- **Rows:** a back row of half the rest, a middle row of the others, and one forward. At five a side that's 2-2-1, on lines at −24, −10 and +4 m.
+- **Spread:** each row is spread 14 m either side of the middle.
+- **Follow:** the rows move with 0.55 of the ball's x and 0.3 of its y.
+- **Step up:** they push 6 m further up when his side has the ball.
+- **Bounds:** they stay 6 m inside the lines.
+
+Technical constants in `OutfieldBrain`, not tactics: formations and instructions are M5's. One and two a side play as before.
+
+`eleven-sim squads <dir> 5` plays 12 CPU 5v5 matches of 2 × 180 s. `docs/simulation/squad-5v5-reference.csv` is the record, and CI diffs the run against it.
+
+| | |
+| --- | --- |
+| Finished | 12 of 12 |
+| Goals | 42, 3.5 a match |
+| Passes | 438, 195 reaching a teammate |
+| The ball changing sides | 1309 |
+| Mean spacing between teammates | 23.1 m |
+| Longest stretch bunched | 0 s |
+
+`ShapeTests` checks four seeds:
+- every 5v5 match finishes, with no side bunched for 6 s;
+- the forward plays more than 10 m ahead of the two defenders;
+- both sides win the ball back.
+
 ## Fifty matches, and a human seat (#95)
 
 `eleven-sim squads <dir> 2 50` plays M2's gate: 50 2v2 matches CPU against CPU. `eleven-sim squads <dir> 2 50 seat` plays them with a **human seat** on home's first outfielder.

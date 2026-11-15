@@ -66,6 +66,25 @@ A **standing player** (slower than 0.5 m/s, stick released) with the ball at res
 6. **Clean-up.** A touch clears the ball's spin and sets `TouchCooldown`. `SimEventKind.Touched` names the player.
    - It also closes every open aftertouch window, as a new kick does. A receiver who controls a short pass inside the passer's window has the ball, and the passer's input no longer shapes it (Codex on #62).
 
+## Running with the ball
+
+#96. A footballer with the ball at his feet runs at a share of his top speed. Sports science measures dribbling sprints at about 85–95 % of a free sprint, worse for poorer dribblers.
+
+- **The share** rises from `dribbleSpeedPoor` (0.85) at no ball control to `dribbleSpeedGood` (0.95) at full. At the reference 0.7 it is 0.92: 6.44 m/s.
+- **"At his feet":**
+  - under ATTACHED, the ball attached to him;
+  - under FREE, he played it last, it is on the ground, and it is within 4 m (`Simulator.DribbleReach`).
+
+  4 m covers a poor dribbler's heavier touches, which otherwise left him sprinting free.
+- **One body:** his movement and every prediction of his own run use the same body (the touch's target, the push, the turn's pivot), so they agree (INV-13).
+- **The touch's lead** still follows his absolute speed, so a slower carry plays a shorter lead.
+- **Knobs:** both shares are in the bench's Control tab, valid 0.5–1. Setting both to 1 turns the cost off.
+
+**What it changes.** Measured against #95:
+- CPU defenders win challenges in every tier, where they won none (with [the commit rule](challenge.md#the-rule)).
+- 50 CPU 1v1 matches score 320 goals, where they scored 344.
+- The turn and cut relationships are now measured with the cost off, at one sprint speed for every profile. A poorer dribbler also sprints slower, and the cut is easier at that pace.
+
 ## Tunables
 
 These are in the bench's Control tab, with `ballControl` on the Player tab.

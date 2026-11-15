@@ -239,6 +239,13 @@ jobs:
           path: squad-trials/
           if-no-files-found: error
 
+      # Five a side (#96): the shape, the press and the dribble's cost, against the recorded reference.
+      - name: Play the 5v5 trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-5v5 5 | tee squads5.txt
+          echo "::notice title=5v5 trials::$(sed 's| -> .*||' squads5.txt)"
+          diff docs/simulation/squad-5v5-reference.csv squad-5v5/squad-5v5-trials.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |
