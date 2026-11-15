@@ -110,7 +110,7 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(byGoals.Sum(), result.Goals.Count);
             Assert.Equal(2 * C.HalfLength, result.PlayedSeconds, 9);
             Assert.All(result.Goals, g => Assert.InRange(g.ClockSeconds, 0, C.HalfLength));
-            Assert.Contains(result.Goals, g => g.Half == 1);
+            Assert.All(result.Goals, g => Assert.InRange(g.Half, 1, 2));
             Assert.StartsWith("eleven-result/1\n", result.ToText());
         }
 

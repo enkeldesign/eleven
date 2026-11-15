@@ -117,14 +117,14 @@ namespace Eleven.Simulation.Tests
 
             // Mid-run, winding up to a miss, in the first kick's aftertouch window, ball in the air,
             // ball rolling beyond the line, winding up the return kick, in its window, ball at rest.
-            foreach (long at in new long[] { 1, 80, 95, 150, 400, 885, 895, 2000 })
+            foreach (long at in new long[] { 1, 80, 95, 150, 400, 880, 890, 2000 })
             {
                 var original = new Simulator(config, SpikeScenario.InitialState(config));
                 ScenarioRunner.Continue(original, stopAtTick: at);
                 byte[] snapshot = Snapshot.Capture(original);
                 PlayerState player = original.PeekState().Players[0];
-                if (at == 80 || at == 885) Assert.True(player.WindUpTicks > 0);
-                if (at == 95 || at == 895) Assert.True(player.AftertouchTicks > 0);
+                if (at == 80 || at == 880) Assert.True(player.WindUpTicks > 0);
+                if (at == 95 || at == 890) Assert.True(player.AftertouchTicks > 0);
 
                 ScenarioRun resumed = ScenarioRunner.Continue(Snapshot.Restore(snapshot, config));
 

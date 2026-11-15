@@ -19,8 +19,15 @@ namespace Eleven.Simulation.Tests
 
         private static readonly List<TurnCurve> Default = TurnCurves.Characterise(Config);
 
+        // The turn's and the cut's own relationships are measured at one sprint speed for every
+        // profile, the dribble's speed cost off (#96): otherwise poorer control also means a slower
+        // sprint, and the cut is easier at it.
+        private static readonly SimConfig Isolated = Config.With("dribbleSpeedPoor", 1).With("dribbleSpeedGood", 1);
+
+        private static readonly List<TurnCurve> Measured = TurnCurves.Characterise(Isolated);
+
         private static TurnCurve Of(string model, string turn, string profile, string speed, double degrees, double sweep = 0) =>
-            Default.Single(c => c.Model == model && c.Turn == turn && c.Profile == profile && c.Speed == speed && c.Degrees == degrees && c.SweepSeconds == sweep);
+            Measured.Single(c => c.Model == model && c.Turn == turn && c.Profile == profile && c.Speed == speed && c.Degrees == degrees && c.SweepSeconds == sweep);
 
         private static readonly double[] Sweeps = { 0, TurnCurves.SweepSeconds };
 
@@ -50,7 +57,7 @@ namespace Eleven.Simulation.Tests
         public void Under_attached_a_change_short_of_the_turn_angle_measures_the_same_off_and_on()
         {
             // The cut is FREE's alone (#75).
-            foreach (TurnCurve on in Default.Where(c => c.Model == "attached" && c.Turn == "on" && c.Degrees <= 90))
+            foreach (TurnCurve on in Measured.Where(c => c.Model == "attached" && c.Turn == "on" && c.Degrees <= 90))
             {
                 TurnCurve off = Of("attached", "off", on.Profile, on.Speed, on.Degrees, on.SweepSeconds);
                 Assert.Equal(Row(off), Row(on));
@@ -118,7 +125,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void The_cut_leaves_snapped_turns_and_attached_unchanged()
         {
-            foreach (TurnCurve on in Default.Where(c => c.Turn == "on" && (c.Model == "attached" || (c.Degrees >= 135 && c.SweepSeconds == 0))))
+            foreach (TurnCurve on in Measured.Where(c => c.Turn == "on" && (c.Model == "attached" || (c.Degrees >= 135 && c.SweepSeconds == 0))))
             {
                 TurnCurve noCut = Without.Single(c => c.Model == on.Model && c.Turn == "on" && c.Profile == on.Profile && c.Speed == on.Speed && c.Degrees == on.Degrees && c.SweepSeconds == on.SweepSeconds);
                 Assert.Equal(Row(noCut), Row(on));
@@ -126,7 +133,7 @@ namespace Eleven.Simulation.Tests
         }
 
         // The reference with the cut off and the turn on: #66 as it was.
-        private static readonly List<TurnCurve> Without = TurnCurves.Characterise(Config.With("cutStrength", 0));
+        private static readonly List<TurnCurve> Without = TurnCurves.Characterise(Isolated.With("cutStrength", 0));
 
         [Theory]
         [MemberData(nameof(Models))]

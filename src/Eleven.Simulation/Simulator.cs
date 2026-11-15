@@ -327,7 +327,7 @@ namespace Eleven.Simulation
             KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
             if (phase == KeeperPhase.Dive) player.Velocity = _state.Keepers[keeper].DiveVelocity;
             else if (phase == KeeperPhase.Recover) player.Velocity = Vec2.Zero;
-            else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, player.Capabilities, dt);
+            else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, Body(player), dt);
             player.Position += player.Velocity * dt;
 
             // Below a millimetre per second the player counts as stopped and keeps its last heading.
@@ -335,6 +335,38 @@ namespace Eleven.Simulation
             {
                 player.Heading = SimMath.Atan2(player.Velocity.Y, player.Velocity.X);
             }
+        }
+
+        /// <summary>
+        /// m. Under FREE, a dribbler still has the ball while it is this close (#96): his own touches,
+        /// a poor dribbler's heavier ones included, never leave him running free. A technical constant.
+        /// </summary>
+        public const double DribbleReach = 4.0;
+
+        /// <summary>
+        /// Whether the footballer has the ball at his feet (#96): attached to him under ATTACHED;
+        /// under FREE, played by him last, on the ground and within <see cref="DribbleReach"/>.
+        /// </summary>
+        private bool Carrying(in PlayerState player)
+        {
+            BallState ball = _state.Ball;
+            if (ball.HeldBy != 0) return false;
+            if (ball.AttachedTo != 0) return ball.AttachedTo == player.Id;
+            if (ball.LastPlayedBy != player.Id || ball.Position.Z > Config.KickMaxBallHeight) return false;
+            return (ball.Position.Horizontal - player.Position).LengthSquared <= DribbleReach * DribbleReach;
+        }
+
+        /// <summary>
+        /// The body he runs with (#96): with the ball at his feet, his top speed is the dribble share
+        /// of it, from dribbleSpeedPoor at no ball control to dribbleSpeedGood at full. The movement
+        /// and every prediction of his own run use it, so they agree (INV-13).
+        /// </summary>
+        private PlayerCapabilities Body(in PlayerState player)
+        {
+            PlayerCapabilities body = player.Capabilities;
+            if (!Carrying(player)) return body;
+            body.MaxSpeed *= Config.DribbleSpeedPoor + (Config.DribbleSpeedGood - Config.DribbleSpeedPoor) * body.BallControl;
+            return body;
         }
 
         /// <summary>
@@ -805,10 +837,30 @@ namespace Eleven.Simulation
                 Vec2 stick = command.Value.Move;
                 if (stick.X * toward.X + stick.Y * toward.Y < Closing) continue;
 
+                // Only a commit that will reach the ball (#96): run along his line through the
+                // commit, with the simulation's own movement (INV-13), against the ball carried on
+                // with its dribbler. One that would end short of it, chasing alongside, waits.
+                Vec2 commitLine = stick * (1 / SimMath.Sqrt(stick.LengthSquared));
+                int commit = CommitTicksFor(player.Capabilities.Tackling, Config);
+                double dt = Config.TickSeconds;
+                Vec2 velocity = player.Velocity, at = player.Position;
+                PlayerCapabilities body = Body(player);
+                for (int k = 0; k < commit; k++)
+                {
+                    velocity = Accelerate(velocity, commitLine, body, dt);
+                    at += velocity * dt;
+                }
+
+                // A controlled ball goes where its dribbler goes: his touches and the ATTACHED
+                // steering keep it ahead of him, at his pace.
+                Vec2 ballThen = ball.Position.Horizontal + _state.Players[controller].Velocity * (commit * dt);
+                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling);
+                if ((ballThen - at).LengthSquared > reachThen * reachThen) continue;
+
                 // He goes the way his stick asks, so he can lead the tackle into the ball's path.
                 player.Challenge = ChallengePhase.Commit;
-                player.ChallengeTicks = CommitTicksFor(player.Capabilities.Tackling, Config);
-                player.ChallengeLine = stick * (1 / SimMath.Sqrt(stick.LengthSquared));
+                player.ChallengeTicks = commit;
+                player.ChallengeLine = commitLine;
                 player.Turning = false;
                 events.Add(new SimEvent(tick, SimEventKind.ChallengeStarted, player.Id));
             }
@@ -1176,9 +1228,10 @@ namespace Eleven.Simulation
 
             double dt = Config.TickSeconds;
             Vec2 velocity = player.Velocity;
-            for (int k = 1; k < Config.TouchIntervalTicks; k++) velocity = Accelerate(velocity, move, player.Capabilities, dt);
+            PlayerCapabilities body = Body(player);
+            for (int k = 1; k < Config.TouchIntervalTicks; k++) velocity = Accelerate(velocity, move, body, dt);
             double speed = SimMath.Sqrt(velocity.LengthSquared);
-            if (speed < from * player.Capabilities.MaxSpeed || speed < TrapSpeed) return false;
+            if (speed < from * body.MaxSpeed || speed < TrapSpeed) return false;
 
             // Only a ball they are already sprinting with: one rolling their way. A first touch on
             // a ball at rest, across them or coming at them is a receiving touch, and never starts
@@ -1210,9 +1263,10 @@ namespace Eleven.Simulation
             double dt = Config.TickSeconds;
             int steps = Config.TouchIntervalTicks;
             Vec2 velocity = player.Velocity, position = player.Position;
+            PlayerCapabilities body = Body(player);
             for (int k = 1; k < steps; k++)
             {
-                velocity = Accelerate(velocity, move, player.Capabilities, dt);
+                velocity = Accelerate(velocity, move, body, dt);
                 position += velocity * dt;
             }
 
@@ -1301,11 +1355,12 @@ namespace Eleven.Simulation
         {
             double dt = Config.TickSeconds;
             Vec2 v = p.Velocity, x = p.Position, u = p.Velocity;
-            int bound = (int)(2 * p.Capabilities.MaxSpeed / (p.Capabilities.Acceleration * dt)) + 2;
+            PlayerCapabilities body = Body(p);
+            int bound = (int)(2 * body.MaxSpeed / (body.Acceleration * dt)) + 2;
             steps = 0;
             while (steps < bound)
             {
-                Vec2 next = Accelerate(v, move, p.Capabilities, dt);
+                Vec2 next = Accelerate(v, move, body, dt);
                 if (next.X * u.X + next.Y * u.Y <= 0) break;
                 v = next;
                 x += v * dt;

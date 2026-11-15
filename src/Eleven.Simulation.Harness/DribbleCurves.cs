@@ -174,7 +174,8 @@ namespace Eleven.Simulation.Harness
                 bool lost = attached ? s.Ball.AttachedTo == 0 : separation > config.ControlReach;
                 if (lost) curve.LostSeconds += config.TickSeconds;
 
-                if (attached && before.AttachedTo != 0 && s.Ball.AttachedTo != 0 && !taken)
+                // A step that brings the ball to rest is the ball's own stop, not a correction (#96).
+                if (attached && before.AttachedTo != 0 && s.Ball.AttachedTo != 0 && !taken && s.Ball.Velocity.Horizontal.LengthSquared > 0)
                 {
                     double change = SimMath.Sqrt((s.Ball.Velocity.Horizontal - before.Velocity.Horizontal).LengthSquared) / config.TickSeconds;
                     curve.MaxCorrectionMps2 = Math.Max(curve.MaxCorrectionMps2, change);

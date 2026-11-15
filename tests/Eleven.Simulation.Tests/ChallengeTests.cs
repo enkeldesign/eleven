@@ -122,17 +122,17 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Movement_avoids_the_challenge()
         {
-            // B commits at the ball where it is; A takes it away across him at a sprint.
+            // A takes the ball away across B at a sprint: B's commit wouldn't reach it, so he doesn't
+            // commit (#96), or commits and misses; either way A keeps it.
             SimState s = World(Free, 0.8);
             s.Players[0].Velocity = new Vec2(0, 7);
             s.Ball.Velocity = new Vec3(0, 7, 0);
             s.Players[1].Position = new Vec2(1.3, 0);
             var sim = new Simulator(Free, s);
             List<SimEvent> events = Run(sim, 60, _ => new Vec2(0, 1), t => t == 0 ? new Vec2(-1, 0) : new Vec2(-1, 0));
-            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeStarted);
-            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeMissed && e.Subject == B);
             Assert.DoesNotContain(events, e => e.Kind == SimEventKind.ChallengeWon);
-            Assert.Contains(events, e => e.Kind == SimEventKind.Touched && e.Subject == A && e.Tick > events.First(x => x.Kind == SimEventKind.ChallengeMissed).Tick);
+            Assert.Equal(events.Count(e => e.Kind == SimEventKind.ChallengeStarted), events.Count(e => e.Kind == SimEventKind.ChallengeMissed));
+            Assert.Contains(events, e => e.Kind == SimEventKind.Touched && e.Subject == A && e.Tick > 30);
         }
 
         // #96: a defender running alongside a dribbler, as a chase ends. He commits only when his
@@ -341,9 +341,14 @@ namespace Eleven.Simulation.Tests
             List<ChallengeCase> cases = ChallengeBench.Characterise(Free);
             Assert.Equal(2 * ChallengeBench.Approaches.Count * ChallengeBench.Speeds.Count * 3, cases.Count);
 
-            // Against a standing dribbler every challenge wins; a sprinting one avoids it; good tacklers win at least as often as poor ones.
+            // Against a standing dribbler every challenge wins; a sprinting one avoids most, and more
+            // than a jogging one (since #96 a challenge commits only when it will reach the ball, so
+            // a well-timed one can win at a sprint); good tacklers win at least as often as poor ones.
             Assert.All(cases.Where(c => c.DribblerSpeed == 0), c => Assert.Equal("won", c.Outcome));
-            Assert.All(cases.Where(c => c.DribblerSpeed == 7), c => Assert.NotEqual("won", c.Outcome));
+            int WonAt(double speed) => cases.Count(c => c.DribblerSpeed == speed && c.Outcome == "won");
+            int sprints = cases.Count(c => c.DribblerSpeed == 7);
+            Assert.True(WonAt(7) * 2 < sprints, $"{WonAt(7)} of {sprints} sprinting dribblers lost the ball");
+            Assert.True(WonAt(7) < WonAt(3.5), $"won {WonAt(7)} at a sprint, {WonAt(3.5)} at a jog");
             int Won(string profile) => cases.Count(c => c.Profile == profile && c.Outcome == "won");
             Assert.True(Won("good") > Won("poor"), $"good {Won("good")}, poor {Won("poor")}");
 
