@@ -652,8 +652,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('a 1v1 match starts from the address', !!started && started[1] === 'address', started ? started[0].replace('ELEVEN ', '') : 'no match started');
         }
 
-        // The match panel: score, clock and half, placed clear of the play.
-        const panel = (await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 15_000, fromM))?.match ?? null;
+        // The match panel: score, clock and half, placed clear of the play. From the match's start:
+        // one started from the address reports it at boot, before this point.
+        const startedAt = Math.max(0, logs.findIndex((l) => startedPattern.test(l)));
+        const panel = (await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 15_000, Math.min(fromM, startedAt)))?.match ?? null;
         check('the score, the clock and the half are shown, clear of the play', !!panel && panel[1] === 'yes', panel ? panel[0].replace('ELEVEN hud result ', '') : 'no panel report');
         await sleep(1500);
         await shot('kickoff');
@@ -935,7 +937,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const afterBoth = (await waitForLog(tracePattern, 10_000, logs.length))?.match ?? null;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       const moved = beforeBoth && afterBoth ? Math.hypot(Number(afterBoth[2]) - Number(beforeBoth[2]), Number(afterBoth[3]) - Number(beforeBoth[3])) : NaN;
-      check('the stick and KICK work at the same time', !!both && both[1] === 'flick' && moved > 1,
+      // A flick or, on a slow runner that holds it a little longer, a hold then flick: both are KICK.
+      check('the stick and KICK work at the same time', !!both && (both[1] === 'flick' || both[1] === 'holdflick') && moved > 1,
         `${both ? both[0].replace('ELEVEN action ', '') : 'no action line'}; player moved ${Number.isFinite(moved) ? moved.toFixed(2) : 'unknown'} m; since: ${since(fromBoth)}`);
 
       // A KICK finger held while the controls switch to A and back (through the bench, so not
@@ -1574,17 +1577,20 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       for (let i = 0; i < 16 && shelf.items[item]; i++) {
         const [x, y] = point(shelf.items[item][key]);
         const list = shelf.line?.[6] ? point(shelf.line[6]) : null;
-        const margin = 30;
-        if (!list || (y >= list[1] + margin && y <= list[1] + list[3] - margin)) {
-          await tap(at(x, y));
-          return shelf;
-        }
+        const margin = 22;
+        if (!list || (y >= list[1] + margin && y <= list[1] + list[3] - margin)) break;
         const centre = at(list[0] + list[2] / 2, list[1] + list[3] / 2);
         await page.mouse.move(centre.x, centre.y);
         const from = logs.length;
         await page.mouse.wheel(0, y > list[1] + list[3] / 2 ? 120 : -120);
-        shelf = await presetsLine(from);
+        // A wheel that scrolls nothing, at the list's end, reports nothing: keep the places held.
+        const next = await presetsLine(from);
+        if (!next.line) break;
+        shelf = next;
       }
+      if (shelf.items[item]) await tap(at(...point(shelf.items[item][key])));
+      // For diagnosis from the job log, which keeps no console artifact here.
+      console.log(`  ${name}: preset ${item} ${key} at ${shelf.items[item]?.[key] ?? 'none'}, list ${shelf.line?.[6] ?? 'unknown'}`);
       return shelf;
     };
     if (name === 'desktop') {
