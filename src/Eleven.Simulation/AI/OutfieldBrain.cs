@@ -63,6 +63,13 @@ namespace Eleven.Simulation.AI
         // Fraction of reach. Within this much of his reach, at the moment his kick would connect, he goes for a ball in the air.
         private const double AirReach = 0.8;
 
+        // The shape (#96), in m in his own frame with the ball at the centre spot: the back row's,
+        // the middle row's and the forward's lines, and the rows' half-width; how much of the ball's
+        // x and y the shape follows, how far it steps up when his side has the ball, how far inside
+        // the lines it stays, and how far goal-side of the ball the cover stands.
+        private const double BackLine = -24, MiddleLine = -10, ForwardLine = 4, ShapeWidth = 14;
+        private const double ShapeFollow = 0.55, ShapeDrift = 0.3, ShapeStepUp = 6, ShapeInside = 6, CoverGoalSide = 6;
+
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
 
@@ -205,6 +212,30 @@ namespace Eleven.Simulation.AI
             // when the teammate has it; marking the other opponent, goal-side, when he hasn't.
             // Only one of a side goes for the ball: the one who reaches it first, by its own flight, so
             // the receiver of a pass goes to meet it; on a tie, the one further toward +y.
+            // A side of three or more holds a shape (#96): the first of it to the ball goes for it;
+            // when the opponents have it, the second covers, goal-side; everyone else takes his
+            // place from the back, shifted with the ball, further up when his side has it.
+            if (seen.SideSize >= 3 && seen.Slot > 0)
+            {
+                Meet(seen, config, me, seen.MaxSpeed, out double myFirst);
+                int sooner = 0;
+                foreach (SeenPlayer other in seen.Others)
+                {
+                    if (!other.Teammate || other.Keeper) continue;
+                    Meet(seen, config, other.Position, seen.MaxSpeed, out double theirFirst);
+                    if (theirFirst + 0.05 < myFirst || (theirFirst <= myFirst + 0.05 && other.Position.Y > me.Y)) sooner++;
+                }
+
+                bool ours = mates <= HasBall && mates <= theirs;
+                if (sooner == 1 && !ours)
+                {
+                    Vec2 cover = ball + Unit(ownGoal - ball) * CoverGoalSide;
+                    return new CpuPlan(CpuMode.Defend, Ease(cover - me));
+                }
+
+                if (sooner >= 1) return new CpuPlan(CpuMode.Support, Ease(ShapePlace(seen, config, ball, ours) - me));
+            }
+
             bool second = false;
             if (mateSeen)
             {
@@ -301,6 +332,33 @@ namespace Eleven.Simulation.AI
             }
 
             return false;
+        }
+
+        // His place in his side's shape (#96), in his own frame: a back row of half the rest, a middle
+        // row of the others and one forward, each row spread across the pitch. It follows the ball
+        // up and down and a little across, and steps up when his side has the ball.
+        private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
+        {
+            int n = seen.SideSize, slot = seen.Slot;
+            int back = n / 2, middle = n - 1 - back;
+            double x, y;
+            if (slot >= n)
+            {
+                x = ForwardLine;
+                y = 0;
+            }
+            else
+            {
+                bool inBack = slot <= back;
+                int count = inBack ? back : middle, index = inBack ? slot - 1 : slot - back - 1;
+                x = inBack ? BackLine : MiddleLine;
+                y = count <= 1 ? 0 : (-1 + 2.0 * index / (count - 1)) * ShapeWidth;
+            }
+
+            x += ShapeFollow * ball.X + (ours ? ShapeStepUp : 0);
+            y += ShapeDrift * ball.Y;
+            double long_ = config.GoalLineX - ShapeInside, wide = config.TouchlineY - ShapeInside;
+            return new Vec2(x > long_ ? long_ : x < -long_ ? -long_ : x, y > wide ? wide : y < -wide ? -wide : y);
         }
 
         // Where the ball will be, on his read of its flight, when a kick he decided on now would
