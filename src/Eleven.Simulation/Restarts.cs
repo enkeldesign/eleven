@@ -236,6 +236,8 @@ namespace Eleven.Simulation
 
                 if (keeper >= 0)
                 {
+                    // The ball is out of his hands: his hold ends with it.
+                    _state.Keepers[keeper].HoldTicks = 0;
                     _state.Keepers[keeper].Phase = KeeperPhase.Position;
                     _state.Keepers[keeper].PhaseTicks = 0;
                     _state.Keepers[keeper].DiveVelocity = Vec2.Zero;
@@ -312,10 +314,26 @@ namespace Eleven.Simulation
             // human taker is left alone until the wait runs out.
             bool cpu = Array.FindIndex(state.Cpus, c => c.PlayerId == body.Id) >= 0;
             if (!cpu && (r.PhaseTicks > 0 || r.WaitTicks < simulator.Config.RestartAutoTicks)) return;
-            bool kick = r.PhaseTicks == 0 && body.WindUpTicks == 0 && body.KickCooldown == 0;
+            SimConfig config = simulator.Config;
+
+            // A taker who has wandered off the ball (a human may, through the set-up) is walked
+            // back to stand just off it first, slowing as he arrives; he kicks only from within
+            // reach, so a kick is never wasted on a ball he can't meet and the match never stalls.
+            Vec2 toBall = state.Ball.Position.Horizontal - body.Position;
+            double away = SimMath.Sqrt(toBall.LengthSquared);
+            Vec2 move = Vec2.Zero;
+            if (away > 0.9 * config.KickReach)
+            {
+                double standOff = Math.Min(Simulator.TakerBehind, 0.6 * config.KickReach);
+                Vec2 to = toBall * ((away - standOff) / away);
+                double length = SimMath.Sqrt(to.LengthSquared);
+                move = to * (1 / Math.Max(length, 2.0));
+            }
+
+            bool kick = move.LengthSquared == 0 && r.PhaseTicks == 0 && body.WindUpTicks == 0 && body.KickCooldown == 0;
 
             commands.RemoveAll(c => c.ControllerId == body.OwnerControllerId);
-            commands.Add(new Command(body.OwnerControllerId, state.Tick, Vec2.Zero, kick ? Take(state, simulator.Config, r, body) : (KickIntent?)null));
+            commands.Add(new Command(body.OwnerControllerId, state.Tick, move, kick ? Take(state, config, r, body) : (KickIntent?)null));
         }
 
         /// <summary>
