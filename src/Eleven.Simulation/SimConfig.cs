@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 12;
+        public const int FormatVersion = 13;
 
         public SimConfig(
             int tickRate = 60,
@@ -81,7 +81,9 @@ namespace Eleven.Simulation
             double turnStrength = 6,
             double cutAngle = 0.35,
             double cutStrength = 5,
-            double cutInterval = 0.07)
+            double cutInterval = 0.07,
+            double pushSpeed = 0,
+            double pushFromSpeed = 0.9)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -142,6 +144,8 @@ namespace Eleven.Simulation
             CutAngle = cutAngle;
             CutStrength = cutStrength;
             CutInterval = cutInterval;
+            PushSpeed = pushSpeed;
+            PushFromSpeed = pushFromSpeed;
 
             CheckTunableRanges();
 
@@ -431,6 +435,19 @@ namespace Eleven.Simulation
         /// </summary>
         public double CutInterval { get; }
 
+        /// <summary>
+        /// m/s. Push-and-chase under FREE (#63, an experiment): how much faster than the footballer
+        /// a sprint's touch sends the ball. The ball runs ahead, beyond their reach, slows under its
+        /// own rolling friction, and they catch it up. 0 is off: FREE's short touches, unchanged.
+        /// </summary>
+        public double PushSpeed { get; }
+
+        /// <summary>
+        /// Fraction of the footballer's max speed. A touch is a push (#63) when the stick asks for
+        /// at least this much and they will be running at least this fast by their next touch.
+        /// </summary>
+        public double PushFromSpeed { get; }
+
         /// <summary>cos(<see cref="CutAngle"/>), through the simulation's own maths.</summary>
         internal double CutCos { get; }
 
@@ -509,7 +526,9 @@ namespace Eleven.Simulation
                 turnStrength: r.ReadDouble(nameof(TurnStrength)),
                 cutAngle: r.ReadDouble(nameof(CutAngle)),
                 cutStrength: r.ReadDouble(nameof(CutStrength)),
-                cutInterval: r.ReadDouble(nameof(CutInterval)));
+                cutInterval: r.ReadDouble(nameof(CutInterval)),
+                pushSpeed: r.ReadDouble(nameof(PushSpeed)),
+                pushFromSpeed: r.ReadDouble(nameof(PushFromSpeed)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -575,6 +594,8 @@ namespace Eleven.Simulation
             w.WriteDouble(CutAngle, nameof(CutAngle));
             w.WriteDouble(CutStrength, nameof(CutStrength));
             w.WriteDouble(CutInterval, nameof(CutInterval));
+            w.WriteDouble(PushSpeed, nameof(PushSpeed));
+            w.WriteDouble(PushFromSpeed, nameof(PushFromSpeed));
             return w.ToArray();
         }
 

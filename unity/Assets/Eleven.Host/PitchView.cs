@@ -40,6 +40,14 @@ namespace Eleven.Host
 
         // Presentation constants, not simulation config.
         private const float MinHalfExtent = 7f;
+
+        /// <summary>
+        /// The widest view (#31): the play area's shorter side never shows more than this many
+        /// metres either side of its centre, so the footballer and the ball keep a useful size
+        /// however far apart they are. 17.5 m is a 35 m view, about a third of the pitch's length,
+        /// as Sensible Soccer shows. A technical reference; <c>?maxview=</c> tries others.
+        /// </summary>
+        public const float MaxHalfExtent = 17.5f;
         private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
@@ -64,17 +72,21 @@ namespace Eleven.Host
         private Vector3 _ballShown;
         private PitchOrientation _orientation = PitchOrientation.Practice;
         private readonly float _minAhead;
+        private readonly float _maxHalfExtent;
         private float _ahead;
         private float _across;
+        private float _pixelsPerMetre;
 
         /// <param name="minAhead">
         /// The least the play shows up-field either side of the action, in metres (#72, <c>?ahead=</c>);
         /// the camera zooms out to give it. The reference is the closest zoom's, so it changes nothing.
         /// </param>
-        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut, float minAhead = MinHalfExtent)
+        /// <param name="maxHalfExtent">The widest view, in metres either side of the play area's centre on its shorter side (#31, <c>?maxview=</c>).</param>
+        public PitchView(SimConfig config, Transform root, Mowing mowing = Mowing.Crosscut, float minAhead = MinHalfExtent, float maxHalfExtent = MaxHalfExtent)
         {
             Grass = mowing;
             _minAhead = Mathf.Max(MinHalfExtent, minAhead);
+            _maxHalfExtent = Mathf.Max(MinHalfExtent, maxHalfExtent);
             _config = config;
             Disc = MakeDiscTexture(64);
             Sprite disc = Sprite.Create(Disc, new Rect(0, 0, Disc.width, Disc.height), new Vector2(0.5f, 0.5f), Disc.width);
@@ -204,14 +216,16 @@ namespace Eleven.Host
             var attacked = new Vector3((float)_config.GoalLineX * _orientation.Up, 0, 0);
             var goal = new Vector3((float)_config.FrameAxisX, 0, 0);
             return System.FormattableString.Invariant(
-                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m");
+                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m ppm={_pixelsPerMetre:F2} playerPx={PlayerDiameter * _pixelsPerMetre:F1} ballPx={_ballDiameter * _pixelsPerMetre:F1} maxview={_maxHalfExtent:F1}m");
         }
 
         /// <summary>
         /// Frames the player and the ball inside the HUD's play area: centred between them, zoomed
         /// out just enough to keep both in view with a margin. The play area's shorter side always
         /// shows at least <see cref="MinHalfExtent"/> metres either side of the centre, and its
-        /// height, up-field, at least the least look-ahead. Player and ball are kept below the
+        /// height, up-field, at least the least look-ahead. It never shows more than the widest
+        /// view (#31): a ball further off than that leaves the frame, and the footballer stays in
+        /// it, toward the edge the ball left by. Player and ball are kept below the
         /// status line, which sits over the top of the play area. The camera still renders the
         /// whole screen; it is shifted so the play lands in the uncovered part. All of it is worked
         /// out on screen, through the orientation (#72).
@@ -229,11 +243,24 @@ namespace Eleven.Host
             float band = Mathf.Clamp(layout.StatusArea.yMax - play.yMin, 0, play.height * 0.5f);
             var framed = new Rect(play.x, play.y + band, play.width, play.height - band);
 
-            // Pixels per metre: the closest zoom allowed, reduced until both fit.
-            float pixelsPerMetre = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
-            pixelsPerMetre = Mathf.Min(pixelsPerMetre, play.height * 0.5f / _minAhead);
-            pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.width * 0.5f / (halfSpan.x + FramingMargin));
+            // Pixels per metre: the closest zoom allowed, reduced until both fit, but never past
+            // the widest view (#31).
+            float closest = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
+            closest = Mathf.Min(closest, play.height * 0.5f / _minAhead);
+            float widest = Mathf.Min(closest, Mathf.Min(play.width, play.height) * 0.5f / _maxHalfExtent);
+            float pixelsPerMetre = Mathf.Min(closest, framed.width * 0.5f / (halfSpan.x + FramingMargin));
             pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.height * 0.5f / (halfSpan.y + FramingMargin));
+            pixelsPerMetre = Mathf.Max(pixelsPerMetre, widest);
+            _pixelsPerMetre = pixelsPerMetre;
+
+            // At the widest view the two may not both fit: the footballer does, with the margin.
+            Vec2 toPlayer = _orientation.ToScreen(new Vec2(player.x - centre.x, player.y - centre.y));
+            float reachX = Mathf.Max(0, framed.width * 0.5f / pixelsPerMetre - FramingMargin);
+            float reachY = Mathf.Max(0, framed.height * 0.5f / pixelsPerMetre - FramingMargin);
+            float overX = Mathf.Abs((float)toPlayer.X) - reachX, overY = Mathf.Abs((float)toPlayer.Y) - reachY;
+            if (overX > 0) centre += World(new Vec2(Mathf.Sign((float)toPlayer.X) * overX, 0));
+            if (overY > 0) centre += World(new Vec2(0, Mathf.Sign((float)toPlayer.Y) * overY));
+
             _camera.orthographicSize = layout.ScreenHeight * 0.5f / pixelsPerMetre;
             _ahead = (framed.height * 0.5f + band) / pixelsPerMetre;
             _across = play.width * 0.5f / pixelsPerMetre;

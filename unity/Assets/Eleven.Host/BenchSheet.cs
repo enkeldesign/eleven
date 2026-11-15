@@ -33,8 +33,11 @@ namespace Eleven.Host
         private static readonly string[] Groups =
         {
             TunableParameter.BallGroup, TunableParameter.KickGroup, TunableParameter.PassGroup, TunableParameter.ControlGroup, TunableParameter.AttachedGroup, TunableParameter.GoalGroup, TunableParameter.KeeperGroup,
-            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group,
+            TunableParameter.PlayerGroup, ActionSurfaceSettings.Group, PresetsTab,
         };
+
+        // The last tab (#46): named presets, not a group of knobs.
+        private const string PresetsTab = "Presets";
 
         private readonly UiRoot _ui;
         private readonly bool _trace;
@@ -46,6 +49,16 @@ namespace Eleven.Host
         private readonly Func<int> _activeControls;
         private readonly Action<int> _switchControls;
         private readonly System.Action _closed;
+        private readonly Func<string> _loadPresets;
+        // Writes the shelf to the device; false when the device refused it.
+        private readonly Func<string, bool> _storePresets;
+        private readonly Func<string> _build;
+        private readonly UiKit.TextInput _presetName;
+        private readonly UiKit.Action _presetSave;
+        private readonly Label _presetStatus;
+        private readonly List<VisualElement> _presetStops = new List<VisualElement>();
+        private readonly List<string> _presetPlaces = new List<string>();
+        private PresetShelf _shelf = new PresetShelf();
         private readonly Dictionary<string, double> _pending = new Dictionary<string, double>();
         private readonly Dictionary<string, UiKit.Value> _shown = new Dictionary<string, UiKit.Value>();
         private readonly Theme _theme = Theme.Ordinary;
@@ -61,6 +74,14 @@ namespace Eleven.Host
         private readonly VisualElement _controlsBlock;
         private readonly UiKit.Segmented _tabs;
         private readonly ScrollView _list;
+        private readonly Label _modelsLabel;
+        private readonly Label _viewsLabel;
+        // The wide arrangement's columns (#31): the live switches over the actions, then the tabs.
+        private readonly VisualElement _switchColumn;
+        private readonly ScrollView _switchScroll;
+        private readonly ScrollView _tabScroll;
+        private string _arranged;
+        private readonly VisualElement _liveBlock = new VisualElement { name = "Bench live" };
         private readonly UiKit.Action _close;
         private readonly UiKit.Action _revert;
         private readonly UiKit.Action _applyAction;
@@ -69,8 +90,12 @@ namespace Eleven.Host
         private bool _reportControls;
 
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
-            Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls, System.Action closed)
+            Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls,
+            Func<string> loadPresets, Func<string, bool> storePresets, Func<string> build, System.Action closed)
         {
+            _loadPresets = loadPresets;
+            _storePresets = storePresets;
+            _build = build;
             _secondHalf = secondHalf;
             _switchView = switchView;
             _activeControls = activeControls;
@@ -104,6 +129,11 @@ namespace Eleven.Host
             _sheet.Content.style.flexGrow = 1;
             _sheet.Content.style.flexShrink = 1;
             _sheet.Content.style.minHeight = 0;
+            // Only the knob list gives way when the sheet is short of room. Left to shrink, the
+            // title and the actions' row were squeezed in proportion, and the actions hung out of
+            // the sheet's bottom (#31).
+            _sheet.Actions.style.flexShrink = 0;
+            if (_sheet.Title != null) _sheet.Title.style.flexShrink = 0;
 
             _state = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _pendingText = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
@@ -112,30 +142,26 @@ namespace Eleven.Host
             _problem = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _problem.style.display = DisplayStyle.None;
             _problem.style.marginBottom = Spacing.S;
-            _sheet.Content.Add(_state);
-            _sheet.Content.Add(_pendingText);
-            _sheet.Content.Add(_problem);
+            _state.style.flexShrink = _pendingText.style.flexShrink = _problem.style.flexShrink = 0;
 
             // The live FREE ↔ ATTACHED switch (#60): it acts at once and the run goes on, unlike the
             // knobs below, which wait for APPLY / RETRY and a fresh run.
-            Label modelsLabel = UiKit.Text(_theme, TypeScale.Body, "Ball control. Switches now; the run goes on.", Role.Text);
-            modelsLabel.style.marginBottom = Spacing.Xs;
-            _sheet.Content.Add(modelsLabel);
+            _modelsLabel = UiKit.Text(_theme, TypeScale.Body, ModelsText, Role.Text);
+            _modelsLabel.style.marginBottom = Spacing.Xs;
+            _modelsLabel.style.flexShrink = 0;
             _models = UiKit.MakeSegmented(ui, _theme, Models, 0, index => _switchModel(index == 1 ? ControlModel.Attached : ControlModel.Free));
             _models.Element.style.marginBottom = Spacing.M;
             _models.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_models.Element);
 
             // The half-time flip, to test (#72): 180° shows a second half's switched ends, still
             // attacking up. It acts at once and the run goes on; only the view and the stick's
             // mapping change.
-            Label viewsLabel = UiKit.Text(_theme, TypeScale.Body, "Pitch view. 180° is a second half: ends switched, still attacking up.", Role.Text);
-            viewsLabel.style.marginBottom = Spacing.Xs;
-            _sheet.Content.Add(viewsLabel);
+            _viewsLabel = UiKit.Text(_theme, TypeScale.Body, ViewsText, Role.Text);
+            _viewsLabel.style.marginBottom = Spacing.Xs;
+            _viewsLabel.style.flexShrink = 0;
             _views = UiKit.MakeSegmented(ui, _theme, Views, 0, index => _switchView(index == 1));
             _views.Element.style.marginBottom = Spacing.M;
             _views.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_views.Element);
 
             // The touch candidates (#28, #76): a choice anyone can make without a gesture, at the top
             // of the Touch tab with both candidates' knobs. It acts at once and the run goes on; only
@@ -151,12 +177,22 @@ namespace Eleven.Host
             _controlsBlock.Add(_controls.Element);
             _controls.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
 
+            // Named presets (#46): a name to save the current values under, and what happened last.
+            _presetName = UiKit.MakeTextInput(_theme, "Preset name", BenchPreset.MaxNameLength);
+            _presetName.Element.style.flexGrow = 1;
+            _presetName.Element.style.flexShrink = 1;
+            _presetName.Element.style.marginRight = Spacing.S;
+            _presetSave = UiKit.MakeAction(ui, _theme, ActionRole.Supporting, "Save preset", SavePreset, "Save");
+            _presetStatus = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
+            _presetStatus.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _presetStatus.style.marginBottom = Spacing.S;
+            _presetSave.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
+
             _tabs = UiKit.MakeSegmented(ui, _theme, Groups, 0, ShowGroup);
             _tabs.Element.style.marginBottom = Spacing.S;
             // The tabs wrap onto a second row on a phone. They must never shrink: squeezed to one
             // row's height, the second row overflows under the knob list, which takes its presses.
             _tabs.Element.style.flexShrink = 0;
-            _sheet.Content.Add(_tabs.Element);
 
             _list = UiKit.MakeScroll();
             _list.style.flexGrow = 1;
@@ -167,7 +203,23 @@ namespace Eleven.Host
                 if (e.target is VisualElement focused && _list.contentContainer.Contains(focused)) _list.ScrollTo(focused);
             });
             _list.style.minHeight = 0;
-            _sheet.Content.Add(_list);
+            _list.style.minWidth = 0;
+
+            // The wide arrangement (#31), for a screen too short to stack all of this: a landscape
+            // phone. Three columns side by side, each scrolling on its own if it must.
+            _switchScroll = UiKit.MakeScroll();
+            _switchScroll.style.flexGrow = 1;
+            _switchScroll.style.flexShrink = 1;
+            _switchScroll.style.minHeight = 0;
+            _switchColumn = new VisualElement { name = "Bench switches" };
+            _switchColumn.style.width = Length.Percent(30);
+            _switchColumn.style.flexShrink = 0;
+            _switchColumn.style.marginRight = Spacing.M;
+            _tabScroll = UiKit.MakeScroll();
+            _tabScroll.name = "Bench tabs";
+            _tabScroll.style.width = Length.Percent(27);
+            _tabScroll.style.flexShrink = 0;
+            _tabScroll.style.marginRight = Spacing.M;
 
             _close = UiKit.MakeAction(ui, _theme, ActionRole.Navigation, "Close", Close);
             _revert = UiKit.MakeAction(ui, _theme, ActionRole.Utility, "Revert", Revert);
@@ -182,9 +234,125 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
             _sheet.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
+            Arrange();
+            // The screen turned or was resized with the sheet open: the other arrangement, at once.
+            _scrim.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                if (Open) Arrange();
+            });
+        }
+
+        private const string ModelsText = "Ball control. Switches now; the run goes on.";
+        private const string ViewsText = "Pitch view. 180° is a second half: ends switched, still attacking up.";
+
+        /// <summary>A screen shorter than this many points, and wider than it is tall, gets the wide arrangement (#31).</summary>
+        public const float WideBelowHeight = 480;
+
+        /// <summary>A screen shorter than this many points, and not wide, gets the compact arrangement (#31): every phone in portrait.</summary>
+        public const float CompactBelowHeight = 720;
+
+        /// <summary>Under this many points high, the compact arrangement's live switches scroll with the knobs too (#31): a compact phone.</summary>
+        public const float SwitchesScrollBelowHeight = 600;
+
+        // Whether the live switches scroll with the knobs: the compact arrangement on a screen too short for them to stay put.
+        private bool _switchesScroll;
+
+        /// <summary>The arrangement a screen of this size, in points, calls for: stacked, wide or compact.</summary>
+        public static string ArrangementFor(float width, float height) =>
+            height > 0 && height < WideBelowHeight && width > height ? "wide"
+            : height > 0 && height < CompactBelowHeight ? "compact"
+            : "stacked";
+
+        /// <summary>
+        /// Lays the sheet out for the screen it has (#31).
+        ///
+        /// Stacked, where there is height for it: the state, the live switches, the tabs, the knob
+        /// list and the actions, one over the other, with the list taking what is left.
+        ///
+        /// Wide, on a screen too short for that (a landscape phone, where the stacked rows left the
+        /// knob list no room at all): three columns. The live switches over the actions; the tabs;
+        /// and the knob list at the sheet's full height. The title goes and the labels shorten, so
+        /// every switch, every tab and every action is in reach without scrolling.
+        /// </summary>
+        private void Arrange()
+        {
+            Rect screen = _ui.Root.layout;
+            string arranged = ArrangementFor(screen.width, screen.height);
+            bool switchesScroll = arranged == "compact" && screen.height < SwitchesScrollBelowHeight;
+            if (_arranged == arranged && _switchesScroll == switchesScroll) return;
+            _arranged = arranged;
+            _switchesScroll = switchesScroll;
+            bool wide = arranged == "wide", compact = arranged == "compact";
+
+            _sheet.Content.Clear();
+            _liveBlock.Clear();
+            _modelsLabel.text = wide || compact ? "Ball control" : ModelsText;
+            _viewsLabel.text = wide || compact ? "Pitch view (180°: second half)" : ViewsText;
+            if (wide)
+            {
+                _switchScroll.Add(_modelsLabel);
+                _switchScroll.Add(_models.Element);
+                _switchScroll.Add(_viewsLabel);
+                _switchScroll.Add(_views.Element);
+                _switchScroll.Add(_state);
+                _switchScroll.Add(_pendingText);
+                _switchScroll.Add(_problem);
+                _switchColumn.Add(_switchScroll);
+                _switchColumn.Add(_sheet.Actions);
+                _sheet.Actions.style.marginTop = Spacing.S;
+                _sheet.Actions.style.justifyContent = Justify.FlexStart;
+                _tabScroll.Add(_tabs.Element);
+                _sheet.Content.style.flexDirection = FlexDirection.Row;
+                _sheet.Content.Add(_switchColumn);
+                _sheet.Content.Add(_tabScroll);
+                _sheet.Content.Add(_list);
+                _sheet.Element.style.maxWidth = StyleKeyword.None;
+            }
+            else
+            {
+                _sheet.Content.style.flexDirection = FlexDirection.Column;
+                // Compact: the title goes, and what is running and pending scrolls with the knobs,
+                // after them, so the list has room. The live switches, the tabs and the actions stay put.
+                // On a compact phone the live switches scroll after the knobs as well.
+                VisualElement status = compact ? _liveBlock : _sheet.Content;
+                VisualElement switches = _switchesScroll ? _liveBlock : _sheet.Content;
+                status.Add(_state);
+                status.Add(_pendingText);
+                status.Add(_problem);
+                switches.Add(_modelsLabel);
+                switches.Add(_models.Element);
+                switches.Add(_viewsLabel);
+                switches.Add(_views.Element);
+                _sheet.Content.Add(_tabs.Element);
+                _sheet.Content.Add(_list);
+                _sheet.Body.Add(_sheet.Actions);
+                _sheet.Actions.style.marginTop = compact ? Spacing.S : Spacing.L;
+                _sheet.Actions.style.justifyContent = Justify.FlexEnd;
+                _sheet.Element.style.maxWidth = 560;
+            }
+
+            if (_sheet.Title != null) _sheet.Title.style.display = wide || compact ? DisplayStyle.None : DisplayStyle.Flex;
+
+            // Wrapped onto two rows in a narrow column, the actions need a gap between the rows.
+            foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) action.Element.style.marginBottom = wide || compact ? Spacing.Xs : 0;
+
+            // The list holds the live block in the compact arrangement.
+            if (Open) ShowGroup(_group);
+            _reportOpen = Open;
+            _reportControls = Open;
+            if (_trace) Log($"ELEVEN bench arranged={arranged} screen={screen.width:F0}x{screen.height:F0}");
         }
 
         public bool Open { get; private set; }
+
+        /// <summary>The screen's unsafe edges, in points (#31): the sheet keeps clear of them.</summary>
+        public void Inset(float top, float right, float bottom, float left)
+        {
+            _scrim.style.paddingTop = Spacing.M + top;
+            _scrim.style.paddingRight = Spacing.M + right;
+            _scrim.style.paddingBottom = Spacing.M + bottom;
+            _scrim.style.paddingLeft = Spacing.M + left;
+        }
 
         /// <summary>Opens the sheet on the applied values and any edits still pending from before.</summary>
         public void Show()
@@ -192,9 +360,12 @@ namespace Eleven.Host
             if (Open) return;
             Open = true;
             _scrim.style.display = DisplayStyle.Flex;
+            _shelf = PresetShelf.Read(_loadPresets());
+            Arrange();
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
+            _presetStatus.text = "";
             ShowGroup(_group);
             _reportOpen = true;
             Describe();
@@ -222,6 +393,7 @@ namespace Eleven.Host
             foreach (UiKit.Raised view in _views.Segments) order.Add(view.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
             if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
+            if (PresetsShown) order.AddRange(_presetStops);
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
             {
                 if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
@@ -260,9 +432,184 @@ namespace Eleven.Host
                 _list.Add(control.Element);
             }
 
+            if (PresetsShown) ShowPresets(applied);
+            if (_arranged == "compact") _list.Add(_liveBlock);
             _reportControls = true;
             if (_trace) Log($"ELEVEN bench group name={Groups[index]}");
         }
+
+        private bool PresetsShown => Groups[_group] == PresetsTab;
+
+        // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with
+        // Load and Delete, then any stored preset this build can't read, with the reason.
+        private void ShowPresets(BenchCandidate applied)
+        {
+            _presetStops.Clear();
+            _presetPlaces.Clear();
+            Label intro = UiKit.Text(_theme, TypeScale.Body,
+                "Save the values shown, pending changes included, under a short name. Load sets a preset's values as pending changes. A preset is not approved feel.", Role.Text);
+            intro.style.marginBottom = Spacing.S;
+            _list.Add(intro);
+
+            VisualElement save = UiKit.Row(Spacing.S);
+            save.style.marginBottom = Spacing.Xs;
+            save.Add(_presetName.Element);
+            save.Add(_presetSave.Element);
+            _list.Add(save);
+            _list.Add(_presetStatus);
+            _presetStops.Add(_presetName.Field);
+            _presetStops.Add(_presetSave.Element);
+
+            PresetRow(BenchPreset.TechnicalReference, applied, deletable: false);
+            foreach (BenchPreset preset in _shelf.Presets) PresetRow(preset, applied, deletable: true);
+            foreach (string problem in _shelf.Problems)
+            {
+                Label unread = UiKit.Text(_theme, TypeScale.Body, $"Can't be loaded. {problem}", Role.Text);
+                unread.style.marginTop = Spacing.S;
+                _list.Add(unread);
+            }
+        }
+
+        // Whether a preset is what is running: its values, its ball control model and its touch candidate.
+        private bool Running(BenchPreset preset, BenchCandidate applied) =>
+            preset.Candidate.ChangesFrom(applied) == 0 && preset.Model == applied.Config.ControlModel && (int)preset.Controls == _activeControls();
+
+        private void PresetRow(BenchPreset preset, BenchCandidate applied, bool deletable)
+        {
+            int fromReference = preset.Candidate.ChangesFrom(BenchCandidate.Reference);
+            string about = !deletable ? "The untuned reference values."
+                : $"{fromReference} changed from the reference · {Controls[(int)preset.Controls]} · {(preset.Model == ControlModel.Attached ? "Attached" : "Free")} · build {(preset.Build.Length > 0 ? preset.Build : "unknown")}";
+            if (Running(preset, applied)) about += " · running";
+
+            var row = new VisualElement { name = $"Preset {preset.Name}" };
+            row.style.marginTop = Spacing.S;
+            Label name = UiKit.Text(_theme, TypeScale.Label, preset.Name, Role.TextHeading);
+            Label meta = UiKit.Text(_theme, TypeScale.Body, about, Role.Text);
+            meta.style.marginBottom = Spacing.Xs;
+            row.Add(name);
+            row.Add(meta);
+            VisualElement actions = UiKit.Row(Spacing.S);
+            BenchPreset p = preset;
+            UiKit.Action load = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, $"Load {preset.Name}", () => LoadPreset(p), "Load");
+            actions.Add(load.Element);
+            _presetStops.Add(load.Element);
+            UiKit.Action delete = null;
+            if (deletable)
+            {
+                delete = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, $"Delete {preset.Name}", () => DeletePreset(p.Name), "Delete");
+                actions.Add(delete.Element);
+                _presetStops.Add(delete.Element);
+            }
+
+            UiKit.Gaps(actions);
+            row.Add(actions);
+            _list.Add(row);
+
+            // Where its actions are, for the smoke test, once they are laid out.
+            int place = _presetPlaces.Count;
+            _presetPlaces.Add("");
+            load.Element.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                float s = _ui.PixelsPerPoint;
+                string At(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
+                if (place < _presetPlaces.Count) _presetPlaces[place] = $"{p.Name.Replace(' ', '_')}:{At(load.Element)}:{(delete != null ? At(delete.Element) : "none")}";
+                _reportControls = true;
+                Report();
+            });
+        }
+
+        // Load: the preset's touch candidate and ball control model become the active ones at once,
+        // as their live switches would, and its values the pending changes, whole. Nothing runs
+        // under the values until APPLY / RETRY.
+        private void LoadPreset(BenchPreset preset)
+        {
+            _switchModel(preset.Model);
+            UiKit.Select(_theme, _models, preset.Model == ControlModel.Attached ? 1 : 0);
+            BenchCandidate applied = _applied();
+            _pending.Clear();
+            foreach (BenchKnob k in BenchCandidate.Knobs)
+            {
+                double value = preset.Candidate.Get(k.Name);
+                if (BitConverter.DoubleToInt64Bits(value) != BitConverter.DoubleToInt64Bits(applied.Get(k.Name))) _pending[k.Name] = value;
+            }
+
+            _switchControls((int)preset.Controls);
+            UiKit.Select(_theme, _controls, _activeControls());
+            _problem.style.display = DisplayStyle.None;
+            _presetStatus.text = _pending.Count == 0
+                ? $"\"{preset.Name}\" is what is running."
+                : $"\"{preset.Name}\" loaded as {_pending.Count} pending change{(_pending.Count == 1 ? "" : "s")}. APPLY / RETRY starts a fresh run with {(_pending.Count == 1 ? "it" : "them")}.";
+            Log(FormattableString.Invariant($"ELEVEN bench preset loaded name={preset.Name.Replace(' ', '_')} pending={_pending.Count} controls={TouchCandidates.NameOf(preset.Controls)} model={BenchPreset.ModelName(preset.Model)} config={preset.ConfigHash:x16}"));
+            Describe();
+        }
+
+        // Save: the values shown, pending changes included, under the name typed. A name already
+        // saved is replaced. Refused, with the reason, for a name or values that can't be used.
+        private void SavePreset()
+        {
+            BenchCandidate applied = _applied();
+            string problem;
+            BenchPreset preset = null;
+            bool made = applied.TryWith(_pending, out BenchCandidate candidate, out problem) && candidate != null
+                && BenchPreset.TryMake(_presetName.Field.value, candidate, (ControlCandidate)_activeControls(), _build(), out preset, out problem);
+            if (!made || preset == null)
+            {
+                _presetStatus.text = $"Not saved. {problem}";
+                Log($"ELEVEN bench preset refused {problem}");
+                // Back to the name, selected, so typing replaces it.
+                _presetName.Field.Focus();
+                _presetName.Field.SelectAll();
+                return;
+            }
+
+            // Kept on the device, or not saved at all: the shelf is what storage holds (Codex on #90).
+            string before = _shelf.Write();
+            bool replaced = _shelf.Save(preset);
+            if (!_storePresets(_shelf.Write()))
+            {
+                _shelf = PresetShelf.Read(before);
+                _presetStatus.text = $"Not saved. This device wouldn't keep \"{preset.Name}\".";
+                Log($"ELEVEN bench preset refused storage");
+                return;
+            }
+
+            _presetName.Field.value = "";
+            ShowGroup(_group);
+            _presetStatus.text = replaced ? $"Replaced \"{preset.Name}\"." : $"Saved \"{preset.Name}\".";
+            Log(FormattableString.Invariant($"ELEVEN bench preset saved name={preset.Name.Replace(' ', '_')} replaced={(replaced ? "yes" : "no")} count={_shelf.Presets.Count} config={preset.ConfigHash:x16}"));
+            Describe();
+        }
+
+        private void DeletePreset(string name)
+        {
+            string before = _shelf.Write();
+            if (!_shelf.Delete(name)) return;
+            if (!_storePresets(_shelf.Write()))
+            {
+                _shelf = PresetShelf.Read(before);
+                _presetStatus.text = $"Not deleted. This device wouldn't change its presets.";
+                Log($"ELEVEN bench preset refused storage");
+                return;
+            }
+
+            ShowGroup(_group);
+            _presetStatus.text = $"Deleted \"{name}\".";
+            Log(FormattableString.Invariant($"ELEVEN bench preset deleted name={name.Replace(' ', '_')} count={_shelf.Presets.Count}"));
+            Describe();
+        }
+
+        /// <summary>The name of the saved preset these values are, the technical reference's, or "unsaved": what a capture records (#46).</summary>
+        public static string PresetNameOf(BenchCandidate candidate, ControlCandidate controls, string stored)
+        {
+            // A saved preset first: one may hold the reference values under another ball control
+            // model or touch candidate. The technical reference is its values, FREE and Candidate A.
+            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate, controls);
+            if (saved != null) return saved.Name;
+            return IsTechnicalReference(candidate, controls) ? BenchCandidate.ReferencePreset : BenchCandidate.UnsavedPreset;
+        }
+
+        private static bool IsTechnicalReference(BenchCandidate candidate, ControlCandidate controls) =>
+            candidate.ChangesFrom(BenchCandidate.Reference) == 0 && candidate.Config.ControlModel == BenchPreset.TechnicalReference.Model && controls == BenchPreset.TechnicalReference.Controls;
 
         // The Touch tab holds every candidate's knobs, A's, B's then C's, under the A / B / C choice
         // (#76, #77).
@@ -317,8 +664,10 @@ namespace Eleven.Host
         {
             BenchCandidate applied = _applied();
             int fromReference = applied.ChangesFrom(BenchCandidate.Reference);
-            _state.text = fromReference == 0
-                ? "Running the technical reference values."
+            var controls = (ControlCandidate)_activeControls();
+            BenchPreset running = _shelf.Matching(applied, controls);
+            _state.text = running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
+                : IsTechnicalReference(applied, controls) ? "Running the technical reference values."
                 : $"Running unsaved values: {fromReference} changed from the technical reference.";
             _pendingText.text = _pending.Count == 0
                 ? "No pending changes. APPLY / RETRY starts a fresh run with these values."
@@ -383,6 +732,31 @@ namespace Eleven.Host
                 Log(FormattableString.Invariant(
                     $"ELEVEN bench targets={targets} smallest={(targets > 0 ? smallest : 0):F1} smallestName={(smallestName ?? "none").Replace(' ', '_')} overflow={overflow.Replace(' ', '_')}"));
 
+                // Whether every switch, tab and action is in reach without scrolling (#31), and the
+                // room the knob list has, in points.
+                var clipped = new List<string>();
+                void Reach(VisualElement e, VisualElement within)
+                {
+                    Rect r = e.worldBound, b = within.worldBound;
+                    bool shown = r.width > 0 && r.xMin >= b.xMin - 0.5f && r.xMax <= b.xMax + 0.5f && r.yMin >= b.yMin - 0.5f && r.yMax <= b.yMax + 0.5f;
+                    if (!shown) clipped.Add((e.name ?? "").Replace(' ', '_'));
+                }
+
+                bool wide = _arranged == "wide";
+                VisualElement switchesIn = wide ? _switchScroll.contentViewport : _sheet.Body;
+                VisualElement tabsIn = wide ? _tabScroll.contentViewport : _sheet.Body;
+                if (!_switchesScroll)
+                {
+                    foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
+                    foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                }
+
+                foreach (UiKit.Raised tab in _tabs.Segments) Reach(tab.Element, tabsIn);
+                foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) Reach(action.Element, _sheet.Body);
+                Rect list = _list.contentViewport.worldBound;
+                Log(FormattableString.Invariant(
+                    $"ELEVEN bench reach arranged={_arranged} clipped={clipped.Count} names={string.Join(",", clipped)} list={list.width:F0}x{list.height:F0}"));
+
                 // Where Tab goes while the sheet is open, and how many of those stops can't be seen.
                 List<VisualElement> order = FocusOrder();
                 int hidden = order.Count(Hidden);
@@ -392,6 +766,12 @@ namespace Eleven.Host
             if (_reportControls && _trace)
             {
                 _reportControls = false;
+                if (PresetsShown)
+                {
+                    Log(FormattableString.Invariant(
+                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces)}"));
+                }
+
                 if (TouchShown)
                 {
                     Log($"ELEVEN bench candidates A={P(_controls.Segments[0].Element)};B={P(_controls.Segments[1].Element)};C={P(_controls.Segments[2].Element)}");

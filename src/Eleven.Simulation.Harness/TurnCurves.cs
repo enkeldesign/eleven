@@ -124,10 +124,13 @@ namespace Eleven.Simulation.Harness
         /// Every case under FREE, then ATTACHED; each with the turn and cut off, then on; with
         /// <paramref name="config"/>'s values.
         /// </summary>
-        public static List<TurnCurve> Characterise(SimConfig config)
+        public static List<TurnCurve> Characterise(SimConfig config) => Characterise(config, PlayerCapabilities.Reference);
+
+        /// <summary>The same cases for this footballer: his own ball control is the "bench" profile, and "good" and "poor" are him with that one value changed.</summary>
+        public static List<TurnCurve> Characterise(SimConfig config, PlayerCapabilities body)
         {
             var curves = new List<TurnCurve>();
-            double bench = PlayerCapabilities.Reference.BallControl;
+            double bench = body.BallControl;
             foreach (ControlModel model in new[] { ControlModel.Free, ControlModel.Attached })
             foreach ((string turn, SimConfig c) in new[] { ("off", Off(config.WithControlModel(model))), ("on", config.WithControlModel(model)) })
             foreach ((string profile, double control) in new[] { ("good", GoodControl), ("bench", bench), ("poor", PoorControl) })
@@ -135,7 +138,7 @@ namespace Eleven.Simulation.Harness
             foreach (double degrees in new[] { 45.0, 90.0, 135.0, 180.0 })
             foreach (double sweep in new[] { 0.0, SweepSeconds })
             {
-                curves.Add(Case(c, turn, profile, control, speed, stick, degrees, sweep));
+                curves.Add(Case(c, turn, profile, body, control, speed, stick, degrees, sweep));
             }
 
             return curves;
@@ -157,7 +160,7 @@ namespace Eleven.Simulation.Harness
             public double Forward = double.NaN, KickReady = double.NaN, Trail, Behind, Exit = double.NaN, Beside = double.NaN, MaxChange, Entry, Out, Separation;
         }
 
-        private static TurnCurve Case(SimConfig config, string turn, string profile, double control, string speed, double stick, double degrees, double sweep)
+        private static TurnCurve Case(SimConfig config, string turn, string profile, PlayerCapabilities body, double control, string speed, double stick, double degrees, double sweep)
         {
             var curve = new TurnCurve
             {
@@ -174,7 +177,7 @@ namespace Eleven.Simulation.Harness
             var kept = new List<Start>();
             for (int phase = 0; phase < curve.Starts; phase++)
             {
-                Start s = Run(config, control, stick, degrees, sweep, phase);
+                Start s = Run(config, body, control, stick, degrees, sweep, phase);
                 curve.EntryMps = s.Entry;
                 curve.MaxStepChangeMps = Math.Max(curve.MaxStepChangeMps, s.MaxChange);
                 curve.OutMaxSeconds = Math.Max(curve.OutMaxSeconds, s.Out);
@@ -210,13 +213,13 @@ namespace Eleven.Simulation.Harness
         // turned by `degrees`, at once or at a steady rate over `sweep` seconds, and held there for
         // the rest of 3 s. A run is kept when the player has control at every step from the turn on
         // and the ball gets ahead of them along the new direction.
-        private static Start Run(SimConfig config, double control, double stick, double degrees, double sweep, int phase)
+        private static Start Run(SimConfig config, PlayerCapabilities body, double control, double stick, double degrees, double sweep, int phase)
         {
             var sim = new Simulator(config, new SimState
             {
                 Seed = Seed,
                 Ball = new BallState { Id = 100, Position = new Vec3(0.6, 0, config.BallRadius) },
-                Players = new[] { new PlayerState { Id = 1, OwnerControllerId = Controller, Capabilities = PlayerCapabilities.Reference.With("ballControl", control) } },
+                Players = new[] { new PlayerState { Id = 1, OwnerControllerId = Controller, Capabilities = body.With("ballControl", control) } },
             });
 
             double r = degrees * Math.PI / 180;

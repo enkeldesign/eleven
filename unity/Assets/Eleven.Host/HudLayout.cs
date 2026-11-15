@@ -18,6 +18,9 @@ namespace Eleven.Host
         public Vector2 SaveCapture;
         public Vector2 Result;
         public Vector2 Status;
+
+        /// <summary>The least height of an action, in screen pixels (#31): 44 pt on this screen. 0 for none.</summary>
+        public float Target;
     }
 
     /// <summary>
@@ -103,10 +106,14 @@ namespace Eleven.Host
         /// <summary>Lines the result panel was laid out for.</summary>
         public readonly int ResultLines;
 
+        /// <summary>The screen's safe area (#31): everything above is laid out inside it.</summary>
+        public readonly Rect Safe;
+
         private HudLayout(int width, int height, Rect safe, int resultLines, HudNeeds needs)
         {
             ScreenWidth = width;
             ScreenHeight = height;
+            Safe = safe;
             Unit = Mathf.Min(safe.width, safe.height) / 9f;
             Padding = Unit * 0.3f;
             FontSize = Mathf.Max(12, Mathf.RoundToInt(Unit * 0.36f));
@@ -121,7 +128,8 @@ namespace Eleven.Host
             float runWidth = Mathf.Min(row, Mathf.Max(4.5f * Unit, needs.Run.x));
             float resetWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.Reset.x));
             float benchWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.Bench.x));
-            float actionHeight = Mathf.Max(1.1f * Unit, Mathf.Max(needs.Run.y, Mathf.Max(needs.Reset.y, needs.Bench.y)));
+            // Never under the smallest touch target, however small the screen (#31).
+            float actionHeight = Mathf.Max(Mathf.Max(1.1f * Unit, needs.Target), Mathf.Max(needs.Run.y, Mathf.Max(needs.Reset.y, needs.Bench.y)));
             RunButton = new Rect(safe.xMax - Padding - runWidth, BuildLabel.yMax + Padding * 0.5f, runWidth, actionHeight);
             float rowLeft = RunButton.x;
             float rowTop = RunButton.y;
@@ -151,7 +159,7 @@ namespace Eleven.Host
 
             // The capture actions, above the kick button and right-aligned to the safe area: side by
             // side where allowed and the row holds both, otherwise SAVE CAPTURE above THIS FELT WRONG.
-            float captureHeight = Mathf.Max(1.1f * Unit, Mathf.Max(needs.FeltWrong.y, needs.SaveCapture.y));
+            float captureHeight = Mathf.Max(Mathf.Max(1.1f * Unit, needs.Target), Mathf.Max(needs.FeltWrong.y, needs.SaveCapture.y));
             float feltWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.FeltWrong.x));
             float saveWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.SaveCapture.x));
             var felt = new Rect(safe.xMax - Padding - feltWidth, KickCentre.y - KickRadius - Padding - captureHeight, feltWidth, captureHeight);
@@ -287,7 +295,7 @@ namespace Eleven.Host
 
         /// <summary>One log line the CI smoke test parses to find the controls.</summary>
         public string Describe() =>
-            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0}");
+            System.FormattableString.Invariant($"screen={ScreenWidth}x{ScreenHeight} run={Point(RunButton.center)} reset={Point(ResetButton.center)} kick={Point(KickCentre)} stick={Point(StickRest)} stickRadius={StickRadius:F0} play={Box(PlayArea)} feltWrong={Box(FeltWrongButton)} save={Box(SaveCaptureButton)} bench={Box(BenchButton)} action={Box(ActionZone)} pass={Point(PassCentre)},{PassRadius:F0} kickMarker={Point(KickMarker)},{KickMarkerRadius:F0} safe={Box(Safe)} stickZone={Box(StickZone)} kickRadius={KickRadius:F0}");
 
         private static float Area(Rect r) => Mathf.Max(0, r.width) * Mathf.Max(0, r.height);
 

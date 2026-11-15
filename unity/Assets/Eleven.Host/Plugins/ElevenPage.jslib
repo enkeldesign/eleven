@@ -39,6 +39,31 @@ mergeInto(LibraryManager.library, {
   // Captures (#44, #53) are a browser service with no UI: THIS FELT WRONG, SAVE CAPTURE and the
   // status line are Unity's. Everything stays on the device: no network.
 
+  // A text kept on the device under a key (#46: the named presets), or the empty string. In
+  // localStorage, so it is the same for every build served from this origin.
+  ElevenReadStored: function (keyPointer) {
+    var value = '';
+    try {
+      value = localStorage.getItem(UTF8ToString(keyPointer)) || '';
+    } catch (e) {
+      // Storage unavailable: nothing kept.
+    }
+    var size = lengthBytesUTF8(value) + 1;
+    var buffer = _malloc(size);
+    stringToUTF8(value, buffer, size);
+    return buffer;
+  },
+
+  // Keeps a text on the device under a key: 1 if it was kept, 0 if storage refused it.
+  ElevenWriteStored: function (keyPointer, valuePointer) {
+    try {
+      localStorage.setItem(UTF8ToString(keyPointer), UTF8ToString(valuePointer));
+      return 1;
+    } catch (e) {
+      return 0;
+    }
+  },
+
   // Whether a capture kept on an earlier visit is here to save, 1 or 0. The newest becomes the one
   // SAVE CAPTURE offers.
   ElevenHasKeptCapture: function () {
