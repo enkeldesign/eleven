@@ -261,6 +261,14 @@ jobs:
           path: league/
           if-no-files-found: error
 
+      # Off-screen threat fairness (#102): how often the CPU decides on footballers outside the
+      # human's view, by tier, against the recorded reference. Fails past the recorded bounds.
+      - name: Measure off-screen fairness
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll fairness fairness | tee fairness.txt
+          echo "::notice title=Off-screen fairness::$(sed 's| -> .*||' fairness.txt)"
+          diff docs/simulation/fairness-reference.csv fairness/fairness.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |
