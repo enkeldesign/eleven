@@ -344,6 +344,7 @@ namespace Eleven.Simulation
             else if (phase == KeeperPhase.Recover) player.Velocity = Vec2.Zero;
             else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, Body(player), dt);
             player.Position += player.Velocity * dt;
+            Tire(ref player, dt);
 
             // Below a millimetre per second the player counts as stopped and keeps its last heading.
             if (player.Velocity.LengthSquared > 1e-6)
@@ -363,6 +364,24 @@ namespace Eleven.Simulation
 
         /// <summary>m. A shielded ball this close to its place behind the carrier, and at rest with him, needs no touch (#97).</summary>
         public const double ShieldSettled = 0.15;
+
+        /// <summary>
+        /// Fatigue (#100), in a match world only: above fatigueFrom of his fresh top speed he tires, faster the nearer his top
+        /// speed; below it he rests, faster the slower he goes. Stamina scales both: reference 0.6 is
+        /// the knobs' own rates; 1 tires at 0.6 of them and rests at 1.4.
+        /// </summary>
+        private void Tire(ref PlayerState player, double dt)
+        {
+            // Only in a match world, two sides: practice and the benches measure the body as it is.
+            if (_state.Teams.Length != 2) return;
+            double fraction = SimMath.Sqrt(player.Velocity.LengthSquared) / player.Capabilities.MaxSpeed;
+            double from = Config.FatigueFrom, stamina = player.Capabilities.Stamina;
+            double change = fraction > from
+                ? Config.FatigueDrain * (fraction - from) / (1 - from) * (1.6 - stamina) * dt
+                : -Config.FatigueRecover * (1 - fraction / from) * (0.4 + stamina) * dt;
+            double fatigue = player.Fatigue + change;
+            player.Fatigue = fatigue < 0 ? 0 : fatigue > 1 ? 1 : fatigue;
+        }
 
         /// <summary>
         /// Whether a kick intent is a slide tackle (#98): he hasn't the ball and can't kick it (out of
@@ -498,6 +517,11 @@ namespace Eleven.Simulation
         private PlayerCapabilities Body(in PlayerState player)
         {
             PlayerCapabilities body = player.Capabilities;
+
+            // Tired (#100), his top speed and acceleration fall toward fatigueFloor of themselves.
+            double fresh = Config.FatigueFloor + (1 - Config.FatigueFloor) * (1 - player.Fatigue);
+            body.MaxSpeed *= fresh;
+            body.Acceleration *= fresh;
             if (!Carrying(player)) return body;
             body.MaxSpeed *= Config.DribbleSpeedPoor + (Config.DribbleSpeedGood - Config.DribbleSpeedPoor) * body.BallControl;
             return body;

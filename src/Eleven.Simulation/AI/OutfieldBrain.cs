@@ -74,6 +74,9 @@ namespace Eleven.Simulation.AI
         // this much nearer him than the man, and beyond this many standing challenge ranges.
         private const double SlideFrom = 0.7, SlideClear = 0.4, SlideOver = 1.5;
 
+        // s. Spent, he counts himself this much later to the ball than he is, so a fresher teammate presses (#100).
+        private const double TiredDelay = 0.6;
+
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
 
@@ -142,6 +145,7 @@ namespace Eleven.Simulation.AI
             // His teammates who aren't keepers (#92): the one nearest the ball, and whether he is open.
             bool mateSeen = false;
             Vec2 mate = Vec2.Zero;
+            double mateFatigue = 0;
             double mateNearest = double.PositiveInfinity;
             foreach (SeenPlayer other in seen.Others)
             {
@@ -151,6 +155,7 @@ namespace Eleven.Simulation.AI
                 {
                     mateNearest = d;
                     mate = other.Position;
+                    mateFatigue = other.Fatigue;
                     mateSeen = true;
                 }
             }
@@ -220,14 +225,17 @@ namespace Eleven.Simulation.AI
             // A side of three or more holds a shape (#96): the first of it to the ball goes for it;
             // when the opponents have it, the second covers, goal-side; everyone else takes his
             // place from the back, shifted with the ball, further up when his side has it.
-            if (seen.SideSize >= 3 && seen.Slot > 0)
+            bool shaped = seen.SideSize >= 3 && seen.Slot > 0;
+            if (shaped)
             {
                 Meet(seen, config, me, seen.MaxSpeed, out double myFirst);
+                myFirst += seen.Fatigue * TiredDelay; // tired, he leaves the press to a fresher teammate (#100)
                 int sooner = 0;
                 foreach (SeenPlayer other in seen.Others)
                 {
                     if (!other.Teammate || other.Keeper) continue;
                     Meet(seen, config, other.Position, seen.MaxSpeed, out double theirFirst);
+                    theirFirst += other.Fatigue * TiredDelay;
                     if (theirFirst + 0.05 < myFirst || (theirFirst <= myFirst + 0.05 && other.Position.Y > me.Y)) sooner++;
                 }
 
@@ -241,11 +249,14 @@ namespace Eleven.Simulation.AI
                 if (sooner >= 1) return new CpuPlan(CpuMode.Support, Ease(ShapePlace(seen, config, ball, ours) - me));
             }
 
+            // Two a side (#92); in a shape the first of the side to the ball is already decided.
             bool second = false;
-            if (mateSeen)
+            if (mateSeen && !shaped)
             {
                 Meet(seen, config, me, seen.MaxSpeed, out double mineFirst);
+                mineFirst += seen.Fatigue * TiredDelay;
                 Meet(seen, config, mate, seen.MaxSpeed, out double mateFirst);
+                mateFirst += mateFatigue * TiredDelay;
                 second = mateFirst + 0.05 < mineFirst || (mateFirst <= mineFirst + 0.05 && mate.Y > me.Y);
             }
 

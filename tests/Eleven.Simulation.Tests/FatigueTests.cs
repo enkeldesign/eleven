@@ -16,16 +16,28 @@ namespace Eleven.Simulation.Tests
     {
         private static readonly SimConfig C = Config();
 
-        // The practice player, the ball far off, his stick `stick` for `seconds`.
+        // Home's outfielder in the two-sided world, no referee, the ball far off, his stick `stick`
+        // for `seconds`. Fatigue is a match world's (two sides), not practice's.
         private static Simulator Run(double seconds, Vec2 stick, double stamina = 0.6, double fatigue = 0)
         {
-            SimState s = State(C, ballPosition: new Vec3(0, 40, C.BallRadius));
+            SimState s = OneVOne.Start(C, seed: 2, homeAttackSign: 1);
+            s.Ball.Position = new Vec3(0, 40, C.BallRadius);
+            s.Players[0].Position = new Vec2(-40, -20);
             s.Players[0].Capabilities = PlayerCapabilities.Reference.With("stamina", stamina);
             s.Players[0].Fatigue = fatigue;
             Simulator sim = Simulator(C, s);
             int ticks = (int)(seconds * C.TickRate);
-            for (int t = 0; t < ticks; t++) Step(sim, Move(t, stick.X, stick.Y));
+            for (int t = 0; t < ticks; t++) Step(sim, new Command(OneVOne.HomeController, t, stick));
             return sim;
+        }
+
+        [Fact]
+        public void Practice_is_timeless()
+        {
+            SimState s = State(C, ballPosition: new Vec3(0, 40, C.BallRadius));
+            Simulator sim = Simulator(C, s);
+            for (int t = 0; t < 30 * C.TickRate; t++) Step(sim, Move(t, 1, 0));
+            Assert.Equal(0, sim.PeekState().Players[0].Fatigue);
         }
 
         [Fact]
@@ -69,6 +81,11 @@ namespace Eleven.Simulation.Tests
             s.Restart.PhaseTicks = 0;
             int a = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 3);
             int b = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 4);
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (s.Players[i].Slot > 0) s.Players[i].Position = new Vec2(s.Players[i].TeamId == Squads.HomeTeam ? -30 : 30, 20);
+            }
+
             s.Players[a].Position = new Vec2(-5, -6);
             s.Players[b].Position = new Vec2(-5, 6);
             s.Ball.Position = new Vec3(0, 0, c.BallRadius);

@@ -42,6 +42,9 @@ namespace Eleven.Simulation
                     {
                         m.Phase = MatchPhase.HalfTime;
                         m.PhaseTicks = Config.HalfTimeTicks;
+
+                        // Half-time's rest (#100): a share of every footballer's fatigue goes.
+                        for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].Fatigue *= 1 - Config.HalfTimeRecovery;
                         events.Add(new SimEvent(tick, SimEventKind.HalfTime, 0));
                     }
                     else

@@ -77,8 +77,9 @@ namespace Eleven.Simulation
     /// <summary>Another footballer as a CPU outfielder sees him (#83).</summary>
     public readonly struct SeenPlayer
     {
-        public SeenPlayer(Vec2 position, Vec2 velocity, bool teammate, bool keeper)
+        public SeenPlayer(Vec2 position, Vec2 velocity, bool teammate, bool keeper, double fatigue = 0)
         {
+            Fatigue = fatigue;
             Position = position;
             Velocity = velocity;
             Teammate = teammate;
@@ -93,6 +94,9 @@ namespace Eleven.Simulation
         public bool Teammate { get; }
 
         public bool Keeper { get; }
+
+        /// <summary>0–1, a teammate's fatigue as he reads it from his teammate (#100); 0 for an opponent, whose he can't.</summary>
+        public double Fatigue { get; }
     }
 
     /// <summary>Who holds the ball, as a CPU outfielder sees it (#83).</summary>
@@ -121,8 +125,9 @@ namespace Eleven.Simulation
 
         internal OutfieldObservation(long tick, Vec2 position, Vec2 velocity, double heading, double maxSpeed, bool kicking,
             Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0,
-            int slot = 0, int sideSize = 0)
+            int slot = 0, int sideSize = 0, double fatigue = 0)
         {
+            Fatigue = fatigue;
             ReactionDelay = reactionDelay;
             Slot = slot;
             SideSize = sideSize;
@@ -162,6 +167,9 @@ namespace Eleven.Simulation
 
         /// <summary>How many places his side's shape has (#96): its outfielders who have one.</summary>
         public int SideSize { get; }
+
+        /// <summary>0–1, his own fatigue (#100). Others' he reads only as the speed he sees.</summary>
+        public double Fatigue { get; }
 
         /// <summary>Whether he is winding up a kick, or can't start one yet.</summary>
         public bool Kicking { get; }
@@ -275,7 +283,7 @@ namespace Eleven.Simulation
                 // Always two draws for each footballer, seen or not, so no one's error depends on who else is in sight.
                 Vec2 at = Seen(other.Position);
                 if ((other.Position - body.Position).LengthSquared > c.Skill.VisionRange * c.Skill.VisionRange) continue;
-                others.Add(new SeenPlayer(turned ? Turn(at) : at, turned ? Turn(other.Velocity) : other.Velocity, teammate, keeper));
+                others.Add(new SeenPlayer(turned ? Turn(at) : at, turned ? Turn(other.Velocity) : other.Velocity, teammate, keeper, teammate ? other.Fatigue : 0));
             }
 
             bool kicking = body.WindUpTicks > 0 || body.KickCooldown > 0;
@@ -283,9 +291,9 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side)
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue)
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side);
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue);
         }
 
         /// <summary>The sign of world x a side attacks toward (#82); +1 with no sides.</summary>
