@@ -50,7 +50,8 @@ namespace Eleven.Host
         private readonly Action<int> _switchControls;
         private readonly System.Action _closed;
         private readonly Func<string> _loadPresets;
-        private readonly Action<string> _storePresets;
+        // Writes the shelf to the device; false when the device refused it.
+        private readonly Func<string, bool> _storePresets;
         private readonly Func<string> _build;
         private readonly UiKit.TextInput _presetName;
         private readonly UiKit.Action _presetSave;
@@ -90,7 +91,7 @@ namespace Eleven.Host
 
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
             Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls,
-            Func<string> loadPresets, Action<string> storePresets, Func<string> build, System.Action closed)
+            Func<string> loadPresets, Func<string, bool> storePresets, Func<string> build, System.Action closed)
         {
             _loadPresets = loadPresets;
             _storePresets = storePresets;
@@ -561,8 +562,17 @@ namespace Eleven.Host
                 return;
             }
 
+            // Kept on the device, or not saved at all: the shelf is what storage holds (Codex on #90).
+            string before = _shelf.Write();
             bool replaced = _shelf.Save(preset);
-            _storePresets(_shelf.Write());
+            if (!_storePresets(_shelf.Write()))
+            {
+                _shelf = PresetShelf.Read(before);
+                _presetStatus.text = $"Not saved. This device wouldn't keep \"{preset.Name}\".";
+                Log($"ELEVEN bench preset refused storage");
+                return;
+            }
+
             _presetName.Field.value = "";
             ShowGroup(_group);
             _presetStatus.text = replaced ? $"Replaced \"{preset.Name}\"." : $"Saved \"{preset.Name}\".";
@@ -572,8 +582,16 @@ namespace Eleven.Host
 
         private void DeletePreset(string name)
         {
+            string before = _shelf.Write();
             if (!_shelf.Delete(name)) return;
-            _storePresets(_shelf.Write());
+            if (!_storePresets(_shelf.Write()))
+            {
+                _shelf = PresetShelf.Read(before);
+                _presetStatus.text = $"Not deleted. This device wouldn't change its presets.";
+                Log($"ELEVEN bench preset refused storage");
+                return;
+            }
+
             ShowGroup(_group);
             _presetStatus.text = $"Deleted \"{name}\".";
             Log(FormattableString.Invariant($"ELEVEN bench preset deleted name={name.Replace(' ', '_')} count={_shelf.Presets.Count}"));

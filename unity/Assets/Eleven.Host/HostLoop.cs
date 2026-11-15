@@ -515,10 +515,7 @@ namespace Eleven.Host
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
-                    () => ReadStored(PresetsKey), text =>
-                    {
-                        if (!WriteStored(PresetsKey, text)) _hud?.ShowStatus("This device wouldn't keep the preset.");
-                    }, () => _buildId);
+                    () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {

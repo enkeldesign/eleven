@@ -62,7 +62,7 @@ namespace Eleven.Host
             System.Action feltWrong, System.Action saveCapture, Action<string> noteDone, Func<Vector2> visible,
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
-            Func<string> benchLoadPresets, Action<string> benchStorePresets, Func<string> benchBuild)
+            Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild)
         {
             _ui = ui;
             _trace = trace;
