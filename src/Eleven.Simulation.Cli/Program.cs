@@ -161,6 +161,28 @@ internal static class Program
                 return 0;
             }
 
+            case "league" when args.Length >= 2:
+            {
+                // M3's gate (#103): a double round robin of six sides at five a side. Fails if a
+                // match is stuck or the strongest tier takes no more points than the weakest.
+                SimConfig leagueConfig = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> sides = League.Sides();
+                List<LeagueMatch> played = League.Run(leagueConfig, sides);
+                List<LeagueRow> table = League.Table(sides, played);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "league-matches.csv"))) League.WriteMatches(csv, leagueConfig, sides, played);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "league-table.csv"))) League.WriteTable(csv, table);
+                Console.WriteLine($"config {leagueConfig.Hash:x16}, {League.KeyNumbers(played, table)} -> {args[1]}");
+                var tiers = League.ByTier(table);
+                if (played.Any(m => m.Stuck) || tiers[tiers.Count - 1].PointsPerMatch <= tiers[0].PointsPerMatch)
+                {
+                    Console.Error.WriteLine("The league failed its gate: a match stuck, or no spread by tier.");
+                    return 1;
+                }
+
+                return 0;
+            }
+
             case "air" when args.Length >= 2:
             {
                 // Headers and volleys (#94): contact by height, incoming speed and heading, and in CPU matches.

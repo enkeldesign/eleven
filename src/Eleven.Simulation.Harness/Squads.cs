@@ -32,9 +32,13 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static int SlotOf(int perSide, int i) => perSide < ShapeFrom ? 0 : i == 0 ? perSide : i;
 
-        /// <summary>A match's start: home kicks off, the clock at nought.</summary>
+        /// <summary>
+        /// A match's start: home kicks off, the clock at nought. <paramref name="homeSide"/> and
+        /// <paramref name="awaySide"/> give a side's outfielders their capabilities (#103's league);
+        /// <paramref name="home"/> is the human's own footballer's.
+        /// </summary>
         public static SimState Match(SimConfig config, ulong seed, int perSide, bool bothCpu = false, CpuSkill? awayCpu = null, CpuSkill? homeCpu = null,
-            PlayerCapabilities? home = null)
+            PlayerCapabilities? home = null, PlayerCapabilities? homeSide = null, PlayerCapabilities? awaySide = null)
         {
             if (perSide < 1) throw new ArgumentOutOfRangeException(nameof(perSide), perSide, "A side has at least one outfielder.");
             double keeperX = config.GoalLineX - OneVOne.KeeperStandOff;
@@ -44,7 +48,7 @@ namespace Eleven.Simulation.Harness
             {
                 int id = HomeOutfielder(i);
                 Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
-                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i) });
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : homeSide ?? PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i) });
                 if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id, Skill = homeCpu ?? CpuSkill.Pro });
             }
 
@@ -53,7 +57,7 @@ namespace Eleven.Simulation.Harness
             {
                 int id = AwayOutfielder(perSide, i);
                 Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : new Vec2(14, (i % 2 == 1 ? -1 : 1) * 12 * ((i + 1) / 2));
-                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i) });
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i) });
                 cpus.Add(new CpuState { PlayerId = id, Skill = awayCpu ?? CpuSkill.Pro });
             }
 
@@ -242,7 +246,7 @@ namespace Eleven.Simulation.Harness
         }
 
         // The mean distance between a side's outfielders.
-        private static double Spacing(SimState s, int team)
+        internal static double Spacing(SimState s, int team)
         {
             double total = 0;
             int pairs = 0;
