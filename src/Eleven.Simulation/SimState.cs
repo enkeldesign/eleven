@@ -548,6 +548,12 @@ namespace Eleven.Simulation
 
         /// <summary>After a challenge, won or missed: he brakes, and can't play the ball or challenge.</summary>
         Recover = 2,
+
+        /// <summary>A slide tackle (#98): committed along its line, slowing, meeting the ball or the man.</summary>
+        Slide = 3,
+
+        /// <summary>On the ground after a slide (#98): he can't move, play the ball or challenge.</summary>
+        Grounded = 4,
     }
 
     public struct PlayerState

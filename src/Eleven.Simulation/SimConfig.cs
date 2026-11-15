@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 19;
+        public const int FormatVersion = 20;
 
         public SimConfig(
             int tickRate = 60,
@@ -107,7 +107,12 @@ namespace Eleven.Simulation
             double dribbleSpeedGood = 0.95,
             double shieldSpeed = 0.45,
             double shieldRange = 2.0,
-            double shieldHold = 0.6)
+            double shieldHold = 0.6,
+            double slideRange = 3.0,
+            double slideSpeed = 7.0,
+            double slideTime = 0.4,
+            double slideReach = 0.9,
+            double slideRecover = 1.0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -194,6 +199,11 @@ namespace Eleven.Simulation
             ShieldSpeed = shieldSpeed;
             ShieldRange = shieldRange;
             ShieldHold = shieldHold;
+            SlideRange = slideRange;
+            SlideSpeed = slideSpeed;
+            SlideTime = slideTime;
+            SlideReach = slideReach;
+            SlideRecover = slideRecover;
 
             CheckTunableRanges();
 
@@ -568,6 +578,21 @@ namespace Eleven.Simulation
         /// <summary>The chance an even shield holds off a challenge through the carrier (#97): strength and tackling move it.</summary>
         public double ShieldHold { get; }
 
+        /// <summary>How far from an opponent's ball a kick intent without the ball becomes a slide tackle (#98).</summary>
+        public double SlideRange { get; }
+
+        /// <summary>How fast a slide carries the footballer along its line at its start (#98), slowing to a stop as it ends.</summary>
+        public double SlideSpeed { get; }
+
+        /// <summary>How long a slide lasts (#98).</summary>
+        public double SlideTime { get; }
+
+        /// <summary>How far from the sliding footballer the ball or the man is met (#98).</summary>
+        public double SlideReach { get; }
+
+        /// <summary>How long a footballer is on the ground after a slide (#98).</summary>
+        public double SlideRecover { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -588,6 +613,12 @@ namespace Eleven.Simulation
 
         /// <summary>Steps a challenge's recovery lasts, at least one (#84).</summary>
         public int ChallengeRecoverTicks => Math.Max(1, (int)Math.Round(ChallengeRecover * TickRate));
+
+        /// <summary>A slide's length in steps (#98), at least one.</summary>
+        public int SlideTicks => Math.Max(1, (int)Math.Round(SlideTime * TickRate));
+
+        /// <summary>The time on the ground after a slide in steps (#98), at least one.</summary>
+        public int SlideRecoverTicks => Math.Max(1, (int)Math.Round(SlideRecover * TickRate));
 
         /// <summary>cos(<see cref="CutAngle"/>), through the simulation's own maths.</summary>
         internal double CutCos { get; }
@@ -693,7 +724,12 @@ namespace Eleven.Simulation
                 dribbleSpeedGood: r.ReadDouble(nameof(DribbleSpeedGood)),
                 shieldSpeed: r.ReadDouble(nameof(ShieldSpeed)),
                 shieldRange: r.ReadDouble(nameof(ShieldRange)),
-                shieldHold: r.ReadDouble(nameof(ShieldHold)));
+                shieldHold: r.ReadDouble(nameof(ShieldHold)),
+                slideRange: r.ReadDouble(nameof(SlideRange)),
+                slideSpeed: r.ReadDouble(nameof(SlideSpeed)),
+                slideTime: r.ReadDouble(nameof(SlideTime)),
+                slideReach: r.ReadDouble(nameof(SlideReach)),
+                slideRecover: r.ReadDouble(nameof(SlideRecover)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -785,6 +821,11 @@ namespace Eleven.Simulation
             w.WriteDouble(ShieldSpeed, nameof(ShieldSpeed));
             w.WriteDouble(ShieldRange, nameof(ShieldRange));
             w.WriteDouble(ShieldHold, nameof(ShieldHold));
+            w.WriteDouble(SlideRange, nameof(SlideRange));
+            w.WriteDouble(SlideSpeed, nameof(SlideSpeed));
+            w.WriteDouble(SlideTime, nameof(SlideTime));
+            w.WriteDouble(SlideReach, nameof(SlideReach));
+            w.WriteDouble(SlideRecover, nameof(SlideRecover));
             return w.ToArray();
         }
 

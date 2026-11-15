@@ -1908,9 +1908,15 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.CutCooldown), p.CutCooldown, config.TouchIntervalTicks);
 
                 // A challenge phase this config could have produced (#84), with a unit line when not ready.
-                if (p.Challenge > ChallengePhase.Recover) throw new ArgumentException($"{owner}: unknown challenge phase {(byte)p.Challenge}.", nameof(state));
-                InRange(owner, nameof(p.ChallengeTicks), p.ChallengeTicks,
-                    p.Challenge == ChallengePhase.Commit ? CommitTicksFor(p.Capabilities.Tackling, config) : p.Challenge == ChallengePhase.Recover ? config.ChallengeRecoverTicks : 0);
+                if (p.Challenge > ChallengePhase.Grounded) throw new ArgumentException($"{owner}: unknown challenge phase {(byte)p.Challenge}.", nameof(state));
+                InRange(owner, nameof(p.ChallengeTicks), p.ChallengeTicks, p.Challenge switch
+                {
+                    ChallengePhase.Commit => CommitTicksFor(p.Capabilities.Tackling, config),
+                    ChallengePhase.Recover => config.ChallengeRecoverTicks,
+                    ChallengePhase.Slide => config.SlideTicks,
+                    ChallengePhase.Grounded => config.SlideRecoverTicks,
+                    _ => 0,
+                });
                 if (p.Challenge != ChallengePhase.Ready && p.ChallengeTicks == 0) throw new ArgumentException($"{owner}: a {p.Challenge} challenge needs steps left.", nameof(state));
                 double lineLength = p.ChallengeLine.LengthSquared;
                 if (p.Challenge == ChallengePhase.Ready ? lineLength != 0 : (lineLength < 1 - 1e-9 || lineLength > 1 + 1e-9))
