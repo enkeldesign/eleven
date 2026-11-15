@@ -71,5 +71,28 @@ namespace Eleven.Simulation.Harness
                 },
             };
         }
+
+        /// <summary>
+        /// A match's start (#85): the same world with the referee on, and a kick-off to
+        /// <paramref name="kickOffTeam"/> set up and ready. Both outfielders are CPU footballers
+        /// when <paramref name="bothCpu"/>, for a match no one plays.
+        /// </summary>
+        public static SimState KickOff(SimConfig config, ulong seed, int kickOffTeam = HomeTeam, int homeAttackSign = 1, bool bothCpu = false,
+            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null)
+        {
+            SimState s = Start(config, seed, homeAttackSign, awayCpu: awayCpu, homeCpu: bothCpu ? homeCpu ?? CpuSkill.Pro : (CpuSkill?)null);
+            int sign = kickOffTeam == HomeTeam ? homeAttackSign : -homeAttackSign;
+            int taker = kickOffTeam == HomeTeam ? 0 : 2, other = kickOffTeam == HomeTeam ? 2 : 0;
+            s.Players[taker].Position = new Vec2(-sign * Simulator.TakerBehind, 0);
+            s.Players[taker].Heading = sign > 0 ? 0 : Math.PI;
+            s.Players[other].Position = new Vec2(sign * OpponentDistance, 0);
+            s.Players[other].Heading = sign > 0 ? Math.PI : 0;
+            s.Restart = new RestartState
+            {
+                On = true, Phase = RestartPhase.Ready, Kind = RestartKind.KickOff, AwardedTeam = kickOffTeam,
+                PhaseTicks = config.RestartReadyTicks, TakerId = s.Players[taker].Id,
+            };
+            return s;
+        }
     }
 }

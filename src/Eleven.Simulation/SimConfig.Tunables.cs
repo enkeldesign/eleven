@@ -130,6 +130,11 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "challengeRecover", "s", 0.05, 1, 0.17, 0.4),
             new TunableParameter(TunableParameter.ControlGroup, "challengeReach", "m", 0.3, 2),
             new TunableParameter(TunableParameter.ControlGroup, "challengeImpulse", "m/s", 0, 15),
+            new TunableParameter(TunableParameter.GoalGroup, "touchlineY", "m", 15, 45),
+            new TunableParameter(TunableParameter.GoalGroup, "restartStop", "s", 0.1, 3),
+            new TunableParameter(TunableParameter.GoalGroup, "restartReady", "s", 0.1, 2, 0.2, 1.0),
+            new TunableParameter(TunableParameter.GoalGroup, "restartAuto", "s", 0.2, 5, 0.33, 1.5),
+            new TunableParameter(TunableParameter.GoalGroup, "throwSpeed", "m/s", 3, 25),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -191,6 +196,11 @@ namespace Eleven.Simulation
             "challengeRecover" => ChallengeRecover,
             "challengeReach" => ChallengeReach,
             "challengeImpulse" => ChallengeImpulse,
+            "touchlineY" => TouchlineY,
+            "restartStop" => RestartStop,
+            "restartReady" => RestartReady,
+            "restartAuto" => RestartAuto,
+            "throwSpeed" => ThrowSpeed,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -233,6 +243,7 @@ namespace Eleven.Simulation
             double cutAngle = CutAngle, cutStrength = CutStrength, cutInterval = CutInterval;
             double pushSpeed = PushSpeed, pushFromSpeed = PushFromSpeed;
             double challengeRange = ChallengeRange, challengeCommit = ChallengeCommit, challengeRecover = ChallengeRecover, challengeReach = ChallengeReach, challengeImpulse = ChallengeImpulse;
+            double touchlineY = TouchlineY, restartStop = RestartStop, restartReady = RestartReady, restartAuto = RestartAuto, throwSpeed = ThrowSpeed;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -285,6 +296,11 @@ namespace Eleven.Simulation
                     case "challengeRecover": challengeRecover = o.Value; break;
                     case "challengeReach": challengeReach = o.Value; break;
                     case "challengeImpulse": challengeImpulse = o.Value; break;
+                    case "touchlineY": touchlineY = o.Value; break;
+                    case "restartStop": restartStop = o.Value; break;
+                    case "restartReady": restartReady = o.Value; break;
+                    case "restartAuto": restartAuto = o.Value; break;
+                    case "throwSpeed": throwSpeed = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -366,7 +382,12 @@ namespace Eleven.Simulation
                 challengeCommit: challengeCommit,
                 challengeRecover: challengeRecover,
                 challengeReach: challengeReach,
-                challengeImpulse: challengeImpulse);
+                challengeImpulse: challengeImpulse,
+                touchlineY: touchlineY,
+                restartStop: restartStop,
+                restartReady: restartReady,
+                restartAuto: restartAuto,
+                throwSpeed: throwSpeed);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -432,7 +453,12 @@ namespace Eleven.Simulation
             challengeCommit: ChallengeCommit,
             challengeRecover: ChallengeRecover,
             challengeReach: ChallengeReach,
-            challengeImpulse: ChallengeImpulse);
+            challengeImpulse: ChallengeImpulse,
+            touchlineY: TouchlineY,
+            restartStop: RestartStop,
+            restartReady: RestartReady,
+            restartAuto: RestartAuto,
+            throwSpeed: ThrowSpeed);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

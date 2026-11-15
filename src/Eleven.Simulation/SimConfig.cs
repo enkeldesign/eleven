@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 14;
+        public const int FormatVersion = 15;
 
         public SimConfig(
             int tickRate = 60,
@@ -88,7 +88,12 @@ namespace Eleven.Simulation
             double challengeCommit = 0.2,
             double challengeRecover = 0.27,
             double challengeReach = 0.9,
-            double challengeImpulse = 5.0)
+            double challengeImpulse = 5.0,
+            double touchlineY = 34.0,
+            double restartStop = 0.5,
+            double restartReady = 0.4,
+            double restartAuto = 1.0,
+            double throwSpeed = 12.0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -156,6 +161,11 @@ namespace Eleven.Simulation
             ChallengeRecover = challengeRecover;
             ChallengeReach = challengeReach;
             ChallengeImpulse = challengeImpulse;
+            TouchlineY = touchlineY;
+            RestartStop = restartStop;
+            RestartReady = restartReady;
+            RestartAuto = restartAuto;
+            ThrowSpeed = throwSpeed;
 
             CheckTunableRanges();
 
@@ -473,6 +483,30 @@ namespace Eleven.Simulation
         /// <summary>m/s. The speed a won challenge knocks the ball away at, along his line.</summary>
         public double ChallengeImpulse { get; }
 
+        /// <summary>m. The touchlines' outer edges, at y = ± this: half Law 1's 68 m pitch width. A ball wholly beyond one is out of play (#85).</summary>
+        public double TouchlineY { get; }
+
+        /// <summary>s. How long the ball is dead after it goes out of play or a goal, before the restart is set up (#85).</summary>
+        public double RestartStop { get; }
+
+        /// <summary>s. From the restart being set up until its taker may take it (#85). #85's start: 12 to 60 steps.</summary>
+        public double RestartReady { get; }
+
+        /// <summary>s. How long a restart waits for a human taker, once he may take it, before his controller's fallback takes it for him (#85). #85's start: 20 to 90 steps.</summary>
+        public double RestartAuto { get; }
+
+        /// <summary>m/s. A throw-in's speed at full strength (#85): a throw is a kick intent, released by the hands.</summary>
+        public double ThrowSpeed { get; }
+
+        /// <summary>Steps the ball is dead before a restart is set up, at least one (#85).</summary>
+        public int RestartStopTicks => Math.Max(1, (int)Math.Round(RestartStop * TickRate));
+
+        /// <summary>Steps from a restart's set-up until it may be taken, at least one (#85).</summary>
+        public int RestartReadyTicks => Math.Max(1, (int)Math.Round(RestartReady * TickRate));
+
+        /// <summary>Steps a restart waits for a human taker before the fallback takes it, at least one (#85).</summary>
+        public int RestartAutoTicks => Math.Max(1, (int)Math.Round(RestartAuto * TickRate));
+
         /// <summary>Steps a challenge commits for, at least one (#84).</summary>
         public int ChallengeCommitTicks => Math.Max(1, (int)Math.Round(ChallengeCommit * TickRate));
 
@@ -564,7 +598,12 @@ namespace Eleven.Simulation
                 challengeCommit: r.ReadDouble(nameof(ChallengeCommit)),
                 challengeRecover: r.ReadDouble(nameof(ChallengeRecover)),
                 challengeReach: r.ReadDouble(nameof(ChallengeReach)),
-                challengeImpulse: r.ReadDouble(nameof(ChallengeImpulse)));
+                challengeImpulse: r.ReadDouble(nameof(ChallengeImpulse)),
+                touchlineY: r.ReadDouble(nameof(TouchlineY)),
+                restartStop: r.ReadDouble(nameof(RestartStop)),
+                restartReady: r.ReadDouble(nameof(RestartReady)),
+                restartAuto: r.ReadDouble(nameof(RestartAuto)),
+                throwSpeed: r.ReadDouble(nameof(ThrowSpeed)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -637,6 +676,11 @@ namespace Eleven.Simulation
             w.WriteDouble(ChallengeRecover, nameof(ChallengeRecover));
             w.WriteDouble(ChallengeReach, nameof(ChallengeReach));
             w.WriteDouble(ChallengeImpulse, nameof(ChallengeImpulse));
+            w.WriteDouble(TouchlineY, nameof(TouchlineY));
+            w.WriteDouble(RestartStop, nameof(RestartStop));
+            w.WriteDouble(RestartReady, nameof(RestartReady));
+            w.WriteDouble(RestartAuto, nameof(RestartAuto));
+            w.WriteDouble(ThrowSpeed, nameof(ThrowSpeed));
             return w.ToArray();
         }
 

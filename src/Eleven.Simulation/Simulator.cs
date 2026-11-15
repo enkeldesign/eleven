@@ -25,7 +25,7 @@ namespace Eleven.Simulation
     /// So a window opened by a contact first acts on the next step, and a wind-up of W steps
     /// started on step N connects on step N + W.
     /// </summary>
-    public sealed class Simulator
+    public sealed partial class Simulator
     {
         private readonly SimState _state;
         private readonly CanonicalWriter _hashScratch = new CanonicalWriter();
@@ -1747,6 +1747,7 @@ namespace Eleven.Simulation
                     _ => throw new ArgumentException($"{owner}: unknown phase {(int)k.Phase}.", nameof(state)),
                 };
                 InRange(owner, nameof(k.PhaseTicks), k.PhaseTicks, most);
+                if (k.HoldTicks < 0 || (k.HoldTicks > 0 && state.Ball.HeldBy != k.PlayerId)) throw new ArgumentException($"{owner}: he has held the ball for {k.HoldTicks} steps, but doesn't hold it.", nameof(state));
                 if (k.Phase != KeeperPhase.Position && k.PhaseTicks == 0) throw new ArgumentException($"{owner}: a {k.Phase} phase needs steps left.", nameof(state));
             }
 
@@ -1791,6 +1792,8 @@ namespace Eleven.Simulation
             {
                 throw new ArgumentException($"The ball is held by {state.Ball.HeldBy}, who isn't a keeper.", nameof(state));
             }
+
+            ValidateRestart(state, config);
 
             // A goal-line state the encoding knows (#68).
             if (state.Ball.Line > LineState.CrossingWide) throw new ArgumentException($"Unknown goal-line state {(byte)state.Ball.Line}.", nameof(state));

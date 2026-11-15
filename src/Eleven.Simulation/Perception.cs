@@ -14,7 +14,8 @@ namespace Eleven.Simulation
     public readonly struct KeeperObservation
     {
         public KeeperObservation(long tick, Vec2 position, Vec2 velocity, double heading, KeeperPhase phase, int phaseTicks,
-            KeeperCapabilities capabilities, double runSpeed, Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, bool ballHeld, bool holding)
+            KeeperCapabilities capabilities, double runSpeed, Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, bool ballHeld, bool holding,
+            int heldTicks = 0, bool inMatch = false)
         {
             Tick = tick;
             Position = position;
@@ -29,6 +30,8 @@ namespace Eleven.Simulation
             BallSpin = ballSpin;
             BallHeld = ballHeld;
             Holding = holding;
+            HeldTicks = heldTicks;
+            InMatch = inMatch;
         }
 
         public long Tick { get; }
@@ -63,6 +66,12 @@ namespace Eleven.Simulation
 
         /// <summary>Whether he holds it.</summary>
         public bool Holding { get; }
+
+        /// <summary>Steps he has held it for (#85).</summary>
+        public int HeldTicks { get; }
+
+        /// <summary>Whether this is a match, with a referee (#85): then a held ball is his to distribute.</summary>
+        public bool InMatch { get; }
     }
 
     /// <summary>Another footballer as a CPU outfielder sees him (#83).</summary>
@@ -159,11 +168,15 @@ namespace Eleven.Simulation
     /// <summary>A keeper's brain's decision (#69): where he moves on his feet, and the point he dives for, if he does.</summary>
     public readonly struct KeeperDecision
     {
-        public KeeperDecision(Vec2 move, Vec3? dive = null)
+        public KeeperDecision(Vec2 move, Vec3? dive = null, KickIntent? kick = null)
         {
             Move = move;
             Dive = dive;
+            Kick = kick;
         }
+
+        /// <summary>A kick (#85): from his hands, the ball he holds, distributed. An ordinary kick intent.</summary>
+        public KickIntent? Kick { get; }
 
         /// <summary>Length at most 1, as a stick's: a fraction of his top speed.</summary>
         public Vec2 Move { get; }
@@ -180,16 +193,17 @@ namespace Eleven.Simulation
             KeeperState k = state.Keepers[keeper];
             PlayerState body = Array.Find(state.Players, p => p.Id == k.PlayerId);
             BallState ball = state.Ball;
+            int held = k.HoldTicks;
             if (GuardedEnd(state, keeper) > 0)
             {
                 return new KeeperObservation(state.Tick, body.Position, body.Velocity, body.Heading, k.Phase, k.PhaseTicks, k.Capabilities,
-                    body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId);
+                    body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On);
             }
 
             // The −x goal's keeper: the world turned half a turn about the centre spot.
             return new KeeperObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
                 k.Phase, k.PhaseTicks, k.Capabilities, body.Capabilities.MaxSpeed, Turn(ball.Position), Turn(ball.Velocity), Turn(ball.Spin),
-                ball.HeldBy != 0, ball.HeldBy == k.PlayerId);
+                ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On);
         }
 
         /// <summary>
@@ -274,7 +288,9 @@ namespace Eleven.Simulation
 
         /// <summary>A keeper's decision, made in his own goal's frame, as a command in the world's.</summary>
         public static KeeperDecision InWorld(KeeperDecision decision, int guardedEnd) =>
-            guardedEnd > 0 ? decision : new KeeperDecision(Turn(decision.Move), decision.Dive.HasValue ? Turn(decision.Dive.Value) : (Vec3?)null);
+            guardedEnd > 0 ? decision
+            : new KeeperDecision(Turn(decision.Move), decision.Dive.HasValue ? Turn(decision.Dive.Value) : (Vec3?)null,
+                decision.Kick.HasValue ? new KickIntent(Turn(decision.Kick.Value.Direction), decision.Kick.Value.Strength, decision.Kick.Value.Loft) : (KickIntent?)null);
 
         // Half a turn about the centre spot. Spin, an axial vector, turns as any vector does.
         private static Vec2 Turn(Vec2 v) => new Vec2(-v.X, -v.Y);
@@ -297,7 +313,7 @@ namespace Eleven.Simulation
                 KeeperObservation seen = Perception.OfKeeper(state, i);
                 KeeperDecision decision = Perception.InWorld(AI.KeeperBrain.Decide(seen, simulator.Config), Perception.GuardedEnd(state, i));
                 int controller = Array.Find(state.Players, p => p.Id == state.Keepers[i].PlayerId).OwnerControllerId;
-                commands.Add(new Command(controller, state.Tick, decision.Move, dive: decision.Dive));
+                commands.Add(new Command(controller, state.Tick, decision.Move, decision.Kick, dive: decision.Dive));
             }
         }
     }

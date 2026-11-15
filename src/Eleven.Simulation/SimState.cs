@@ -33,6 +33,9 @@ namespace Eleven.Simulation
         /// </summary>
         public TeamState[] Teams = Array.Empty<TeamState>();
 
+        /// <summary>The restart sequencer's state (#85): off in practice, on in a match.</summary>
+        public RestartState Restart;
+
         /// <summary>The CPU outfielders (#83), in ascending player id order, each one of <see cref="Players"/> and not a keeper.</summary>
         public CpuState[] Cpus = Array.Empty<CpuState>();
 
@@ -48,7 +51,7 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
-        /// each player, keeper count (int32), each keeper, team count (int32), each team, CPU count
+        /// each player, keeper count (int32), each keeper, team count (int32), each team, the restart, CPU count
         /// (int32), each CPU outfielder. Field order within each is as declared, capabilities in their own
         /// declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
@@ -111,6 +114,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(keeper.Capabilities.DiveSpeed, "Keeper.Capabilities.DiveSpeed");
                 w.WriteDouble(keeper.Capabilities.Reach, "Keeper.Capabilities.Reach");
                 w.WriteDouble(keeper.Capabilities.Handling, "Keeper.Capabilities.Handling");
+                w.WriteInt32(keeper.HoldTicks);
             }
 
             w.WriteInt32(Teams.Length);
@@ -119,6 +123,17 @@ namespace Eleven.Simulation
                 w.WriteInt32(team.Id);
                 w.WriteInt32(team.AttackSign);
             }
+
+            w.WriteByte(Restart.On ? (byte)1 : (byte)0);
+            w.WriteByte((byte)Restart.Phase);
+            w.WriteByte((byte)Restart.Kind);
+            w.WriteInt32(Restart.AwardedTeam);
+            w.WriteInt32(Restart.LastTouchedTeam);
+            WriteVec2(w, Restart.Point, "Restart.Point");
+            w.WriteInt32(Restart.PhaseTicks);
+            w.WriteInt32(Restart.WaitTicks);
+            w.WriteInt32(Restart.TakerId);
+            w.WriteByte(Restart.FromThrow ? (byte)1 : (byte)0);
 
             w.WriteInt32(Cpus.Length);
             foreach (CpuState cpu in Cpus)
@@ -243,6 +258,7 @@ namespace Eleven.Simulation
                         Reach = r.ReadDouble("Keeper.Capabilities.Reach"),
                         Handling = r.ReadDouble("Keeper.Capabilities.Handling"),
                     },
+                    HoldTicks = r.ReadInt32(),
                 };
             }
 
@@ -253,6 +269,20 @@ namespace Eleven.Simulation
             {
                 state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32() };
             }
+
+            state.Restart = new RestartState
+            {
+                On = ReadFlag(r.ReadByte(), "Restart.On"),
+                Phase = r.ReadByte() is byte phase && phase <= (byte)RestartPhase.Ready ? (RestartPhase)phase : throw new FormatException("Unknown restart phase."),
+                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Corner ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
+                AwardedTeam = r.ReadInt32(),
+                LastTouchedTeam = r.ReadInt32(),
+                Point = ReadVec2(r, "Restart.Point"),
+                PhaseTicks = r.ReadInt32(),
+                WaitTicks = r.ReadInt32(),
+                TakerId = r.ReadInt32(),
+                FromThrow = ReadFlag(r.ReadByte(), "Restart.FromThrow"),
+            };
 
             int cpus = r.ReadInt32();
             if (cpus < 0 || cpus > count) throw new FormatException($"Implausible CPU count {cpus}.");
@@ -333,6 +363,72 @@ namespace Eleven.Simulation
         /// line, and its keeper guards the goal on the other.
         /// </summary>
         public int AttackSign;
+    }
+
+    /// <summary>Where the restart sequencer is (#85). Numeric values are stable and encoded as one byte.</summary>
+    public enum RestartPhase : byte
+    {
+        /// <summary>The ball is in play.</summary>
+        Live = 0,
+
+        /// <summary>The ball went out of play or into a goal: it is dead, and the restart is awarded.</summary>
+        Stopped = 1,
+
+        /// <summary>The ball and the footballers are placed. Only the taker may move, and he puts the ball in play by kicking it.</summary>
+        Ready = 2,
+    }
+
+    /// <summary>The restart awarded (#85). Numeric values are stable and encoded as one byte.</summary>
+    public enum RestartKind : byte
+    {
+        None = 0,
+
+        /// <summary>From the centre spot, to the side that conceded, or to start a half.</summary>
+        KickOff = 1,
+
+        /// <summary>Where the whole ball crossed a touchline, to the side that didn't touch it last.</summary>
+        ThrowIn = 2,
+
+        /// <summary>From the goal area, to the defenders, when an attacker touched it last over their goal line.</summary>
+        GoalKick = 3,
+
+        /// <summary>From the corner, to the attackers, when a defender touched it last over his own goal line.</summary>
+        Corner = 4,
+    }
+
+    /// <summary>
+    /// The restart sequencer's state (#85, INV-8): plain data. A match turns it on; practice
+    /// leaves it off, and then the ball is never out of play. docs/simulation/restarts.md.
+    /// </summary>
+    public struct RestartState
+    {
+        /// <summary>Whether there is a referee: out of play, goals and restarts are judged.</summary>
+        public bool On;
+
+        public RestartPhase Phase;
+
+        public RestartKind Kind;
+
+        /// <summary>The side that takes the restart.</summary>
+        public int AwardedTeam;
+
+        /// <summary>The side of the footballer who last played the ball while it was in play; 0 before anyone has.</summary>
+        public int LastTouchedTeam;
+
+        /// <summary>m. Where the ball is placed for the restart.</summary>
+        public Vec2 Point;
+
+        /// <summary>Steps left in <see cref="Phase"/>: until the set-up when stopped, until it may be taken when ready.</summary>
+        public int PhaseTicks;
+
+        /// <summary>Steps it has waited, ready, since it could first be taken.</summary>
+        public int WaitTicks;
+
+        /// <summary>The footballer who takes it, once it is set up; 0 before.</summary>
+        public int TakerId;
+
+        /// <summary>Whether the ball is live from a throw-in no one else has played yet: it can't score.</summary>
+        public bool FromThrow;
     }
 
     public struct BallState
