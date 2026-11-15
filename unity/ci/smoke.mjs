@@ -867,7 +867,44 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!short && !!long && short[1] === 'holdkick' && long[1] === 'holdkick' && Number(long[2]) === 1 && Number(long[2]) >= Number(short[2]),
           `${short ? short[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromShort)}`}; then ${long ? long[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromLong)}`}`);
 
-        // A re-touch while the hold's kick waits for its tick shapes it, and kicks nothing more.
+        const s0 = at(n[8], n[9]);
+        const reach = n[10] * sx;
+        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
+        const aimAt = (m) => {
+          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
+          const length = Math.hypot(dx, dy) || 1;
+          const on = toScreen({ x: dx / length, y: dy / length }, 0);
+          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
+        };
+        // The stick, finger 1, steered at the ball on every trace line until he touches it: then
+        // he has it. The finger stays down; the caller lifts it.
+        const runOntoBall = async (from) => {
+          let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
+          for (let i = 1; i <= 5; i++) {
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
+            await sleep(20);
+          }
+          let ran = null;
+          for (let until = Date.now() + 40_000; Date.now() < until;) {
+            if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) break;
+            const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
+            if (!line) break;
+            ran = line.match;
+            if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) break;
+            s1 = aimAt(line.match);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
+          }
+          return { s1, ran, hasBall: !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) };
+        };
+
+        // A re-touch while the hold's kick is under way shapes it, and kicks nothing more. With the
+        // ball at his feet the kick meets it and its aftertouch keeps the window open: from 10 m
+        // the wind-up's 0.1 s alone closes before a slow runner's re-touch arrives.
+        await settle();
+        const fromOnto = logs.length;
+        const onto = await runOntoBall(fromOnto);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         await settle();
         const fromShapeC = logs.length;
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
@@ -880,39 +917,13 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
         const kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
         check('a re-touch on FIRE during a kick shapes it and kicks nothing more', shapedC.some((l) => /target=shaping/.test(l)) && kicksC === 1,
-          `${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
+          `${onto.hasBall ? 'from the ball at his feet' : 'he never reached the ball'}; ${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
 
         // Both thumbs, and the kick's line: the stick, steered at the ball, runs the footballer onto
         // it; a hold on FIRE then kicks it on along his heading, ahead of him.
         await settle();
         const fromRun = logs.length;
-        const s0 = at(n[8], n[9]);
-        const reach = n[10] * sx;
-        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
-        const aimAt = (m) => {
-          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
-          const length = Math.hypot(dx, dy) || 1;
-          const on = toScreen({ x: dx / length, y: dy / length }, 0);
-          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
-        };
-        let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
-        for (let i = 1; i <= 5; i++) {
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
-          await sleep(20);
-        }
-        // Steered at the ball on every trace line until he touches it: then he has it.
-        let ran = null;
-        for (let until = Date.now() + 40_000; Date.now() < until;) {
-          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
-          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
-          if (!line) break;
-          ran = line.match;
-          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
-          s1 = aimAt(line.match);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
-        }
-        const hasBall = !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun));
+        const { s1, ran, hasBall } = await runOntoBall(fromRun);
         const fromKick = logs.length;
         await holdFire(600, 2, [pt(s1, 1)]);
         const both = (await waitForLog(actionPattern, 20_000, fromKick))?.match ?? null;
