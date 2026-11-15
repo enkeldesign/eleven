@@ -1681,8 +1681,10 @@ namespace Eleven.Simulation
             if (to - Config.BallRadius > line && (state == LineState.CrossingMouth || state == LineState.CrossingWide))
             {
                 // Straight from a throw-in, a ball through the mouth scores nothing (#85, Law 15): it is
-                // out of play over the goal line.
-                if (state == LineState.CrossingMouth && _state.Restart.On && _state.Restart.FromThrow) state = LineState.CrossingWide;
+                // out of play over the goal line. Anyone else's touch, this step's included, makes it a goal.
+                bool straightFromThrow = _state.Restart.On && _state.Restart.FromThrow
+                    && (ball.LastPlayedBy == 0 || ball.LastPlayedBy == _state.Restart.TakerId);
+                if (state == LineState.CrossingMouth && straightFromThrow) state = LineState.CrossingWide;
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
                 if (state == LineState.CrossingMouth)
                 {
