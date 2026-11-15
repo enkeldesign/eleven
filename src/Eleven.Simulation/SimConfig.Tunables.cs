@@ -137,6 +137,13 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.GoalGroup, "throwSpeed", "m/s", 3, 25),
             new TunableParameter(TunableParameter.GoalGroup, "halfLength", "s", 60, 600, 120, 600),
             new TunableParameter(TunableParameter.GoalGroup, "halfTimeBreak", "s", 0.5, 30),
+            new TunableParameter(TunableParameter.KickGroup, "volleyMaxHeight", "m", 0.6, 1.6, 0.9, 1.2),
+            new TunableParameter(TunableParameter.KickGroup, "headerMinHeight", "m", 1.0, 2.0, 1.4, 1.7),
+            new TunableParameter(TunableParameter.KickGroup, "headerMaxHeight", "m", 1.8, 3.0, 2.1, 2.5),
+            new TunableParameter(TunableParameter.KickGroup, "headerSpeed", "fraction of kickSpeed", 0.2, 1, 0.4, 0.7),
+            new TunableParameter(TunableParameter.KickGroup, "headerReach", "m", 0.2, 1.2),
+            new TunableParameter(TunableParameter.KickGroup, "volleyError", "rad per m/s", 0, 0.1),
+            new TunableParameter(TunableParameter.KickGroup, "headerError", "rad", 0, 0.8),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -205,6 +212,13 @@ namespace Eleven.Simulation
             "throwSpeed" => ThrowSpeed,
             "halfLength" => HalfLength,
             "halfTimeBreak" => HalfTimeBreak,
+            "volleyMaxHeight" => VolleyMaxHeight,
+            "headerMinHeight" => HeaderMinHeight,
+            "headerMaxHeight" => HeaderMaxHeight,
+            "headerSpeed" => HeaderSpeed,
+            "headerReach" => HeaderReach,
+            "volleyError" => VolleyError,
+            "headerError" => HeaderError,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -249,6 +263,7 @@ namespace Eleven.Simulation
             double challengeRange = ChallengeRange, challengeCommit = ChallengeCommit, challengeRecover = ChallengeRecover, challengeReach = ChallengeReach, challengeImpulse = ChallengeImpulse;
             double touchlineY = TouchlineY, restartStop = RestartStop, restartReady = RestartReady, restartAuto = RestartAuto, throwSpeed = ThrowSpeed;
             double halfLength = HalfLength, halfTimeBreak = HalfTimeBreak;
+            double volleyMaxHeight = VolleyMaxHeight, headerMinHeight = HeaderMinHeight, headerMaxHeight = HeaderMaxHeight, headerSpeed = HeaderSpeed, headerReach = HeaderReach, volleyError = VolleyError, headerError = HeaderError;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -308,6 +323,13 @@ namespace Eleven.Simulation
                     case "throwSpeed": throwSpeed = o.Value; break;
                     case "halfLength": halfLength = o.Value; break;
                     case "halfTimeBreak": halfTimeBreak = o.Value; break;
+                    case "volleyMaxHeight": volleyMaxHeight = o.Value; break;
+                    case "headerMinHeight": headerMinHeight = o.Value; break;
+                    case "headerMaxHeight": headerMaxHeight = o.Value; break;
+                    case "headerSpeed": headerSpeed = o.Value; break;
+                    case "headerReach": headerReach = o.Value; break;
+                    case "volleyError": volleyError = o.Value; break;
+                    case "headerError": headerError = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -396,7 +418,14 @@ namespace Eleven.Simulation
                 restartAuto: restartAuto,
                 throwSpeed: throwSpeed,
                 halfLength: halfLength,
-                halfTimeBreak: halfTimeBreak);
+                halfTimeBreak: halfTimeBreak,
+                volleyMaxHeight: volleyMaxHeight,
+                headerMinHeight: headerMinHeight,
+                headerMaxHeight: headerMaxHeight,
+                headerSpeed: headerSpeed,
+                headerReach: headerReach,
+                volleyError: volleyError,
+                headerError: headerError);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -469,7 +498,14 @@ namespace Eleven.Simulation
             restartAuto: RestartAuto,
             throwSpeed: ThrowSpeed,
             halfLength: HalfLength,
-            halfTimeBreak: HalfTimeBreak);
+            halfTimeBreak: HalfTimeBreak,
+            volleyMaxHeight: VolleyMaxHeight,
+            headerMinHeight: HeaderMinHeight,
+            headerMaxHeight: HeaderMaxHeight,
+            headerSpeed: HeaderSpeed,
+            headerReach: HeaderReach,
+            volleyError: VolleyError,
+            headerError: HeaderError);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

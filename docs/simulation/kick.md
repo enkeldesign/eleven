@@ -60,7 +60,7 @@ In `Simulator.Step`, after the players move:
    1. An intent is accepted only if the player isn't winding up and has no cooldown. It starts the wind-up and stores the intended line, the clamped strength and the loft. Intents at other times are ignored.
    2. The wind-up counts down. A wind-up of W steps started on step N ends on step N + W, and with no wind-up the kick connects on the intent's own step.
    3. When the wind-up ends:
-      - **The ball is out of reach** (further than `kickReach` horizontally, or higher than `kickMaxBallHeight`): the kick misses. `KickMissed` is emitted, and no cooldown is set.
+      - **The ball is out of reach** (further than `kickReach` horizontally, or at a height no part of the body plays): the kick misses. `KickMissed` is emitted, and no cooldown is set. Above `kickMaxBallHeight` the contact is a volley or a header (#94, [air.md](air.md)).
       - **Otherwise the kick connects** and `Kicked` is emitted.
 3. **The ball integrates**, so a window opened by a contact first acts on the next step.
 

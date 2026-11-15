@@ -75,6 +75,16 @@ namespace Eleven.Host
         private readonly Transform _farLeftPost;
         private readonly Transform _opponent;
         private readonly Transform _opponentKeeper;
+
+        // A 2v2 match's other footballers (#95): the controlled player's teammates in his colour,
+        // the opponents beyond the first in theirs, made as a match needs them. The marker is a halo
+        // under the controlled player, so who the human has reads at a glance (SWOS's marker).
+        private readonly Transform _root;
+        private readonly Sprite _discSprite;
+        private readonly System.Collections.Generic.List<Transform> _mates = new System.Collections.Generic.List<Transform>();
+        private readonly System.Collections.Generic.List<Transform> _opponents = new System.Collections.Generic.List<Transform>();
+        private readonly Transform _marker;
+        private int _perSide = 1;
         private float _ballDiameter;
         private Vector3 _ballShown;
         private PitchOrientation _orientation = PitchOrientation.Practice;
@@ -133,11 +143,16 @@ namespace Eleven.Host
 
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
             _ballShadow = Shape(root, disc, "Ball shadow", HostPalette.BallShadow, 3, _ballDiameter);
+            _root = root;
+            _discSprite = disc;
+            _marker = Shape(root, disc, "Controlled marker", HostPalette.Marker, 3, PlayerDiameter * MarkerScale);
+            _marker.gameObject.SetActive(false);
             _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
             _keeper = Shape(root, disc, "Keeper", HostPalette.Keeper, 4, PlayerDiameter);
             _keeper.gameObject.SetActive(false);
             _opponent = Shape(root, disc, "Opponent", HostPalette.Opponent, 4, PlayerDiameter);
             _opponentKeeper = Shape(root, disc, "Opponent keeper", HostPalette.OpponentKeeper, 4, PlayerDiameter);
+            _opponents.Add(_opponent);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
             ShowMatch(false);
         }
@@ -163,20 +178,33 @@ namespace Eleven.Host
             _farRightPost.localScale = _farLeftPost.localScale = _rightPost.localScale;
         }
 
-        /// <summary>A match's pitch (#87): the far goal and the opponents shown; practice hides them.</summary>
-        public void ShowMatch(bool match)
+        /// <summary>The marker's diameter, as a multiple of a footballer's.</summary>
+        private const float MarkerScale = 1.5f;
+
+        /// <summary>
+        /// A match's pitch (#87): the far goal and the opponents shown; practice hides them. With
+        /// <paramref name="perSide"/> outfielders a side (#95), his teammates too, and the marker
+        /// once he has a teammate to tell him from.
+        /// </summary>
+        public void ShowMatch(bool match, int perSide = 1)
         {
+            _perSide = match ? perSide : 1;
             _farCrossbar.gameObject.SetActive(match);
             _farRightPost.gameObject.SetActive(match);
             _farLeftPost.gameObject.SetActive(match);
-            _opponent.gameObject.SetActive(match);
             _opponentKeeper.gameObject.SetActive(match);
+            while (_mates.Count < _perSide - 1) _mates.Add(Shape(_root, _discSprite, $"Teammate {_mates.Count + 1}", HostPalette.Player, 4, PlayerDiameter));
+            while (_opponents.Count < _perSide) _opponents.Add(Shape(_root, _discSprite, $"Opponent {_opponents.Count + 1}", HostPalette.Opponent, 4, PlayerDiameter));
+            for (int i = 0; i < _mates.Count; i++) _mates[i].gameObject.SetActive(match && i < _perSide - 1);
+            for (int i = 0; i < _opponents.Count; i++) _opponents[i].gameObject.SetActive(match && i < _perSide);
+            _marker.gameObject.SetActive(match && _perSide > 1);
         }
 
-        /// <summary>Where a match's opponents are drawn this frame (#87).</summary>
-        public void RenderOpponents(Vector2 opponent, Vector2 opponentKeeper)
+        /// <summary>Where a match's other footballers are drawn this frame (#87, #95): his teammates, the opponents' outfielders, their keeper.</summary>
+        public void RenderSides(System.Collections.Generic.IReadOnlyList<Vector2> mates, System.Collections.Generic.IReadOnlyList<Vector2> opponents, Vector2 opponentKeeper)
         {
-            _opponent.localPosition = new Vector3(opponent.x, opponent.y, 0);
+            for (int i = 0; i < mates.Count && i < _mates.Count; i++) _mates[i].localPosition = new Vector3(mates[i].x, mates[i].y, 0);
+            for (int i = 0; i < opponents.Count && i < _opponents.Count; i++) _opponents[i].localPosition = new Vector3(opponents[i].x, opponents[i].y, 0);
             _opponentKeeper.localPosition = new Vector3(opponentKeeper.x, opponentKeeper.y, 0);
         }
 
@@ -217,6 +245,7 @@ namespace Eleven.Host
         public void Render(Vector2 player, Vector2? keeper, Vector3 ball, in HudLayout layout)
         {
             _player.localPosition = new Vector3(player.x, player.y, 0);
+            _marker.localPosition = _player.localPosition;
             _keeper.gameObject.SetActive(keeper.HasValue);
             if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);

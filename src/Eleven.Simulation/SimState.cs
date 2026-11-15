@@ -86,6 +86,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.PassAnticipation, "Player.Capabilities.PassAnticipation");
                 w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
                 w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
+                w.WriteDouble(player.Capabilities.Heading, "Player.Capabilities.Heading");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -175,7 +176,7 @@ namespace Eleven.Simulation
         private static CpuPlanState ReadPlan(CanonicalReader r)
         {
             int mode = r.ReadInt32();
-            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Recover) throw new FormatException($"Unknown CPU mode {mode}.");
+            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Support) throw new FormatException($"Unknown CPU mode {mode}.");
             return new CpuPlanState
             {
                 Mode = (CpuMode)mode,
@@ -227,6 +228,7 @@ namespace Eleven.Simulation
                         PassAnticipation = r.ReadDouble("Player.Capabilities.PassAnticipation"),
                         BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
                         Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
+                        Heading = r.ReadDouble("Player.Capabilities.Heading"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),

@@ -61,7 +61,8 @@ namespace Eleven.Host
         private bool _paused;
         private double _lastTime;
         private double _accumulator;
-        private Vector2 _previousPlayer;
+        // Every footballer's position at the last step, by index, to draw between steps.
+        private Vector2[] _previousAll = new Vector2[0];
         private Vector2 _previousKeeper;
         private Vector3 _previousBall;
         private GUIStyle _buttonStyle;
@@ -165,8 +166,10 @@ namespace Eleven.Host
 
             if (url.Contains("autorun")) RunScenario();
 
-            // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch.
-            if (url.Contains("mode=match")) StartMatch("address");
+            // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch;
+            // ?mode=match2, a 2v2 match (#95).
+            if (url.Contains("mode=match2")) StartMatch("address", 2);
+            else if (url.Contains("mode=match")) StartMatch("address", 1);
         }
 
         private void OnDestroy() => _input?.Dispose();
@@ -217,7 +220,7 @@ namespace Eleven.Host
 
             // A press on ACTION shapes the ball while the controlled player's kick winds up or its
             // aftertouch window is open: the simulation's window, not a second duration (#28).
-            PlayerState controlled = _simulator.PeekState().Players[0];
+            PlayerState controlled = _simulator.PeekState().Players[Controlled(_simulator.PeekState())];
             _input.ShapingOpen = controlled.WindUpTicks > 0 || controlled.AftertouchTicks > 0;
 
             _specimen?.Tick(_simulator.Tick);
@@ -230,13 +233,11 @@ namespace Eleven.Host
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
             Vector2? keeper = Keeper(state, out Vec2 at) ? Vector2.Lerp(_previousKeeper, ToVector(at), alpha) : (Vector2?)null;
-            if (_match && state.Players.Length >= 4)
-            {
-                _view.RenderOpponents(Vector2.Lerp(_previousOpponent, ToVector(state.Players[2].Position), alpha), Vector2.Lerp(_previousOpponentKeeper, ToVector(state.Players[3].Position), alpha));
-            }
+            int me = Controlled(state);
+            if (_match) RenderSides(state, me, alpha);
 
             _view.Render(
-                Vector2.Lerp(_previousPlayer, ToVector(state.Players[0].Position), alpha),
+                Vector2.Lerp(Previous(me, state), ToVector(state.Players[me].Position), alpha),
                 keeper,
                 Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
                 _layout);
@@ -246,7 +247,7 @@ namespace Eleven.Host
         {
             RememberPrevious();
             _commands.Clear();
-            _commands.Add(_input.CommandFor(_simulator.Tick));
+            _commands.Add(WithSwitch(_input.CommandFor(_simulator.Tick)));
 
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
@@ -268,7 +269,8 @@ namespace Eleven.Host
                 _framesSinceTrace = 0;
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={s.Players[0].Position.X:F2},{s.Players[0].Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)}"));
+                PlayerState traced = s.Players[Controlled(s)];
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={traced.Position.X:F2},{traced.Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)}"));
                 Log($"ELEVEN view tick={s.Tick} {_view.Report(_layout)}");
             }
 
@@ -302,14 +304,10 @@ namespace Eleven.Host
         private void RememberPrevious()
         {
             SimState state = _simulator.PeekState();
-            _previousPlayer = ToVector(state.Players[0].Position);
+            if (_previousAll.Length != state.Players.Length) _previousAll = new Vector2[state.Players.Length];
+            for (int i = 0; i < state.Players.Length; i++) _previousAll[i] = ToVector(state.Players[i].Position);
             _previousBall = ToVector(state.Ball.Position);
             if (Keeper(state, out Vec2 at)) _previousKeeper = ToVector(at);
-            if (state.Players.Length >= 4)
-            {
-                _previousOpponent = ToVector(state.Players[2].Position);
-                _previousOpponentKeeper = ToVector(state.Players[3].Position);
-            }
         }
 
         // The keeper's position (#69), when practice has one.
@@ -337,7 +335,7 @@ namespace Eleven.Host
         {
             if (_match)
             {
-                StartMatch("reset");
+                StartMatch("reset", _perSide);
                 return;
             }
 
@@ -553,7 +551,7 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => _match ? 1 : 0, SwitchPlay);
+                    () => _match ? (_perSide > 1 ? 2 : 1) : 0, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {

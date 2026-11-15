@@ -114,6 +114,15 @@ namespace Eleven.Simulation
 
         /// <summary>The match is over (#86).</summary>
         FullTime = 27,
+
+        /// <summary>A controller took over a teammate (#93). Subject: the footballer taken over. <see cref="SimEvent.Other"/>: the one left to the CPU.</summary>
+        Switched = 28,
+
+        /// <summary>A kick that connected was a header (#94). With <see cref="Kicked"/>.</summary>
+        Headed = 29,
+
+        /// <summary>A kick that connected was a volley (#94). With <see cref="Kicked"/>.</summary>
+        Volleyed = 30,
     }
 
     /// <summary>
@@ -154,7 +163,7 @@ namespace Eleven.Simulation
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
             : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0)
-                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken ? $"{Tick} {Kind} {Subject} {Other}"
+                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

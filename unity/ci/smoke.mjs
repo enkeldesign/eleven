@@ -634,7 +634,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       // ?matchview=1 starts from the address instead, and only looks at the HUD.
       if (url.includes('match=1')) {
         const shot = (label) => page.screenshot({ path: path.join(outDir, `${name}-${label}.png`), timeout: 60_000 }).catch(() => {});
-        const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/;
+        const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})(?: side=(\d+))?/;
+        // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH.
+        const side = url.includes('match2') ? 2 : 1;
         const fromM = logs.length;
         let started = lastLog(startedPattern);
         if (!url.includes('mode=match')) {
@@ -642,14 +644,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openedM = await openBench(2, [], false);
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
-          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)/, 10_000, fromM))?.match ?? null;
-          if (play) await press(play[2], 2);
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?/, 10_000, fromM))?.match ?? null;
+          if (play && (side === 1 || play[3])) await press(side === 1 ? play[2] : play[3], 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
-          check('a 1v1 match starts through the bench\'s play switch', !!started && started[1] === 'bench',
+          check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
             started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
           await closeBench(openedM, 2);
         } else {
-          check('a 1v1 match starts from the address', !!started && started[1] === 'address', started ? started[0].replace('ELEVEN ', '') : 'no match started');
+          check(`a ${side}v${side} match starts from the address`, !!started && started[1] === 'address' && (started[7] ?? '1') === String(side), started ? started[0].replace('ELEVEN ', '') : 'no match started');
         }
 
         // The match panel: score, clock and half, placed clear of the play. From the match's start:
@@ -659,6 +661,25 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         check('the score, the clock and the half are shown, clear of the play', !!panel && panel[1] === 'yes', panel ? panel[0].replace('ELEVEN hud result ', '') : 'no panel report');
         await sleep(1500);
         await shot('kickoff');
+
+        // SWITCH (#95): in a 2v2 match a control of at least 44 x 44 pt beside the action area, and
+        // none in a 1v1 match. A press asks for the teammate who reaches the ball first.
+        const switchBox = (lastLog(/ELEVEN layout .* switch=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
+        const ppp = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
+        if (side === 1) {
+          check('a 1v1 match shows no SWITCH', switchBox.length === 4 && switchBox[2] === 0, switchBox.length ? `switch=${switchBox.join(',')}` : 'no switch in the layout line');
+        } else {
+          const big = switchBox.length === 4 && switchBox[2] >= 44 * ppp - 1 && switchBox[3] >= 44 * ppp - 1;
+          check('SWITCH is shown, at least 44 x 44 pt, beside the action area', big && switchBox[0] + switchBox[2] / 2 > Number(n[0]) / 2,
+            switchBox.length ? `switch=${switchBox.join(',')} px at ${ppp} px/pt` : 'no switch in the layout line');
+          const fromS = logs.length;
+          if (big) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
+          const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
+          const switched = (await waitForLog(/ELEVEN match switched to=(\d+) from=(\d+)/, 10_000, fromS))?.match ?? null;
+          check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
+            `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
+        }
+
         if (url.includes('matchview=1')) {
           const errorsV = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
           check('no page errors or exceptions', errorsV.length === 0, errorsV.length ? errorsV.slice(0, 5).join(' | ') : 'none');
@@ -694,6 +715,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!result && /score=\d+-\d+/.test(result[1]) && /played=\d+/.test(result[1]) && halves === 1 && fulls === 1,
           `${result ? result[1] : 'no result'}; ${halves} half-time(s), ${fulls} full time(s)`);
         notes.result = result ? result[1] : 'none';
+        if (side === 2) {
+          const switches = logs.slice(fromM).filter((l) => /^ELEVEN match switched /.test(l)).length;
+          check('control switched through the 2v2 match', switches >= 2, `${switches} switch(es)`);
+          notes.result += `; ${switches} switches`;
+        }
         console.log(`::notice title=match ${name}::${notes.result}`);
         await sleep(1500);
         await shot('result');
@@ -1879,6 +1905,9 @@ try {
   await runPass(browser, `${base}?trace=1&match=1&half=60`, 'match-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-tablet-landscape', quick(1080, 810), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-phone-landscape', quick(750, 342), true);
+  // The 2v2 match (#95): a whole one on a phone through the bench, and SWITCH in landscape.
+  await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60`, 'match2-phone', quick(390, 664), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2`, 'match2-phone-landscape', quick(750, 342), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

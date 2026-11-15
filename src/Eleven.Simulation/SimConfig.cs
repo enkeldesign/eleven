@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 16;
+        public const int FormatVersion = 17;
 
         public SimConfig(
             int tickRate = 60,
@@ -95,7 +95,14 @@ namespace Eleven.Simulation
             double restartAuto = 1.0,
             double throwSpeed = 12.0,
             double halfLength = 180.0,
-            double halfTimeBreak = 2.0)
+            double halfTimeBreak = 2.0,
+            double volleyMaxHeight = 1.1,
+            double headerMinHeight = 1.4,
+            double headerMaxHeight = 2.4,
+            double headerSpeed = 0.55,
+            double headerReach = 0.6,
+            double volleyError = 0.02,
+            double headerError = 0.25)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -170,6 +177,13 @@ namespace Eleven.Simulation
             ThrowSpeed = throwSpeed;
             HalfLength = halfLength;
             HalfTimeBreak = halfTimeBreak;
+            VolleyMaxHeight = volleyMaxHeight;
+            HeaderMinHeight = headerMinHeight;
+            HeaderMaxHeight = headerMaxHeight;
+            HeaderSpeed = headerSpeed;
+            HeaderReach = headerReach;
+            VolleyError = volleyError;
+            HeaderError = headerError;
 
             CheckTunableRanges();
 
@@ -508,6 +522,27 @@ namespace Eleven.Simulation
         /// <summary>s. The pause at half-time before the second half's kick-off is set up (#86). It is not match time.</summary>
         public double HalfTimeBreak { get; }
 
+        /// <summary>m. A ball's centre above kick height and up to this is volleyed (#94): kicked in the air, its error growing with its speed.</summary>
+        public double VolleyMaxHeight { get; }
+
+        /// <summary>m. From this height a ball is headed (#94).</summary>
+        public double HeaderMinHeight { get; }
+
+        /// <summary>m. Up to this height a ball is headed, a jump included (#94).</summary>
+        public double HeaderMaxHeight { get; }
+
+        /// <summary>Fraction of the config's hardest kick a full-strength header reaches (#94).</summary>
+        public double HeaderSpeed { get; }
+
+        /// <summary>m. How far from his body, across the ground, a footballer heads a ball (#94).</summary>
+        public double HeaderReach { get; }
+
+        /// <summary>rad per m/s of the ball's incoming speed: a volley's extra error over the kicker's own (#94).</summary>
+        public double VolleyError { get; }
+
+        /// <summary>rad. A header's error at no heading at all, shrinking to nothing at full heading (#94).</summary>
+        public double HeaderError { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -621,7 +656,14 @@ namespace Eleven.Simulation
                 restartAuto: r.ReadDouble(nameof(RestartAuto)),
                 throwSpeed: r.ReadDouble(nameof(ThrowSpeed)),
                 halfLength: r.ReadDouble(nameof(HalfLength)),
-                halfTimeBreak: r.ReadDouble(nameof(HalfTimeBreak)));
+                halfTimeBreak: r.ReadDouble(nameof(HalfTimeBreak)),
+                volleyMaxHeight: r.ReadDouble(nameof(VolleyMaxHeight)),
+                headerMinHeight: r.ReadDouble(nameof(HeaderMinHeight)),
+                headerMaxHeight: r.ReadDouble(nameof(HeaderMaxHeight)),
+                headerSpeed: r.ReadDouble(nameof(HeaderSpeed)),
+                headerReach: r.ReadDouble(nameof(HeaderReach)),
+                volleyError: r.ReadDouble(nameof(VolleyError)),
+                headerError: r.ReadDouble(nameof(HeaderError)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -701,6 +743,13 @@ namespace Eleven.Simulation
             w.WriteDouble(ThrowSpeed, nameof(ThrowSpeed));
             w.WriteDouble(HalfLength, nameof(HalfLength));
             w.WriteDouble(HalfTimeBreak, nameof(HalfTimeBreak));
+            w.WriteDouble(VolleyMaxHeight, nameof(VolleyMaxHeight));
+            w.WriteDouble(HeaderMinHeight, nameof(HeaderMinHeight));
+            w.WriteDouble(HeaderMaxHeight, nameof(HeaderMaxHeight));
+            w.WriteDouble(HeaderSpeed, nameof(HeaderSpeed));
+            w.WriteDouble(HeaderReach, nameof(HeaderReach));
+            w.WriteDouble(VolleyError, nameof(VolleyError));
+            w.WriteDouble(HeaderError, nameof(HeaderError));
             return w.ToArray();
         }
 
