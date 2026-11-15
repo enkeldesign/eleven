@@ -250,6 +250,12 @@ namespace Eleven.Host
         /// <summary>A screen shorter than this many points, and not wide, gets the compact arrangement (#31): every phone in portrait.</summary>
         public const float CompactBelowHeight = 720;
 
+        /// <summary>Under this many points high, the compact arrangement's live switches scroll with the knobs too (#31): a compact phone.</summary>
+        public const float SwitchesScrollBelowHeight = 600;
+
+        // Whether the live switches scroll with the knobs: the compact arrangement on a screen too short for them to stay put.
+        private bool _switchesScroll;
+
         /// <summary>The arrangement a screen of this size, in points, calls for: stacked, wide or compact.</summary>
         public static string ArrangementFor(float width, float height) =>
             height > 0 && height < WideBelowHeight && width > height ? "wide"
@@ -271,7 +277,8 @@ namespace Eleven.Host
         {
             Rect screen = _ui.Root.layout;
             string arranged = ArrangementFor(screen.width, screen.height);
-            if (_arranged == arranged) return;
+            bool switchesScroll = arranged == "compact" && screen.height < SwitchesScrollBelowHeight;
+            if (_arranged == arranged && _switchesScroll == switchesScroll) return;
             _arranged = arranged;
             bool wide = arranged == "wide", compact = arranged == "compact";
 
@@ -304,14 +311,17 @@ namespace Eleven.Host
                 _sheet.Content.style.flexDirection = FlexDirection.Column;
                 // Compact: the title goes, and what is running and pending scrolls with the knobs,
                 // after them, so the list has room. The live switches, the tabs and the actions stay put.
+                // On a compact phone the live switches scroll after the knobs as well.
+                _switchesScroll = compact && screen.height < SwitchesScrollBelowHeight;
                 VisualElement status = compact ? _liveBlock : _sheet.Content;
+                VisualElement switches = _switchesScroll ? _liveBlock : _sheet.Content;
                 status.Add(_state);
                 status.Add(_pendingText);
                 status.Add(_problem);
-                _sheet.Content.Add(_modelsLabel);
-                _sheet.Content.Add(_models.Element);
-                _sheet.Content.Add(_viewsLabel);
-                _sheet.Content.Add(_views.Element);
+                switches.Add(_modelsLabel);
+                switches.Add(_models.Element);
+                switches.Add(_viewsLabel);
+                switches.Add(_views.Element);
                 _sheet.Content.Add(_tabs.Element);
                 _sheet.Content.Add(_list);
                 _sheet.Body.Add(_sheet.Actions);
@@ -717,8 +727,11 @@ namespace Eleven.Host
                 bool wide = _arranged == "wide";
                 VisualElement switchesIn = wide ? _switchScroll.contentViewport : _sheet.Body;
                 VisualElement tabsIn = wide ? _tabScroll.contentViewport : _sheet.Body;
-                foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
-                foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                if (!_switchesScroll)
+                {
+                    foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
+                    foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
+                }
 
                 foreach (UiKit.Raised tab in _tabs.Segments) Reach(tab.Element, tabsIn);
                 foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) Reach(action.Element, _sheet.Body);

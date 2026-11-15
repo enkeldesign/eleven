@@ -43,7 +43,7 @@ The bench sheet (`BenchSheet.Arrange`) has three arrangements, and takes the one
   - The knob list, at the sheet's full height.
 
   The title goes and the switches' labels shorten, so every switch, tab and action is in reach without scrolling.
-- **Compact,** on a screen under 720 pt high that isn't wide (every phone in portrait): the title goes, the switches' labels shorten, and the lines saying what is running and pending scroll with the knob list, after the knobs. The live switches, the tabs and the actions stay put.
+- **Compact,** on a screen under 720 pt high that isn't wide (every phone in portrait): the title goes, the switches' labels shorten, and the lines saying what is running and pending scroll with the knob list, after the knobs. The live switches, the tabs and the actions stay put. Under 600 pt high (a compact phone) the live switches scroll after the knobs too.
 - **Only the knob list gives way** when a sheet is short of room. The title, the labels, the switches, the tabs and the actions keep their sizes.
 - **Before #31** a landscape phone got the stacked arrangement, whose fixed rows took the sheet's whole height. The knob list had no room, and the Touch tab's A / B / C choice couldn't be reached.
 - **The run goes on while the bench is open,** so a live switch can be judged at once. No play input can happen by accident: opening the bench cancels gestures in progress, its scrim covers the whole screen, and a press on the UI never reaches the match controls. The note sheet is different: play waits while it is open.
