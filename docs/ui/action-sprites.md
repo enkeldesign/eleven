@@ -38,11 +38,16 @@ With reduced motion a run is one frame: Run A, whatever the stride. Every other 
 
 ## Screenshot regression
 
-`?sheet=1` shows every pose in every kit, in a grid over the play area. The smoke's `sheet-phone` pass:
-- checks that all 48 are shown;
-- screenshots them;
-- compares the screenshot with `unity/ci/reference/sprite-sheet.png`, allowing 1 % of pixels off by more than 24 in a channel.
+The regression has two parts.
 
-With no reference recorded, the pass keeps its screenshot as the one to record.
+1. **The art is pinned in .NET.** `docs/ui/action-sprites-reference.txt` holds a digest of every pose's pixels in each kit, and `ActionSpriteTests` checks it. A change to a sprite is a baseline update: regenerate it with `ELEVEN_WRITE_REFERENCE=1`, in its own commit with its reason.
+2. **The drawing must reproduce it.** `?sheet=1` shows every pose in every kit, in a grid over the play area. The host logs:
+   - the grids;
+   - the palette;
+   - each cell's place on screen.
+
+   The smoke's `sheet-phone` pass checks that all 48 sprites are shown. It screenshots them and samples every opaque sprite pixel at its centre. 95 % must be within 40 a channel of the colour the generator gives it.
+
+A wrong filter, turn, colour space or scale fails the second part; any change to the art fails the first.
 
 `?sprites=0` draws the discs as before, for comparison.
