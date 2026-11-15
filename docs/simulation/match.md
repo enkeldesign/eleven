@@ -53,7 +53,7 @@ A goal is credited to the side attacking the end it went into (#82), once: the g
 | `Restarts` | Restarts taken, kick-offs included |
 
 - **`MatchResult.SchemaVersion`** (1) is bumped whenever a field is added or changes meaning.
-- **`ToText()`** writes a stable text form: `eleven-result/1`, then one `name=value` line each and a `goal=` line per goal.
+- **`ToText()`** writes a stable text form: `eleven-result/2`, then one `name=value` line each and a `goal=` line per goal. Schema 2 (#99) adds `fouls=` and `penalties=`, home–away.
 - **`MatchRecorder`** builds it as the match is played, from each step's events and state, and gives it at full time. It reads the match and is no part of it, so replaying the same commands builds the same result.
 
 ## Measured

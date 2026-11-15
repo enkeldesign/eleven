@@ -129,10 +129,15 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
 
-        public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts)
+        public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
+            int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0)
         {
+            HomeFouls = homeFouls;
+            AwayFouls = awayFouls;
+            HomePenalties = homePenalties;
+            AwayPenalties = awayPenalties;
             HomeTeam = homeTeam;
             AwayTeam = awayTeam;
             HomeGoals = homeGoals;
@@ -160,13 +165,23 @@ namespace Eleven.Simulation
         /// <summary>Restarts taken, kick-offs included.</summary>
         public int Restarts { get; }
 
+        /// <summary>Fouls each side committed (schema 2, #99).</summary>
+        public int HomeFouls { get; }
+
+        public int AwayFouls { get; }
+
+        /// <summary>Penalties each side was awarded (schema 2, #99).</summary>
+        public int HomePenalties { get; }
+
+        public int AwayPenalties { get; }
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
             var text = new StringBuilder();
             text.Append("eleven-result/").Append(SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\n",
-                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts));
+            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\n",
+                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
