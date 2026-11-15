@@ -741,6 +741,23 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('the 5v5 match gives a foul, and a restart of each kind is taken',
             fouls >= 1 && [1, 2, 3, 4, 5].every((k) => taken.has(k)), `${fouls} foul(s); taken: ${seen || 'none'}`);
           notes.result += `; ${fouls} fouls; ${seen}`;
+
+          // The off-screen cues (#102): footballers just outside the view are cued at its edge,
+          // every cue inside the play area. Counted each second of the match clock.
+          const cueLines = logs.slice(fromM).map((l) => /^ELEVEN cues second=(\d+) shown=(\d+) play=(\d+),(\d+),(\d+),(\d+) at=(\S*)/.exec(l)).filter(Boolean);
+          let cues = 0, outside = 0;
+          for (const c of cueLines) {
+            const [px, py, pw, ph] = c.slice(3, 7).map(Number);
+            for (const one of c[7] ? c[7].split(';') : []) {
+              const [x, y, size] = one.split(',').map(Number);
+              cues++;
+              if (x - size / 2 < px - 1 || x + size / 2 > px + pw + 1 || y - size / 2 < py - 1 || y + size / 2 > py + ph + 1) outside++;
+            }
+          }
+          const perSecond = cueLines.length ? cues / cueLines.length : 0;
+          check('footballers just off the screen are cued at its edge, inside the play area', cueLines.length > 0 && cues > 0 && outside === 0,
+            `${cues} cue(s) over ${cueLines.length} s, ${perSecond.toFixed(2)} a second; ${outside} outside the play area`);
+          notes.result += `; ${perSecond.toFixed(2)} cues a second`;
         }
         console.log(`::notice title=match ${name}::${notes.result}`);
         await sleep(1500);

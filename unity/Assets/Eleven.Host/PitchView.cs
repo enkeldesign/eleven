@@ -85,6 +85,23 @@ namespace Eleven.Host
         private readonly System.Collections.Generic.List<Transform> _opponents = new System.Collections.Generic.List<Transform>();
         private readonly Transform _marker;
         private int _perSide = 1;
+
+        // The off-screen cues (#102): a pointer at the play area's edge for each footballer just
+        // outside it, in his side's colour, made as they are needed. Drawn over the play, under
+        // the HUD; they take no touch, since the pitch's sprites never do.
+        private readonly System.Collections.Generic.List<SpriteRenderer> _cues = new System.Collections.Generic.List<SpriteRenderer>();
+        private Sprite _cueSprite;
+        private int _cuesShown;
+
+        /// <summary>m. How far outside the view a footballer is cued; 0 for none (<c>?cues=</c>, #102).</summary>
+        public float CueReach { get; set; } = (float)Eleven.Presentation.EdgeCues.Reach;
+
+        /// <summary>The HUD's scale, for the cues' sizes in points.</summary>
+        public float PixelsPerPoint { get; set; } = 1;
+
+        /// <summary>For the trace: how many cues the last frame drew.</summary>
+        public int CuesShown => _cuesShown;
+
         private float _ballDiameter;
         private Vector3 _ballShown;
         private PitchOrientation _orientation = PitchOrientation.Practice;
@@ -154,6 +171,8 @@ namespace Eleven.Host
             _opponentKeeper = Shape(root, disc, "Opponent keeper", HostPalette.OpponentKeeper, 4, PlayerDiameter);
             _opponents.Add(_opponent);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
+            Texture2D pointer = MakePointerTexture(32);
+            _cueSprite = Sprite.Create(pointer, new Rect(0, 0, pointer.width, pointer.height), new Vector2(0.5f, 0.5f), pointer.width);
             ShowMatch(false);
         }
 
@@ -259,6 +278,61 @@ namespace Eleven.Host
 
             _ballShown = _ball.localPosition;
             Frame(player, new Vector2(_ballShown.x, _ballShown.y), layout);
+            PlaceCues(layout);
+        }
+
+        // A cue for each of the match's footballers drawn outside the play area, within the reach.
+        private void PlaceCues(in HudLayout layout)
+        {
+            int shown = 0;
+            if (_perSide > 0 && _opponentKeeper.gameObject.activeSelf)
+            {
+                for (int i = 0; i < _mates.Count; i++) Cue(_mates[i], HostPalette.Player, layout, ref shown);
+                for (int i = 0; i < _opponents.Count; i++) Cue(_opponents[i], HostPalette.Opponent, layout, ref shown);
+                Cue(_opponentKeeper, HostPalette.OpponentKeeper, layout, ref shown);
+                Cue(_keeper, HostPalette.Keeper, layout, ref shown);
+            }
+
+            for (int i = shown; i < _cues.Count; i++) _cues[i].gameObject.SetActive(false);
+            _cuesShown = shown;
+        }
+
+        private void Cue(Transform footballer, Color colour, in HudLayout layout, ref int shown)
+        {
+            if (!footballer.gameObject.activeSelf) return;
+            Vector3 screen = _camera.WorldToScreenPoint(footballer.position);
+            Rect play = layout.PlayArea;
+            Eleven.Presentation.EdgeCue? cue = Eleven.Presentation.EdgeCues.Place(screen.x, layout.ScreenHeight - screen.y, play.x, play.y, play.width, play.height,
+                _pixelsPerMetre, PixelsPerPoint, CueReach);
+            if (!cue.HasValue) return;
+            if (shown == _cues.Count)
+            {
+                Transform made = Shape(_root, _cueSprite, $"Cue {shown + 1}", colour, 6, 1);
+                _cues.Add(made.GetComponent<SpriteRenderer>());
+            }
+
+            SpriteRenderer r = _cues[shown++];
+            Eleven.Presentation.EdgeCue c = cue.Value;
+            r.color = colour;
+            r.gameObject.SetActive(true);
+            Vector3 world = _camera.ScreenToWorldPoint(new Vector3((float)c.X, layout.ScreenHeight - (float)c.Y, 10));
+            r.transform.position = new Vector3(world.x, world.y, 0);
+            r.transform.localScale = Vector3.one * ((float)c.Size / _pixelsPerMetre);
+            // The cue's angle is on screen with y down; the sprite points right in the camera's frame.
+            r.transform.rotation = Quaternion.Euler(0, 0, _camera.transform.eulerAngles.z - (float)c.Angle * Mathf.Rad2Deg);
+        }
+
+        /// <summary>For the smoke test (#102): the cues drawn, each as x,y,size in HUD pixels with y down.</summary>
+        public string CueReport(in HudLayout layout)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < _cuesShown; i++)
+            {
+                Vector3 s = _camera.WorldToScreenPoint(_cues[i].transform.position);
+                parts.Add(System.FormattableString.Invariant($"{s.x:F0},{layout.ScreenHeight - s.y:F0},{_cues[i].transform.localScale.x * _pixelsPerMetre:F0}"));
+            }
+
+            return string.Join(";", parts);
         }
 
         /// <summary>For the smoke test: whether the player and the drawn ball are inside the play area.</summary>
@@ -441,6 +515,36 @@ namespace Eleven.Host
             spriteRenderer.color = colour;
             spriteRenderer.sortingOrder = order;
             return shape.transform;
+        }
+
+        // A white pointer, pointing right: a triangle with a soft edge, so a cue reads by its shape
+        // before its colour.
+        private static Texture2D MakePointerTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Pointer",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            var pixels = new Color32[size * size];
+            float half = size / 2f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    // Inside when |y - half| is under the edge that narrows from the back to the tip.
+                    float px = x + 0.5f, py = Mathf.Abs(y + 0.5f - half);
+                    float edge = half * (1 - px / size);
+                    float alpha = Mathf.Clamp01(edge - py) * Mathf.Clamp01(px) * Mathf.Clamp01(size - px);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         private static Texture2D MakeDiscTexture(int size)

@@ -109,6 +109,12 @@ namespace Eleven.Host
             int maxViewAt = url.IndexOf("maxview=", StringComparison.Ordinal);
             if (maxViewAt >= 0) float.TryParse(url.Substring(maxViewAt + 8).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out maxView);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40), Mathf.Clamp(maxView, 7, 60));
+            // ?cues=15: how far outside the view, in metres, a footballer is cued at the edge; 0 for none (#102).
+            int cuesAt = url.IndexOf("cues=", StringComparison.Ordinal);
+            if (cuesAt >= 0 && float.TryParse(url.Substring(cuesAt + 5).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float cues))
+            {
+                _view.CueReach = Mathf.Clamp(cues, 0, 40);
+            }
             // ?safe=47,0,34,0: safe-area insets to try, in points: top, right, bottom, left (#31).
             // A browser on a desktop has none, so this stands in for a notch and a home indicator.
             int safeAt = url.IndexOf("safe=", StringComparison.Ordinal);
@@ -631,6 +637,7 @@ namespace Eleven.Host
             bool resized = _layout.ScreenWidth != 0 && (_layout.ScreenWidth != Screen.width || _layout.ScreenHeight != Screen.height);
             _layout = Layout();
             _input.Place(_layout, PixelsPerPoint());
+            _view.PixelsPerPoint = PixelsPerPoint();
             if (resized)
             {
                 _input.Clear();

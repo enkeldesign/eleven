@@ -251,6 +251,12 @@ namespace Eleven.Host
                 _lastClockSecond = second;
                 UpdateMatchPanel();
                 if (_trace && second % 10 == 0) Log(FormattableString.Invariant($"ELEVEN match clock phase={s.Match.Phase} clock={s.Match.ClockTicks} score={Score(s)} tick={s.Tick}"));
+                // The off-screen cues (#102), each second: how many, and where, inside the play area.
+                if (_trace)
+                {
+                    Rect play = _layout.PlayArea;
+                    Log(FormattableString.Invariant($"ELEVEN cues second={second} shown={_view.CuesShown} play={play.x:F0},{play.y:F0},{play.width:F0},{play.height:F0} at={_view.CueReport(_layout)}"));
+                }
             }
         }
 
