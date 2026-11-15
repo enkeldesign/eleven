@@ -572,7 +572,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         // reach without scrolling, and room for the knobs.
         const css = page.viewportSize();
         const wantWide = css.height < 480 && css.width > css.height;
-        const wanted = wantWide ? 'wide' : css.height < 600 ? 'compact' : 'stacked';
+        const wanted = wantWide ? 'wide' : css.height < 720 ? 'compact' : 'stacked';
         const fromBench = logs.length;
         const openedL = await openBench(2, [], false);
         const reach = (await waitForLog(/ELEVEN bench reach arranged=(\w+) clipped=(\d+) names=(\S*) list=([\d.]+)x([\d.]+)/, 10_000, fromBench))?.match ?? null;
@@ -1523,7 +1523,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       if (first.open) await tap(at(...point(first.open[4])));
       const appliedReference = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
       check('TECHNICAL REFERENCE restores the reference values',
-        !!loadedReference && loadedReference.match[1] === 'TECHNICAL_REFERENCE' && loadedReference.match[2] === '2' && !!appliedReference && appliedReference.match[1] === '0'
+        !!loadedReference && loadedReference.match[1] === 'TECHNICAL_REFERENCE' && loadedReference.match[2] === '2' && !!appliedReference && appliedReference.match[1] === '2'
           && appliedReference.match[2] === 'technical-reference' && appliedReference.match[3] === knobsLine?.[3] && appliedReference.match[4] === knobsLine?.[4],
         `${loadedReference ? loadedReference.match[0].replace('ELEVEN bench ', '') : 'no loaded line'}; ${appliedReference ? appliedReference.match[0].replace('ELEVEN bench ', '') : 'no applied line'}; at boot config ${knobsLine?.[3]} start ${knobsLine?.[4]}`);
 

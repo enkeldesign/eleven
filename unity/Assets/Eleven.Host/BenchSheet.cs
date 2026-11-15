@@ -247,8 +247,8 @@ namespace Eleven.Host
         /// <summary>A screen shorter than this many points, and wider than it is tall, gets the wide arrangement (#31).</summary>
         public const float WideBelowHeight = 480;
 
-        /// <summary>A portrait screen shorter than this many points gets the compact arrangement (#31).</summary>
-        public const float CompactBelowHeight = 600;
+        /// <summary>A screen shorter than this many points, and not wide, gets the compact arrangement (#31): every phone in portrait.</summary>
+        public const float CompactBelowHeight = 720;
 
         /// <summary>The arrangement a screen of this size, in points, calls for: stacked, wide or compact.</summary>
         public static string ArrangementFor(float width, float height) =>
@@ -302,16 +302,16 @@ namespace Eleven.Host
             else
             {
                 _sheet.Content.style.flexDirection = FlexDirection.Column;
-                // Compact: only the tabs and the actions stay put. The state and the live switches
-                // scroll with the knobs, after them, so the list has room.
-                VisualElement live = compact ? _liveBlock : _sheet.Content;
-                live.Add(_state);
-                live.Add(_pendingText);
-                live.Add(_problem);
-                live.Add(_modelsLabel);
-                live.Add(_models.Element);
-                live.Add(_viewsLabel);
-                live.Add(_views.Element);
+                // Compact: the title goes, and what is running and pending scrolls with the knobs,
+                // after them, so the list has room. The live switches, the tabs and the actions stay put.
+                VisualElement status = compact ? _liveBlock : _sheet.Content;
+                status.Add(_state);
+                status.Add(_pendingText);
+                status.Add(_problem);
+                _sheet.Content.Add(_modelsLabel);
+                _sheet.Content.Add(_models.Element);
+                _sheet.Content.Add(_viewsLabel);
+                _sheet.Content.Add(_views.Element);
                 _sheet.Content.Add(_tabs.Element);
                 _sheet.Content.Add(_list);
                 _sheet.Body.Add(_sheet.Actions);
@@ -714,16 +714,11 @@ namespace Eleven.Host
                     if (!shown) clipped.Add((e.name ?? "").Replace(' ', '_'));
                 }
 
-                // In the compact arrangement the live switches scroll with the knobs, so only the
-                // tabs and the actions are asked to be in reach without scrolling.
                 bool wide = _arranged == "wide";
                 VisualElement switchesIn = wide ? _switchScroll.contentViewport : _sheet.Body;
                 VisualElement tabsIn = wide ? _tabScroll.contentViewport : _sheet.Body;
-                if (_arranged != "compact")
-                {
-                    foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
-                    foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
-                }
+                foreach (UiKit.Raised model in _models.Segments) Reach(model.Element, switchesIn);
+                foreach (UiKit.Raised view in _views.Segments) Reach(view.Element, switchesIn);
 
                 foreach (UiKit.Raised tab in _tabs.Segments) Reach(tab.Element, tabsIn);
                 foreach (UiKit.Action action in new[] { _close, _revert, _applyAction }) Reach(action.Element, _sheet.Body);

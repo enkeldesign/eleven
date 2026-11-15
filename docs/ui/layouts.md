@@ -43,7 +43,7 @@ The bench sheet (`BenchSheet.Arrange`) has three arrangements, and takes the one
   - The knob list, at the sheet's full height.
 
   The title goes and the switches' labels shorten, so every switch, tab and action is in reach without scrolling.
-- **Compact,** on a portrait screen under 600 pt high (a compact phone): only the tabs and the actions stay put. The state and the live switches scroll with the knob list, after the knobs, so the list has room. The title goes and the switches' labels shorten.
+- **Compact,** on a screen under 720 pt high that isn't wide (every phone in portrait): the title goes, the switches' labels shorten, and the lines saying what is running and pending scroll with the knob list, after the knobs. The live switches, the tabs and the actions stay put.
 - **Only the knob list gives way** when a sheet is short of room. The title, the labels, the switches, the tabs and the actions keep their sizes.
 - **Before #31** a landscape phone got the stacked arrangement, whose fixed rows took the sheet's whole height. The knob list had no room, and the Touch tab's A / B / C choice couldn't be reached.
 - **The run goes on while the bench is open,** so a live switch can be judged at once. No play input can happen by accident: opening the bench cancels gestures in progress, its scrim covers the whole screen, and a press on the UI never reaches the match controls. The note sheet is different: play waits while it is open.
@@ -77,7 +77,7 @@ For each one:
 - the play area is clear of the stick zone, the right-hand area and the HUD's actions, and at least 150 pt on each side;
 - bounded controls are at least 44 × 44 pt;
 - the footballer and the ball are in the play area, at least 12 pt and 4 pt across, with at least 7 m ahead;
-- the bench takes the arrangement the screen calls for, with no switch, tab or action clipped and at least 100 pt of knob list (in the compact arrangement the switches scroll with the list, so only the tabs and actions are checked);
+- the bench takes the arrangement the screen calls for, with no switch, tab or action clipped and at least 100 pt of knob list (in the compact arrangement the running and pending lines scroll with the list);
 - through the bench: the Touch tab opens, its first knob is on screen, and the controls switch to B and back with no step;
 - the screen turns: the layout follows, every control is inside the new safe area, and the run goes on from the tick it was at.
 
