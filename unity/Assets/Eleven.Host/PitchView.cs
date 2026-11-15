@@ -95,6 +95,12 @@ namespace Eleven.Host
         private Sprite _cueSprite;
         private int _cuesShown;
 
+        // The play area the cues were last placed in, and where on screen each went: the trace
+        // reports these, not a re-projection through a camera or a layout that may have changed
+        // since (the half-time turn happens between a frame and the next step's trace).
+        private Rect _cuedIn;
+        private readonly System.Collections.Generic.List<string> _placed = new System.Collections.Generic.List<string>();
+
         // The action sprites (#101): each kit's poses, generated at start from ActionSprites' grids,
         // in point filtering so they stay crisp pixels. Discs with ?sprites=0, as before.
         private readonly System.Collections.Generic.Dictionary<Color, Sprite[]> _poses = new System.Collections.Generic.Dictionary<Color, Sprite[]>();
@@ -299,6 +305,8 @@ namespace Eleven.Host
         // A cue for each of the match's footballers drawn outside the play area, within the reach.
         private void PlaceCues(in HudLayout layout)
         {
+            _cuedIn = layout.PlayArea;
+            _placed.Clear();
             int shown = 0;
             if (_perSide > 0 && _opponentKeeper.gameObject.activeSelf)
             {
@@ -328,6 +336,7 @@ namespace Eleven.Host
 
             SpriteRenderer r = _cues[shown++];
             Eleven.Presentation.EdgeCue c = cue.Value;
+            _placed.Add(System.FormattableString.Invariant($"{c.X:F0},{c.Y:F0},{c.Size:F0}"));
             r.color = colour;
             r.gameObject.SetActive(true);
             Vector3 world = _camera.ScreenToWorldPoint(new Vector3((float)c.X, layout.ScreenHeight - (float)c.Y, 10));
@@ -391,12 +400,11 @@ namespace Eleven.Host
         {
             if (show && _sheet.Count == 0)
             {
-                Color[] kits = { HostPalette.Player, HostPalette.Keeper, HostPalette.Opponent, HostPalette.OpponentKeeper };
-                foreach (Color kit in kits)
+                foreach (Rgba kit in SheetKits)
                 {
                     foreach (Pose pose in ActionSprites.All)
                     {
-                        Transform t = Shape(_camera.transform, _poses[kit][(int)pose], $"Sheet {kit} {pose}", Color.white, 7, 1);
+                        Transform t = Shape(_camera.transform, _poses[kit.ToColor()][(int)pose], $"Sheet {kit} {pose}", Color.white, 7, 1);
                         _sheet.Add(t);
                     }
                 }
@@ -408,6 +416,29 @@ namespace Eleven.Host
             _ballShadow.gameObject.SetActive(!show);
         }
 
+        /// <summary>The sheet's kits, a row of poses each, in order.</summary>
+        public static readonly Rgba[] SheetKits = { Domain.Player, Domain.Keeper, Domain.Opponent, Domain.OpponentKeeper };
+
+        private const int SheetColumns = 6;
+
+        /// <summary>For the smoke test (#101): each sheet sprite's centre and side, x,y,size in HUD pixels with y down, in the sheet's order.</summary>
+        public string SheetReport(in HudLayout layout)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            float cell = SheetCell(layout);
+            Rect play = layout.PlayArea;
+            for (int i = 0; i < _sheet.Count; i++)
+            {
+                float x = play.x + (i % SheetColumns + 0.5f) * cell, y = play.y + (i / SheetColumns + 0.5f) * cell;
+                parts.Add(System.FormattableString.Invariant($"{x:F1},{y:F1},{cell * 0.8f:F1}"));
+            }
+
+            return string.Join(";", parts);
+        }
+
+        private float SheetCell(in HudLayout layout) =>
+            Mathf.Min(layout.PlayArea.width / SheetColumns, layout.PlayArea.height / Mathf.Max(1, _sheet.Count / SheetColumns));
+
         /// <summary>For the smoke test: how many sheet sprites are shown.</summary>
         public int SheetShown => _sheet.FindAll(t => t.gameObject.activeSelf).Count;
 
@@ -415,12 +446,11 @@ namespace Eleven.Host
         private void PlaceSheet(in HudLayout layout)
         {
             if (_sheet.Count == 0 || !_sheet[0].gameObject.activeSelf) return;
-            int columns = 6, rows = _sheet.Count / columns;
             Rect play = layout.PlayArea;
-            float cell = Mathf.Min(play.width / columns, play.height / rows);
+            float cell = SheetCell(layout);
             for (int i = 0; i < _sheet.Count; i++)
             {
-                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
+                float x = play.x + (i % SheetColumns + 0.5f) * cell, y = play.y + (i / SheetColumns + 0.5f) * cell;
                 Vector3 world = _camera.ScreenToWorldPoint(new Vector3(x, layout.ScreenHeight - y, 10));
                 _sheet[i].position = new Vector3(world.x, world.y, 0);
                 _sheet[i].rotation = _camera.transform.rotation;
@@ -450,17 +480,13 @@ namespace Eleven.Host
             return sprites;
         }
 
-        /// <summary>For the smoke test (#102): the cues drawn, each as x,y,size in HUD pixels with y down.</summary>
-        public string CueReport(in HudLayout layout)
+        /// <summary>
+        /// For the smoke test (#102): the play area the cues were placed in, then each cue drawn as
+        /// x,y,size in HUD pixels with y down.
+        /// </summary>
+        public string CueReport()
         {
-            var parts = new System.Collections.Generic.List<string>();
-            for (int i = 0; i < _cuesShown; i++)
-            {
-                Vector3 s = _camera.WorldToScreenPoint(_cues[i].transform.position);
-                parts.Add(System.FormattableString.Invariant($"{s.x:F0},{layout.ScreenHeight - s.y:F0},{_cues[i].transform.localScale.x * _pixelsPerMetre:F0}"));
-            }
-
-            return string.Join(";", parts);
+            return System.FormattableString.Invariant($"play={_cuedIn.x:F0},{_cuedIn.y:F0},{_cuedIn.width:F0},{_cuedIn.height:F0} at={string.Join(";", _placed)}");
         }
 
         /// <summary>For the smoke test: whether the player and the drawn ball are inside the play area.</summary>

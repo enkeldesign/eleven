@@ -289,8 +289,7 @@ namespace Eleven.Host
                 // The off-screen cues (#102), each second: how many, and where, inside the play area.
                 if (_trace)
                 {
-                    Rect play = _layout.PlayArea;
-                    Log(FormattableString.Invariant($"ELEVEN cues second={second} shown={_view.CuesShown} play={play.x:F0},{play.y:F0},{play.width:F0},{play.height:F0} at={_view.CueReport(_layout)}"));
+                    Log(FormattableString.Invariant($"ELEVEN cues second={second} shown={_view.CuesShown} {_view.CueReport()}"));
                 }
             }
         }
