@@ -30,10 +30,10 @@ namespace Eleven.Simulation.Harness
     {
         public const int Seeds = 12;
 
-        public static List<MatchTrial> Run(SimConfig config)
+        public static List<MatchTrial> Run(SimConfig config, int seeds = Seeds)
         {
             var trials = new List<MatchTrial>();
-            for (int i = 1; i <= Seeds; i++) trials.Add(One(config, 0x86000000UL + (ulong)i));
+            for (int i = 1; i <= seeds; i++) trials.Add(One(config, 0x86000000UL + (ulong)i));
             return trials;
         }
 

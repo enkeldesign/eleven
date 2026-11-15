@@ -19,6 +19,10 @@ namespace Eleven.Host
         public static readonly Color Player = new Color32(0x99, 0xCC, 0x44, 0xFF);
         // The keeper (#69), straight from the domain tokens: sky blue, 3.8:1 against the pitch.
         public static readonly Color Keeper = Domain.Keeper.ToColor();
+        // The 1v1 match's opponents (#87): a salmon outfielder, 3.1:1 against the pitch, and an
+        // orchid keeper, 3.3:1, each far from the player's green, his keeper's blue and the ball's yellow.
+        public static readonly Color Opponent = new Color32(0xFF, 0x99, 0x88, 0xFF);
+        public static readonly Color OpponentKeeper = new Color32(0xF0, 0xA0, 0xF0, 0xFF);
         // The match controls (#28's): the ACTION label and the discs. The UI around the match takes
         // its colours from the visual system's roles (#48, #53).
         public static readonly Color HudText = Color.white;

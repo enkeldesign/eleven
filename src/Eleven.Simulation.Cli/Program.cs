@@ -128,7 +128,9 @@ internal static class Program
             {
                 // Whole CPU-against-CPU matches (#86).
                 SimConfig matchConfig = SpikeScenario.Config();
-                List<MatchTrial> played = MatchTrials.Run(matchConfig);
+                // A count after the directory plays that many: the milestone gate's 50 (#87).
+                int count = args.Length >= 3 && int.TryParse(args[2], out int asked) && asked > 0 ? asked : MatchTrials.Seeds;
+                List<MatchTrial> played = MatchTrials.Run(matchConfig, count);
                 Directory.CreateDirectory(args[1]);
                 using (var csv = new StreamWriter(Path.Combine(args[1], "match-trials.csv")))
                 {
@@ -147,7 +149,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir>");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count]");
                 return 2;
         }
     }

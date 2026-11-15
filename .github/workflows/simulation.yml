@@ -213,10 +213,11 @@ jobs:
           path: challenge-bench/
           if-no-files-found: error
 
-      # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86).
+      # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86), fifty of
+      # them for M1's gate (#87).
       - name: Play the match trials
         run: |
-          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll matches match-trials | tee matches.txt
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll matches match-trials 50 | tee matches.txt
           echo "::notice title=Match trials::$(sed 's| -> .*||' matches.txt)"
 
       - name: Publish the match trials

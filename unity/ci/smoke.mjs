@@ -446,7 +446,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
     // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`. So does the layout matrix
     // (#31): `layout=1`.
-    if (url.includes('split=1') || url.includes('fire=1') || url.includes('layout=1')) {
+    if (url.includes('split=1') || url.includes('fire=1') || url.includes('layout=1') || url.includes('match=1')) {
       const pointPx = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
       const layoutLine = lastLog(layoutPattern)?.input ?? '';
       const zone = actionZonePattern.exec(layoutLine)?.slice(1, 5).map(Number) ?? null;
@@ -625,6 +625,80 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         console.log(`::notice title=layout ${name}::${notes.layout}`);
         const errorsL = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
         check('no page errors or exceptions', errorsL.length === 0, errorsL.length ? errorsL.slice(0, 5).join(' | ') : 'none');
+        return;
+      }
+
+      // The playable 1v1 match (#87): started through the bench's play switch, paused and resumed,
+      // through half-time, where the ends change and the view turns, to full time and its result.
+      // The human sends nothing: his restarts are taken for him, so the match must finish alone.
+      // ?matchview=1 starts from the address instead, and only looks at the HUD.
+      if (url.includes('match=1')) {
+        const shot = (label) => page.screenshot({ path: path.join(outDir, `${name}-${label}.png`), timeout: 60_000 }).catch(() => {});
+        const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/;
+        const fromM = logs.length;
+        let started = lastLog(startedPattern);
+        if (!url.includes('mode=match')) {
+          // The play switch is at the top of the bench's Presets tab.
+          const openedM = await openBench(2, [], false);
+          const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
+          if (openLine) await press(segments(openLine[1]).Presets, 2);
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)/, 10_000, fromM))?.match ?? null;
+          if (play) await press(play[2], 2);
+          started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
+          check('a 1v1 match starts through the bench\'s play switch', !!started && started[1] === 'bench',
+            started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
+          await closeBench(openedM, 2);
+        } else {
+          check('a 1v1 match starts from the address', !!started && started[1] === 'address', started ? started[0].replace('ELEVEN ', '') : 'no match started');
+        }
+
+        // The match panel: score, clock and half, placed clear of the play.
+        const panel = (await waitForLog(/ELEVEN hud result fits=(\w+) .*/, 15_000, fromM))?.match ?? null;
+        check('the score, the clock and the half are shown, clear of the play', !!panel && panel[1] === 'yes', panel ? panel[0].replace('ELEVEN hud result ', '') : 'no panel report');
+        await sleep(1500);
+        await shot('kickoff');
+        if (url.includes('matchview=1')) {
+          const errorsV = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+          check('no page errors or exceptions', errorsV.length === 0, errorsV.length ? errorsV.slice(0, 5).join(' | ') : 'none');
+          return;
+        }
+
+        // PAUSE, in RUN SCENARIO's place: no step while paused; RESUME goes on from the same tick.
+        const runAt = at(n[2], n[3]);
+        const fromP = logs.length;
+        await tap(runAt);
+        const paused = (await waitForLog(/ELEVEN match paused tick=(\d+) clock=(\d+)/, 10_000, fromP))?.match ?? null;
+        await sleep(3000);
+        const stepsWhilePaused = logs.slice(fromP).filter((l) => /^ELEVEN trace tick=/.test(l)).length;
+        const fromR = logs.length;
+        await tap(runAt);
+        const resumed = (await waitForLog(/ELEVEN match resumed tick=(\d+) clock=(\d+)/, 10_000, fromR))?.match ?? null;
+        check('PAUSE stops the match and its clock, and RESUME goes on from the same step',
+          !!paused && !!resumed && paused[1] === resumed[1] && paused[2] === resumed[2] && stepsWhilePaused <= 1,
+          `${paused ? paused[0].replace('ELEVEN ', '') : 'no pause'}; ${resumed ? resumed[0].replace('ELEVEN ', '') : 'no resume'}; ${stepsWhilePaused} trace line(s) while paused`);
+
+        // Half-time, the change of ends, full time.
+        const half = (await waitForLog(/ELEVEN match halftime score=(\S+) tick=(\d+)/, 600_000, fromR))?.match ?? null;
+        check('the first half ends at half-time', !!half, half ? half[0].replace('ELEVEN ', '') : 'no half-time');
+        await shot('halftime');
+        const second = (await waitForLog(/ELEVEN match secondhalf tick=(\d+) attack=(-?\d+) orientation=(\S+)/, 60_000, fromR))?.match ?? null;
+        check('at half-time the ends change and the view turns, so the human still attacks up',
+          !!second && second[2] === '-1' && second[3] !== 'Practice', second ? second[0].replace('ELEVEN ', '') : 'no second half');
+        const result = (await waitForLog(/ELEVEN match result (eleven-result\/\d+ .*)/, 600_000, fromR))?.match ?? null;
+        const halves = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ HalfTime/.test(l)).length;
+        const fulls = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ FullTime/.test(l)).length;
+        check('the match ends at full time with its result: one half-time, one full time, a score',
+          !!result && /score=\d+-\d+/.test(result[1]) && /played=\d+/.test(result[1]) && halves === 1 && fulls === 1,
+          `${result ? result[1] : 'no result'}; ${halves} half-time(s), ${fulls} full time(s)`);
+        notes.result = result ? result[1] : 'none';
+        console.log(`::notice title=match ${name}::${notes.result}`);
+        await sleep(1500);
+        await shot('result');
+        const recordingM = (await waitForLog(/ELEVEN match recording steps=(\d+) replay=(\w+)/, 30_000, fromR))?.match ?? null;
+        check('the whole match\'s recording replays to the live state in .NET\'s simulation', !!recordingM && recordingM[2] === 'match',
+          recordingM ? recordingM[0].replace('ELEVEN ', '') : 'no recording check');
+        const errorsM = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+        check('no page errors or exceptions', errorsM.length === 0, errorsM.length ? errorsM.slice(0, 5).join(' | ') : 'none');
         return;
       }
 
@@ -1769,6 +1843,12 @@ try {
   await runPass(browser, `${base}?trace=1&split=1&controls=split`, 'split-phone-landscape', phoneLandscape, true);
   // Candidate C, ONE FIRE (#77), on an iPhone in portrait.
   await runPass(browser, `${base}?trace=1&fire=1`, 'fire-phone', phone, true);
+  // The playable 1v1 match (#87): a whole match of one-minute halves on a phone at 1 px per pt,
+  // which the runner steps fast enough; and the match's HUD on a landscape tablet and a phone.
+  const quick = (width, height) => ({ ...phone, viewport: { width, height }, screen: { width, height }, deviceScaleFactor: 1 });
+  await runPass(browser, `${base}?trace=1&match=1&half=60`, 'match-phone', quick(390, 664), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-tablet-landscape', quick(1080, 810), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-phone-landscape', quick(750, 342), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

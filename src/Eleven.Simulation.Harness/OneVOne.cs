@@ -78,9 +78,9 @@ namespace Eleven.Simulation.Harness
         /// when <paramref name="bothCpu"/>, for a match no one plays.
         /// </summary>
         public static SimState KickOff(SimConfig config, ulong seed, int kickOffTeam = HomeTeam, int homeAttackSign = 1, bool bothCpu = false,
-            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null)
+            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null, PlayerCapabilities? home = null)
         {
-            SimState s = Start(config, seed, homeAttackSign, awayCpu: awayCpu, homeCpu: bothCpu ? homeCpu ?? CpuSkill.Pro : (CpuSkill?)null);
+            SimState s = Start(config, seed, homeAttackSign, home: home, awayCpu: awayCpu, homeCpu: bothCpu ? homeCpu ?? CpuSkill.Pro : (CpuSkill?)null);
             int sign = kickOffTeam == HomeTeam ? homeAttackSign : -homeAttackSign;
             int taker = kickOffTeam == HomeTeam ? 0 : 2, other = kickOffTeam == HomeTeam ? 2 : 0;
             s.Players[taker].Position = new Vec2(-sign * Simulator.TakerBehind, 0);
@@ -97,9 +97,9 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>A whole match's start (#86): the kick-off of the first half, with the clock at nought.</summary>
         public static SimState Match(SimConfig config, ulong seed, int kickOffTeam = HomeTeam, int homeAttackSign = 1, bool bothCpu = false,
-            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null)
+            CpuSkill? awayCpu = null, CpuSkill? homeCpu = null, PlayerCapabilities? home = null)
         {
-            SimState s = KickOff(config, seed, kickOffTeam, homeAttackSign, bothCpu, awayCpu, homeCpu);
+            SimState s = KickOff(config, seed, kickOffTeam, homeAttackSign, bothCpu, awayCpu, homeCpu, home);
             s.Match = new MatchState { Phase = MatchPhase.FirstHalf, FirstKickOff = kickOffTeam };
             return s;
         }

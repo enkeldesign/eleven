@@ -21,7 +21,7 @@ namespace Eleven.Host
     /// for time nobody saw. At most <see cref="MaxStepsPerFrame"/> ticks run per frame; any
     /// backlog beyond that is dropped too.
     /// </summary>
-    public sealed class HostLoop : MonoBehaviour
+    public sealed partial class HostLoop : MonoBehaviour
     {
         private const double MaxFrameSeconds = 0.25;
         private const int MaxStepsPerFrame = 8;
@@ -86,6 +86,7 @@ namespace Eleven.Host
             _buildId = Application.version;
             string url = Application.absoluteURL ?? "";
             _trace = url.Contains("trace");
+            ReadMatchOptions(url);
 
             _config = _bench.Config;
             _simulator = new Simulator(_config, _bench.PracticeStart());
@@ -163,6 +164,9 @@ namespace Eleven.Host
             Log($"ELEVEN controls candidate={_input.Name} {_input.Describe()}");
 
             if (url.Contains("autorun")) RunScenario();
+
+            // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch.
+            if (url.Contains("mode=match")) StartMatch("address");
         }
 
         private void OnDestroy() => _input?.Dispose();
@@ -190,8 +194,9 @@ namespace Eleven.Host
             double frame = now - _lastTime;
             _lastTime = now;
 
-            // Play waits while the note sheet is open, as it did under the browser's prompt (#44).
-            bool waiting = _hud != null && _hud.SheetOpen;
+            // Play waits while the note sheet is open, as it did under the browser's prompt (#44),
+            // and while a match is paused (#87).
+            bool waiting = (_hud != null && _hud.SheetOpen) || (_match && _matchPaused);
             if (_paused || waiting || frame > MaxFrameSeconds) _accumulator = 0;
             else
             {
@@ -225,6 +230,11 @@ namespace Eleven.Host
             float alpha = (float)(_accumulator / tick);
             SimState state = _simulator.PeekState();
             Vector2? keeper = Keeper(state, out Vec2 at) ? Vector2.Lerp(_previousKeeper, ToVector(at), alpha) : (Vector2?)null;
+            if (_match && state.Players.Length >= 4)
+            {
+                _view.RenderOpponents(Vector2.Lerp(_previousOpponent, ToVector(state.Players[2].Position), alpha), Vector2.Lerp(_previousOpponentKeeper, ToVector(state.Players[3].Position), alpha));
+            }
+
             _view.Render(
                 Vector2.Lerp(_previousPlayer, ToVector(state.Players[0].Position), alpha),
                 keeper,
@@ -241,10 +251,12 @@ namespace Eleven.Host
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
             KeeperControllers.Append(_simulator, _commands);
+            AppendMatchControllers();
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
             _simulator.Step(_commands, _events);
             _feel.Record(_simulator, _commands, _events);
+            ObserveMatch();
 
             if (!_trace) return;
 
@@ -293,6 +305,11 @@ namespace Eleven.Host
             _previousPlayer = ToVector(state.Players[0].Position);
             _previousBall = ToVector(state.Ball.Position);
             if (Keeper(state, out Vec2 at)) _previousKeeper = ToVector(at);
+            if (state.Players.Length >= 4)
+            {
+                _previousOpponent = ToVector(state.Players[2].Position);
+                _previousOpponentKeeper = ToVector(state.Players[3].Position);
+            }
         }
 
         // The keeper's position (#69), when practice has one.
@@ -315,7 +332,19 @@ namespace Eleven.Host
                 ? FormattableString.Invariant($"{at.X:F2},{at.Y:F2},{state.Keepers[0].Phase.ToString().ToLowerInvariant()}")
                 : "none";
 
+        // RESET: practice's fresh start, or in a match a new match from its kick-off (#87).
         private void ResetMatch()
+        {
+            if (_match)
+            {
+                StartMatch("reset");
+                return;
+            }
+
+            ResetPractice();
+        }
+
+        private void ResetPractice()
         {
             _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
@@ -374,7 +403,7 @@ namespace Eleven.Host
             double started = Time.realtimeSinceStartupAsDouble;
             int changes = candidate.ChangesFrom(_bench);
             _bench = candidate;
-            _config = candidate.Config;
+            _config = _match ? MatchConfig() : candidate.Config;
             _view.Use(_config);
             _input.Use(candidate.ActionSurface, candidate.Split, candidate.Fire);
             ResetMatch();
@@ -398,9 +427,10 @@ namespace Eleven.Host
             if (_config.ControlModel == model) return;
             ulong before = _simulator.StateHash();
             _bench = _bench.WithControlModel(model);
-            _config = _bench.Config;
-            _view.Use(_config);
             _simulator = ControlSwitch.To(_simulator, model);
+            // The run's own config under the new model: a match's keeps its halves (#87).
+            _config = _simulator.Config;
+            _view.Use(_config);
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
 
@@ -480,6 +510,13 @@ namespace Eleven.Host
         /// <summary>Runs the whole issue 1 scenario inside this build and shows its hashes.</summary>
         private void RunScenario()
         {
+            // In a match this action is PAUSE / RESUME (#87).
+            if (_match)
+            {
+                TogglePause();
+                return;
+            }
+
             double started = Time.realtimeSinceStartupAsDouble;
             ScenarioRun run = ScenarioRunner.Run(SpikeScenario.Config());
             double milliseconds = (Time.realtimeSinceStartupAsDouble - started) * 1000;
@@ -515,7 +552,8 @@ namespace Eleven.Host
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
-                    () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId);
+                    () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
+                    () => _match ? 1 : 0, SwitchPlay);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {

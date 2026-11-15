@@ -188,6 +188,18 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_hosts_match_start_takes_the_humans_footballer_and_the_opponents_tier()
+        {
+            PlayerCapabilities quick = PlayerCapabilities.Reference.With("maxSpeed", 8.5);
+            SimState s = OneVOne.Match(C, seed: 4, home: quick, awayCpu: CpuSkill.Elite);
+            new Simulator(C, s);
+            Assert.Equal(8.5, s.Players[0].Capabilities.MaxSpeed);
+            Assert.Single(s.Cpus);
+            Assert.Equal((OneVOne.AwayPlayer, CpuSkill.Elite.DecisionInterval), (s.Cpus[0].PlayerId, s.Cpus[0].Skill.DecisionInterval));
+            Assert.Equal(MatchPhase.FirstHalf, s.Match.Phase);
+        }
+
+        [Fact]
         public void A_bad_match_state_is_refused_and_practice_has_no_clock()
         {
             SimState With(Action<SimState> change)
