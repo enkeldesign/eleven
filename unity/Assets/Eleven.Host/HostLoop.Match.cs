@@ -28,13 +28,19 @@ namespace Eleven.Host
         private MatchRecorder _recorder;
         private int _lastClockSecond = -1;
 
-        // Outfielders a side (#95): 1 for the 1v1 match, 2 for 2v2.
+        // Outfielders a side (#95, #103): 1 for the 1v1 match, 2 for 2v2, 5 for 5v5.
         private int _perSide = 1;
+
+        // The bench's play switch, by segment (#103): practice, then the match sizes.
+        private static readonly int[] PlaySizes = { 0, 1, 2, 5 };
 
         // Who the human controls in a 2v2 match (#93): automatic at the ball's changes of hands, and
         // SWITCH's own request, which the next step's command carries.
         private SwitchController _switcher;
         private bool _switchRequested;
+
+        /// <summary>The play switch's segment for what is being played.</summary>
+        private int PlayIndex => _match ? Math.Max(1, Array.IndexOf(PlaySizes, _perSide)) : 0;
         private int _switches;
 
         /// <summary>Whether a match is being played rather than practice.</summary>
@@ -66,7 +72,7 @@ namespace Eleven.Host
         {
             _match = true;
             _matchPaused = false;
-            _perSide = Math.Max(1, Math.Min(2, perSide));
+            _perSide = perSide >= 5 ? 5 : Math.Max(1, Math.Min(2, perSide));
             _config = MatchConfig();
             _view.Use(_config);
             _view.ShowMatch(true, _perSide);
@@ -112,7 +118,7 @@ namespace Eleven.Host
             Log("ELEVEN match ended to=practice");
         }
 
-        /// <summary>The bench's play switch (#87, #95): 0 practice, 1 a 1v1 match, 2 a 2v2 match.</summary>
+        /// <summary>The bench's play switch (#87, #95, #103): 0 practice, 1 a 1v1 match, 2 a 2v2 match, 3 a 5v5 match.</summary>
         private void SwitchPlay(int index)
         {
             if (index == 0)
@@ -121,7 +127,8 @@ namespace Eleven.Host
                 return;
             }
 
-            if (!_match || _perSide != index) StartMatch("bench", index);
+            int size = PlaySizes[Math.Max(0, Math.Min(PlaySizes.Length - 1, index))];
+            if (!_match || _perSide != size) StartMatch("bench", size);
         }
 
         // The footballer the human's controller owns: in practice the only one; in a match

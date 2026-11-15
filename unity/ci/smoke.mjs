@@ -635,8 +635,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       if (url.includes('match=1')) {
         const shot = (label) => page.screenshot({ path: path.join(outDir, `${name}-${label}.png`), timeout: 60_000 }).catch(() => {});
         const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})(?: side=(\d+))?/;
-        // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH.
-        const side = url.includes('match2') ? 2 : 1;
+        // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH; ?match5=1 or ?mode=match5,
+        // the 5v5 match (#103).
+        const side = url.includes('match5') ? 5 : url.includes('match2') ? 2 : 1;
         const fromM = logs.length;
         let started = lastLog(startedPattern);
         if (!url.includes('mode=match')) {
@@ -644,8 +645,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openedM = await openBench(2, [], false);
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
-          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?/, 10_000, fromM))?.match ?? null;
-          if (play && (side === 1 || play[3])) await press(side === 1 ? play[2] : play[3], 2);
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?/, 10_000, fromM))?.match ?? null;
+          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : 4] : null;
+          if (segment) await press(segment, 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
             started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
@@ -673,11 +675,15 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('SWITCH is shown, at least 44 x 44 pt, beside the action area', big && switchBox[0] + switchBox[2] / 2 > Number(n[0]) / 2,
             switchBox.length ? `switch=${switchBox.join(',')} px at ${ppp} px/pt` : 'no switch in the layout line');
           const fromS = logs.length;
-          if (big) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
-          const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
-          const switched = (await waitForLog(/ELEVEN match switched to=(\d+) from=(\d+)/, 10_000, fromS))?.match ?? null;
-          check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
-            `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
+          // At five a side the match is left to run untouched from its seed, so that the foul it
+          // gives is the one the seed's match gave in .NET; the 2v2 pass presses SWITCH.
+          if (big && side === 2) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
+          if (side === 2) {
+            const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
+            const switched = (await waitForLog(/ELEVEN match switched to=(\d+) from=(\d+)/, 10_000, fromS))?.match ?? null;
+            check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
+              `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
+          }
         }
 
         if (url.includes('matchview=1')) {
@@ -715,10 +721,26 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!result && /score=\d+-\d+/.test(result[1]) && /played=\d+/.test(result[1]) && halves === 1 && fulls === 1,
           `${result ? result[1] : 'no result'}; ${halves} half-time(s), ${fulls} full time(s)`);
         notes.result = result ? result[1] : 'none';
-        if (side === 2) {
+        if (side > 1) {
           const switches = logs.slice(fromM).filter((l) => /^ELEVEN match switched /.test(l)).length;
-          check('control switched through the 2v2 match', switches >= 2, `${switches} switch(es)`);
+          check(`control switched through the ${side}v${side} match`, switches >= 2, `${switches} switch(es)`);
           notes.result += `; ${switches} switches`;
+        }
+
+        if (side === 5) {
+          // A foul, and a restart of each kind the seed's match gives taken (#103): kick-off,
+          // throw-in, goal kick, corner and free kick. A penalty is counted when there is one.
+          const fouls = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ Foul\b/.test(l)).length;
+          const kinds = ['', 'kick-off', 'throw-in', 'goal kick', 'corner', 'free kick', 'penalty'];
+          const taken = new Map();
+          for (const l of logs.slice(fromM)) {
+            const t = /^ELEVEN event \d+ RestartTaken \d+ (\d+)/.exec(l);
+            if (t) taken.set(Number(t[1]), (taken.get(Number(t[1])) ?? 0) + 1);
+          }
+          const seen = [...taken.entries()].sort((a, b) => a[0] - b[0]).map(([k, c]) => `${kinds[k] ?? k} ${c}`).join(', ');
+          check('the 5v5 match gives a foul, and a restart of each kind is taken',
+            fouls >= 1 && [1, 2, 3, 4, 5].every((k) => taken.has(k)), `${fouls} foul(s); taken: ${seen || 'none'}`);
+          notes.result += `; ${fouls} fouls; ${seen}`;
         }
         console.log(`::notice title=match ${name}::${notes.result}`);
         await sleep(1500);
@@ -1908,6 +1930,10 @@ try {
   // The 2v2 match (#95): a whole one on a phone through the bench, and SWITCH in landscape.
   await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60`, 'match2-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2`, 'match2-phone-landscape', quick(750, 342), true);
+  // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
+  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape.
+  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=18`, 'match5-phone', quick(390, 664), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

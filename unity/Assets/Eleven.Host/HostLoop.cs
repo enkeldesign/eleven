@@ -167,8 +167,9 @@ namespace Eleven.Host
             if (url.Contains("autorun")) RunScenario();
 
             // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch;
-            // ?mode=match2, a 2v2 match (#95).
+            // ?mode=match2, a 2v2 match (#95); ?mode=match5, a 5v5 match (#103).
             if (url.Contains("mode=match2")) StartMatch("address", 2);
+            else if (url.Contains("mode=match5")) StartMatch("address", 5);
             else if (url.Contains("mode=match")) StartMatch("address", 1);
         }
 
@@ -551,7 +552,7 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => _match ? (_perSide > 1 ? 2 : 1) : 0, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
+                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
