@@ -6,6 +6,7 @@ using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Pose = Eleven.Presentation.Pose;
 
 namespace Eleven.Host
 {
@@ -180,7 +181,21 @@ namespace Eleven.Host
             if (url.Contains("sheet=1"))
             {
                 _view.ShowSheet(true);
-                Log(FormattableString.Invariant($"ELEVEN sprites sheet shown={_view.SheetShown} poses={Eleven.Presentation.ActionSprites.All.Length} size={Eleven.Presentation.ActionSprites.Size}"));
+                Log(FormattableString.Invariant($"ELEVEN sprites sheet shown={_view.SheetShown} poses={ActionSprites.All.Length} size={ActionSprites.Size}"));
+
+                // What the sheet should look like, from the generator itself: the smoke compares the
+                // drawn pixels with these, so a change in the drawing (filtering, turn, colour, scale)
+                // fails it. The art itself is pinned in .NET (ActionSpriteTests).
+                foreach (Pose pose in ActionSprites.All)
+                {
+                    var rows = new string[ActionSprites.Size];
+                    for (int r = 0; r < rows.Length; r++) rows[r] = ActionSprites.Row(pose, r);
+                    Log($"ELEVEN sprites grid pose={(int)pose} rows={string.Join("|", rows)}");
+                }
+
+                var kits = new List<string>();
+                foreach (Rgba kit in PitchView.SheetKits) kits.Add($"{kit.ToHex()}/{ActionSprites.Shorts(kit).ToHex()}");
+                Log($"ELEVEN sprites colours o={ActionSprites.Outline.ToHex()} h={ActionSprites.Hair.ToHex()} f={ActionSprites.Skin.ToHex()} b={ActionSprites.Boot.ToHex()} g={ActionSprites.Glove.ToHex()} kits={string.Join(",", kits)}");
             }
 
             // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch;
@@ -260,7 +275,20 @@ namespace Eleven.Host
                 keeper,
                 Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
                 _layout);
+
+            // The sheet's cells on screen (#101), when they move: for the smoke's comparison.
+            if (_view.SheetShown > 0)
+            {
+                string cells = _view.SheetReport(_layout);
+                if (cells != _sheetCells)
+                {
+                    _sheetCells = cells;
+                    Log($"ELEVEN sprites cells={cells}");
+                }
+            }
         }
+
+        private string _sheetCells;
 
         private void StepOnce()
         {

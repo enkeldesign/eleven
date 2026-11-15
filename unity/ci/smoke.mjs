@@ -442,9 +442,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       return;
     }
 
-    // The action sprites' sheet (#101): every pose in every kit over the play area. Screenshot
-    // regression: compared with the recorded reference within a tolerance; with none recorded
-    // yet, the screenshot is kept as the one to record.
+    // The action sprites' sheet (#101): every pose in every kit over the play area, for the
+    // screenshot regression.
     if (url.includes('sheet=1')) {
       const sheet = (await waitForLog(/ELEVEN sprites sheet shown=(\d+) poses=(\d+) size=(\d+)/, 30_000))?.match ?? null;
       const expected = sheet ? Number(sheet[2]) * 4 : 0;
@@ -453,41 +452,55 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await sleep(2000);
       const shotPath = path.join(outDir, `${name}-sheet.png`);
       await page.screenshot({ path: shotPath, timeout: 60_000 }).catch(() => {});
-      const referencePath = new URL('./reference/sprite-sheet.png', import.meta.url);
-      const shot = fs.existsSync(shotPath) ? fs.readFileSync(shotPath).toString('base64') : null;
-      const reference = fs.existsSync(referencePath) ? fs.readFileSync(referencePath).toString('base64') : null;
-      // Both decoded in the page: the share of pixels off by more than 24 in any channel, and
-      // how many colours the shot has (a blank or failed draw has one or two).
-      const compared = shot ? await page.evaluate(async ([a, b]) => {
-        const load = (data) => new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = `data:image/png;base64,${data}`; });
-        const pixels = (img) => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); return x.getImageData(0, 0, img.width, img.height).data; };
-        const shotImg = await load(a);
-        if (!shotImg) return null;
-        const p = pixels(shotImg);
-        const colours = new Set();
-        for (let i = 0; i < p.length; i += 4 * 7) colours.add((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
-        let off = null;
-        if (b) {
-          const refImg = await load(b);
-          if (refImg && refImg.width === shotImg.width && refImg.height === shotImg.height) {
-            const r = pixels(refImg);
-            let n = 0;
-            for (let i = 0; i < p.length; i += 4) if (Math.abs(p[i] - r[i]) > 24 || Math.abs(p[i + 1] - r[i + 1]) > 24 || Math.abs(p[i + 2] - r[i + 2]) > 24) n++;
-            off = n / (p.length / 4);
-          } else off = -1;
-        }
-        return { width: shotImg.width, height: shotImg.height, colours: colours.size, off };
-      }, [shot, reference]).catch(() => null) : null;
-      check('the sprite sheet draws, in more than a handful of colours', !!compared && compared.colours >= 8,
-        compared ? `${compared.width}x${compared.height}, ${compared.colours} colours sampled` : 'no screenshot');
-      if (!reference) {
-        console.log(`::notice title=sprite sheet ${name}::no reference recorded yet; ${shotPath} is the one to record`);
-        notes.sheet = 'no reference yet';
-      } else {
-        check('the sprite sheet matches its recorded reference within 1 % of pixels', !!compared && compared.off !== null && compared.off >= 0 && compared.off <= 0.01,
-          compared ? (compared.off === -1 ? 'the reference is another size' : `${(compared.off * 100).toFixed(2)} % of pixels differ`) : 'no comparison');
-        notes.sheet = compared ? `${((compared.off ?? 0) * 100).toFixed(2)} % differ` : 'none';
+      // Every opaque pixel of every sheet sprite, sampled at its centre in the screenshot and
+      // compared with the colour the generator gives it: the drawing must reproduce the art. The
+      // art itself is pinned in .NET (ActionSpriteTests).
+      const grids = new Map(logs.map((l) => /^ELEVEN sprites grid pose=(\d+) rows=(\S+)/.exec(l)).filter(Boolean).map((m) => [Number(m[1]), m[2].split('|')]));
+      const colours = lastLog(/ELEVEN sprites colours o=(#\w+) h=(#\w+) f=(#\w+) b=(#\w+) g=(#\w+) kits=(\S+)/);
+      const cells = lastLog(/ELEVEN sprites cells=(\S+)/);
+      const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const samples = [];
+      if (colours && cells && grids.size) {
+        const kits = colours[6].split(',').map((k) => k.split('/').map(hex));
+        const fixed = { o: hex(colours[1]), h: hex(colours[2]), f: hex(colours[3]), b: hex(colours[4]), g: hex(colours[5]) };
+        const poses = grids.size;
+        cells[1].split(';').forEach((cell, i) => {
+          const [cx, cy, size] = cell.split(',').map(Number);
+          const [kit, shorts] = kits[Math.floor(i / poses)] ?? kits[0];
+          const rows = grids.get(i % poses) ?? [];
+          rows.forEach((row, r) => [...row].forEach((ch, c) => {
+            const colour = ch === 'k' ? kit : ch === 's' ? shorts : fixed[ch];
+            if (!colour) return;
+            const p = at(cx + ((c + 0.5) / row.length - 0.5) * size, cy + ((r + 0.5) / rows.length - 0.5) * size);
+            samples.push([Math.round(p.x), Math.round(p.y), ...colour]);
+          }));
+        });
       }
+
+      const shot = fs.existsSync(shotPath) ? fs.readFileSync(shotPath).toString('base64') : null;
+      const compared = shot && samples.length ? await page.evaluate(async ([data, wanted]) => {
+        const img = await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = `data:image/png;base64,${data}`; });
+        if (!img) return null;
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0);
+        const p = x.getImageData(0, 0, img.width, img.height).data;
+        let match = 0, worst = 0;
+        for (const [sx, sy, r, g, b] of wanted) {
+          const i = 4 * (sy * img.width + sx);
+          const off = Math.max(Math.abs(p[i] - r), Math.abs(p[i + 1] - g), Math.abs(p[i + 2] - b));
+          if (off <= 40) match++;
+          worst = Math.max(worst, off);
+        }
+        return { width: img.width, height: img.height, match, total: wanted.length, worst };
+      }, [shot, samples]).catch(() => null) : null;
+      const share = compared ? compared.match / compared.total : 0;
+      check('the drawn sprite sheet reproduces the generator\'s pixels, 95 % of them within 40 a channel', !!compared && share >= 0.95,
+        compared ? `${compared.match} of ${compared.total} pixels match (${(share * 100).toFixed(1)} %), the worst off by ${compared.worst}; ${compared.width}x${compared.height}`
+          : `no comparison: ${grids.size} grid(s), ${colours ? 'colours' : 'no colours'}, ${cells ? 'cells' : 'no cells'}`);
+      notes.sheet = compared ? `${(share * 100).toFixed(1)} % of ${compared.total} pixels match` : 'none';
 
       const errorsS = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errorsS.length === 0, errorsS.length ? errorsS.slice(0, 5).join(' | ') : 'none');
