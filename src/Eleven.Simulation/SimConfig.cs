@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 13;
+        public const int FormatVersion = 14;
 
         public SimConfig(
             int tickRate = 60,
@@ -83,7 +83,12 @@ namespace Eleven.Simulation
             double cutStrength = 5,
             double cutInterval = 0.07,
             double pushSpeed = 0,
-            double pushFromSpeed = 0.9)
+            double pushFromSpeed = 0.9,
+            double challengeRange = 1.0,
+            double challengeCommit = 0.2,
+            double challengeRecover = 0.27,
+            double challengeReach = 0.9,
+            double challengeImpulse = 5.0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -146,6 +151,11 @@ namespace Eleven.Simulation
             CutInterval = cutInterval;
             PushSpeed = pushSpeed;
             PushFromSpeed = pushFromSpeed;
+            ChallengeRange = challengeRange;
+            ChallengeCommit = challengeCommit;
+            ChallengeRecover = challengeRecover;
+            ChallengeReach = challengeReach;
+            ChallengeImpulse = challengeImpulse;
 
             CheckTunableRanges();
 
@@ -448,6 +458,27 @@ namespace Eleven.Simulation
         /// </summary>
         public double PushFromSpeed { get; }
 
+        /// <summary>m. A footballer closing on a ball an opponent controls commits to a standing challenge (#84) when it is within this of him.</summary>
+        public double ChallengeRange { get; }
+
+        /// <summary>s. How long a challenge commits him before it reaches the ball: he keeps his line and can't steer.</summary>
+        public double ChallengeCommit { get; }
+
+        /// <summary>s. How long he recovers after a challenge, won or missed: he brakes and can't play the ball.</summary>
+        public double ChallengeRecover { get; }
+
+        /// <summary>m. As the commit ends, a ball within this of him is won; one further off is missed.</summary>
+        public double ChallengeReach { get; }
+
+        /// <summary>m/s. The speed a won challenge knocks the ball away at, along his line.</summary>
+        public double ChallengeImpulse { get; }
+
+        /// <summary>Steps a challenge commits for, at least one (#84).</summary>
+        public int ChallengeCommitTicks => Math.Max(1, (int)Math.Round(ChallengeCommit * TickRate));
+
+        /// <summary>Steps a challenge's recovery lasts, at least one (#84).</summary>
+        public int ChallengeRecoverTicks => Math.Max(1, (int)Math.Round(ChallengeRecover * TickRate));
+
         /// <summary>cos(<see cref="CutAngle"/>), through the simulation's own maths.</summary>
         internal double CutCos { get; }
 
@@ -528,7 +559,12 @@ namespace Eleven.Simulation
                 cutStrength: r.ReadDouble(nameof(CutStrength)),
                 cutInterval: r.ReadDouble(nameof(CutInterval)),
                 pushSpeed: r.ReadDouble(nameof(PushSpeed)),
-                pushFromSpeed: r.ReadDouble(nameof(PushFromSpeed)));
+                pushFromSpeed: r.ReadDouble(nameof(PushFromSpeed)),
+                challengeRange: r.ReadDouble(nameof(ChallengeRange)),
+                challengeCommit: r.ReadDouble(nameof(ChallengeCommit)),
+                challengeRecover: r.ReadDouble(nameof(ChallengeRecover)),
+                challengeReach: r.ReadDouble(nameof(ChallengeReach)),
+                challengeImpulse: r.ReadDouble(nameof(ChallengeImpulse)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -596,6 +632,11 @@ namespace Eleven.Simulation
             w.WriteDouble(CutInterval, nameof(CutInterval));
             w.WriteDouble(PushSpeed, nameof(PushSpeed));
             w.WriteDouble(PushFromSpeed, nameof(PushFromSpeed));
+            w.WriteDouble(ChallengeRange, nameof(ChallengeRange));
+            w.WriteDouble(ChallengeCommit, nameof(ChallengeCommit));
+            w.WriteDouble(ChallengeRecover, nameof(ChallengeRecover));
+            w.WriteDouble(ChallengeReach, nameof(ChallengeReach));
+            w.WriteDouble(ChallengeImpulse, nameof(ChallengeImpulse));
             return w.ToArray();
         }
 

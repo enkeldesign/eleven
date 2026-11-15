@@ -54,6 +54,12 @@ namespace Eleven.Simulation
         public double BallControl;
 
         /// <summary>
+        /// 0–1. This player's standing challenge (#84): the smallest input, not a final attribute.
+        /// More reaches a little further as the challenge ends, and knocks the ball away more truly.
+        /// </summary>
+        public double Tackling;
+
+        /// <summary>
         /// The capability values, with their valid ranges and, where the research on #26 gives one,
         /// a starting range (docs/simulation/movement.md, kick.md). The valid ranges are wide enough
         /// for the test bench to explore past the starting ranges; neither is a feel target.
@@ -67,6 +73,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.PlayerGroup, "passVision", "rad", 0, Math.PI),
             new TunableParameter(TunableParameter.PlayerGroup, "passAnticipation", "fraction", 0, 1),
             new TunableParameter(TunableParameter.PlayerGroup, "ballControl", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.PlayerGroup, "tackling", "fraction", 0, 1),
         });
 
         /// <summary>
@@ -76,7 +83,7 @@ namespace Eleven.Simulation
         public static PlayerCapabilities Reference => new PlayerCapabilities
         {
             MaxSpeed = 7, Acceleration = 25, KickPower = 1, KickError = 0.05, PassVision = 1.05, PassAnticipation = 0.75,
-            BallControl = 0.7,
+            BallControl = 0.7, Tackling = 0.7,
         };
 
         /// <summary>A capability value by its name in <see cref="Parameters"/>.</summary>
@@ -89,6 +96,7 @@ namespace Eleven.Simulation
             "passVision" => PassVision,
             "passAnticipation" => PassAnticipation,
             "ballControl" => BallControl,
+            "tackling" => Tackling,
             _ => throw new ArgumentException($"'{name}' is not a player capability.", nameof(name)),
         };
 
@@ -105,6 +113,7 @@ namespace Eleven.Simulation
                 case "passVision": copy.PassVision = value; break;
                 case "passAnticipation": copy.PassAnticipation = value; break;
                 case "ballControl": copy.BallControl = value; break;
+                case "tackling": copy.Tackling = value; break;
                 default: throw new ArgumentException($"'{name}' is not a player capability.", nameof(name));
             }
 

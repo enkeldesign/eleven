@@ -587,6 +587,7 @@ namespace Eleven.Simulation
             player.AftertouchDirection = line;
             player.KickCooldown = Config.KickCooldownTicks;
             _kickConnected = true;
+            _state.Ball.LastPlayedBy = player.Id;
             events.Add(new SimEvent(tick, SimEventKind.Kicked, player.Id));
         }
 
@@ -605,6 +606,13 @@ namespace Eleven.Simulation
         /// cooldown keep the ball free. A turn's two touches (#66) come when the turn starts and
         /// ends, not on the touch interval.
         /// </summary>
+        /// <summary>
+        /// A challenge's commit in whole steps (#84): the config's commit time, shorter the better
+        /// the challenger's tackling (0.8 of it at full tackling, 1.25 of it at none), at least one.
+        /// </summary>
+        public static int CommitTicksFor(double tackling, SimConfig config) =>
+            Math.Max(1, (int)Math.Round(config.ChallengeCommit * (1.25 - 0.45 * tackling) * config.TickRate));
+
         private void StepControl(long tick, List<SimEvent> events)
         {
             if (Config.ControlModel == ControlModel.Attached)
@@ -677,6 +685,7 @@ namespace Eleven.Simulation
             // round from it, so a turn never has a cut touch on top of its own.
             if ((cut || kind == TurnTouch.Out) && Config.CutStrength > 0) player.CutCooldown = Config.TouchIntervalTicks;
 
+            _state.Ball.LastPlayedBy = player.Id;
             events.Add(new SimEvent(tick, SimEventKind.Touched, player.Id));
             if (kind != TurnTouch.None) events.Add(new SimEvent(tick, SimEventKind.Turned, player.Id, other: (int)kind));
             if (cut) events.Add(new SimEvent(tick, SimEventKind.Cut, player.Id));
@@ -825,6 +834,7 @@ namespace Eleven.Simulation
             ball.Velocity = new Vec3(velocity.X, velocity.Y, ball.Velocity.Z);
             ball.Spin = Vec3.Zero;
             ball.AttachedTo = taker.Id;
+            ball.LastPlayedBy = taker.Id;
             for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].AftertouchTicks = 0;
             events.Add(new SimEvent(tick, SimEventKind.Attached, taker.Id));
         }
@@ -1384,6 +1394,7 @@ namespace Eleven.Simulation
                 ball.HeldBy = keeper.PlayerId;
                 ball.Velocity = moving;
                 ball.Position = new Vec3(ballAt.X + rest.X, ballAt.Y + rest.Y, ballAt.Z);
+                ball.LastPlayedBy = keeper.PlayerId;
                 events.Add(new SimEvent(tick, SimEventKind.KeeperHeld, keeper.PlayerId));
                 return;
             }
@@ -1407,6 +1418,7 @@ namespace Eleven.Simulation
             }
 
             ball.Velocity = relative + moving;
+            ball.LastPlayedBy = keeper.PlayerId;
             events.Add(new SimEvent(tick, SimEventKind.KeeperParried, keeper.PlayerId));
         }
 
@@ -1518,6 +1530,17 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
                 InRange(owner, nameof(p.TouchCooldown), p.TouchCooldown, config.TouchIntervalTicks);
                 InRange(owner, nameof(p.CutCooldown), p.CutCooldown, config.TouchIntervalTicks);
+
+                // A challenge phase this config could have produced (#84), with a unit line when not ready.
+                if (p.Challenge > ChallengePhase.Recover) throw new ArgumentException($"{owner}: unknown challenge phase {(byte)p.Challenge}.", nameof(state));
+                InRange(owner, nameof(p.ChallengeTicks), p.ChallengeTicks,
+                    p.Challenge == ChallengePhase.Commit ? CommitTicksFor(p.Capabilities.Tackling, config) : p.Challenge == ChallengePhase.Recover ? config.ChallengeRecoverTicks : 0);
+                if (p.Challenge != ChallengePhase.Ready && p.ChallengeTicks == 0) throw new ArgumentException($"{owner}: a {p.Challenge} challenge needs steps left.", nameof(state));
+                double lineLength = p.ChallengeLine.LengthSquared;
+                if (p.Challenge == ChallengePhase.Ready ? lineLength != 0 : (lineLength < 1 - 1e-9 || lineLength > 1 + 1e-9))
+                {
+                    throw new ArgumentException($"{owner}: a challenge's line is a unit vector, and zero when ready.", nameof(state));
+                }
                 if (p.WindUpStrength < 0 || p.WindUpStrength > 1 || p.WindUpLoft < 0 || p.WindUpLoft > 1)
                 {
                     throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: wind-up strength and loft must be within [0, 1].");

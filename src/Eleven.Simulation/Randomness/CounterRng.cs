@@ -20,6 +20,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>A CPU outfielder's perception (#83): where he places the ball and each footballer he looks at, within his skill's error.</summary>
         Perception = 5,
+
+        /// <summary>A won challenge's knock-away (#84): its direction error, smaller the better the challenger's tackling.</summary>
+        Challenge = 6,
     }
 
     /// <summary>

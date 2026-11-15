@@ -87,6 +87,15 @@ namespace Eleven.Simulation
         /// chased. With <see cref="Touched"/>.
         /// </summary>
         Pushed = 18,
+
+        /// <summary>A footballer committed to a standing challenge (#84).</summary>
+        ChallengeStarted = 19,
+
+        /// <summary>A challenge reached the ball and knocked it away (#84). <see cref="SimEvent.Other"/> is the opponent who had it.</summary>
+        ChallengeWon = 20,
+
+        /// <summary>A challenge ended with the ball out of its reach (#84).</summary>
+        ChallengeMissed = 21,
     }
 
     /// <summary>

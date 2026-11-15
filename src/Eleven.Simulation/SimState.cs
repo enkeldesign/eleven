@@ -64,6 +64,7 @@ namespace Eleven.Simulation
             w.WriteByte((byte)Ball.Line);
             w.WriteInt32(Ball.AttachedTo);
             w.WriteInt32(Ball.HeldBy);
+            w.WriteInt32(Ball.LastPlayedBy);
 
             w.WriteInt32(Players.Length);
             foreach (PlayerState player in Players)
@@ -78,6 +79,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.PassVision, "Player.Capabilities.PassVision");
                 w.WriteDouble(player.Capabilities.PassAnticipation, "Player.Capabilities.PassAnticipation");
                 w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
+                w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -92,6 +94,9 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.TouchCooldown);
                 w.WriteByte(player.Turning ? (byte)1 : (byte)0);
                 w.WriteInt32(player.CutCooldown);
+                w.WriteByte((byte)player.Challenge);
+                w.WriteInt32(player.ChallengeTicks);
+                WriteVec2(w, player.ChallengeLine, "Player.ChallengeLine");
             }
 
             w.WriteInt32(Keepers.Length);
@@ -176,6 +181,7 @@ namespace Eleven.Simulation
             state.Ball.Line = ReadLine(r.ReadByte());
             state.Ball.AttachedTo = r.ReadInt32();
             state.Ball.HeldBy = r.ReadInt32();
+            state.Ball.LastPlayedBy = r.ReadInt32();
 
             int count = r.ReadInt32();
             if (count < 0 || count > 1024) throw new FormatException($"Implausible player count {count}.");
@@ -196,6 +202,7 @@ namespace Eleven.Simulation
                         PassVision = r.ReadDouble("Player.Capabilities.PassVision"),
                         PassAnticipation = r.ReadDouble("Player.Capabilities.PassAnticipation"),
                         BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
+                        Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -211,6 +218,9 @@ namespace Eleven.Simulation
                     TouchCooldown = r.ReadInt32(),
                     Turning = ReadFlag(r.ReadByte(), "Player.Turning"),
                     CutCooldown = r.ReadInt32(),
+                    Challenge = ReadChallenge(r.ReadByte()),
+                    ChallengeTicks = r.ReadInt32(),
+                    ChallengeLine = ReadVec2(r, "Player.ChallengeLine"),
                 };
             }
 
@@ -268,6 +278,9 @@ namespace Eleven.Simulation
 
             return state;
         }
+
+        private static ChallengePhase ReadChallenge(byte value) =>
+            value <= (byte)ChallengePhase.Recover ? (ChallengePhase)value : throw new FormatException($"Unknown challenge phase {value}.");
 
         private static bool ReadFlag(byte value, string field) =>
             value <= 1 ? value == 1 : throw new FormatException($"{field} must be 0 or 1, not {value}.");
@@ -358,6 +371,29 @@ namespace Eleven.Simulation
         /// was caught and moves with him; no kick or touch reaches it.
         /// </summary>
         public int HeldBy;
+
+        /// <summary>
+        /// The id of the player who last played the ball (#84): touched it, kicked it, knocked it
+        /// away in a challenge, or saved it; 0 before anyone has. Whether an opponent controls the
+        /// ball is read from this and where they are.
+        /// </summary>
+        public int LastPlayedBy;
+    }
+
+    /// <summary>
+    /// A standing challenge's phase (#84): explicit, authoritative and timed by the simulation
+    /// (INV-12). docs/simulation/challenge.md. Numeric values are stable and encoded as one byte.
+    /// </summary>
+    public enum ChallengePhase : byte
+    {
+        /// <summary>Not challenging: he can start one.</summary>
+        Ready = 0,
+
+        /// <summary>Committed: he keeps his line, can't steer, and reaches for the ball as it ends.</summary>
+        Commit = 1,
+
+        /// <summary>After a challenge, won or missed: he brakes, and can't play the ball or challenge.</summary>
+        Recover = 2,
     }
 
     public struct PlayerState
@@ -443,5 +479,14 @@ namespace Eleven.Simulation
         /// so there is at most one cut per stride. docs/simulation/cut.md.
         /// </summary>
         public int CutCooldown;
+
+        /// <summary>This player's standing challenge (#84): ready, committed or recovering.</summary>
+        public ChallengePhase Challenge;
+
+        /// <summary>Steps left in <see cref="Challenge"/>, counting the step that ends it; 0 when ready.</summary>
+        public int ChallengeTicks;
+
+        /// <summary>The line he committed along: a unit vector, fixed as the challenge starts; zero when ready.</summary>
+        public Vec2 ChallengeLine;
     }
 }

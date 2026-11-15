@@ -15,9 +15,10 @@ namespace Eleven.Simulation
         /// state (#68). Version 9 added the keepers and the held ball (#69). Version 10 added each
         /// player's turn with the ball (#66), version 11 their cut with it (#75),
         /// version 12 the two sides of a match and the way each attacks (#82),
-        /// and version 13 the CPU outfielders, their plans and their timers (#83).
+        /// version 13 the CPU outfielders, their plans and their timers (#83),
+        /// and version 14 the standing challenge: each player's tackling, phase and line, and who last played the ball (#84).
         /// </summary>
-        public const int StateSchemaVersion = 13;
+        public const int StateSchemaVersion = 14;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence
