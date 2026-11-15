@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
+using Pose = Eleven.Presentation.Pose;
 
 namespace Eleven.Host
 {
@@ -93,6 +95,17 @@ namespace Eleven.Host
         private Sprite _cueSprite;
         private int _cuesShown;
 
+        // The action sprites (#101): each kit's poses, generated at start from ActionSprites' grids,
+        // in point filtering so they stay crisp pixels. Discs with ?sprites=0, as before.
+        private readonly System.Collections.Generic.Dictionary<Color, Sprite[]> _poses = new System.Collections.Generic.Dictionary<Color, Sprite[]>();
+        private readonly System.Collections.Generic.List<Transform> _sheet = new System.Collections.Generic.List<Transform>();
+
+        /// <summary>m. A sprite's side: its body, about ten of its sixteen pixels across, is a footballer's diameter.</summary>
+        private const float SpriteSide = PlayerDiameter * ActionSprites.Size / 10f;
+
+        /// <summary>Whether footballers are drawn as action sprites (#101) rather than discs.</summary>
+        public bool Sprites { get; set; } = true;
+
         /// <summary>m. How far outside the view a footballer is cued; 0 for none (<c>?cues=</c>, #102).</summary>
         public float CueReach { get; set; } = (float)Eleven.Presentation.EdgeCues.Reach;
 
@@ -171,6 +184,7 @@ namespace Eleven.Host
             _opponentKeeper = Shape(root, disc, "Opponent keeper", HostPalette.OpponentKeeper, 4, PlayerDiameter);
             _opponents.Add(_opponent);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
+            foreach (Rgba kit in new[] { Domain.Player, Domain.Keeper, Domain.Opponent, Domain.OpponentKeeper }) _poses[kit.ToColor()] = MakePoses(kit);
             Texture2D pointer = MakePointerTexture(32);
             _cueSprite = Sprite.Create(pointer, new Rect(0, 0, pointer.width, pointer.height), new Vector2(0.5f, 0.5f), pointer.width);
             ShowMatch(false);
@@ -279,6 +293,7 @@ namespace Eleven.Host
             _ballShown = _ball.localPosition;
             Frame(player, new Vector2(_ballShown.x, _ballShown.y), layout);
             PlaceCues(layout);
+            PlaceSheet(layout);
         }
 
         // A cue for each of the match's footballers drawn outside the play area, within the reach.
@@ -320,6 +335,119 @@ namespace Eleven.Host
             r.transform.localScale = Vector3.one * ((float)c.Size / _pixelsPerMetre);
             // The cue's angle is on screen with y down; the sprite points right in the camera's frame.
             r.transform.rotation = Quaternion.Euler(0, 0, _camera.transform.eulerAngles.z - (float)c.Angle * Mathf.Rad2Deg);
+        }
+
+        /// <summary>One footballer's drawn action this frame (#101): his pose and the way it faces, in world radians.</summary>
+        public readonly struct Drawn
+        {
+            public Drawn(Pose pose, double facing)
+            {
+                Pose = pose;
+                Facing = facing;
+            }
+
+            public Pose Pose { get; }
+            public double Facing { get; }
+        }
+
+        /// <summary>
+        /// The poses of this frame's footballers (#101), in RenderSides' order: the controlled
+        /// footballer, his keeper, his teammates, the opponents' outfielders and their keeper.
+        /// Presentation only: chosen from the state, never written back.
+        /// </summary>
+        public void SetPoses(Drawn me, Drawn keeper, System.Collections.Generic.IReadOnlyList<Drawn> mates, System.Collections.Generic.IReadOnlyList<Drawn> opponents, Drawn theirKeeper)
+        {
+            Dress(_player, HostPalette.Player, me);
+            Dress(_keeper, HostPalette.Keeper, keeper);
+            for (int i = 0; i < mates.Count && i < _mates.Count; i++) Dress(_mates[i], HostPalette.Player, mates[i]);
+            for (int i = 0; i < opponents.Count && i < _opponents.Count; i++) Dress(_opponents[i], HostPalette.Opponent, opponents[i]);
+            Dress(_opponentKeeper, HostPalette.OpponentKeeper, theirKeeper);
+        }
+
+        private void Dress(Transform footballer, Color kit, Drawn drawn)
+        {
+            var r = footballer.GetComponent<SpriteRenderer>();
+            if (!Sprites)
+            {
+                r.sprite = _discSprite;
+                footballer.localScale = Vector3.one * PlayerDiameter;
+                footballer.localRotation = Quaternion.identity;
+                return;
+            }
+
+            r.sprite = _poses[kit][(int)drawn.Pose];
+            r.color = Color.white;
+            footballer.localScale = Vector3.one * SpriteSide;
+            // The sprite faces up its sheet: turned to his facing, to the nearest eighth of a turn.
+            footballer.localRotation = Quaternion.Euler(0, 0, ActionSprites.Facing(drawn.Facing) - 90);
+        }
+
+        /// <summary>
+        /// The sprite sheet (#101, <c>?sheet=1</c>): every pose in every kit, facing up the screen,
+        /// in a grid over the play area, for the screenshot regression. The footballers and the
+        /// ball are hidden under it.
+        /// </summary>
+        public void ShowSheet(bool show)
+        {
+            if (show && _sheet.Count == 0)
+            {
+                Color[] kits = { HostPalette.Player, HostPalette.Keeper, HostPalette.Opponent, HostPalette.OpponentKeeper };
+                foreach (Color kit in kits)
+                {
+                    foreach (Pose pose in ActionSprites.All)
+                    {
+                        Transform t = Shape(_camera.transform, _poses[kit][(int)pose], $"Sheet {kit} {pose}", Color.white, 7, 1);
+                        _sheet.Add(t);
+                    }
+                }
+            }
+
+            foreach (Transform t in _sheet) t.gameObject.SetActive(show);
+            _player.gameObject.SetActive(!show);
+            _ball.gameObject.SetActive(!show);
+            _ballShadow.gameObject.SetActive(!show);
+        }
+
+        /// <summary>For the smoke test: how many sheet sprites are shown.</summary>
+        public int SheetShown => _sheet.FindAll(t => t.gameObject.activeSelf).Count;
+
+        // The sheet's grid: a row of poses for each kit, inside the play area, upright on screen.
+        private void PlaceSheet(in HudLayout layout)
+        {
+            if (_sheet.Count == 0 || !_sheet[0].gameObject.activeSelf) return;
+            int columns = 6, rows = _sheet.Count / columns;
+            Rect play = layout.PlayArea;
+            float cell = Mathf.Min(play.width / columns, play.height / rows);
+            for (int i = 0; i < _sheet.Count; i++)
+            {
+                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
+                Vector3 world = _camera.ScreenToWorldPoint(new Vector3(x, layout.ScreenHeight - y, 10));
+                _sheet[i].position = new Vector3(world.x, world.y, 0);
+                _sheet[i].rotation = _camera.transform.rotation;
+                _sheet[i].localScale = Vector3.one * (cell * 0.8f / _pixelsPerMetre);
+            }
+        }
+
+        private static Sprite[] MakePoses(Rgba kit)
+        {
+            var sprites = new Sprite[ActionSprites.All.Length];
+            foreach (Pose pose in ActionSprites.All)
+            {
+                Rgba[] pixels = ActionSprites.Draw(pose, kit);
+                var colours = new Color32[pixels.Length];
+                for (int i = 0; i < pixels.Length; i++) colours[i] = new Color32(pixels[i].R, pixels[i].G, pixels[i].B, pixels[i].A);
+                var texture = new Texture2D(ActionSprites.Size, ActionSprites.Size, TextureFormat.RGBA32, false)
+                {
+                    name = $"{pose} {kit}",
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                texture.SetPixels32(colours);
+                texture.Apply(false, true);
+                sprites[(int)pose] = Sprite.Create(texture, new Rect(0, 0, ActionSprites.Size, ActionSprites.Size), new Vector2(0.5f, 0.5f), ActionSprites.Size);
+            }
+
+            return sprites;
         }
 
         /// <summary>For the smoke test (#102): the cues drawn, each as x,y,size in HUD pixels with y down.</summary>

@@ -85,6 +85,7 @@ namespace Eleven.Host
             _hud?.ShowSwitch(_perSide > 1);
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
+            _poses.Clear();
             _recorder = new MatchRecorder();
             _input.Clear();
             _lastClockSecond = -1;
@@ -167,6 +168,40 @@ namespace Eleven.Host
             }
 
             _view.RenderSides(_mates, _opponents, theirKeeper);
+        }
+
+        // Each footballer's action this frame (#101), chosen from the state and never written back.
+        private readonly ActionPoses _poses = new ActionPoses();
+        private readonly System.Collections.Generic.List<PitchView.Drawn> _matePoses = new System.Collections.Generic.List<PitchView.Drawn>();
+        private readonly System.Collections.Generic.List<PitchView.Drawn> _opponentPoses = new System.Collections.Generic.List<PitchView.Drawn>();
+
+        private void DrawPoses(SimState s, int me)
+        {
+            _matePoses.Clear();
+            _opponentPoses.Clear();
+            bool still = UiRoot.ReducedMotion;
+            PitchView.Drawn Of(int i)
+            {
+                Eleven.Presentation.Pose pose = _poses.Of(s, i, _config, still);
+                return new PitchView.Drawn(pose, ActionPoses.Facing(s, i, pose));
+            }
+
+            PitchView.Drawn mine = Of(me), ownKeeper = default, theirKeeper = default;
+            int home = s.Players[me].TeamId;
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (i == me) continue;
+                bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == s.Players[i].Id) >= 0;
+                if (s.Players[i].TeamId == home)
+                {
+                    if (keeper) ownKeeper = Of(i);
+                    else _matePoses.Add(Of(i));
+                }
+                else if (keeper) theirKeeper = Of(i);
+                else _opponentPoses.Add(Of(i));
+            }
+
+            _view.SetPoses(mine, ownKeeper, _matePoses, _opponentPoses, theirKeeper);
         }
 
         // The human's command for this step, with the switch the switcher decides on the last

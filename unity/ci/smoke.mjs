@@ -442,6 +442,58 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       return;
     }
 
+    // The action sprites' sheet (#101): every pose in every kit over the play area. Screenshot
+    // regression: compared with the recorded reference within a tolerance; with none recorded
+    // yet, the screenshot is kept as the one to record.
+    if (url.includes('sheet=1')) {
+      const sheet = (await waitForLog(/ELEVEN sprites sheet shown=(\d+) poses=(\d+) size=(\d+)/, 30_000))?.match ?? null;
+      const expected = sheet ? Number(sheet[2]) * 4 : 0;
+      check('the sprite sheet shows every pose in every kit', !!sheet && Number(sheet[1]) === expected && expected > 0,
+        sheet ? sheet[0].replace('ELEVEN ', '') : 'no sheet line');
+      await sleep(2000);
+      const shotPath = path.join(outDir, `${name}-sheet.png`);
+      await page.screenshot({ path: shotPath, timeout: 60_000 }).catch(() => {});
+      const referencePath = new URL('./reference/sprite-sheet.png', import.meta.url);
+      const shot = fs.existsSync(shotPath) ? fs.readFileSync(shotPath).toString('base64') : null;
+      const reference = fs.existsSync(referencePath) ? fs.readFileSync(referencePath).toString('base64') : null;
+      // Both decoded in the page: the share of pixels off by more than 24 in any channel, and
+      // how many colours the shot has (a blank or failed draw has one or two).
+      const compared = shot ? await page.evaluate(async ([a, b]) => {
+        const load = (data) => new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = `data:image/png;base64,${data}`; });
+        const pixels = (img) => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); return x.getImageData(0, 0, img.width, img.height).data; };
+        const shotImg = await load(a);
+        if (!shotImg) return null;
+        const p = pixels(shotImg);
+        const colours = new Set();
+        for (let i = 0; i < p.length; i += 4 * 7) colours.add((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
+        let off = null;
+        if (b) {
+          const refImg = await load(b);
+          if (refImg && refImg.width === shotImg.width && refImg.height === shotImg.height) {
+            const r = pixels(refImg);
+            let n = 0;
+            for (let i = 0; i < p.length; i += 4) if (Math.abs(p[i] - r[i]) > 24 || Math.abs(p[i + 1] - r[i + 1]) > 24 || Math.abs(p[i + 2] - r[i + 2]) > 24) n++;
+            off = n / (p.length / 4);
+          } else off = -1;
+        }
+        return { width: shotImg.width, height: shotImg.height, colours: colours.size, off };
+      }, [shot, reference]).catch(() => null) : null;
+      check('the sprite sheet draws, in more than a handful of colours', !!compared && compared.colours >= 8,
+        compared ? `${compared.width}x${compared.height}, ${compared.colours} colours sampled` : 'no screenshot');
+      if (!reference) {
+        console.log(`::notice title=sprite sheet ${name}::no reference recorded yet; ${shotPath} is the one to record`);
+        notes.sheet = 'no reference yet';
+      } else {
+        check('the sprite sheet matches its recorded reference within 1 % of pixels', !!compared && compared.off !== null && compared.off >= 0 && compared.off <= 0.01,
+          compared ? (compared.off === -1 ? 'the reference is another size' : `${(compared.off * 100).toFixed(2)} % of pixels differ`) : 'no comparison');
+        notes.sheet = compared ? `${((compared.off ?? 0) * 100).toFixed(2)} % differ` : 'none';
+      }
+
+      const errorsS = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errorsS.length === 0, errorsS.length ? errorsS.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
     // Candidate B, SPLIT (#76): switched on through the bench, live; PASS at the press, KICK's
     // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
     // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`. So does the layout matrix
@@ -1947,6 +1999,8 @@ try {
   // The 2v2 match (#95): a whole one on a phone through the bench, and SWITCH in landscape.
   await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60`, 'match2-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2`, 'match2-phone-landscape', quick(750, 342), true);
+  // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
+  await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
   // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape.
   await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=18`, 'match5-phone', quick(390, 664), true);
