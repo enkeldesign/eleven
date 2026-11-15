@@ -78,6 +78,7 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.Id);
                 w.WriteInt32(player.OwnerControllerId);
                 w.WriteInt32(player.TeamId);
+                w.WriteInt32(player.Slot);
                 w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
                 w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
                 w.WriteDouble(player.Capabilities.KickPower, "Player.Capabilities.KickPower");
@@ -218,6 +219,7 @@ namespace Eleven.Simulation
                     Id = r.ReadInt32(),
                     OwnerControllerId = r.ReadInt32(),
                     TeamId = r.ReadInt32(),
+                    Slot = r.ReadInt32(),
                     Capabilities = new PlayerCapabilities
                     {
                         MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
@@ -555,6 +557,13 @@ namespace Eleven.Simulation
 
         /// <summary>The player's team. Teammates share it; a quick pass only ever goes to a teammate (#38).</summary>
         public int TeamId;
+
+        /// <summary>
+        /// His place in his side's shape (#96): 1 to the side's outfielders, numbered from the back;
+        /// 0 for none (a keeper, practice, or a side too small for a shape). The footballer keeps it
+        /// whoever controls him.
+        /// </summary>
+        public int Slot;
 
         /// <summary>What this footballer can do. Read by the simulation, never changed by it.</summary>
         public PlayerCapabilities Capabilities;

@@ -120,9 +120,12 @@ namespace Eleven.Simulation
         private readonly SeenPlayer[] _others;
 
         internal OutfieldObservation(long tick, Vec2 position, Vec2 velocity, double heading, double maxSpeed, bool kicking,
-            Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0)
+            Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0,
+            int slot = 0, int sideSize = 0)
         {
             ReactionDelay = reactionDelay;
+            Slot = slot;
+            SideSize = sideSize;
             Tick = tick;
             Position = position;
             Velocity = velocity;
@@ -153,6 +156,12 @@ namespace Eleven.Simulation
         /// takes effect. He knows his own body; the simulation still times the plan (INV-12).
         /// </summary>
         public double ReactionDelay { get; }
+
+        /// <summary>His place in his side's shape (#96), from the back; 0 for none. His own, as his reaction delay is.</summary>
+        public int Slot { get; }
+
+        /// <summary>How many places his side's shape has (#96): its outfielders who have one.</summary>
+        public int SideSize { get; }
 
         /// <summary>Whether he is winding up a kick, or can't start one yet.</summary>
         public bool Kicking { get; }
@@ -270,11 +279,13 @@ namespace Eleven.Simulation
             }
 
             bool kicking = body.WindUpTicks > 0 || body.KickCooldown > 0;
+            int side = 0;
+            foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay)
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side)
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay);
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side);
         }
 
         /// <summary>The sign of world x a side attacks toward (#82); +1 with no sides.</summary>

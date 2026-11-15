@@ -343,6 +343,9 @@ namespace Eleven.Simulation
         /// </summary>
         public const double DribbleReach = 4.0;
 
+        /// <summary>The most places a side's shape has (#96): ten outfielders.</summary>
+        public const int MaxSlot = 10;
+
         /// <summary>
         /// Whether the footballer has the ball at his feet (#96): attached to him under ATTACHED;
         /// under FREE, played by him last, on the ground and within <see cref="DribbleReach"/>.
@@ -1815,6 +1818,7 @@ namespace Eleven.Simulation
                 p.Capabilities.CheckRanges(owner);
 
                 // Kick state this config could have produced (#37). NaN fails the encoding above.
+                InRange(owner, nameof(p.Slot), p.Slot, MaxSlot);
                 InRange(owner, nameof(p.KickCooldown), p.KickCooldown, config.KickCooldownTicks);
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
