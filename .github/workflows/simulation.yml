@@ -213,6 +213,19 @@ jobs:
           path: challenge-bench/
           if-no-files-found: error
 
+      # 2v2 CPU-against-CPU matches: passes, possessions, spacing and bunching (#92).
+      - name: Play the 2v2 trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-trials 2 | tee squads.txt
+          echo "::notice title=2v2 trials::$(sed 's| -> .*||' squads.txt)"
+
+      - name: Publish the 2v2 trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: squad-trials
+          path: squad-trials/
+          if-no-files-found: error
+
       # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86), fifty of
       # them for M1's gate (#87).
       - name: Play the match trials
