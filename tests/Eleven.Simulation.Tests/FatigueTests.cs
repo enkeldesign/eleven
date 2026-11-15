@@ -57,6 +57,37 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_tired_cpu_footballer_leaves_the_press_to_a_fresh_teammate()
+        {
+            // Five a side, a loose ball between two of home's midfielders the same distance off.
+            SimConfig c = SpikeScenario.Config();
+            SimState s = Squads.Match(c, 9, 5, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            int a = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 3);
+            int b = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 4);
+            s.Players[a].Position = new Vec2(-5, -6);
+            s.Players[b].Position = new Vec2(-5, 6);
+            s.Ball.Position = new Vec3(0, 0, c.BallRadius);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Ball.LastPlayedBy = 0;
+
+            // Fresh, the tie goes to +y (#92); with him spent, to the other.
+            s.Players[b].Fatigue = 1;
+            CpuMode Mode(int player)
+            {
+                int cpu = Array.FindIndex(s.Cpus, x => x.PlayerId == s.Players[player].Id);
+                return AI.OutfieldBrain.Decide(Perception.OfOutfielder(s, cpu), c).Mode;
+            }
+
+            Assert.Contains(Mode(a), new[] { CpuMode.SeekBall, CpuMode.Approach });
+            Assert.DoesNotContain(Mode(b), new[] { CpuMode.SeekBall, CpuMode.Approach });
+        }
+
+        [Fact]
         public void Half_time_gives_back_its_share()
         {
             SimConfig c = SpikeScenario.Config().With("halfLength", 60);
