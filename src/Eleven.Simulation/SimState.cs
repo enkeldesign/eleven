@@ -175,7 +175,7 @@ namespace Eleven.Simulation
         private static CpuPlanState ReadPlan(CanonicalReader r)
         {
             int mode = r.ReadInt32();
-            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Recover) throw new FormatException($"Unknown CPU mode {mode}.");
+            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Support) throw new FormatException($"Unknown CPU mode {mode}.");
             return new CpuPlanState
             {
                 Mode = (CpuMode)mode,

@@ -29,6 +29,9 @@ namespace Eleven.Simulation
 
         /// <summary>A keeper holds the ball: taking up a position and waiting.</summary>
         Recover = 6,
+
+        /// <summary>A teammate is nearer the ball (#92): in a passing lane in attack, marking in defence.</summary>
+        Support = 7,
     }
 
     /// <summary>

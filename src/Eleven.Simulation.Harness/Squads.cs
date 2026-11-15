@@ -1,0 +1,247 @@
+// Unity compiles this file with nullable annotations off; the .NET build has them on.
+#nullable enable
+using System;
+using System.Collections.Generic;
+
+namespace Eleven.Simulation.Harness
+{
+    /// <summary>
+    /// An N-a-side world (#92): outfielders and a keeper a side, two sides, two goals, a referee
+    /// and a clock. Player ids, ascending: home's outfielders, home's keeper, away's outfielders,
+    /// away's keeper. Each footballer has his own controller, his id. Home's first outfielder is
+    /// the human's unless <c>bothCpu</c>; every other outfielder is a CPU footballer.
+    /// </summary>
+    public static class Squads
+    {
+        public const int HomeTeam = OneVOne.HomeTeam, AwayTeam = OneVOne.AwayTeam;
+
+        public static int HomeOutfielder(int i) => 1 + i;
+
+        public static int HomeKeeper(int perSide) => perSide + 1;
+
+        public static int AwayOutfielder(int perSide, int i) => perSide + 2 + i;
+
+        public static int AwayKeeper(int perSide) => 2 * perSide + 2;
+
+        /// <summary>A match's start: home kicks off, the clock at nought.</summary>
+        public static SimState Match(SimConfig config, ulong seed, int perSide, bool bothCpu = false, CpuSkill? awayCpu = null, CpuSkill? homeCpu = null,
+            PlayerCapabilities? home = null)
+        {
+            if (perSide < 1) throw new ArgumentOutOfRangeException(nameof(perSide), perSide, "A side has at least one outfielder.");
+            double keeperX = config.GoalLineX - OneVOne.KeeperStandOff;
+            var players = new List<PlayerState>();
+            var cpus = new List<CpuState>();
+            for (int i = 0; i < perSide; i++)
+            {
+                int id = HomeOutfielder(i);
+                Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : PlayerCapabilities.Reference, Position = at, Heading = 0 });
+                if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id, Skill = homeCpu ?? CpuSkill.Pro });
+            }
+
+            players.Add(new PlayerState { Id = HomeKeeper(perSide), OwnerControllerId = HomeKeeper(perSide), TeamId = HomeTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(-keeperX, 0) });
+            for (int i = 0; i < perSide; i++)
+            {
+                int id = AwayOutfielder(perSide, i);
+                Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : new Vec2(14, (i % 2 == 1 ? -1 : 1) * 12 * ((i + 1) / 2));
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = at, Heading = Math.PI });
+                cpus.Add(new CpuState { PlayerId = id, Skill = awayCpu ?? CpuSkill.Pro });
+            }
+
+            players.Add(new PlayerState { Id = AwayKeeper(perSide), OwnerControllerId = AwayKeeper(perSide), TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(keeperX, 0), Heading = Math.PI });
+
+            return new SimState
+            {
+                Seed = seed,
+                Ball = new BallState { Id = OneVOne.BallId, Position = new Vec3(0, 0, config.BallRadius) },
+                Teams = new[] { new TeamState { Id = HomeTeam, AttackSign = 1 }, new TeamState { Id = AwayTeam, AttackSign = -1 } },
+                Players = players.ToArray(),
+                Keepers = new[]
+                {
+                    new KeeperState { PlayerId = HomeKeeper(perSide), Capabilities = KeeperCapabilities.Reference },
+                    new KeeperState { PlayerId = AwayKeeper(perSide), Capabilities = KeeperCapabilities.Reference },
+                },
+                Cpus = cpus.ToArray(),
+                Restart = new RestartState
+                {
+                    On = true, Phase = RestartPhase.Ready, Kind = RestartKind.KickOff, AwardedTeam = HomeTeam,
+                    PhaseTicks = config.RestartReadyTicks, TakerId = HomeOutfielder(0),
+                },
+                Match = new MatchState { Phase = MatchPhase.FirstHalf, FirstKickOff = HomeTeam },
+            };
+        }
+    }
+
+    /// <summary>One CPU-against-CPU N-a-side match (#92).</summary>
+    public sealed class SquadTrial
+    {
+        public ulong Seed;
+        public bool Finished;
+        public int HomeGoals, AwayGoals;
+        public int Passes, PassesCompleted;
+
+        /// <summary>How often the ball went from one side's feet to the other's.</summary>
+        public int Possessions;
+
+        /// <summary>m. The mean distance between teammates who aren't keepers, sampled each second in play.</summary>
+        public double MeanSpacing;
+
+        /// <summary>s. The longest stretch in play in which a side's outfielders were all within 2 m of each other.</summary>
+        public double LongestBunchedSeconds;
+
+        public double LengthSeconds;
+        public ulong FinalHash;
+    }
+
+    /// <summary>
+    /// Whole N-a-side CPU-against-CPU matches (#92): every footballer a CPU footballer, the
+    /// reference halves, every brain running. Records passes, possessions, spacing, bunching and
+    /// the score. Technical evidence, not feel.
+    /// </summary>
+    public static class SquadTrials
+    {
+        public const int Seeds = 12;
+
+        public static List<SquadTrial> Run(SimConfig config, int perSide, int seeds = Seeds)
+        {
+            var trials = new List<SquadTrial>();
+            for (int i = 1; i <= seeds; i++) trials.Add(One(config, perSide, 0x92000000UL + (ulong)i));
+            return trials;
+        }
+
+        public static SquadTrial One(SimConfig config, int perSide, ulong seed)
+        {
+            var sim = new Simulator(config, Squads.Match(config, seed, perSide, bothCpu: true));
+            var recorder = new MatchRecorder();
+            var trial = new SquadTrial { Seed = seed };
+            var commands = new List<Command>();
+            var events = new List<SimEvent>();
+            int limit = 3 * 2 * config.HalfTicks;
+            int lastTeam = 0, passer = 0, passTeam = 0;
+            double spacing = 0;
+            int samples = 0;
+            long bunchedFrom = -1, bunched = 0;
+            while (sim.Tick < limit && recorder.Result == null)
+            {
+                commands.Clear();
+                events.Clear();
+                KeeperControllers.Append(sim, commands);
+                CpuControllers.Append(sim, commands);
+                RestartControllers.Append(sim, commands);
+                sim.Step(commands, events);
+                SimState s = sim.PeekState();
+                recorder.Observe(config, s, events);
+                foreach (SimEvent e in events)
+                {
+                    int team = TeamOf(s, e.Subject);
+                    if (e.Kind == SimEventKind.QuickPassResolved)
+                    {
+                        trial.Passes++;
+                        passer = e.Subject;
+                        passTeam = team;
+                    }
+                    else if ((e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.ChallengeWon) && team != 0)
+                    {
+                        if (passer != 0 && e.Subject != passer)
+                        {
+                            if (team == passTeam) trial.PassesCompleted++;
+                            passer = 0;
+                        }
+
+                        if (lastTeam != 0 && team != lastTeam) trial.Possessions++;
+                        lastTeam = team;
+                    }
+                }
+
+                bool live = s.Restart.Phase == RestartPhase.Live && (s.Match.Phase == MatchPhase.FirstHalf || s.Match.Phase == MatchPhase.SecondHalf);
+                if (live && s.Tick % config.TickRate == 0 && perSide > 1)
+                {
+                    spacing += Spacing(s, Squads.HomeTeam) + Spacing(s, Squads.AwayTeam);
+                    samples += 2;
+                }
+
+                bool bunchedNow = live && perSide > 1 && (Spacing(s, Squads.HomeTeam) < 2 || Spacing(s, Squads.AwayTeam) < 2);
+                if (bunchedNow && bunchedFrom < 0) bunchedFrom = s.Tick;
+                if (!bunchedNow && bunchedFrom >= 0)
+                {
+                    bunched = Math.Max(bunched, s.Tick - bunchedFrom);
+                    bunchedFrom = -1;
+                }
+            }
+
+            trial.Finished = recorder.Result != null;
+            if (recorder.Result != null)
+            {
+                trial.HomeGoals = recorder.Result.HomeGoals;
+                trial.AwayGoals = recorder.Result.AwayGoals;
+            }
+
+            trial.MeanSpacing = samples > 0 ? spacing / samples : 0;
+            trial.LongestBunchedSeconds = bunched * config.TickSeconds;
+            trial.LengthSeconds = sim.Tick * config.TickSeconds;
+            trial.FinalHash = sim.StateHash();
+            return trial;
+        }
+
+        private static int TeamOf(SimState s, int id)
+        {
+            foreach (PlayerState p in s.Players)
+            {
+                if (p.Id == id) return p.TeamId;
+            }
+
+            return 0;
+        }
+
+        // The mean distance between a side's outfielders.
+        private static double Spacing(SimState s, int team)
+        {
+            double total = 0;
+            int pairs = 0;
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (s.Players[i].TeamId != team || IsKeeper(s, s.Players[i].Id)) continue;
+                for (int j = i + 1; j < s.Players.Length; j++)
+                {
+                    if (s.Players[j].TeamId != team || IsKeeper(s, s.Players[j].Id)) continue;
+                    total += Eleven.Simulation.Maths.SimMath.Sqrt((s.Players[i].Position - s.Players[j].Position).LengthSquared);
+                    pairs++;
+                }
+            }
+
+            return pairs > 0 ? total / pairs : 0;
+        }
+
+        private static bool IsKeeper(SimState s, int id) => Array.FindIndex(s.Keepers, k => k.PlayerId == id) >= 0;
+
+        public static void WriteCsv(System.IO.TextWriter w, SimConfig config, IReadOnlyList<SquadTrial> trials)
+        {
+            w.WriteLine("config_hash,seed,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,length_s,final_hash");
+            foreach (SquadTrial t in trials)
+            {
+                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8:F2},{9:F2},{10:F2},{11:x16}",
+                    config.Hash, t.Seed, t.Finished ? "yes" : "no", t.HomeGoals, t.AwayGoals, t.Passes, t.PassesCompleted, t.Possessions, t.MeanSpacing, t.LongestBunchedSeconds, t.LengthSeconds, t.FinalHash));
+            }
+        }
+
+        public static string KeyNumbers(IReadOnlyList<SquadTrial> trials, int perSide)
+        {
+            int finished = 0, goals = 0, passes = 0, completed = 0, possessions = 0;
+            double spacing = 0, bunched = 0;
+            foreach (SquadTrial t in trials)
+            {
+                if (t.Finished) finished++;
+                goals += t.HomeGoals + t.AwayGoals;
+                passes += t.Passes;
+                completed += t.PassesCompleted;
+                possessions += t.Possessions;
+                spacing += t.MeanSpacing;
+                bunched = Math.Max(bunched, t.LongestBunchedSeconds);
+            }
+
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0}v{0}: {1} of {2} finished; {3} goals; {4} passes, {5} completed; {6} possessions; mean spacing {7:F1} m; longest bunched {8:F1} s",
+                perSide, finished, trials.Count, goals, passes, completed, possessions, spacing / Math.Max(1, trials.Count), bunched);
+        }
+    }
+}

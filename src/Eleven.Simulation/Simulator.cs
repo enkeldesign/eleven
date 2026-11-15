@@ -1829,7 +1829,7 @@ namespace Eleven.Simulation
                 c.Skill.CheckRanges($"CPU outfielder {c.PlayerId}");
                 foreach (CpuPlanState plan in new[] { c.Plan, c.Next })
                 {
-                    if (plan.Mode < CpuMode.None || plan.Mode > CpuMode.Recover) throw new ArgumentException($"CPU outfielder {c.PlayerId}: unknown mode {(int)plan.Mode}.", nameof(state));
+                    if (plan.Mode < CpuMode.None || plan.Mode > CpuMode.Support) throw new ArgumentException($"CPU outfielder {c.PlayerId}: unknown mode {(int)plan.Mode}.", nameof(state));
                     if (plan.Move.LengthSquared > 1 + 1e-9 || plan.KickStrength < 0 || plan.KickStrength > 1 || plan.KickLoft < 0 || plan.KickLoft > 1)
                     {
                         throw new ArgumentOutOfRangeException(nameof(state), $"CPU outfielder {c.PlayerId}: a plan's stick is at most 1 long, and its kick's strength and loft within [0, 1].");
