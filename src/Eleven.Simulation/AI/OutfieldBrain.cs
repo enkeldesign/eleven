@@ -70,6 +70,10 @@ namespace Eleven.Simulation.AI
         private const double BackLine = -24, MiddleLine = -10, ForwardLine = 4, ShapeWidth = 14;
         private const double ShapeFollow = 0.55, ShapeDrift = 0.3, ShapeStepUp = 6, ShapeInside = 6, CoverGoalSide = 6;
 
+        // The slide (#98): within this share of the slide's range he slides, only with the ball
+        // this much nearer him than the man, and beyond this many standing challenge ranges.
+        private const double SlideFrom = 0.7, SlideClear = 0.4, SlideOver = 1.5;
+
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
 
@@ -110,7 +114,7 @@ namespace Eleven.Simulation.AI
 
             // The nearest opponent who isn't a keeper, if he sees one.
             bool opponentSeen = false;
-            Vec2 opponent = Vec2.Zero;
+            Vec2 opponent = Vec2.Zero, opponentVelocity = Vec2.Zero;
             double nearest = double.PositiveInfinity;
             Vec2? theirKeeper = null;
             foreach (SeenPlayer other in seen.Others)
@@ -127,6 +131,7 @@ namespace Eleven.Simulation.AI
                 {
                     nearest = d;
                     opponent = other.Position;
+                    opponentVelocity = other.Velocity;
                     opponentSeen = true;
                 }
             }
@@ -277,6 +282,18 @@ namespace Eleven.Simulation.AI
 
             // On an opponent's ball he goes at where it will be as his challenge would reach it
             // (#84): the challenge goes the way he is running.
+            // Beyond a standing challenge's range, with the ball nearer him than the man (#98): he
+            // slides at where it will be partway through, from the side or in front, never through him.
+            if (theirs <= HasBall && !seen.Kicking && mine > SlideOver * config.ChallengeRange && mine <= SlideFrom * config.SlideRange)
+            {
+                Vec2 away = opponent - me;
+                if (mine + SlideClear < Length(away))
+                {
+                    Vec2 at = ball + opponentVelocity * (config.SlideTime * 0.5) - me;
+                    return new CpuPlan(CpuMode.Approach, Unit(at), new KickIntent(at, 1, 0));
+                }
+            }
+
             if (theirs <= HasBall && mine <= Press)
             {
                 Vec2 ahead = ball + seen.BallVelocity.Horizontal * config.ChallengeCommit;
