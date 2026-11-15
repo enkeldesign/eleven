@@ -346,6 +346,54 @@ namespace Eleven.Simulation
         /// <summary>The most places a side's shape has (#96): ten outfielders.</summary>
         public const int MaxSlot = 10;
 
+        /// <summary>m. A shielded ball this close to its place behind the carrier, and at rest with him, needs no touch (#97).</summary>
+        public const double ShieldSettled = 0.15;
+
+        /// <summary>
+        /// Whether a carrier shields (#97): he has the ball, moves slower than shieldSpeed of his top
+        /// speed, and an opponent is within shieldRange. <paramref name="away"/> is the way from the
+        /// nearest such opponent to him: where he keeps the ball.
+        /// </summary>
+        private bool Shields(in PlayerState player, out Vec2 away)
+        {
+            away = Vec2.Zero;
+            if (!Carrying(player)) return false;
+            double slow = Config.ShieldSpeed * Body(player).MaxSpeed;
+            if (player.Velocity.LengthSquared >= slow * slow) return false; // shieldSpeed 0: never
+            double nearest = Config.ShieldRange * Config.ShieldRange;
+            bool found = false;
+            foreach (PlayerState other in _state.Players)
+            {
+                if (other.Id == player.Id || other.TeamId == player.TeamId) continue;
+                Vec2 from = player.Position - other.Position;
+                double d = from.LengthSquared;
+                if (d > nearest || d == 0) continue;
+                nearest = d;
+                away = from * (1 / SimMath.Sqrt(d));
+                found = true;
+            }
+
+            return found;
+        }
+
+        // A challenge that reached the ball through a shielding carrier, his body between them
+        // along the challenge's line (#97): held by the contest's draw. Even, it holds at shieldHold; the carrier's strength over
+        // the challenger's adds to it, and the challenger's tackling takes from it.
+        private bool ShieldHolds(int carrier, in PlayerState challenger, long tick)
+        {
+            PlayerState c = _state.Players[carrier];
+            if (!Shields(c, out _)) return false;
+            // Between: the ball lies beyond him along the challenge's line. Footballers have no
+            // bodies to collide, so the challenger may end his commit past him; his line says
+            // which way he came.
+            Vec2 toBall = _state.Ball.Position.Horizontal - c.Position, line = challenger.ChallengeLine;
+            if (toBall.X * line.X + toBall.Y * line.Y <= 0) return false;
+            double hold = Config.ShieldHold + 0.5 * (c.Capabilities.Strength - challenger.Capabilities.Strength) - 0.3 * (challenger.Capabilities.Tackling - 0.5);
+            hold = hold < 0.05 ? 0.05 : hold > 0.95 ? 0.95 : hold;
+            var draws = new StreamDraws(_state.Seed, tick, RandomStream.Shield, challenger.Id);
+            return draws.NextUniform() < hold;
+        }
+
         /// <summary>
         /// Whether the footballer has the ball at his feet (#96): attached to him under ATTACHED;
         /// under FREE, played by him last, on the ground and within <see cref="DribbleReach"/>.
@@ -773,9 +821,21 @@ namespace Eleven.Simulation
                     foreach (PlayerState p in _state.Players) inFlight |= p.AftertouchTicks > 0;
                     bool there = !_kickConnected && !_challengeWon && !inFlight && ball.HeldBy == 0 && ball.Position.Z <= Config.KickMaxBallHeight
                         && (ball.Position.Horizontal - player.Position).LengthSquared <= reach * reach;
+                    int had = there ? ControllerOfBall() : -1;
+
+                    // Through a shielding carrier (#97): his body is between, and the challenge is a
+                    // contest of strength and tackling, drawn from its own stream.
+                    if (there && had >= 0 && ShieldHolds(had, player, tick))
+                    {
+                        events.Add(new SimEvent(tick, SimEventKind.ShieldHeld, _state.Players[had].Id, other: player.Id));
+                        events.Add(new SimEvent(tick, SimEventKind.ChallengeMissed, player.Id));
+                        player.Challenge = ChallengePhase.Recover;
+                        player.ChallengeTicks = Config.ChallengeRecoverTicks;
+                        continue;
+                    }
+
                     if (there)
                     {
-                        int had = ControllerOfBall();
                         Vec2 line = player.ChallengeLine;
                         double error = ChallengeError * (1 - player.Capabilities.Tackling);
                         if (error > 0)
@@ -1129,6 +1189,12 @@ namespace Eleven.Simulation
                 ? holder.Velocity * (1 / speed)
                 : new Vec2(SimMath.Cos(holder.Heading), SimMath.Sin(holder.Heading));
             double lead = Config.AttachedLeadSlow + (Config.AttachedLeadFast - Config.AttachedLeadSlow) * fraction;
+            if (Shields(holder, out Vec2 away))
+            {
+                // Shielding (#97): steered round to his far side from the opponent.
+                along = away;
+                lead = Config.AttachedLeadSlow;
+            }
 
             Vec2 error = holder.Position + along * lead - ball.Position.Horizontal;
             double distance = SimMath.Sqrt(error.LengthSquared);
@@ -1170,7 +1236,15 @@ namespace Eleven.Simulation
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
             Vec2 ballVelocity = ball.Velocity.Horizontal;
 
-            if (Standing(player, move)) return false;
+            // A shielding carrier moves the ball to his far side, standing or not (#97).
+            bool shielding = Shields(player, out Vec2 shieldAway);
+            if (shielding && (player.Position + shieldAway * Config.DribbleLeadSlow - ball.Position.Horizontal).LengthSquared < ShieldSettled * ShieldSettled
+                && (ballVelocity - player.Velocity).LengthSquared <= Config.StopSpeed * Config.StopSpeed)
+            {
+                return false;
+            }
+
+            if (!shielding && Standing(player, move)) return false;
 
             Vec2 wanted = TouchTarget(player, move, Config.DribbleLeadSlow, Config.DribbleLeadFast);
             if (mayPush && Config.PushSpeed > 0 && PushWanted(player, move, out Vec2 push))
@@ -1280,6 +1354,14 @@ namespace Eleven.Simulation
                 ? velocity * (1 / speed)
                 : new Vec2(SimMath.Cos(player.Heading), SimMath.Sin(player.Heading));
             double lead = leadSlow + (leadFast - leadSlow) * fraction;
+
+            // Shielding (#97): just off his feet on the far side from the opponent.
+            if (Shields(player, out Vec2 away))
+            {
+                along = away;
+                lead = leadSlow;
+            }
+
             return Roll(position + along * lead - _state.Ball.Position.Horizontal, steps * dt);
         }
 

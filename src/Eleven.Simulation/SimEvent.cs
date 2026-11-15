@@ -123,6 +123,9 @@ namespace Eleven.Simulation
 
         /// <summary>A kick that connected was a volley (#94). With <see cref="Kicked"/>.</summary>
         Volleyed = 30,
+
+        /// <summary>A shielding carrier held off a challenge that reached the ball (#97). Subject: the carrier. <see cref="SimEvent.Other"/>: the challenger.</summary>
+        ShieldHeld = 31,
     }
 
     /// <summary>

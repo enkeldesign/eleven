@@ -9,7 +9,10 @@ namespace Eleven.Simulation.Tests
     /// <summary>The standing challenge (#84): a contest for a ball an opponent controls, decided by where the ball is.</summary>
     public class ChallengeTests
     {
-        private static readonly SimConfig Free = SpikeScenario.Config();
+        // The challenge's own mechanics, shielding off (#97): a standing dribbler would otherwise
+        // turn the ball away from the challenger. The bench characterises the default.
+        private static readonly SimConfig Free = SpikeScenario.Config().With("shieldSpeed", 0);
+        private static readonly SimConfig Default = SpikeScenario.Config();
         private static readonly SimConfig Attached = Free.WithControlModel(ControlModel.Attached);
 
         private const int A = 1, B = 2;
@@ -338,13 +341,16 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void The_challenge_bench_shows_the_contest_and_matches_its_reference()
         {
-            List<ChallengeCase> cases = ChallengeBench.Characterise(Free);
+            List<ChallengeCase> cases = ChallengeBench.Characterise(Default);
             Assert.Equal(2 * ChallengeBench.Approaches.Count * ChallengeBench.Speeds.Count * 3, cases.Count);
 
-            // Against a standing dribbler every challenge wins; a sprinting one avoids most, and more
+            // A jogging dribbler loses every challenge; a sprinting one avoids most, and more
             // than a jogging one (since #96 a challenge commits only when it will reach the ball, so
             // a well-timed one can win at a sprint); good tacklers win at least as often as poor ones.
-            Assert.All(cases.Where(c => c.DribblerSpeed == 0), c => Assert.Equal("won", c.Outcome));
+            // A standing dribbler shields (#97): the challenge is a contest, won some of the time.
+            int standing = cases.Count(c => c.DribblerSpeed == 0);
+            Assert.InRange(cases.Count(c => c.DribblerSpeed == 0 && c.Outcome == "won"), 1, standing - 1);
+            Assert.All(cases.Where(c => c.DribblerSpeed == 3.5), c => Assert.Equal("won", c.Outcome));
             int WonAt(double speed) => cases.Count(c => c.DribblerSpeed == speed && c.Outcome == "won");
             int sprints = cases.Count(c => c.DribblerSpeed == 7);
             Assert.True(WonAt(7) * 2 < sprints, $"{WonAt(7)} of {sprints} sprinting dribblers lost the ball");
@@ -353,7 +359,7 @@ namespace Eleven.Simulation.Tests
             Assert.True(Won("good") > Won("poor"), $"good {Won("good")}, poor {Won("poor")}");
 
             var csv = new System.IO.StringWriter();
-            ChallengeBench.WriteCsv(csv, Free, cases);
+            ChallengeBench.WriteCsv(csv, Default, cases);
             string reference = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "challenge-reference.csv");
             Assert.Equal(System.IO.File.ReadAllText(reference), csv.ToString());
         }
