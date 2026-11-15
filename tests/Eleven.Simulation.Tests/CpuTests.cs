@@ -425,14 +425,16 @@ namespace Eleven.Simulation.Tests
 
                 // Every trial ends at a goal, in a keeper's hands or out of play: none runs out of time.
                 Assert.All(of, t => Assert.NotEqual("time", t.Outcome));
-                Assert.All(of, t => Assert.True(t.HomeKicks + t.AwayKicks >= 1, $"{tier} {t.Seed:x}: no kick"));
+                Assert.All(of, t => Assert.True(t.HomeKicks + t.AwayKicks + t.ChallengesWon >= 1, $"{tier} {t.Seed:x}: no kick and no challenge won"));
                 Assert.All(of, t => Assert.True(t.LongestIdleSeconds < 10, $"{tier} {t.Seed:x}: {t.LongestIdleSeconds} s with no one on the ball"));
-                Assert.True(of.Sum(t => t.Recoveries) > 0, $"{tier}: the ball never changed feet");
                 Assert.True(of.Select(t => t.Outcome).Distinct().Count() >= 2, $"{tier}: every trial ended {of[0].Outcome}");
 
                 // Both sides get the ball, across the seeds.
                 Assert.True(of.Any(t => t.HomeTouches > t.AwayTouches) && of.Any(t => t.AwayTouches > t.HomeTouches), $"{tier}: one side always had the ball");
             }
+
+            // Out of possession they contest the ball by standing challenges (#84), never by being nearer.
+            Assert.True(trials.Sum(t => t.ChallengesStarted) >= 8, $"{trials.Sum(t => t.ChallengesStarted)} challenges in all the trials");
 
             // The same trials again are the same runs.
             Assert.Equal(trials.Select(t => t.FinalHash), CpuTrials.Run(C).Select(t => t.FinalHash));

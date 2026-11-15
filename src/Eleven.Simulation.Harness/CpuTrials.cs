@@ -22,6 +22,9 @@ namespace Eleven.Simulation.Harness
         public int HomeTouches;
         public int AwayTouches;
 
+        /// <summary>Standing challenges started and won (#84), by either side.</summary>
+        public int ChallengesStarted, ChallengesWon;
+
         /// <summary>How often the ball went from one side's feet to the other's.</summary>
         public int Recoveries;
 
@@ -98,10 +101,11 @@ namespace Eleven.Simulation.Harness
                 foreach (SimEvent e in events)
                 {
                     bool home = e.Subject == OneVOne.HomePlayer, away = e.Subject == OneVOne.AwayPlayer;
-                    if (e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Touched)
+                    if (e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.ChallengeWon)
                     {
                         if (!home && !away) continue;
-                        if (e.Kind == SimEventKind.Kicked)
+                        if (e.Kind == SimEventKind.ChallengeWon) trial.ChallengesWon++;
+                        else if (e.Kind == SimEventKind.Kicked)
                         {
                             if (home) trial.HomeKicks++;
                             else trial.AwayKicks++;
@@ -115,6 +119,7 @@ namespace Eleven.Simulation.Harness
                         if (e.Tick - lastContact > idle) idle = e.Tick - lastContact;
                         lastContact = e.Tick;
                     }
+                    else if (e.Kind == SimEventKind.ChallengeStarted) trial.ChallengesStarted++;
                     else if (e.Kind == SimEventKind.Goal) trial.Outcome = e.Other == OneVOne.HomeTeam ? "goal-home" : "goal-away";
                     else if (e.Kind == SimEventKind.KeeperHeld && trial.Outcome.Length == 0) trial.Outcome = "held";
                 }
@@ -133,12 +138,12 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(TextWriter w, SimConfig config, IReadOnlyList<CpuTrial> trials)
         {
-            w.WriteLine("config_hash,tier,seed,outcome,seconds,home_kicks,away_kicks,home_touches,away_touches,recoveries,longest_idle_s,seek,approach,carry,shoot,defend,recover,final_hash");
+            w.WriteLine("config_hash,tier,seed,outcome,seconds,home_kicks,away_kicks,home_touches,away_touches,challenges,challenges_won,recoveries,longest_idle_s,seek,approach,carry,shoot,defend,recover,final_hash");
             foreach (CpuTrial t in trials)
             {
-                w.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:x16},{1},{2:x},{3},{4:F2},{5},{6},{7},{8},{9},{10:F2},{11},{12},{13},{14},{15},{16},{17:x16}",
+                w.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:x16},{1},{2:x},{3},{4:F2},{5},{6},{7},{8},{19},{18},{9},{10:F2},{11},{12},{13},{14},{15},{16},{17:x16}",
                     config.Hash, t.Tier, t.Seed, t.Outcome, t.Seconds, t.HomeKicks, t.AwayKicks, t.HomeTouches, t.AwayTouches, t.Recoveries, t.LongestIdleSeconds,
-                    t.Modes[1], t.Modes[2], t.Modes[3], t.Modes[4], t.Modes[5], t.Modes[6], t.FinalHash));
+                    t.Modes[1], t.Modes[2], t.Modes[3], t.Modes[4], t.Modes[5], t.Modes[6], t.FinalHash, t.ChallengesWon, t.ChallengesStarted));
             }
         }
 
@@ -148,7 +153,7 @@ namespace Eleven.Simulation.Harness
             var parts = new List<string>();
             foreach (string tier in Tiers)
             {
-                int n = 0, goals = 0, held = 0, outs = 0, time = 0, kicks = 0, recoveries = 0;
+                int n = 0, goals = 0, held = 0, outs = 0, time = 0, kicks = 0, recoveries = 0, challenges = 0;
                 double idle = 0;
                 foreach (CpuTrial t in trials)
                 {
@@ -160,11 +165,12 @@ namespace Eleven.Simulation.Harness
                     else time++;
                     kicks += t.HomeKicks + t.AwayKicks;
                     recoveries += t.Recoveries;
+                    challenges += t.ChallengesWon;
                     if (t.LongestIdleSeconds > idle) idle = t.LongestIdleSeconds;
                 }
 
-                parts.Add(string.Format(CultureInfo.InvariantCulture, "{0}: {1} trials, {2} goals, {3} held, {4} out, {5} timed out, {6} kicks, {7} recoveries, longest idle {8:F1} s",
-                    tier, n, goals, held, outs, time, kicks, recoveries, idle));
+                parts.Add(string.Format(CultureInfo.InvariantCulture, "{0}: {1} trials, {2} goals, {3} held, {4} out, {5} timed out, {6} kicks, {7} challenges won, {8} recoveries, longest idle {9:F1} s",
+                    tier, n, goals, held, outs, time, kicks, challenges, recoveries, idle));
             }
 
             return string.Join("; ", parts);
