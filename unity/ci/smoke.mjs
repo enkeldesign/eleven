@@ -345,7 +345,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
     // View passes (#72): the vertical pitch at this size, at 0°, then flipped to 180° through the
     // bench, as a match's half-time would: stick and flick up the screen go up-field either way.
-    if (url.includes('view=1')) {
+    if (/[?&]view=1/.test(url)) {
       const up = (degrees) => (degrees === 0 ? 1 : -1);
       // Low in the ACTION zone: a flick up from its centre ends over THIS FELT WRONG on a phone,
       // and a lift over a UI action can activate it (#57), opening the note sheet.
@@ -686,7 +686,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!second && second[2] === '-1' && second[3] !== 'Practice', second ? second[0].replace('ELEVEN ', '') : 'no second half');
         const result = (await waitForLog(/ELEVEN match result (eleven-result\/\d+ .*)/, 600_000, fromR))?.match ?? null;
         const halves = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ HalfTime/.test(l)).length;
-        const fulls = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ FullTime/.test(l)).length;
+        // Logged by the match itself ahead of its result: the step's event lines come after it.
+        const fulls = logs.slice(fromM).filter((l) => /^ELEVEN match fulltime /.test(l)).length;
         check('the match ends at full time with its result: one half-time, one full time, a score',
           !!result && /score=\d+-\d+/.test(result[1]) && /played=\d+/.test(result[1]) && halves === 1 && fulls === 1,
           `${result ? result[1] : 'no result'}; ${halves} half-time(s), ${fulls} full time(s)`);
@@ -1547,7 +1548,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     // Named presets (#46), on the desktop, where there is a keyboard to type a name with: the
     // running candidate saved under a name, TECHNICAL REFERENCE loaded and applied, then the
     // preset recalled and applied, hashed as in .NET. Deleted after the reload, which it survives.
-    const presetsPattern = /ELEVEN bench presets count=(\d+) unread=(\d+) name=(\S+) save=(\S+) items=(\S*)/;
+    const presetsPattern = /ELEVEN bench presets count=(\d+) unread=(\d+) name=(\S+) save=(\S+) items=(\S*)(?: list=(\S+))?/;
     const openPresets = async () => {
       const from = logs.length;
       const layoutNow = benchPattern.exec(lastLog(layoutPattern)?.input ?? '');
@@ -1565,6 +1566,26 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const line = lines[lines.length - 1] ?? null;
       const items = Object.fromEntries((line?.[5] ?? '').split(';').filter(Boolean).map((i) => i.split(':')).map(([n, load, del]) => [n, { load, del }]));
       return { line, items };
+    };
+    // A preset's Load or Delete, scrolled into the list's view first (#87: the Play switch above
+    // the shelf can push it below the fold). Wheels over the list and re-reads its places, which
+    // the bench reports again whenever the list scrolls.
+    const tapPreset = async (shelf, item, key) => {
+      for (let i = 0; i < 16 && shelf.items[item]; i++) {
+        const [x, y] = point(shelf.items[item][key]);
+        const list = shelf.line?.[6] ? point(shelf.line[6]) : null;
+        const margin = 30;
+        if (!list || (y >= list[1] + margin && y <= list[1] + list[3] - margin)) {
+          await tap(at(x, y));
+          return shelf;
+        }
+        const centre = at(list[0] + list[2] / 2, list[1] + list[3] / 2);
+        await page.mouse.move(centre.x, centre.y);
+        const from = logs.length;
+        await page.mouse.wheel(0, y > list[1] + list[3] / 2 ? 120 : -120);
+        shelf = await presetsLine(from);
+      }
+      return shelf;
     };
     if (name === 'desktop') {
       const first = await openPresets();
@@ -1592,7 +1613,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       // TECHNICAL REFERENCE: loaded as pending changes, then applied.
       shelf = await presetsLine(fromSave);
       let fromLoad = logs.length;
-      if (shelf.items.TECHNICAL_REFERENCE) await tap(at(...point(shelf.items.TECHNICAL_REFERENCE.load)));
+      if (shelf.items.TECHNICAL_REFERENCE) await tapPreset(shelf, 'TECHNICAL_REFERENCE', 'load');
       const loadedReference = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) model=\S+ config=([0-9a-f]{16})/, 5_000, fromLoad);
       if (first.open) await tap(at(...point(first.open[4])));
       const appliedReference = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
@@ -1605,7 +1626,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const second = await openPresets();
       shelf = await presetsLine(second.from);
       fromLoad = logs.length;
-      if (shelf.items.Smoke_1) await tap(at(...point(shelf.items.Smoke_1.load)));
+      if (shelf.items.Smoke_1) await tapPreset(shelf, 'Smoke_1', 'load');
       const loadedPreset = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) model=\S+ config=([0-9a-f]{16})/, 5_000, fromLoad);
       if (second.open) await tap(at(...point(second.open[4])));
       const appliedPreset = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
@@ -1723,7 +1744,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const kept = await openPresets();
       const shelfAfter = await presetsLine(kept.from);
       const fromDelete = logs.length;
-      if (shelfAfter.items.Smoke_1 && shelfAfter.items.Smoke_1.del !== 'none') await tap(at(...point(shelfAfter.items.Smoke_1.del)));
+      if (shelfAfter.items.Smoke_1 && shelfAfter.items.Smoke_1.del !== 'none') await tapPreset(shelfAfter, 'Smoke_1', 'del');
       const deleted = await waitForLog(/ELEVEN bench preset deleted name=(\S+) count=(\d+)/, 5_000, fromDelete);
       check('a saved preset is still there after a reload, and can be deleted',
         shelfAfter.line?.[1] === '1' && !!shelfAfter.items.Smoke_1 && !!deleted && deleted.match[1] === 'Smoke_1' && deleted.match[2] === '0',

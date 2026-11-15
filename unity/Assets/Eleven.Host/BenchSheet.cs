@@ -62,7 +62,7 @@ namespace Eleven.Host
         private readonly UiKit.Action _presetSave;
         private readonly Label _presetStatus;
         private readonly List<VisualElement> _presetStops = new List<VisualElement>();
-        private readonly List<string> _presetPlaces = new List<string>();
+        private readonly List<(string Name, VisualElement Load, VisualElement Delete)> _presetPlaces = new List<(string, VisualElement, VisualElement)>();
         private PresetShelf _shelf = new PresetShelf();
         private readonly Dictionary<string, double> _pending = new Dictionary<string, double>();
         private readonly Dictionary<string, UiKit.Value> _shown = new Dictionary<string, UiKit.Value>();
@@ -224,6 +224,14 @@ namespace Eleven.Host
             {
                 if (e.target is VisualElement focused && _list.contentContainer.Contains(focused)) _list.ScrollTo(focused);
             });
+
+            // A scrolled Presets tab reports its places again, for the smoke test.
+            _list.verticalScroller.valueChanged += _ =>
+            {
+                if (!_trace || !PresetsShown) return;
+                _reportControls = true;
+                Report();
+            };
             _list.style.minHeight = 0;
             _list.style.minWidth = 0;
 
@@ -540,13 +548,10 @@ namespace Eleven.Host
             _list.Add(row);
 
             // Where its actions are, for the smoke test, once they are laid out.
-            int place = _presetPlaces.Count;
-            _presetPlaces.Add("");
+            // Placed when the line is written, so a scrolled list reports where they are now.
+            _presetPlaces.Add((p.Name.Replace(' ', '_'), load.Element, delete?.Element));
             load.Element.RegisterCallback<GeometryChangedEvent>(_ =>
             {
-                float s = _ui.PixelsPerPoint;
-                string At(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
-                if (place < _presetPlaces.Count) _presetPlaces[place] = $"{p.Name.Replace(' ', '_')}:{At(load.Element)}:{(delete != null ? At(delete.Element) : "none")}";
                 _reportControls = true;
                 Report();
             });
@@ -732,6 +737,7 @@ namespace Eleven.Host
             if (!Open || (!_reportOpen && !_reportControls)) return;
             float s = _ui.PixelsPerPoint;
             string P(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
+            string Box(VisualElement e) => FormattableString.Invariant($"{e.worldBound.x * s:F0},{e.worldBound.y * s:F0},{e.worldBound.width * s:F0},{e.worldBound.height * s:F0}");
 
             if (_reportOpen)
             {
@@ -803,7 +809,7 @@ namespace Eleven.Host
                 if (PresetsShown)
                 {
                     Log(FormattableString.Invariant(
-                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces)}"));
+                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces.Select(i => $"{i.Name}:{P(i.Load)}:{(i.Delete != null ? P(i.Delete) : "none")}"))} list={Box(_list.contentViewport)}"));
                 }
 
                 if (TouchShown)

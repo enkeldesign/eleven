@@ -29,6 +29,15 @@ namespace Eleven.Simulation
                     if (_state.Restart.Phase != RestartPhase.Live) return;
                     if (++m.ClockTicks < Config.HalfTicks) return;
                     _state.Ball.AttachedTo = 0;
+
+                    // The whistle ends any kick under way: nothing is played until the next kick-off.
+                    for (int i = 0; i < _state.Players.Length; i++)
+                    {
+                        ref PlayerState p = ref _state.Players[i];
+                        p.WindUpTicks = p.AftertouchTicks = 0;
+                        p.WindUpDirection = p.WindUpStrength = p.WindUpLoft = p.AftertouchDirection = 0;
+                        p.WindUpTarget = 0;
+                    }
                     if (m.Phase == MatchPhase.FirstHalf)
                     {
                         m.Phase = MatchPhase.HalfTime;

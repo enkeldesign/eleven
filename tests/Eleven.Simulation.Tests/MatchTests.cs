@@ -48,6 +48,34 @@ namespace Eleven.Simulation.Tests
 
         private static int Enough => 2 * C.HalfTicks + 60 * 60;
 
+        [Theory]
+        [InlineData(MatchPhase.FirstHalf, MatchPhase.HalfTime)]
+        [InlineData(MatchPhase.SecondHalf, MatchPhase.FullTime)]
+        public void A_kick_winding_up_at_the_whistle_never_connects(MatchPhase half, MatchPhase whistle)
+        {
+            SimState s = OneVOne.Match(C, seed: 4, bothCpu: true);
+            s.Match.Phase = half;
+            s.Match.ClockTicks = C.HalfTicks - 1;
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            s.Players[0].Position = new Vec2(10, 0);
+            s.Players[0].Heading = 0;
+            s.Ball.Position = new Vec3(10.4, 0, C.BallRadius);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Players[0].WindUpTicks = Math.Max(2, C.KickWindUpTicks);
+            s.Players[0].WindUpStrength = 1;
+            var sim = new Simulator(C, s);
+            var events = new List<SimEvent>();
+            for (int i = 0; i < 30; i++) sim.Step(Array.Empty<Command>(), events);
+            Assert.Contains(events, e => e.Kind == (whistle == MatchPhase.HalfTime ? SimEventKind.HalfTime : SimEventKind.FullTime));
+            Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Kicked);
+            Assert.Equal(whistle, sim.PeekState().Match.Phase);
+            Assert.All(sim.PeekState().Players, p => Assert.Equal(0, p.WindUpTicks));
+        }
+
         [Fact]
         public void A_cpu_match_plays_two_halves_changes_ends_and_ends_with_its_result()
         {

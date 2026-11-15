@@ -144,6 +144,7 @@ namespace Eleven.Host
                         break;
                     case SimEventKind.FullTime:
                         _hud?.ShowStatus($"Full time {Score(s)}");
+                        Log(FormattableString.Invariant($"ELEVEN match fulltime score={Score(s)} tick={s.Tick}"));
                         break;
                 }
             }
