@@ -23,6 +23,16 @@ namespace Eleven.Simulation
         /// <summary>m. The goal area's depth and reach past each post: Law 1's 5.5 m.</summary>
         public const double GoalArea = 5.5;
 
+        /// <summary>m. The penalty mark's distance from the goal line (Law 1, #99).</summary>
+        public const double PenaltyMark = 11;
+
+        /// <summary>m. The penalty area's depth from the goal line, and its half-width (Law 1, #99).</summary>
+        public const double PenaltyAreaDepth = 16.5, PenaltyAreaHalfWidth = 20.16;
+
+        /// <summary>Whether <paramref name="at"/> is in the penalty area at the <paramref name="end"/> (+1 or −1) end (#99).</summary>
+        public static bool InPenaltyArea(Vec2 at, int end, SimConfig config) =>
+            at.X * end >= config.GoalLineX - PenaltyAreaDepth && at.X * end <= config.GoalLineX && (at.Y < 0 ? -at.Y : at.Y) <= PenaltyAreaHalfWidth;
+
         /// <summary>m. How far behind the ball its taker is placed.</summary>
         public const double TakerBehind = 0.6;
 
