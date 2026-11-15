@@ -98,6 +98,25 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_match_result_counts_each_sides_fouls_and_penalties()
+        {
+            SimState after = OneVOne.Match(C, seed: 3);
+            after.Match.Phase = MatchPhase.FullTime;
+            var recorder = new MatchRecorder();
+            recorder.Observe(C, after, new[]
+            {
+                new SimEvent(10, SimEventKind.Foul, B, other: A),
+                new SimEvent(10, SimEventKind.RestartAwarded, Home, other: (int)RestartKind.Penalty),
+                new SimEvent(20, SimEventKind.Foul, A, other: B),
+                new SimEvent(30, SimEventKind.Foul, B, other: A),
+                new SimEvent(40, SimEventKind.FullTime, 0),
+            });
+            MatchResult result = Assert.IsType<MatchResult>(recorder.Result);
+            Assert.Equal((1, 2, 1, 0), (result.HomeFouls, result.AwayFouls, result.HomePenalties, result.AwayPenalties));
+            Assert.Contains("fouls=1-2\npenalties=1-0\n", result.ToText());
+        }
+
+        [Fact]
         public void A_foul_in_the_offenders_penalty_area_is_a_penalty_from_the_mark()
         {
             var sim = new Simulator(C, Fouling(new Vec2(C.GoalLineX - 8, 2)));
