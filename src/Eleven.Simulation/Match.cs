@@ -196,6 +196,7 @@ namespace Eleven.Simulation
     {
         private readonly List<ResultGoal> _goals = new List<ResultGoal>();
         private int _restarts;
+        private int _homeFouls, _awayFouls, _homePenalties, _awayPenalties;
 
         public MatchResult? Result { get; private set; }
 
@@ -209,10 +210,23 @@ namespace Eleven.Simulation
                     _goals.Add(new ResultGoal(e.Other, after.Ball.LastPlayedBy, half, after.Match.ClockTicks * config.TickSeconds));
                 }
                 else if (e.Kind == SimEventKind.RestartTaken) _restarts++;
+                else if (e.Kind == SimEventKind.Foul)
+                {
+                    // The offender's side, by who he is (#99).
+                    int side = Array.Find(after.Players, p => p.Id == e.Subject).TeamId;
+                    if (side == after.Teams[0].Id) _homeFouls++;
+                    else if (side == after.Teams[1].Id) _awayFouls++;
+                }
+                else if (e.Kind == SimEventKind.RestartAwarded && e.Other == (int)RestartKind.Penalty)
+                {
+                    if (e.Subject == after.Teams[0].Id) _homePenalties++;
+                    else if (e.Subject == after.Teams[1].Id) _awayPenalties++;
+                }
                 else if (e.Kind == SimEventKind.FullTime && Result == null)
                 {
                     TeamState home = after.Teams[0], away = after.Teams[1];
-                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts);
+                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts,
+                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties);
                 }
             }
         }
