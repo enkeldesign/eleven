@@ -73,6 +73,7 @@ namespace Eleven.Simulation
             _kickConnected = false;
             _challengeWon = false;
             _crossedEnd = 0;
+            _foulBy = _foulOn = -1;
             _crossedMouth = false;
             ResolveCommands(tick, commands, events);
             StepCpus(tick);
@@ -398,6 +399,7 @@ namespace Eleven.Simulation
             if (manMet && !(ballMet && toBall <= toMan))
             {
                 events.Add(new SimEvent(tick, SimEventKind.SlideFouled, player.Id, other: _state.Players[had].Id));
+                RecordFoul(IndexOfPlayer(player.Id), had, tick, events);
             }
             else if (ballMet)
             {
@@ -989,6 +991,14 @@ namespace Eleven.Simulation
                     else
                     {
                         events.Add(new SimEvent(tick, SimEventKind.ChallengeMissed, player.Id));
+
+                        // Missing the ball, into the man who has it: a foul (#99).
+                        int man = ControllerOfBall();
+                        if (man >= 0 && _state.Players[man].TeamId != player.TeamId
+                            && (_state.Players[man].Position - player.Position).LengthSquared <= Config.ChallengeFoulReach * Config.ChallengeFoulReach)
+                        {
+                            RecordFoul(i, man, tick, events);
+                        }
                     }
 
                     player.Challenge = ChallengePhase.Recover;
