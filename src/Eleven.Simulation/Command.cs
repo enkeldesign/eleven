@@ -54,8 +54,18 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly Vec3? Dive;
 
-        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null)
+        /// <summary>
+        /// A CPU outfielder's new plan (#83), from his brain. Taken only from the controller of a
+        /// CPU outfielder who may decide on this tick; otherwise the whole command is rejected as
+        /// <see cref="CommandRejection.PlanRefused"/>. It moves no one: the simulation keeps it,
+        /// and it takes effect after his reaction delay. A non-finite value in it is
+        /// <see cref="CommandRejection.Invalid"/>.
+        /// </summary>
+        public readonly CpuPlan? Plan;
+
+        public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null, CpuPlan? plan = null)
         {
+            Plan = plan;
             ControllerId = controllerId;
             Tick = tick;
             Move = move;
@@ -107,5 +117,8 @@ namespace Eleven.Simulation
         Early = 3,
         Duplicate = 4,
         Invalid = 5,
+
+        /// <summary>The command carried a CPU plan (#83) from a controller with no CPU outfielder, or before he may decide again.</summary>
+        PlanRefused = 6,
     }
 }

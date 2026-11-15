@@ -27,9 +27,26 @@ namespace Eleven.Simulation
         /// <summary>The keepers (#69), in ascending player id order, each one of <see cref="Players"/>.</summary>
         public KeeperState[] Keepers = Array.Empty<KeeperState>();
 
+        /// <summary>
+        /// The two sides of a match (#82), in ascending id order; empty for practice, which has one
+        /// goal, at +x, and no sides. Each player's <see cref="PlayerState.TeamId"/> is one of them.
+        /// </summary>
+        public TeamState[] Teams = Array.Empty<TeamState>();
+
+        /// <summary>The restart sequencer's state (#85): off in practice, on in a match.</summary>
+        public RestartState Restart;
+
+        /// <summary>The match's clock and halves (#86): none in practice.</summary>
+        public MatchState Match;
+
+        /// <summary>The CPU outfielders (#83), in ascending player id order, each one of <see cref="Players"/> and not a keeper.</summary>
+        public CpuState[] Cpus = Array.Empty<CpuState>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
+            copy.Teams = (TeamState[])Teams.Clone();
+            copy.Cpus = (CpuState[])Cpus.Clone();
             copy.Players = (PlayerState[])Players.Clone();
             copy.Keepers = (KeeperState[])Keepers.Clone();
             return copy;
@@ -37,9 +54,9 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
-        /// each player, keeper count (int32), each keeper. Field order within the ball, players and
-        /// keepers is as declared, capabilities in their own declaration order. Fails on NaN or
-        /// ±Infinity anywhere.
+        /// each player, keeper count (int32), each keeper, team count (int32), each team, the restart, CPU count
+        /// (int32), each CPU outfielder. Field order within each is as declared, capabilities in their own
+        /// declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
         {
@@ -53,6 +70,7 @@ namespace Eleven.Simulation
             w.WriteByte((byte)Ball.Line);
             w.WriteInt32(Ball.AttachedTo);
             w.WriteInt32(Ball.HeldBy);
+            w.WriteInt32(Ball.LastPlayedBy);
 
             w.WriteInt32(Players.Length);
             foreach (PlayerState player in Players)
@@ -67,6 +85,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.PassVision, "Player.Capabilities.PassVision");
                 w.WriteDouble(player.Capabilities.PassAnticipation, "Player.Capabilities.PassAnticipation");
                 w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
+                w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -81,6 +100,9 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.TouchCooldown);
                 w.WriteByte(player.Turning ? (byte)1 : (byte)0);
                 w.WriteInt32(player.CutCooldown);
+                w.WriteByte((byte)player.Challenge);
+                w.WriteInt32(player.ChallengeTicks);
+                WriteVec2(w, player.ChallengeLine, "Player.ChallengeLine");
             }
 
             w.WriteInt32(Keepers.Length);
@@ -95,7 +117,77 @@ namespace Eleven.Simulation
                 w.WriteDouble(keeper.Capabilities.DiveSpeed, "Keeper.Capabilities.DiveSpeed");
                 w.WriteDouble(keeper.Capabilities.Reach, "Keeper.Capabilities.Reach");
                 w.WriteDouble(keeper.Capabilities.Handling, "Keeper.Capabilities.Handling");
+                w.WriteInt32(keeper.HoldTicks);
             }
+
+            w.WriteInt32(Teams.Length);
+            foreach (TeamState team in Teams)
+            {
+                w.WriteInt32(team.Id);
+                w.WriteInt32(team.AttackSign);
+                w.WriteInt32(team.Goals);
+            }
+
+            w.WriteByte(Restart.On ? (byte)1 : (byte)0);
+            w.WriteByte((byte)Restart.Phase);
+            w.WriteByte((byte)Restart.Kind);
+            w.WriteInt32(Restart.AwardedTeam);
+            w.WriteInt32(Restart.LastTouchedTeam);
+            WriteVec2(w, Restart.Point, "Restart.Point");
+            w.WriteInt32(Restart.PhaseTicks);
+            w.WriteInt32(Restart.WaitTicks);
+            w.WriteInt32(Restart.TakerId);
+            w.WriteByte(Restart.FromThrow ? (byte)1 : (byte)0);
+
+            w.WriteByte((byte)Match.Phase);
+            w.WriteInt32(Match.ClockTicks);
+            w.WriteInt32(Match.PhaseTicks);
+            w.WriteInt32(Match.FirstKickOff);
+
+            w.WriteInt32(Cpus.Length);
+            foreach (CpuState cpu in Cpus)
+            {
+                w.WriteInt32(cpu.PlayerId);
+                w.WriteDouble(cpu.Skill.DecisionInterval, "Cpu.Skill.DecisionInterval");
+                w.WriteDouble(cpu.Skill.ReactionDelay, "Cpu.Skill.ReactionDelay");
+                w.WriteDouble(cpu.Skill.PerceptionError, "Cpu.Skill.PerceptionError");
+                w.WriteDouble(cpu.Skill.VisionRange, "Cpu.Skill.VisionRange");
+                w.WriteInt64(cpu.NextDecisionTick);
+                WritePlan(w, cpu.Plan);
+                w.WriteByte(cpu.HasNext ? (byte)1 : (byte)0);
+                WritePlan(w, cpu.Next);
+            }
+        }
+
+        private static void WritePlan(CanonicalWriter w, CpuPlanState plan)
+        {
+            w.WriteInt32((int)plan.Mode);
+            WriteVec2(w, plan.Move, "Cpu.Plan.Move");
+            w.WriteByte(plan.HasKick ? (byte)1 : (byte)0);
+            WriteVec2(w, plan.KickDirection, "Cpu.Plan.KickDirection");
+            w.WriteDouble(plan.KickStrength, "Cpu.Plan.KickStrength");
+            w.WriteDouble(plan.KickLoft, "Cpu.Plan.KickLoft");
+            w.WriteByte(plan.QuickPass ? (byte)1 : (byte)0);
+            w.WriteInt64(plan.ObservedTick);
+            w.WriteInt64(plan.ActsTick);
+        }
+
+        private static CpuPlanState ReadPlan(CanonicalReader r)
+        {
+            int mode = r.ReadInt32();
+            if (mode < (int)CpuMode.None || mode > (int)CpuMode.Recover) throw new FormatException($"Unknown CPU mode {mode}.");
+            return new CpuPlanState
+            {
+                Mode = (CpuMode)mode,
+                Move = ReadVec2(r, "Cpu.Plan.Move"),
+                HasKick = ReadFlag(r.ReadByte(), "Cpu.Plan.HasKick"),
+                KickDirection = ReadVec2(r, "Cpu.Plan.KickDirection"),
+                KickStrength = r.ReadDouble("Cpu.Plan.KickStrength"),
+                KickLoft = r.ReadDouble("Cpu.Plan.KickLoft"),
+                QuickPass = ReadFlag(r.ReadByte(), "Cpu.Plan.QuickPass"),
+                ObservedTick = r.ReadInt64(),
+                ActsTick = r.ReadInt64(),
+            };
         }
 
         public static SimState Decode(CanonicalReader r)
@@ -113,6 +205,7 @@ namespace Eleven.Simulation
             state.Ball.Line = ReadLine(r.ReadByte());
             state.Ball.AttachedTo = r.ReadInt32();
             state.Ball.HeldBy = r.ReadInt32();
+            state.Ball.LastPlayedBy = r.ReadInt32();
 
             int count = r.ReadInt32();
             if (count < 0 || count > 1024) throw new FormatException($"Implausible player count {count}.");
@@ -133,6 +226,7 @@ namespace Eleven.Simulation
                         PassVision = r.ReadDouble("Player.Capabilities.PassVision"),
                         PassAnticipation = r.ReadDouble("Player.Capabilities.PassAnticipation"),
                         BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
+                        Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -148,6 +242,9 @@ namespace Eleven.Simulation
                     TouchCooldown = r.ReadInt32(),
                     Turning = ReadFlag(r.ReadByte(), "Player.Turning"),
                     CutCooldown = r.ReadInt32(),
+                    Challenge = ReadChallenge(r.ReadByte()),
+                    ChallengeTicks = r.ReadInt32(),
+                    ChallengeLine = ReadVec2(r, "Player.ChallengeLine"),
                 };
             }
 
@@ -170,11 +267,67 @@ namespace Eleven.Simulation
                         Reach = r.ReadDouble("Keeper.Capabilities.Reach"),
                         Handling = r.ReadDouble("Keeper.Capabilities.Handling"),
                     },
+                    HoldTicks = r.ReadInt32(),
+                };
+            }
+
+            int teams = r.ReadInt32();
+            if (teams != 0 && teams != 2) throw new FormatException($"A state has no teams or two, not {teams}.");
+            state.Teams = new TeamState[teams];
+            for (int i = 0; i < teams; i++)
+            {
+                state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32() };
+            }
+
+            state.Restart = new RestartState
+            {
+                On = ReadFlag(r.ReadByte(), "Restart.On"),
+                Phase = r.ReadByte() is byte phase && phase <= (byte)RestartPhase.Ready ? (RestartPhase)phase : throw new FormatException("Unknown restart phase."),
+                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Corner ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
+                AwardedTeam = r.ReadInt32(),
+                LastTouchedTeam = r.ReadInt32(),
+                Point = ReadVec2(r, "Restart.Point"),
+                PhaseTicks = r.ReadInt32(),
+                WaitTicks = r.ReadInt32(),
+                TakerId = r.ReadInt32(),
+                FromThrow = ReadFlag(r.ReadByte(), "Restart.FromThrow"),
+            };
+
+            state.Match = new MatchState
+            {
+                Phase = r.ReadByte() is byte matchPhase && matchPhase <= (byte)MatchPhase.FullTime ? (MatchPhase)matchPhase : throw new FormatException("Unknown match phase."),
+                ClockTicks = r.ReadInt32(),
+                PhaseTicks = r.ReadInt32(),
+                FirstKickOff = r.ReadInt32(),
+            };
+
+            int cpus = r.ReadInt32();
+            if (cpus < 0 || cpus > count) throw new FormatException($"Implausible CPU count {cpus}.");
+            state.Cpus = new CpuState[cpus];
+            for (int i = 0; i < cpus; i++)
+            {
+                state.Cpus[i] = new CpuState
+                {
+                    PlayerId = r.ReadInt32(),
+                    Skill = new CpuSkill
+                    {
+                        DecisionInterval = r.ReadDouble("Cpu.Skill.DecisionInterval"),
+                        ReactionDelay = r.ReadDouble("Cpu.Skill.ReactionDelay"),
+                        PerceptionError = r.ReadDouble("Cpu.Skill.PerceptionError"),
+                        VisionRange = r.ReadDouble("Cpu.Skill.VisionRange"),
+                    },
+                    NextDecisionTick = r.ReadInt64(),
+                    Plan = ReadPlan(r),
+                    HasNext = ReadFlag(r.ReadByte(), "Cpu.HasNext"),
+                    Next = ReadPlan(r),
                 };
             }
 
             return state;
         }
+
+        private static ChallengePhase ReadChallenge(byte value) =>
+            value <= (byte)ChallengePhase.Recover ? (ChallengePhase)value : throw new FormatException($"Unknown challenge phase {value}.");
 
         private static bool ReadFlag(byte value, string field) =>
             value <= 1 ? value == 1 : throw new FormatException($"{field} must be 0 or 1, not {value}.");
@@ -213,6 +366,123 @@ namespace Eleven.Simulation
             new Vec2(r.ReadDouble(field), r.ReadDouble(field));
     }
 
+    /// <summary>
+    /// One side of a match (#82): plain data. Which goal a team attacks is state, not a property of
+    /// the team or of the screen, so the sides can change ends between halves.
+    /// </summary>
+    public struct TeamState
+    {
+        /// <summary>The side's id in this match, positive. Players carry it as <see cref="PlayerState.TeamId"/>; it is not a controller's id.</summary>
+        public int Id;
+
+        /// <summary>
+        /// +1 or −1: the sign of world x this side attacks toward. It scores in the goal on that
+        /// line, and its keeper guards the goal on the other.
+        /// </summary>
+        public int AttackSign;
+
+        /// <summary>Goals this side has scored in the match (#86).</summary>
+        public int Goals;
+    }
+
+    /// <summary>Where a match is (#86). Numeric values are stable and encoded as one byte.</summary>
+    public enum MatchPhase : byte
+    {
+        /// <summary>No match clock: practice, or a world without halves.</summary>
+        None = 0,
+
+        FirstHalf = 1,
+
+        /// <summary>The break: the ball is dead, the clock stopped, and the sides then change ends.</summary>
+        HalfTime = 2,
+
+        SecondHalf = 3,
+
+        /// <summary>The match is over: the ball is dead for good.</summary>
+        FullTime = 4,
+    }
+
+    /// <summary>A match's clock and halves (#86): plain data. docs/simulation/match.md.</summary>
+    public struct MatchState
+    {
+        public MatchPhase Phase;
+
+        /// <summary>Steps of match clock played in this half: it runs only while the ball is in play.</summary>
+        public int ClockTicks;
+
+        /// <summary>Steps left of the half-time break.</summary>
+        public int PhaseTicks;
+
+        /// <summary>The side that kicked off the first half; the other kicks off the second.</summary>
+        public int FirstKickOff;
+    }
+
+    /// <summary>Where the restart sequencer is (#85). Numeric values are stable and encoded as one byte.</summary>
+    public enum RestartPhase : byte
+    {
+        /// <summary>The ball is in play.</summary>
+        Live = 0,
+
+        /// <summary>The ball went out of play or into a goal: it is dead, and the restart is awarded.</summary>
+        Stopped = 1,
+
+        /// <summary>The ball and the footballers are placed. Only the taker may move, and he puts the ball in play by kicking it.</summary>
+        Ready = 2,
+    }
+
+    /// <summary>The restart awarded (#85). Numeric values are stable and encoded as one byte.</summary>
+    public enum RestartKind : byte
+    {
+        None = 0,
+
+        /// <summary>From the centre spot, to the side that conceded, or to start a half.</summary>
+        KickOff = 1,
+
+        /// <summary>Where the whole ball crossed a touchline, to the side that didn't touch it last.</summary>
+        ThrowIn = 2,
+
+        /// <summary>From the goal area, to the defenders, when an attacker touched it last over their goal line.</summary>
+        GoalKick = 3,
+
+        /// <summary>From the corner, to the attackers, when a defender touched it last over his own goal line.</summary>
+        Corner = 4,
+    }
+
+    /// <summary>
+    /// The restart sequencer's state (#85, INV-8): plain data. A match turns it on; practice
+    /// leaves it off, and then the ball is never out of play. docs/simulation/restarts.md.
+    /// </summary>
+    public struct RestartState
+    {
+        /// <summary>Whether there is a referee: out of play, goals and restarts are judged.</summary>
+        public bool On;
+
+        public RestartPhase Phase;
+
+        public RestartKind Kind;
+
+        /// <summary>The side that takes the restart.</summary>
+        public int AwardedTeam;
+
+        /// <summary>The side of the footballer who last played the ball while it was in play; 0 before anyone has.</summary>
+        public int LastTouchedTeam;
+
+        /// <summary>m. Where the ball is placed for the restart.</summary>
+        public Vec2 Point;
+
+        /// <summary>Steps left in <see cref="Phase"/>: until the set-up when stopped, until it may be taken when ready.</summary>
+        public int PhaseTicks;
+
+        /// <summary>Steps it has waited, ready, since it could first be taken.</summary>
+        public int WaitTicks;
+
+        /// <summary>The footballer who takes it, once it is set up; 0 before.</summary>
+        public int TakerId;
+
+        /// <summary>Whether the ball is live from a throw-in no one else has played yet: it can't score.</summary>
+        public bool FromThrow;
+    }
+
     public struct BallState
     {
         public int Id;
@@ -249,6 +519,29 @@ namespace Eleven.Simulation
         /// was caught and moves with him; no kick or touch reaches it.
         /// </summary>
         public int HeldBy;
+
+        /// <summary>
+        /// The id of the player who last played the ball (#84): touched it, kicked it, knocked it
+        /// away in a challenge, or saved it; 0 before anyone has. Whether an opponent controls the
+        /// ball is read from this and where they are.
+        /// </summary>
+        public int LastPlayedBy;
+    }
+
+    /// <summary>
+    /// A standing challenge's phase (#84): explicit, authoritative and timed by the simulation
+    /// (INV-12). docs/simulation/challenge.md. Numeric values are stable and encoded as one byte.
+    /// </summary>
+    public enum ChallengePhase : byte
+    {
+        /// <summary>Not challenging: he can start one.</summary>
+        Ready = 0,
+
+        /// <summary>Committed: he keeps his line, can't steer, and reaches for the ball as it ends.</summary>
+        Commit = 1,
+
+        /// <summary>After a challenge, won or missed: he brakes, and can't play the ball or challenge.</summary>
+        Recover = 2,
     }
 
     public struct PlayerState
@@ -334,5 +627,14 @@ namespace Eleven.Simulation
         /// so there is at most one cut per stride. docs/simulation/cut.md.
         /// </summary>
         public int CutCooldown;
+
+        /// <summary>This player's standing challenge (#84): ready, committed or recovering.</summary>
+        public ChallengePhase Challenge;
+
+        /// <summary>Steps left in <see cref="Challenge"/>, counting the step that ends it; 0 when ready.</summary>
+        public int ChallengeTicks;
+
+        /// <summary>The line he committed along: a unit vector, fixed as the challenge starts; zero when ready.</summary>
+        public Vec2 ChallengeLine;
     }
 }

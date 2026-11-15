@@ -22,6 +22,11 @@ using Eleven.Simulation.Harness;
 ///                              characterise the manual kick and aftertouch (#37) under the default config
 ///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
 /// eleven-sim replay &lt;capture.elfc&gt; replay a "this felt wrong" capture (#44) and compare every tick; exit 1 on any mismatch
+/// eleven-sim cpu &lt;dir&gt;         CPU against CPU in the 1v1 world (#83): how each tier's trials end, kicks, recoveries, idle stretches
+/// eleven-sim challenge &lt;dir&gt;   the standing challenge (#84): approach angles, dribbler speeds and tackling profiles
+/// eleven-sim restarts &lt;dir&gt;    CPU-against-CPU matches with the referee on (#85): restarts by kind, dead-ball time, stalls
+/// eleven-sim matches &lt;dir&gt;     whole CPU-against-CPU matches (#86): scores, goals by half, length, stuck matches
+/// eleven-sim sides             the same shots at the +x goal and at the −x goal (#82): goals, frame hits and saves by end
 /// eleven-sim capture &lt;file&gt; [seconds]
 ///                              capture the last 10 s of the scripted spike session at `seconds` (default 20),
 ///                              through the host's FeelRecorder: the committed fixture
@@ -74,10 +79,77 @@ internal static class Program
                 return Candidate(args.Skip(1));
             case "preset" when args.Length >= 2:
                 return Preset(args[1], args.Length > 2 ? args[2] : null);
+            case "cpu" when args.Length >= 2:
+            {
+                // CPU against CPU in the 1v1 world (#83), every tier, a dozen seeds each.
+                SimConfig cpuConfig = SpikeScenario.Config();
+                List<CpuTrial> trials = CpuTrials.Run(cpuConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "cpu-trials.csv")))
+                {
+                    CpuTrials.WriteCsv(csv, cpuConfig, trials);
+                }
+
+                Console.WriteLine($"config {cpuConfig.Hash:x16}, {CpuTrials.KeyNumbers(trials)} -> {args[1]}");
+                return 0;
+            }
+
+            case "challenge" when args.Length >= 2:
+            {
+                // The standing challenge (#84): approach angles, dribbler speeds, tackling.
+                SimConfig challengeConfig = SpikeScenario.Config();
+                List<ChallengeCase> cases = ChallengeBench.Characterise(challengeConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "challenge-bench.csv")))
+                {
+                    ChallengeBench.WriteCsv(csv, challengeConfig, cases);
+                }
+
+                Console.WriteLine($"config {challengeConfig.Hash:x16}, {ChallengeBench.KeyNumbers(cases)} -> {args[1]}");
+                return 0;
+            }
+
+            case "restarts" when args.Length >= 2:
+            {
+                // The restart sequencer over CPU-against-CPU matches (#85).
+                SimConfig restartConfig = SpikeScenario.Config();
+                List<RestartTrial> matches = RestartTrials.Run(restartConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "restart-trials.csv")))
+                {
+                    RestartTrials.WriteCsv(csv, restartConfig, matches);
+                }
+
+                Console.WriteLine($"config {restartConfig.Hash:x16}, {RestartTrials.KeyNumbers(matches)} -> {args[1]}");
+                return 0;
+            }
+
+            case "matches" when args.Length >= 2:
+            {
+                // Whole CPU-against-CPU matches (#86).
+                SimConfig matchConfig = SpikeScenario.Config();
+                // A count after the directory plays that many: the milestone gate's 50 (#87).
+                int count = args.Length >= 3 && int.TryParse(args[2], out int asked) && asked > 0 ? asked : MatchTrials.Seeds;
+                List<MatchTrial> played = MatchTrials.Run(matchConfig, count);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "match-trials.csv")))
+                {
+                    MatchTrials.WriteCsv(csv, matchConfig, played);
+                }
+
+                File.WriteAllText(Path.Combine(args[1], "first-result.txt"), played[0].Result);
+                Console.WriteLine($"config {matchConfig.Hash:x16}, {MatchTrials.KeyNumbers(played)} -> {args[1]}");
+                return 0;
+            }
+
+            case "sides":
+                // The two ends compared (#82): the same shots at +x and at −x.
+                foreach (SideCount count in SideParity.Measure(SpikeScenario.Config())) Console.WriteLine(count);
+                return 0;
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count]");
                 return 2;
         }
     }

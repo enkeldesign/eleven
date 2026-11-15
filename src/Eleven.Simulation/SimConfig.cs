@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 13;
+        public const int FormatVersion = 16;
 
         public SimConfig(
             int tickRate = 60,
@@ -83,7 +83,19 @@ namespace Eleven.Simulation
             double cutStrength = 5,
             double cutInterval = 0.07,
             double pushSpeed = 0,
-            double pushFromSpeed = 0.9)
+            double pushFromSpeed = 0.9,
+            double challengeRange = 1.0,
+            double challengeCommit = 0.2,
+            double challengeRecover = 0.27,
+            double challengeReach = 0.9,
+            double challengeImpulse = 5.0,
+            double touchlineY = 34.0,
+            double restartStop = 0.5,
+            double restartReady = 0.4,
+            double restartAuto = 1.0,
+            double throwSpeed = 12.0,
+            double halfLength = 180.0,
+            double halfTimeBreak = 2.0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -146,6 +158,18 @@ namespace Eleven.Simulation
             CutInterval = cutInterval;
             PushSpeed = pushSpeed;
             PushFromSpeed = pushFromSpeed;
+            ChallengeRange = challengeRange;
+            ChallengeCommit = challengeCommit;
+            ChallengeRecover = challengeRecover;
+            ChallengeReach = challengeReach;
+            ChallengeImpulse = challengeImpulse;
+            TouchlineY = touchlineY;
+            RestartStop = restartStop;
+            RestartReady = restartReady;
+            RestartAuto = restartAuto;
+            ThrowSpeed = throwSpeed;
+            HalfLength = halfLength;
+            HalfTimeBreak = halfTimeBreak;
 
             CheckTunableRanges();
 
@@ -448,6 +472,63 @@ namespace Eleven.Simulation
         /// </summary>
         public double PushFromSpeed { get; }
 
+        /// <summary>m. A footballer closing on a ball an opponent controls commits to a standing challenge (#84) when it is within this of him.</summary>
+        public double ChallengeRange { get; }
+
+        /// <summary>s. How long a challenge commits him before it reaches the ball: he keeps his line and can't steer.</summary>
+        public double ChallengeCommit { get; }
+
+        /// <summary>s. How long he recovers after a challenge, won or missed: he brakes and can't play the ball.</summary>
+        public double ChallengeRecover { get; }
+
+        /// <summary>m. As the commit ends, a ball within this of him is won; one further off is missed.</summary>
+        public double ChallengeReach { get; }
+
+        /// <summary>m/s. The speed a won challenge knocks the ball away at, along his line.</summary>
+        public double ChallengeImpulse { get; }
+
+        /// <summary>m. The touchlines' outer edges, at y = ± this: half Law 1's 68 m pitch width. A ball wholly beyond one is out of play (#85).</summary>
+        public double TouchlineY { get; }
+
+        /// <summary>s. How long the ball is dead after it goes out of play or a goal, before the restart is set up (#85).</summary>
+        public double RestartStop { get; }
+
+        /// <summary>s. From the restart being set up until its taker may take it (#85). #85's start: 12 to 60 steps.</summary>
+        public double RestartReady { get; }
+
+        /// <summary>s. How long a restart waits for a human taker, once he may take it, before his controller's fallback takes it for him (#85). #85's start: 20 to 90 steps.</summary>
+        public double RestartAuto { get; }
+
+        /// <summary>m/s. A throw-in's speed at full strength (#85): a throw is a kick intent, released by the hands.</summary>
+        public double ThrowSpeed { get; }
+
+        /// <summary>s. A half's length on the match clock (#86): the brief's 2 × 3 minutes. The clock runs only while the ball is in play.</summary>
+        public double HalfLength { get; }
+
+        /// <summary>s. The pause at half-time before the second half's kick-off is set up (#86). It is not match time.</summary>
+        public double HalfTimeBreak { get; }
+
+        /// <summary>A half's length in steps of match clock (#86).</summary>
+        public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
+
+        /// <summary>Steps of the half-time break (#86), at least one.</summary>
+        public int HalfTimeTicks => Math.Max(1, (int)Math.Round(HalfTimeBreak * TickRate));
+
+        /// <summary>Steps the ball is dead before a restart is set up, at least one (#85).</summary>
+        public int RestartStopTicks => Math.Max(1, (int)Math.Round(RestartStop * TickRate));
+
+        /// <summary>Steps from a restart's set-up until it may be taken, at least one (#85).</summary>
+        public int RestartReadyTicks => Math.Max(1, (int)Math.Round(RestartReady * TickRate));
+
+        /// <summary>Steps a restart waits for a human taker before the fallback takes it, at least one (#85).</summary>
+        public int RestartAutoTicks => Math.Max(1, (int)Math.Round(RestartAuto * TickRate));
+
+        /// <summary>Steps a challenge commits for, at least one (#84).</summary>
+        public int ChallengeCommitTicks => Math.Max(1, (int)Math.Round(ChallengeCommit * TickRate));
+
+        /// <summary>Steps a challenge's recovery lasts, at least one (#84).</summary>
+        public int ChallengeRecoverTicks => Math.Max(1, (int)Math.Round(ChallengeRecover * TickRate));
+
         /// <summary>cos(<see cref="CutAngle"/>), through the simulation's own maths.</summary>
         internal double CutCos { get; }
 
@@ -528,7 +609,19 @@ namespace Eleven.Simulation
                 cutStrength: r.ReadDouble(nameof(CutStrength)),
                 cutInterval: r.ReadDouble(nameof(CutInterval)),
                 pushSpeed: r.ReadDouble(nameof(PushSpeed)),
-                pushFromSpeed: r.ReadDouble(nameof(PushFromSpeed)));
+                pushFromSpeed: r.ReadDouble(nameof(PushFromSpeed)),
+                challengeRange: r.ReadDouble(nameof(ChallengeRange)),
+                challengeCommit: r.ReadDouble(nameof(ChallengeCommit)),
+                challengeRecover: r.ReadDouble(nameof(ChallengeRecover)),
+                challengeReach: r.ReadDouble(nameof(ChallengeReach)),
+                challengeImpulse: r.ReadDouble(nameof(ChallengeImpulse)),
+                touchlineY: r.ReadDouble(nameof(TouchlineY)),
+                restartStop: r.ReadDouble(nameof(RestartStop)),
+                restartReady: r.ReadDouble(nameof(RestartReady)),
+                restartAuto: r.ReadDouble(nameof(RestartAuto)),
+                throwSpeed: r.ReadDouble(nameof(ThrowSpeed)),
+                halfLength: r.ReadDouble(nameof(HalfLength)),
+                halfTimeBreak: r.ReadDouble(nameof(HalfTimeBreak)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -596,6 +689,18 @@ namespace Eleven.Simulation
             w.WriteDouble(CutInterval, nameof(CutInterval));
             w.WriteDouble(PushSpeed, nameof(PushSpeed));
             w.WriteDouble(PushFromSpeed, nameof(PushFromSpeed));
+            w.WriteDouble(ChallengeRange, nameof(ChallengeRange));
+            w.WriteDouble(ChallengeCommit, nameof(ChallengeCommit));
+            w.WriteDouble(ChallengeRecover, nameof(ChallengeRecover));
+            w.WriteDouble(ChallengeReach, nameof(ChallengeReach));
+            w.WriteDouble(ChallengeImpulse, nameof(ChallengeImpulse));
+            w.WriteDouble(TouchlineY, nameof(TouchlineY));
+            w.WriteDouble(RestartStop, nameof(RestartStop));
+            w.WriteDouble(RestartReady, nameof(RestartReady));
+            w.WriteDouble(RestartAuto, nameof(RestartAuto));
+            w.WriteDouble(ThrowSpeed, nameof(ThrowSpeed));
+            w.WriteDouble(HalfLength, nameof(HalfLength));
+            w.WriteDouble(HalfTimeBreak, nameof(HalfTimeBreak));
             return w.ToArray();
         }
 

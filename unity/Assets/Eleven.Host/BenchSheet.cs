@@ -29,6 +29,11 @@ namespace Eleven.Host
 
         // The touch candidates (#28, #76, #77), in ControlCandidate's order.
         private static readonly string[] Controls = { "A · Action", "B · Pass + Kick", "C · One fire" };
+        private static readonly string[] Plays = { "Practice", "1v1 match" };
+        private readonly Func<int> _play;
+        private readonly Action<int> _switchPlay;
+        private UiKit.Segmented _plays;
+        private VisualElement _playBlock;
 
         private static readonly string[] Groups =
         {
@@ -91,8 +96,11 @@ namespace Eleven.Host
 
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
             Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls,
-            Func<string> loadPresets, Func<string, bool> storePresets, Func<string> build, System.Action closed)
+            Func<string> loadPresets, Func<string, bool> storePresets, Func<string> build, System.Action closed,
+            Func<int> play = null, Action<int> switchPlay = null)
         {
+            _play = play ?? (() => 0);
+            _switchPlay = switchPlay ?? (_ => { });
             _loadPresets = loadPresets;
             _storePresets = storePresets;
             _build = build;
@@ -168,6 +176,20 @@ namespace Eleven.Host
             // the touch adapter changes, and gestures in progress are cancelled. In the tab rather
             // than above the tabs, so a phone's knob list keeps its room.
             _controlsBlock = new VisualElement { name = "Touch controls" };
+
+            // What is played (#87): practice, or a 1v1 match against the CPU from its kick-off. It
+            // acts at once, as the other live switches do. At the top of the Presets tab, the
+            // session's tab, so the Touch tab's choices keep their places on a phone.
+            _playBlock = new VisualElement { name = "Play" };
+            Label playLabel = UiKit.Text(_theme, TypeScale.Body, "Play. Switches now: a match starts at its kick-off.", Role.Text);
+            playLabel.style.marginBottom = Spacing.Xs;
+            _playBlock.Add(playLabel);
+            _plays = UiKit.MakeSegmented(ui, _theme, Plays, 0, index => _switchPlay(index));
+            _plays.Element.style.marginBottom = Spacing.M;
+            _plays.Element.style.flexShrink = 0;
+            _playBlock.Add(_plays.Element);
+            _plays.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
+
             Label controlsLabel = UiKit.Text(_theme, TypeScale.Body, "Touch controls. Switches now; the run goes on.", Role.Text);
             controlsLabel.style.marginBottom = Spacing.Xs;
             _controlsBlock.Add(controlsLabel);
@@ -365,6 +387,7 @@ namespace Eleven.Host
             UiKit.Select(_theme, _models, _applied().Config.ControlModel == ControlModel.Attached ? 1 : 0);
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
+            UiKit.Select(_theme, _plays, _play());
             _presetStatus.text = "";
             ShowGroup(_group);
             _reportOpen = true;
@@ -440,10 +463,21 @@ namespace Eleven.Host
 
         private bool PresetsShown => Groups[_group] == PresetsTab;
 
+        // Where the play switch's choices are, for the smoke test (#87), once laid out.
+        private void ReportPlay()
+        {
+            if (!_trace || !Open || !PresetsShown) return;
+            float s = _ui.PixelsPerPoint;
+            string P(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
+            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)}");
+        }
+
         // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with
         // Load and Delete, then any stored preset this build can't read, with the reason.
         private void ShowPresets(BenchCandidate applied)
         {
+            UiKit.Select(_theme, _plays, _play());
+            _list.Add(_playBlock);
             _presetStops.Clear();
             _presetPlaces.Clear();
             Label intro = UiKit.Text(_theme, TypeScale.Body,

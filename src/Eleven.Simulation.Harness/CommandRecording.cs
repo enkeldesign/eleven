@@ -21,11 +21,13 @@ namespace Eleven.Simulation.Harness
     /// then quick pass (bool). Every double is written as its raw IEEE-754 bits (uint64), so even
     /// invalid input is preserved. Version 2 replaced the kick flag with the kick intent and added
     /// aftertouch (#37); version 3 added the quick pass (#38); version 4 added a keeper's dive (#69):
-    /// a bool, and if set its target x, y and z.
+    /// a bool, and if set its target x, y and z. Version 5 added a CPU outfielder's plan (#83): a
+    /// bool, and if set its mode (int32), its move x and y, whether it has a kick and that kick as
+    /// above, and its quick pass (bool).
     /// </summary>
     public sealed class CommandRecording
     {
-        public const int FormatVersion = 4;
+        public const int FormatVersion = 5;
         private static readonly byte[] Magic = { (byte)'E', (byte)'L', (byte)'R', (byte)'C' };
 
         private readonly List<Command[]> _steps = new List<Command[]>();
@@ -110,6 +112,25 @@ namespace Eleven.Simulation.Harness
                         WriteBits(w, c.Dive.Value.Y);
                         WriteBits(w, c.Dive.Value.Z);
                     }
+
+                    w.WriteBool(c.Plan.HasValue);
+                    if (c.Plan.HasValue)
+                    {
+                        CpuPlan plan = c.Plan.Value;
+                        w.WriteInt32((int)plan.Mode);
+                        WriteBits(w, plan.Move.X);
+                        WriteBits(w, plan.Move.Y);
+                        w.WriteBool(plan.Kick.HasValue);
+                        if (plan.Kick.HasValue)
+                        {
+                            WriteBits(w, plan.Kick.Value.Direction.X);
+                            WriteBits(w, plan.Kick.Value.Direction.Y);
+                            WriteBits(w, plan.Kick.Value.Strength);
+                            WriteBits(w, plan.Kick.Value.Loft);
+                        }
+
+                        w.WriteBool(plan.QuickPass);
+                    }
                 }
             }
 
@@ -152,7 +173,23 @@ namespace Eleven.Simulation.Harness
                     bool quickPass = r.ReadBool();
                     Vec3? dive = null;
                     if (r.ReadBool()) dive = new Vec3(ReadBits(r), ReadBits(r), ReadBits(r));
-                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive);
+                    CpuPlan? plan = null;
+                    if (r.ReadBool())
+                    {
+                        var mode = (CpuMode)r.ReadInt32();
+                        var planMove = new Vec2(ReadBits(r), ReadBits(r));
+                        KickIntent? planKick = null;
+                        if (r.ReadBool())
+                        {
+                            var planDirection = new Vec2(ReadBits(r), ReadBits(r));
+                            double planStrength = ReadBits(r);
+                            planKick = new KickIntent(planDirection, planStrength, ReadBits(r));
+                        }
+
+                        plan = new CpuPlan(mode, planMove, planKick, r.ReadBool());
+                    }
+
+                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive, plan);
                 }
 
                 recording._steps.Add(step);

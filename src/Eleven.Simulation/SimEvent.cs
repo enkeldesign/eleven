@@ -87,6 +87,33 @@ namespace Eleven.Simulation
         /// chased. With <see cref="Touched"/>.
         /// </summary>
         Pushed = 18,
+
+        /// <summary>A footballer committed to a standing challenge (#84).</summary>
+        ChallengeStarted = 19,
+
+        /// <summary>A challenge reached the ball and knocked it away (#84). <see cref="SimEvent.Other"/> is the opponent who had it.</summary>
+        ChallengeWon = 20,
+
+        /// <summary>A challenge ended with the ball out of its reach (#84).</summary>
+        ChallengeMissed = 21,
+
+        /// <summary>The ball went out of play or into a goal (#85): a restart is awarded. Subject: the side awarded it. <see cref="SimEvent.Other"/>: its <see cref="RestartKind"/>.</summary>
+        RestartAwarded = 22,
+
+        /// <summary>The restart is set up (#85). Subject: its taker. <see cref="SimEvent.Other"/>: its <see cref="RestartKind"/>.</summary>
+        RestartPlaced = 23,
+
+        /// <summary>The taker kicked the ball: it is in play (#85). Subject: the taker. <see cref="SimEvent.Other"/>: the <see cref="RestartKind"/>.</summary>
+        RestartTaken = 24,
+
+        /// <summary>The first half is over (#86): the ball is dead for the break.</summary>
+        HalfTime = 25,
+
+        /// <summary>The second half has started its kick-off's set-up, with the ends changed (#86).</summary>
+        SecondHalf = 26,
+
+        /// <summary>The match is over (#86).</summary>
+        FullTime = 27,
     }
 
     /// <summary>
@@ -103,7 +130,8 @@ namespace Eleven.Simulation
 
         /// <summary>
         /// A second value where the kind has one: the receiver of <see cref="SimEventKind.QuickPassResolved"/>,
-        /// or the <see cref="FramePart"/> of <see cref="SimEventKind.HitFrame"/>; otherwise 0.
+        /// the <see cref="FramePart"/> of <see cref="SimEventKind.HitFrame"/>, or the id of the side a
+        /// <see cref="SimEventKind.Goal"/> is scored for (#82; 0 in practice, which has no sides); otherwise 0.
         /// </summary>
         public readonly int Other;
 
@@ -125,7 +153,8 @@ namespace Eleven.Simulation
 
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
-            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned ? $"{Tick} {Kind} {Subject} {Other}"
+            : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0)
+                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

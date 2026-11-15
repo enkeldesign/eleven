@@ -62,7 +62,8 @@ namespace Eleven.Host
             System.Action feltWrong, System.Action saveCapture, Action<string> noteDone, Func<Vector2> visible,
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
-            Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild)
+            Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
+            Func<int> benchPlay, Action<int> benchSwitchPlay)
         {
             _ui = ui;
             _trace = trace;
@@ -155,7 +156,7 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
-            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, benchLoadPresets, benchStorePresets, benchBuild, BenchClosed);
+            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, benchLoadPresets, benchStorePresets, benchBuild, BenchClosed, benchPlay, benchSwitchPlay);
 
             // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
             // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel
@@ -325,8 +326,67 @@ namespace Eleven.Host
             }
         }
 
+        /// <summary>
+        /// A match's panel (#87), in the scenario result's place: the score, the clock and the half,
+        /// in the same tabular rows, relabelled.
+        /// </summary>
+        public void ShowMatch(string score, string clock, string half)
+        {
+            Set(_scenario.Name, "SCORE");
+            Set(_digest.Name, "CLOCK");
+            Set(_final.Name, "HALF");
+            Set(_scenario.Value, score);
+            Set(_digest.Value, clock);
+            Set(_final.Value, half);
+            if (_result.Element.style.display.value != DisplayStyle.Flex)
+            {
+                _result.Element.style.display = DisplayStyle.Flex;
+                _reportResult = true;
+            }
+        }
+
+        /// <summary>Practice again: the panel goes back to the scenario's rows, hidden until a scenario runs.</summary>
+        public void HideMatch()
+        {
+            Set(_scenario.Name, "SCENARIO");
+            Set(_digest.Name, "DIGEST");
+            Set(_final.Name, "FINAL");
+            _result.Element.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>Full time (#87): the result, stated where it stays.</summary>
+        public void ShowMatchResult(int home, int away)
+        {
+            Set(_final.Value, FullTime(home, away));
+            _reportResult = true;
+        }
+
+        /// <summary>The HALF row at full time: the verdict.</summary>
+        public static string FullTime(int home, int away) =>
+            $"Full time · {(home > away ? "You win" : home < away ? "CPU wins" : "Draw")}";
+
+        /// <summary>
+        /// In a match, RESET starts a new match and RUN SCENARIO pauses and resumes it (#87); in
+        /// practice they are as they were. Each keeps its accessible name in step with its label.
+        /// </summary>
+        public void SetMatchActions(bool match, bool paused)
+        {
+            Relabel(Reset, match ? "New match" : "Reset");
+            Relabel(Run, match ? (paused ? "Resume" : "Pause") : "Run scenario");
+        }
+
+        private static void Relabel(UiKit.Action action, string text)
+        {
+            if (action.Text == text) return;
+            action.Text = text;
+            action.Name = text;
+            action.Element.name = text;
+            action.Label.text = text;
+        }
+
         public void ShowResult(double milliseconds, ulong digest, ulong final)
         {
+            HideMatch();
             Set(_scenario.Value, FormattableString.Invariant($"{milliseconds:F0} ms"));
             Set(_digest.Value, digest.ToString("x16", CultureInfo.InvariantCulture));
             Set(_final.Value, final.ToString("x16", CultureInfo.InvariantCulture));
