@@ -338,7 +338,7 @@ namespace Eleven.Host
             Set(_scenario.Value, score);
             Set(_digest.Value, clock);
             Set(_final.Value, half);
-            if (_result.Element.style.display != DisplayStyle.Flex)
+            if (_result.Element.style.display.value != DisplayStyle.Flex)
             {
                 _result.Element.style.display = DisplayStyle.Flex;
                 _reportResult = true;
@@ -357,10 +357,13 @@ namespace Eleven.Host
         /// <summary>Full time (#87): the result, stated where it stays.</summary>
         public void ShowMatchResult(int home, int away)
         {
-            string verdict = home > away ? "You win" : home < away ? "CPU wins" : "Draw";
-            Set(_final.Value, $"Full time · {verdict}");
+            Set(_final.Value, FullTime(home, away));
             _reportResult = true;
         }
+
+        /// <summary>The HALF row at full time: the verdict.</summary>
+        public static string FullTime(int home, int away) =>
+            $"Full time · {(home > away ? "You win" : home < away ? "CPU wins" : "Draw")}";
 
         /// <summary>
         /// In a match, RESET starts a new match and RUN SCENARIO pauses and resumes it (#87); in

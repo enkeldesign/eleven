@@ -188,7 +188,7 @@ namespace Eleven.Host
                 MatchPhase.FirstHalf => "1st half",
                 MatchPhase.HalfTime => "Half-time",
                 MatchPhase.SecondHalf => "2nd half",
-                MatchPhase.FullTime => "Full time",
+                MatchPhase.FullTime => Hud.FullTime(s.Teams[0].Goals, s.Teams[1].Goals),
                 _ => "",
             };
             _hud.ShowMatch($"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), half);
