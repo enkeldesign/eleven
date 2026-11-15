@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 18;
+        public const int FormatVersion = 19;
 
         public SimConfig(
             int tickRate = 60,
@@ -104,7 +104,10 @@ namespace Eleven.Simulation
             double volleyError = 0.02,
             double headerError = 0.25,
             double dribbleSpeedPoor = 0.85,
-            double dribbleSpeedGood = 0.95)
+            double dribbleSpeedGood = 0.95,
+            double shieldSpeed = 0.45,
+            double shieldRange = 2.0,
+            double shieldHold = 0.6)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -188,6 +191,9 @@ namespace Eleven.Simulation
             HeaderError = headerError;
             DribbleSpeedPoor = dribbleSpeedPoor;
             DribbleSpeedGood = dribbleSpeedGood;
+            ShieldSpeed = shieldSpeed;
+            ShieldRange = shieldRange;
+            ShieldHold = shieldHold;
 
             CheckTunableRanges();
 
@@ -553,6 +559,15 @@ namespace Eleven.Simulation
         /// <summary>Fraction of his top speed a footballer of full ball control reaches while he has the ball (#96).</summary>
         public double DribbleSpeedGood { get; }
 
+        /// <summary>Below this share of his top speed, a footballer with the ball and an opponent within shieldRange shields it (#97): the ball kept on his far side from the opponent.</summary>
+        public double ShieldSpeed { get; }
+
+        /// <summary>m. How near an opponent makes a slow carrier shield the ball (#97).</summary>
+        public double ShieldRange { get; }
+
+        /// <summary>The chance an even shield holds off a challenge through the carrier (#97): strength and tackling move it.</summary>
+        public double ShieldHold { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -675,7 +690,10 @@ namespace Eleven.Simulation
                 volleyError: r.ReadDouble(nameof(VolleyError)),
                 headerError: r.ReadDouble(nameof(HeaderError)),
                 dribbleSpeedPoor: r.ReadDouble(nameof(DribbleSpeedPoor)),
-                dribbleSpeedGood: r.ReadDouble(nameof(DribbleSpeedGood)));
+                dribbleSpeedGood: r.ReadDouble(nameof(DribbleSpeedGood)),
+                shieldSpeed: r.ReadDouble(nameof(ShieldSpeed)),
+                shieldRange: r.ReadDouble(nameof(ShieldRange)),
+                shieldHold: r.ReadDouble(nameof(ShieldHold)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -764,6 +782,9 @@ namespace Eleven.Simulation
             w.WriteDouble(HeaderError, nameof(HeaderError));
             w.WriteDouble(DribbleSpeedPoor, nameof(DribbleSpeedPoor));
             w.WriteDouble(DribbleSpeedGood, nameof(DribbleSpeedGood));
+            w.WriteDouble(ShieldSpeed, nameof(ShieldSpeed));
+            w.WriteDouble(ShieldRange, nameof(ShieldRange));
+            w.WriteDouble(ShieldHold, nameof(ShieldHold));
             return w.ToArray();
         }
 

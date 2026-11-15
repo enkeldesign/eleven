@@ -62,6 +62,9 @@ namespace Eleven.Simulation
         /// <summary>0–1. This player's heading (#94): more sends a header harder and truer.</summary>
         public double Heading;
 
+        /// <summary>0–1. This player's strength (#97): holding off a challenger while shielding the ball, and challenging a shielding carrier.</summary>
+        public double Strength;
+
         /// <summary>
         /// The capability values, with their valid ranges and, where the research on #26 gives one,
         /// a starting range (docs/simulation/movement.md, kick.md). The valid ranges are wide enough
@@ -78,6 +81,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.PlayerGroup, "ballControl", "fraction", 0, 1),
             new TunableParameter(TunableParameter.PlayerGroup, "tackling", "fraction", 0, 1),
             new TunableParameter(TunableParameter.PlayerGroup, "heading", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.PlayerGroup, "strength", "fraction", 0, 1),
         });
 
         /// <summary>
@@ -87,7 +91,7 @@ namespace Eleven.Simulation
         public static PlayerCapabilities Reference => new PlayerCapabilities
         {
             MaxSpeed = 7, Acceleration = 25, KickPower = 1, KickError = 0.05, PassVision = 1.05, PassAnticipation = 0.75,
-            BallControl = 0.7, Tackling = 0.7, Heading = 0.6,
+            BallControl = 0.7, Tackling = 0.7, Heading = 0.6, Strength = 0.6,
         };
 
         /// <summary>A capability value by its name in <see cref="Parameters"/>.</summary>
@@ -102,6 +106,7 @@ namespace Eleven.Simulation
             "ballControl" => BallControl,
             "tackling" => Tackling,
             "heading" => Heading,
+            "strength" => Strength,
             _ => throw new ArgumentException($"'{name}' is not a player capability.", nameof(name)),
         };
 
@@ -120,6 +125,7 @@ namespace Eleven.Simulation
                 case "ballControl": copy.BallControl = value; break;
                 case "tackling": copy.Tackling = value; break;
                 case "heading": copy.Heading = value; break;
+                case "strength": copy.Strength = value; break;
                 default: throw new ArgumentException($"'{name}' is not a player capability.", nameof(name));
             }
 

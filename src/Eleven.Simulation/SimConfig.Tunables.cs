@@ -146,6 +146,9 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.KickGroup, "headerError", "rad", 0, 0.8),
             new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedPoor", "fraction of top speed", 0.5, 1, 0.8, 0.9),
             new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedGood", "fraction of top speed", 0.5, 1, 0.9, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldSpeed", "fraction of top speed", 0, 1, 0.3, 0.6),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldRange", "m", 0.5, 5, 1.5, 2.5),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldHold", "probability", 0, 1, 0.5, 0.75),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -223,6 +226,9 @@ namespace Eleven.Simulation
             "headerError" => HeaderError,
             "dribbleSpeedPoor" => DribbleSpeedPoor,
             "dribbleSpeedGood" => DribbleSpeedGood,
+            "shieldSpeed" => ShieldSpeed,
+            "shieldRange" => ShieldRange,
+            "shieldHold" => ShieldHold,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -269,6 +275,7 @@ namespace Eleven.Simulation
             double halfLength = HalfLength, halfTimeBreak = HalfTimeBreak;
             double volleyMaxHeight = VolleyMaxHeight, headerMinHeight = HeaderMinHeight, headerMaxHeight = HeaderMaxHeight, headerSpeed = HeaderSpeed, headerReach = HeaderReach, volleyError = VolleyError, headerError = HeaderError;
             double dribbleSpeedPoor = DribbleSpeedPoor, dribbleSpeedGood = DribbleSpeedGood;
+            double shieldSpeed = ShieldSpeed, shieldRange = ShieldRange, shieldHold = ShieldHold;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -337,6 +344,9 @@ namespace Eleven.Simulation
                     case "headerError": headerError = o.Value; break;
                     case "dribbleSpeedPoor": dribbleSpeedPoor = o.Value; break;
                     case "dribbleSpeedGood": dribbleSpeedGood = o.Value; break;
+                    case "shieldSpeed": shieldSpeed = o.Value; break;
+                    case "shieldRange": shieldRange = o.Value; break;
+                    case "shieldHold": shieldHold = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -434,7 +444,10 @@ namespace Eleven.Simulation
                 volleyError: volleyError,
                 headerError: headerError,
                 dribbleSpeedPoor: dribbleSpeedPoor,
-                dribbleSpeedGood: dribbleSpeedGood);
+                dribbleSpeedGood: dribbleSpeedGood,
+                shieldSpeed: shieldSpeed,
+                shieldRange: shieldRange,
+                shieldHold: shieldHold);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -516,7 +529,10 @@ namespace Eleven.Simulation
             volleyError: VolleyError,
             headerError: HeaderError,
             dribbleSpeedPoor: DribbleSpeedPoor,
-            dribbleSpeedGood: DribbleSpeedGood);
+            dribbleSpeedGood: DribbleSpeedGood,
+            shieldSpeed: ShieldSpeed,
+            shieldRange: ShieldRange,
+            shieldHold: ShieldHold);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

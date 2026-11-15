@@ -88,6 +88,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
                 w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
                 w.WriteDouble(player.Capabilities.Heading, "Player.Capabilities.Heading");
+                w.WriteDouble(player.Capabilities.Strength, "Player.Capabilities.Strength");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -231,6 +232,7 @@ namespace Eleven.Simulation
                         BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
                         Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
                         Heading = r.ReadDouble("Player.Capabilities.Heading"),
+                        Strength = r.ReadDouble("Player.Capabilities.Strength"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
