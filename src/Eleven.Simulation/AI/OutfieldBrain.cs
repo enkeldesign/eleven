@@ -41,6 +41,16 @@ namespace Eleven.Simulation.AI
         // spot and back.
         private const double Arrive = 5.0, Stand = 0.5;
 
+        // m. A supporter's place (#92): this far ahead of his teammate with the ball and this far
+        // across, toward the middle; marking, this far goal-side of the opponent he marks.
+        private const double SupportAhead = 6, SupportWide = 10, MarkGoalSide = 2.5;
+
+        // m. A teammate with no opponent this close to him is open for a pass (#92).
+        private const double Open = 4;
+
+        // rad. A pass goes only to a teammate within this of his heading: his quick pass's own cone.
+        private const double PassCone = 0.9;
+
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
 
@@ -51,8 +61,33 @@ namespace Eleven.Simulation.AI
             var theirGoal = new Vec2(config.GoalLineX, 0);
             var ownGoal = new Vec2(-config.GoalLineX, 0);
 
-            if (seen.Holder == SeenHolder.OpponentKeeper) return new CpuPlan(CpuMode.Recover, Ease(DropOff - me));
-            if (seen.Holder == SeenHolder.OwnKeeper) return new CpuPlan(CpuMode.Recover, Ease(ShowFor - me));
+            if (seen.Holder != SeenHolder.None)
+            {
+                // Each to his own side of the waiting spot (#92): the one a teammate is nearer to
+                // goes to the teammate, and he takes the mirrored one.
+                Vec2 wait = seen.Holder == SeenHolder.OpponentKeeper ? DropOff : ShowFor;
+                var mirrored = new Vec2(wait.X, -wait.Y);
+                bool withMates = false;
+                foreach (SeenPlayer other in seen.Others) withMates |= other.Teammate && !other.Keeper;
+                if (withMates && wait.Y == 0)
+                {
+                    wait = new Vec2(wait.X, 8);
+                    mirrored = new Vec2(wait.X, -8);
+                }
+
+                foreach (SeenPlayer other in seen.Others)
+                {
+                    if (other.Teammate && !other.Keeper && (other.Position - wait).LengthSquared < (me - wait).LengthSquared)
+                    {
+                        Vec2 swap = wait;
+                        wait = mirrored;
+                        mirrored = swap;
+                        break;
+                    }
+                }
+
+                return new CpuPlan(CpuMode.Recover, Ease(wait - me));
+            }
 
             // The nearest opponent who isn't a keeper, if he sees one.
             bool opponentSeen = false;
@@ -80,8 +115,28 @@ namespace Eleven.Simulation.AI
             double mine = Length(ball - me);
             double theirs = opponentSeen ? SimMath.Sqrt(nearest) : double.PositiveInfinity;
 
+            // His teammates who aren't keepers (#92): the one nearest the ball, and whether he is open.
+            bool mateSeen = false;
+            Vec2 mate = Vec2.Zero;
+            double mateNearest = double.PositiveInfinity;
+            foreach (SeenPlayer other in seen.Others)
+            {
+                if (!other.Teammate || other.Keeper) continue;
+                double d = (other.Position - ball).LengthSquared;
+                if (d < mateNearest)
+                {
+                    mateNearest = d;
+                    mate = other.Position;
+                    mateSeen = true;
+                }
+            }
+
+            double mates = mateSeen ? SimMath.Sqrt(mateNearest) : double.PositiveInfinity;
+
             // With the ball: shoot in range, otherwise carry it at the goal, round an opponent in the way.
-            if (mine <= HasBall && mine <= theirs && seen.BallPosition.Z < 1)
+            // Only the nearer of two teammates has it (#92); on a tie, the one further toward −y.
+            bool mineNotMates = !mateSeen || mine < mates || (mine == mates && me.Y <= mate.Y);
+            if (mine <= HasBall && mine <= theirs && mineNotMates && seen.BallPosition.Z < 1)
             {
                 // Only with the ball within his kick's reach, or the kick misses (#85).
                 if (Length(theirGoal - ball) <= ShootRange && !seen.Kicking && mine <= config.KickReach)
@@ -106,7 +161,48 @@ namespace Eleven.Simulation.AI
                     }
                 }
 
+                // Pressed, with an open teammate in his quick pass's cone: he passes (#92).
+                if (opponentSeen && mateSeen && !seen.Kicking && Pressed(ball, opponent, theirGoal) && IsOpen(seen, mate) && InCone(seen.Heading, mate - me))
+                {
+                    return new CpuPlan(CpuMode.Carry, Unit(mate - me), quickPass: true);
+                }
+
                 return new CpuPlan(CpuMode.Carry, toGoal);
+            }
+
+            // A teammate is nearer the ball (#92): he supports. In a passing lane ahead and across
+            // when the teammate has it; marking the other opponent, goal-side, when he hasn't.
+            // Only one of a side goes for the ball: the one who reaches it first, by its own flight, so
+            // the receiver of a pass goes to meet it; on a tie, the one further toward +y.
+            bool second = false;
+            if (mateSeen)
+            {
+                Meet(seen, config, me, seen.MaxSpeed, out double mineFirst);
+                Meet(seen, config, mate, seen.MaxSpeed, out double mateFirst);
+                second = mateFirst + 0.05 < mineFirst || (mateFirst <= mineFirst + 0.05 && mate.Y > me.Y);
+            }
+
+            if (mateSeen && second)
+            {
+                Vec2 place;
+                if (mates <= HasBall && mates <= theirs)
+                {
+                    double across = mate.Y >= 0 ? -1 : 1;
+                    double y = mate.Y + across * SupportWide;
+                    double most = config.TouchlineY - 4;
+                    place = new Vec2(mate.X + SupportAhead, y > most ? most : y < -most ? -most : y);
+                }
+                else if (SecondOpponent(seen, opponent, out Vec2 marked))
+                {
+                    place = marked + Unit(ownGoal - marked) * MarkGoalSide;
+                }
+                else
+                {
+                    place = ball + Unit(ownGoal - ball) * SupportWide;
+                }
+
+                Vec2 toSupport = place - me;
+                return new CpuPlan(CpuMode.Support, Length(toSupport) > Stand * 4 ? Unit(toSupport) : Vec2.Zero);
             }
 
             // Where he can first meet the ball, by its own flight, and whether the opponent meets it sooner.
@@ -132,6 +228,45 @@ namespace Eleven.Simulation.AI
             // At full speed until he is there: the spot moves with the ball.
             Vec2 toSpot = spot - me;
             return new CpuPlan(CpuMode.Defend, Length(toSpot) > Stand * 2 ? Unit(toSpot) : Vec2.Zero);
+        }
+
+        // Whether the opponent nearest the ball is in front of it, toward the goal, within Evade.
+        private static bool Pressed(Vec2 ball, Vec2 opponent, Vec2 goal)
+        {
+            Vec2 toGoal = Unit(goal - ball), toOpponent = opponent - ball;
+            return toOpponent.X * toGoal.X + toOpponent.Y * toGoal.Y > -1 && toOpponent.LengthSquared < Evade * Evade;
+        }
+
+        private static bool IsOpen(OutfieldObservation seen, Vec2 mate)
+        {
+            foreach (SeenPlayer other in seen.Others)
+            {
+                if (!other.Teammate && (other.Position - mate).LengthSquared < Open * Open) return false;
+            }
+
+            return true;
+        }
+
+        private static bool InCone(double heading, Vec2 to)
+        {
+            double angle = SimMath.Atan2(to.Y, to.X) - heading;
+            while (angle > System.Math.PI) angle -= 2 * System.Math.PI;
+            while (angle < -System.Math.PI) angle += 2 * System.Math.PI;
+            return (angle < 0 ? -angle : angle) <= PassCone;
+        }
+
+        // The opponent, not a keeper, other than the one nearest the ball.
+        private static bool SecondOpponent(OutfieldObservation seen, Vec2 nearest, out Vec2 other)
+        {
+            other = Vec2.Zero;
+            foreach (SeenPlayer p in seen.Others)
+            {
+                if (p.Teammate || p.Keeper || p.Position.Equals(nearest)) continue;
+                other = p.Position;
+                return true;
+            }
+
+            return false;
         }
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the
