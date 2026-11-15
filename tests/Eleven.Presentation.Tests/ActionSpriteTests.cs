@@ -1,5 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Eleven.Presentation;
 using Xunit;
 
@@ -64,6 +67,43 @@ namespace Eleven.Presentation.Tests
                     Assert.True(differ >= 6, $"{ActionSprites.All[a]} and {ActionSprites.All[b]} differ in {differ} pixels");
                 }
             }
+        }
+
+        /// <summary>Every pose in every kit, a digest of its pixels each: the art the smoke's sheet must reproduce.</summary>
+        public static string Digests()
+        {
+            var text = new StringBuilder();
+            foreach ((string name, Rgba kit) in new[] { ("player", Domain.Player), ("keeper", Domain.Keeper), ("opponent", Domain.Opponent), ("opponent-keeper", Domain.OpponentKeeper) })
+            {
+                foreach (Pose pose in ActionSprites.All)
+                {
+                    byte[] bytes = ActionSprites.Draw(pose, kit).SelectMany(c => new[] { c.R, c.G, c.B, c.A }).ToArray();
+                    string digest = Convert.ToHexString(SHA256.HashData(bytes)).Substring(0, 16).ToLowerInvariant();
+                    text.Append($"{name} {pose} {digest}\n");
+                }
+            }
+
+            return text.ToString();
+        }
+
+        [Fact]
+        public void The_drawn_sprites_are_the_recorded_reference()
+        {
+            // A change to the art is a baseline update: regenerate with ELEVEN_WRITE_REFERENCE=1,
+            // in its own commit with its reason.
+            string path = Path.Combine(Root(), "docs", "ui", "action-sprites-reference.txt");
+            if (Environment.GetEnvironmentVariable("ELEVEN_WRITE_REFERENCE") == "1") File.WriteAllText(path, Digests());
+            Assert.Equal(File.ReadAllText(path), Digests());
+        }
+
+        private static string Root()
+        {
+            for (DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "AGENTS.md"))) return dir.FullName;
+            }
+
+            throw new DirectoryNotFoundException("Repository root (with AGENTS.md) not found above the test binaries.");
         }
 
         [Theory]
