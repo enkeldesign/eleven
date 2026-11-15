@@ -280,6 +280,7 @@ namespace Eleven.Host
             bool switchesScroll = arranged == "compact" && screen.height < SwitchesScrollBelowHeight;
             if (_arranged == arranged && _switchesScroll == switchesScroll) return;
             _arranged = arranged;
+            _switchesScroll = switchesScroll;
             bool wide = arranged == "wide", compact = arranged == "compact";
 
             _sheet.Content.Clear();
@@ -312,7 +313,6 @@ namespace Eleven.Host
                 // Compact: the title goes, and what is running and pending scrolls with the knobs,
                 // after them, so the list has room. The live switches, the tabs and the actions stay put.
                 // On a compact phone the live switches scroll after the knobs as well.
-                _switchesScroll = compact && screen.height < SwitchesScrollBelowHeight;
                 VisualElement status = compact ? _liveBlock : _sheet.Content;
                 VisualElement switches = _switchesScroll ? _liveBlock : _sheet.Content;
                 status.Add(_state);
