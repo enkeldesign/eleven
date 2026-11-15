@@ -213,6 +213,19 @@ jobs:
           path: challenge-bench/
           if-no-files-found: error
 
+      # CPU-against-CPU matches with the referee on: restarts, dead-ball time, stalls (#85).
+      - name: Run the restart trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll restarts restart-trials | tee restarts.txt
+          echo "::notice title=Restart trials::$(sed 's| -> .*||' restarts.txt)"
+
+      - name: Publish the restart trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: restart-trials
+          path: restart-trials/
+          if-no-files-found: error
+
       # CPU against CPU in the 1v1 world, every difficulty tier (#83), and the two ends compared (#82).
       - name: Run the CPU trials
         run: |

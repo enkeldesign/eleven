@@ -311,6 +311,23 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(first.Skip(1800), resumed);
         }
 
+        [Fact]
+        public void Over_a_dozen_cpu_matches_every_kind_of_restart_comes_and_none_stalls()
+        {
+            List<RestartTrial> trials = RestartTrials.Run(C);
+            Assert.Equal(RestartTrials.Seeds, trials.Count);
+            for (int kind = 1; kind <= 4; kind++) Assert.True(trials.Sum(t => t.Awarded[kind]) > 0, $"no {(RestartKind)kind}");
+            Assert.All(trials, t => Assert.Equal(t.Goals, t.Awarded[(int)RestartKind.KickOff]));
+            Assert.All(trials, t => Assert.InRange(t.Taken, t.Awarded.Sum(), t.Awarded.Sum() + 1));
+            Assert.All(trials, t => Assert.True(t.LongestDeadSeconds <= C.RestartStop + C.RestartReady + C.RestartAuto + 1, $"{t.Seed:x}: dead {t.LongestDeadSeconds} s"));
+            Assert.All(trials, t => Assert.True(t.LongestIdleSeconds < 10, $"{t.Seed:x}: {t.LongestIdleSeconds} s with no one on the ball"));
+
+            var csv = new System.IO.StringWriter();
+            RestartTrials.WriteCsv(csv, C, trials);
+            string reference = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "restart-trials-reference.csv");
+            Assert.Equal(System.IO.File.ReadAllText(reference), csv.ToString());
+        }
+
         // ---- Plain data, checked; practice untouched ---------------------------------------------------------
 
         [Fact]

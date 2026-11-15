@@ -6,11 +6,11 @@ config_hash,tier,seed,outcome,seconds,home_kicks,away_kicks,home_touches,away_to
 6aba5043176bb87b,apprentice,c0ffee05,goal-home,9.05,1,0,30,0,0,0,0,1.35,4,7,21,2,28,0,365a196c5586af23
 6aba5043176bb87b,apprentice,c0ffee06,out,8.85,1,0,26,0,1,0,0,1.55,8,7,18,2,25,0,6615d1e3b687d531
 6aba5043176bb87b,apprentice,c0ffee07,held,15.15,2,0,42,0,1,0,0,4.08,17,10,26,4,45,0,61ba2c5fed0cc584
-6aba5043176bb87b,apprentice,c0ffee08,out,10.97,0,1,0,34,0,0,0,2.00,8,6,24,2,34,0,244703d68b9bd96a
+6aba5043176bb87b,apprentice,c0ffee08,out,10.97,0,1,0,34,0,0,0,2.00,8,6,25,1,34,0,9a0b8c79292d373a
 6aba5043176bb87b,apprentice,c0ffee09,out,8.72,1,0,30,0,0,0,0,1.12,4,7,20,2,27,0,690e8629f2cdb073
-6aba5043176bb87b,apprentice,c0ffee0a,out,14.50,0,1,0,33,1,0,0,5.12,19,9,25,2,43,0,6a77a0e391102765
-6aba5043176bb87b,apprentice,c0ffee0b,held,27.47,1,1,30,50,0,0,1,3.15,22,12,60,5,85,0,688b8d59e48b14a6
-6aba5043176bb87b,apprentice,c0ffee0c,goal-home,11.33,1,0,37,0,1,0,0,2.07,7,4,27,2,36,0,7e9801521bee705c
+6aba5043176bb87b,apprentice,c0ffee0a,goal-away,9.47,0,1,0,29,1,0,0,1.68,6,6,23,1,28,0,f590af31e67b6e86
+6aba5043176bb87b,apprentice,c0ffee0b,held,18.80,3,0,48,0,2,0,0,3.47,23,14,28,6,55,0,b5a6b9101f336fe4
+6aba5043176bb87b,apprentice,c0ffee0c,goal-home,11.52,1,0,38,0,1,0,0,2.07,7,4,29,1,37,0,7fd6c46078f79414
 6aba5043176bb87b,club,c0ffee01,held,10.77,1,0,34,0,0,0,0,2.30,10,7,34,2,47,0,57a25e9856dfa45e
 6aba5043176bb87b,club,c0ffee02,held,7.93,0,1,0,31,1,0,0,0.68,3,5,32,2,32,0,6ef656709450b484
 6aba5043176bb87b,club,c0ffee03,goal-away,10.52,0,1,0,34,0,0,0,1.77,9,29,35,2,23,0,65bfef0822d09a26
