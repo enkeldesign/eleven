@@ -68,6 +68,13 @@ namespace Eleven.Host
         private readonly Transform _crossbar;
         private readonly Transform _rightPost;
         private readonly Transform _leftPost;
+
+        // The match's far goal and opponents (#87), shown only in a match.
+        private readonly Transform _farCrossbar;
+        private readonly Transform _farRightPost;
+        private readonly Transform _farLeftPost;
+        private readonly Transform _opponent;
+        private readonly Transform _opponentKeeper;
         private float _ballDiameter;
         private Vector3 _ballShown;
         private PitchOrientation _orientation = PitchOrientation.Practice;
@@ -119,6 +126,9 @@ namespace Eleven.Host
             _crossbar = Shape(root, square, "Crossbar", HostPalette.PitchLine, 2, 1);
             _rightPost = Shape(root, disc, "Right post", HostPalette.PitchLine, 2, 1);
             _leftPost = Shape(root, disc, "Left post", HostPalette.PitchLine, 2, 1);
+            _farCrossbar = Shape(root, square, "Far crossbar", HostPalette.PitchLine, 2, 1);
+            _farRightPost = Shape(root, disc, "Far right post", HostPalette.PitchLine, 2, 1);
+            _farLeftPost = Shape(root, disc, "Far left post", HostPalette.PitchLine, 2, 1);
             PlaceGoal(config);
 
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
@@ -126,7 +136,10 @@ namespace Eleven.Host
             _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
             _keeper = Shape(root, disc, "Keeper", HostPalette.Keeper, 4, PlayerDiameter);
             _keeper.gameObject.SetActive(false);
+            _opponent = Shape(root, disc, "Opponent", HostPalette.Opponent, 4, PlayerDiameter);
+            _opponentKeeper = Shape(root, disc, "Opponent keeper", HostPalette.OpponentKeeper, 4, PlayerDiameter);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
+            ShowMatch(false);
         }
 
         /// <summary>For the trace: the goal as drawn, from the simulation's geometry.</summary>
@@ -141,6 +154,30 @@ namespace Eleven.Host
             _rightPost.localPosition = new Vector3(x, -y, 0);
             _leftPost.localPosition = new Vector3(x, y, 0);
             _rightPost.localScale = _leftPost.localScale = Vector3.one * width;
+
+            // The far goal is the near one turned half a turn about the centre spot (#82).
+            _farCrossbar.localPosition = new Vector3(-x, 0, 0);
+            _farCrossbar.localScale = _crossbar.localScale;
+            _farRightPost.localPosition = new Vector3(-x, y, 0);
+            _farLeftPost.localPosition = new Vector3(-x, -y, 0);
+            _farRightPost.localScale = _farLeftPost.localScale = _rightPost.localScale;
+        }
+
+        /// <summary>A match's pitch (#87): the far goal and the opponents shown; practice hides them.</summary>
+        public void ShowMatch(bool match)
+        {
+            _farCrossbar.gameObject.SetActive(match);
+            _farRightPost.gameObject.SetActive(match);
+            _farLeftPost.gameObject.SetActive(match);
+            _opponent.gameObject.SetActive(match);
+            _opponentKeeper.gameObject.SetActive(match);
+        }
+
+        /// <summary>Where a match's opponents are drawn this frame (#87).</summary>
+        public void RenderOpponents(Vector2 opponent, Vector2 opponentKeeper)
+        {
+            _opponent.localPosition = new Vector3(opponent.x, opponent.y, 0);
+            _opponentKeeper.localPosition = new Vector3(opponentKeeper.x, opponentKeeper.y, 0);
         }
 
         /// <summary>

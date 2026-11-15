@@ -122,5 +122,8 @@ namespace Eleven.Simulation
         public double DiveTop;
 
         public KeeperCapabilities Capabilities;
+
+        /// <summary>Steps he has held the ball for (#85); 0 when he isn't holding it.</summary>
+        public int HoldTicks;
     }
 }

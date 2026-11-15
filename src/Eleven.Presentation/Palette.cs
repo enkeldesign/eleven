@@ -98,9 +98,19 @@ namespace Eleven.Presentation
         /// </summary>
         public static readonly Rgba Keeper = Rgba.Hex("#7FD3F7");
 
+        /// <summary>
+        /// The match's opponents (#87): a salmon outfielder and an orchid keeper, each 3:1 or more
+        /// against both grass shades, and far in hue from the player's green, the keeper's blue and
+        /// the ball's yellow.
+        /// </summary>
+        public static readonly Rgba Opponent = Rgba.Hex("#FF9988");
+
+        public static readonly Rgba OpponentKeeper = Rgba.Hex("#F0A0F0");
+
         public static readonly (string Name, Rgba Colour)[] All =
         {
             ("Pitch", Pitch), ("PitchMown", PitchMown), ("PitchLine", PitchLine), ("Ball", Ball), ("BallShadow", BallShadow), ("Player", Player), ("Keeper", Keeper),
+            ("Opponent", Opponent), ("OpponentKeeper", OpponentKeeper),
         };
     }
 }

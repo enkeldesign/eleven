@@ -10,25 +10,27 @@ namespace Eleven.Simulation
     public static class BallFlight
     {
         /// <summary>One step of a ball no player touches. Returns whether it bounced, and the parts of the frame it hit.</summary>
-        internal static bool Advance(ref BallState ball, SimConfig config, out FramePart first, out FramePart second)
+        internal static bool Advance(ref BallState ball, SimConfig config, out FramePart first, out FramePart second, bool bothGoals = false)
         {
             Vec3 start = ball.Position;
             bool bounced = Simulator.IntegrateBall(ref ball, config, config.TickSeconds);
-            GoalFrame.Resolve(start, ref ball, config, out first, out second);
+            GoalFrame.Resolve(start, ref ball, config, out first, out second, bothGoals && start.X < 0 ? -1 : 1);
             return bounced;
         }
 
         /// <summary>
         /// The ball's path for <paramref name="steps"/> steps from what is seen of it now: its
         /// position after each step goes into <paramref name="positions"/>, and its velocity into
-        /// <paramref name="velocities"/> when given. Nothing touches it on the way.
+        /// <paramref name="velocities"/> when given. Nothing touches it on the way. With
+        /// <paramref name="bothGoals"/> the −x goal's frame stands too, as in a match (#82);
+        /// without it only the +x goal's does, as in practice and in a keeper's own frame.
         /// </summary>
-        public static void Predict(SimConfig config, Vec3 position, Vec3 velocity, Vec3 spin, int steps, List<Vec3> positions, List<Vec3>? velocities = null)
+        public static void Predict(SimConfig config, Vec3 position, Vec3 velocity, Vec3 spin, int steps, List<Vec3> positions, List<Vec3>? velocities = null, bool bothGoals = false)
         {
             var ball = new BallState { Position = position, Velocity = velocity, Spin = spin };
             for (int i = 0; i < steps; i++)
             {
-                Advance(ref ball, config, out _, out _);
+                Advance(ref ball, config, out _, out _, bothGoals);
                 positions.Add(ball.Position);
                 velocities?.Add(ball.Velocity);
             }

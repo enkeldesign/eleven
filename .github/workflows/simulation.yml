@@ -200,6 +200,61 @@ jobs:
           path: push-curves/
           if-no-files-found: error
 
+      # The standing challenge (#84): approach angles, dribbler speeds, tackling.
+      - name: Characterise the standing challenge
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll challenge challenge-bench | tee challenge.txt
+          echo "::notice title=Challenge bench::$(sed 's| -> .*||' challenge.txt)"
+
+      - name: Publish the challenge bench
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenge-bench
+          path: challenge-bench/
+          if-no-files-found: error
+
+      # Whole CPU-against-CPU matches: scores, goals by half, length, stuck matches (#86), fifty of
+      # them for M1's gate (#87).
+      - name: Play the match trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll matches match-trials 50 | tee matches.txt
+          echo "::notice title=Match trials::$(sed 's| -> .*||' matches.txt)"
+
+      - name: Publish the match trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-trials
+          path: match-trials/
+          if-no-files-found: error
+
+      # CPU-against-CPU matches with the referee on: restarts, dead-ball time, stalls (#85).
+      - name: Run the restart trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll restarts restart-trials | tee restarts.txt
+          echo "::notice title=Restart trials::$(sed 's| -> .*||' restarts.txt)"
+
+      - name: Publish the restart trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: restart-trials
+          path: restart-trials/
+          if-no-files-found: error
+
+      # CPU against CPU in the 1v1 world, every difficulty tier (#83), and the two ends compared (#82).
+      - name: Run the CPU trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll cpu cpu-trials | tee cpu.txt
+          echo "::notice title=CPU trials::$(sed 's| -> .*||' cpu.txt)"
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll sides | tee sides.txt
+          echo "::notice title=Two ends::$(tr '\n' ' ' < sides.txt)"
+
+      - name: Publish CPU trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-trials
+          path: cpu-trials/
+          if-no-files-found: error
+
       # Evidence only: there is no pass/fail budget for tick cost.
       - name: Measure tick cost
         run: |

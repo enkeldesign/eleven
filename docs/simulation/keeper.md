@@ -32,6 +32,8 @@ This follows the brief's architecture: the simulation is observed, perception gi
 - **Prediction (INV-13).** `BallFlight` is the simulation's own ball step, its integration and the goal's frame ([goal.md](goal.md)). The step moves a ball no keeper meets with it, and the brain predicts with it. `KeeperBrainTests` shows the two agree bit for bit on a spinning, lofted shot that meets the post.
 - **The driver.** `KeeperControllers.Append` runs each keeper's brain before a step and appends his command, owned by his controller, beside the human's. The host records his commands with the player's (recording format 4 adds `Command.Dive`). So replays, the recording check and feel captures never run a brain.
 
+**In a match** each keeper guards his own goal, and perceives the pitch from it: the goal he guards is always on +x in his observation (#82, [sides.md](sides.md)).
+
 ## Phases (INV-12)
 
 The phases are authoritative state, timed by the step after kicks; the brain can ask but never skip one.
