@@ -26,7 +26,7 @@ The brain (`OutfieldBrain`) still decides on the footballer's own observation al
 | Rule | What it does |
 | --- | --- |
 | **One at the ball** | Of two teammates, the one who reaches the ball first by its own flight (INV-13) goes for it. So a pass's receiver goes to meet it while the passer lets it go. On a tie, the one further toward +y. Only the nearer of the two carries. |
-| **Support in attack** | With a teammate on the ball: a passing lane 6 m ahead of him and 10 m across, toward the middle, inside the touchlines. |
+| **Support in attack** | With a teammate on the ball: a passing lane 6 m ahead of him and 10 m across, toward the middle, inside the touchlines. Alongside him (within 5 m), he breaks wide on a diagonal first, aiming 4 m ahead of where he is: making for a place ahead of a carrier who runs at his own speed, he would stay at his shoulder (#94). |
 | **Marking in defence** | Second to the ball when the opponents have it: 2.5 m goal-side of the other opponent; with none in sight, 10 m goal-side of the ball. |
 | **Passing** | Pressed (an opponent within 6 m), with an open teammate (no opponent within 4 m of him) inside 0.9 rad of his heading: a quick pass. It goes through the footballer's own quick pass (#38), with his own perception and weight. |
 | **Waiting** | While a keeper holds the ball, two teammates take the waiting spot's two sides. |
@@ -40,11 +40,13 @@ At one a side none of these applies, so the 1v1 references don't move.
 | | |
 | --- | --- |
 | Finished | 12 of 12 |
-| Goals | 77 |
-| Passes | 49, 22 reaching a teammate |
-| The ball changing sides | 563 |
-| Mean spacing between teammates | 19.9 m |
-| Longest stretch with a side's outfielders within 2 m | 3.5 s |
+| Goals | 89 |
+| Passes | 59, 29 reaching a teammate |
+| The ball changing sides | 580 |
+| Mean spacing between teammates | 19.8 m |
+| Longest stretch with a side's outfielders within 2 m | 2.6 s |
+
+Since #94: headers and volleys, and the supporter's diagonal break. Before, 77 goals; 49 passes, 22 reaching a teammate; 563 changes of side; 19.9 m; 3.5 s.
 
 Before the side rules, both teammates chased the ball, and stood bunched for up to 29 s at a time.
 
