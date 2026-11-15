@@ -515,10 +515,7 @@ namespace Eleven.Host
 
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
-                    () => ReadStored(PresetsKey), text =>
-                    {
-                        if (!WriteStored(PresetsKey, text)) _hud?.ShowStatus("This device wouldn't keep the preset.");
-                    }, () => _buildId);
+                    () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -566,7 +563,13 @@ namespace Eleven.Host
             if (!Layout().SamePlaces(_layout)) UpdateLayout(true);
         }
 
-        private HudLayout Layout() => HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, _hud?.Needs);
+        private HudLayout Layout()
+        {
+            // An action is at least 44 pt high on any screen (#31).
+            HudNeeds needs = _hud?.Needs ?? new HudNeeds();
+            needs.Target = 44f * (_ui != null ? _ui.PixelsPerPoint : 1f);
+            return HudLayout.For(Screen.width, Screen.height, SafeArea(), _resultLines, needs);
+        }
 
         // The screen's safe area, in pixels with the origin at the bottom left, less any insets
         // ?safe= asks to try (#31).

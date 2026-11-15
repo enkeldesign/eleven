@@ -572,13 +572,14 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         // reach without scrolling, and room for the knobs.
         const css = page.viewportSize();
         const wantWide = css.height < 480 && css.width > css.height;
+        const wanted = wantWide ? 'wide' : css.height < 720 ? 'compact' : 'stacked';
         const fromBench = logs.length;
         const openedL = await openBench(2, [], false);
         const reach = (await waitForLog(/ELEVEN bench reach arranged=(\w+) clipped=(\d+) names=(\S*) list=([\d.]+)x([\d.]+)/, 10_000, fromBench))?.match ?? null;
         const targets = (await waitForLog(/ELEVEN bench targets=(\d+) smallest=([\d.]+) smallestName=(\S+) overflow=(\S+)/, 5_000, fromBench))?.match ?? null;
         check('the bench is arranged for the screen, with every switch, tab and action in reach',
-          !!reach && reach[1] === (wantWide ? 'wide' : 'stacked') && reach[2] === '0' && Number(reach[5]) >= 100 && !!targets && Number(targets[2]) >= 44 && targets[4] === 'none',
-          `${reach ? reach[0].replace('ELEVEN bench reach ', '') : 'no reach line'}; ${targets ? targets[0].replace('ELEVEN bench ', '') : 'no targets line'}; wanted ${wantWide ? 'wide' : 'stacked'} at ${css.width}x${css.height} pt`);
+          !!reach && reach[1] === wanted && reach[2] === '0' && Number(reach[5]) >= 100 && !!targets && Number(targets[2]) >= 44 && targets[4] === 'none',
+          `${reach ? reach[0].replace('ELEVEN bench reach ', '') : 'no reach line'}; ${targets ? targets[0].replace('ELEVEN bench ', '') : 'no targets line'}; wanted ${wanted} at ${css.width}x${css.height} pt`);
         await page.screenshot({ path: path.join(outDir, `${name}-bench.png`), timeout: 60_000 }).catch(() => {});
 
         // Through the bench: the Touch tab, its first knob in view, and a live switch to B and back.
@@ -1500,6 +1501,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       await page.keyboard.type('bad/name');
       if (shelf.line) await tap(at(...point(shelf.line[4])));
       const refused = await waitForLog(/ELEVEN bench preset refused (.*)/, 5_000, fromSave);
+      // A refused save returns to the name with it selected, so typing replaces it. Back on the
+      // field first: the press on Save took the focus.
+      if (shelf.line) await tap(at(...point(shelf.line[3])));
+      await page.keyboard.press('Control+A');
+      await page.keyboard.press('End');
       for (let i = 0; i < 'bad/name'.length; i++) await page.keyboard.press('Backspace');
       fromSave = logs.length;
       await page.keyboard.type('Smoke 1');
@@ -1517,7 +1523,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       if (first.open) await tap(at(...point(first.open[4])));
       const appliedReference = await waitForLog(/ELEVEN bench applied changes=(\d+) preset=(\S+) config=([0-9a-f]{16}) start=([0-9a-f]{16})/, 5_000, fromLoad);
       check('TECHNICAL REFERENCE restores the reference values',
-        !!loadedReference && loadedReference.match[1] === 'TECHNICAL_REFERENCE' && loadedReference.match[2] === '2' && !!appliedReference && appliedReference.match[1] === '0'
+        !!loadedReference && loadedReference.match[1] === 'TECHNICAL_REFERENCE' && loadedReference.match[2] === '2' && !!appliedReference && appliedReference.match[1] === '2'
           && appliedReference.match[2] === 'technical-reference' && appliedReference.match[3] === knobsLine?.[3] && appliedReference.match[4] === knobsLine?.[4],
         `${loadedReference ? loadedReference.match[0].replace('ELEVEN bench ', '') : 'no loaded line'}; ${appliedReference ? appliedReference.match[0].replace('ELEVEN bench ', '') : 'no applied line'}; at boot config ${knobsLine?.[3]} start ${knobsLine?.[4]}`);
 

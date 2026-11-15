@@ -198,6 +198,25 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_keeper_tool_measures_the_keeper_it_is_given_as_the_bench_profile()
+        {
+            SimConfig config = new SimConfig();
+            List<KeeperShot> plain = KeeperShots.Characterise(config);
+            Assert.DoesNotContain(plain, s => s.Profile == "bench");
+
+            KeeperCapabilities quick = KeeperCapabilities.Reference.With("diveSpeed", KeeperCapabilities.Reference.DiveSpeed + 2);
+            List<KeeperShot> given = KeeperShots.Characterise(config, quick);
+            Assert.Equal(plain.Count * 3 / 2, given.Count);
+            Assert.Equal(KeeperShots.KeyNumbers(plain), KeeperShots.KeyNumbers(given.Where(s => s.Profile != "bench").ToList()));
+
+            // The bench profile is that keeper: given the reference keeper, it repeats the reference rows.
+            List<KeeperShot> same = KeeperShots.Characterise(config, KeeperCapabilities.Reference);
+            Assert.Equal(
+                same.Where(s => s.Profile == "reference").Select(s => s.Outcome),
+                same.Where(s => s.Profile == "bench").Select(s => s.Outcome));
+        }
+
+        [Fact]
         public void The_shelf_saves_recalls_replaces_and_deletes_by_name()
         {
             var shelf = new PresetShelf();

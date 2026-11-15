@@ -124,6 +124,27 @@ namespace Eleven.Simulation.Tests
             Assert.True(jog.After.All(s => Separation(s) <= config.ControlReach + 0.15));
         }
 
+        [Theory]
+        [InlineData(0.0, 0.0)]    // a ball at rest in his path
+        [InlineData(-8.0, 0.0)]   // a pass coming at him
+        [InlineData(0.0, 6.0)]    // a ball rolling across him
+        public void A_first_touch_on_a_ball_he_is_not_sprinting_with_never_pushes(double ballVx, double ballVy)
+        {
+            // Already at a sprint, he meets the ball 12 m on: a receiving touch, not a push. Once it
+            // rolls his way, his later touches push.
+            SimConfig config = Free(1.5);
+            SimState start = TestWorld.State(config, new Vec3(12, 0, config.BallRadius));
+            start.Ball.Velocity = new Vec3(ballVx, ballVy, 0);
+            start.Ball.Position = new Vec3(12 - ballVx * 1.6, -ballVy * 1.6, config.BallRadius);
+            start.Players[0].Velocity = new Vec2(start.Players[0].Capabilities.MaxSpeed, 0);
+            Run run = Play(config, start, Sprint, 8);
+
+            List<int> touches = run.TicksOf(SimEventKind.Touched);
+            Assert.NotEmpty(touches);
+            Assert.DoesNotContain(run.Events[touches[0]], e => e.Kind == SimEventKind.Pushed);
+            if (ballVy == 0) Assert.True(run.Count(SimEventKind.Pushed) > 0, "he never pushed once he had it");
+        }
+
         [Fact]
         public void A_kick_connects_just_after_a_push_and_misses_in_the_middle_of_the_chase()
         {

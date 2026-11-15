@@ -9,7 +9,7 @@ Issue #31. ELEVEN is laid out for a phone and a tablet in both orientations. Nei
 - **The safe area.** Every control, HUD action and panel is inside it, so none sits under a notch or a home indicator. The sheets (the test bench and the note sheet) add the screen's unsafe edges to their margins.
 - **The stick zone** is on the left and **the right-hand control area** on the right, in both orientations. In portrait they share the band under the play area. In landscape they are the columns either side of it.
 - **The play area** is what the controls and the HUD's actions leave uncovered. The camera frames the play inside it, not inside the whole screen.
-- **Bounded controls** are at least 44 × 44 pt: the stick, A's ACTION disc, B's PASS disc and KICK marker, C's FIRE disc, and the HUD's actions. The gesture areas are larger still.
+- **Bounded controls** are at least 44 × 44 pt: the stick, A's ACTION disc, B's PASS disc and KICK marker, C's FIRE disc, and the HUD's actions. The gesture areas are larger still. The HUD's actions take 1.1 units of height, and never less than 44 pt, which is more than 1.1 units on a phone under 360 pt on its shorter side.
 
 ## The camera in the play area
 
@@ -34,7 +34,7 @@ Issue #31. ELEVEN is laid out for a phone and a tablet in both orientations. Nei
 
 ## The test bench in each orientation
 
-The bench sheet (`BenchSheet.Arrange`) has two arrangements, and takes the one the screen calls for when it opens and whenever the screen changes while it is open.
+The bench sheet (`BenchSheet.Arrange`) has three arrangements, and takes the one the screen calls for (`BenchSheet.ArrangementFor`) when it opens and whenever the screen changes while it is open.
 
 - **Stacked,** where there is height for it: the state, the live switches, the tabs, the knob list and the actions, one over the other. The list takes what is left.
 - **Wide,** on a screen under 480 pt high and wider than it is tall (a landscape phone): three columns.
@@ -43,6 +43,8 @@ The bench sheet (`BenchSheet.Arrange`) has two arrangements, and takes the one t
   - The knob list, at the sheet's full height.
 
   The title goes and the switches' labels shorten, so every switch, tab and action is in reach without scrolling.
+- **Compact,** on a screen under 720 pt high that isn't wide (every phone in portrait): the title goes, the switches' labels shorten, and the lines saying what is running and pending scroll with the knob list, after the knobs. The live switches, the tabs and the actions stay put. Under 600 pt high (a compact phone) the live switches scroll after the knobs too.
+- **Only the knob list gives way** when a sheet is short of room. The title, the labels, the switches, the tabs and the actions keep their sizes.
 - **Before #31** a landscape phone got the stacked arrangement, whose fixed rows took the sheet's whole height. The knob list had no room, and the Touch tab's A / B / C choice couldn't be reached.
 - **The run goes on while the bench is open,** so a live switch can be judged at once. No play input can happen by accident: opening the bench cancels gestures in progress, its scrim covers the whole screen, and a press on the UI never reaches the match controls. The note sheet is different: play waits while it is open.
 
@@ -75,7 +77,7 @@ For each one:
 - the play area is clear of the stick zone, the right-hand area and the HUD's actions, and at least 150 pt on each side;
 - bounded controls are at least 44 × 44 pt;
 - the footballer and the ball are in the play area, at least 12 pt and 4 pt across, with at least 7 m ahead;
-- the bench takes the arrangement the screen calls for, with no switch, tab or action clipped and at least 100 pt of knob list;
+- the bench takes the arrangement the screen calls for, with no switch, tab or action clipped and at least 100 pt of knob list (in the compact arrangement the running and pending lines scroll with the list);
 - through the bench: the Touch tab opens, its first knob is on screen, and the controls switch to B and back with no step;
 - the screen turns: the layout follows, every control is inside the new safe area, and the run goes on from the tick it was at.
 
