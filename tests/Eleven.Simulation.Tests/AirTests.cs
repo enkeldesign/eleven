@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
+using Eleven.Simulation.Harness;
 using static Eleven.Simulation.Tests.TestWorld;
 
 namespace Eleven.Simulation.Tests
@@ -138,6 +139,52 @@ namespace Eleven.Simulation.Tests
 
             Assert.Equal(0, Spread(1), 12);
             Assert.True(Spread(0) > 0.05);
+        }
+
+        // A ball lofted at a CPU outfielder standing at the centre spot, from 14 m up the pitch:
+        // the events of the next two seconds, the brains running.
+        private static List<SimEvent> LoftedAt(double speed, double lift)
+        {
+            SimConfig config = SpikeScenario.Config();
+            SimState s = OneVOne.Match(config, seed: 9, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            s.Players[0].Position = Vec2.Zero;
+            s.Players[2].Position = new Vec2(30, 25);
+            s.Ball.Position = new Vec3(14, 0, config.BallRadius);
+            s.Ball.Velocity = new Vec3(-speed, 0, lift);
+            var sim = new Simulator(config, s);
+            var events = new List<SimEvent>();
+            for (int i = 0; i < 2 * 60; i++)
+            {
+                var commands = new List<Command>();
+                KeeperControllers.Append(sim, commands);
+                CpuControllers.Append(sim, commands);
+                sim.Step(commands, events);
+            }
+
+            return events;
+        }
+
+        [Fact]
+        public void A_cpu_outfielder_heads_and_volleys_a_ball_that_comes_to_him_in_the_air()
+        {
+            int headed = 0, volleyed = 0;
+            for (double speed = 10; speed <= 16; speed += 2)
+            {
+                for (double lift = 2; lift <= 8; lift += 0.5)
+                {
+                    List<SimEvent> e = LoftedAt(speed, lift);
+                    headed += e.Count(x => x.Kind == SimEventKind.Headed && x.Subject == OneVOne.HomePlayer);
+                    volleyed += e.Count(x => x.Kind == SimEventKind.Volleyed && x.Subject == OneVOne.HomePlayer);
+                }
+            }
+
+            Assert.True(headed > 0, "he never headed it");
+            Assert.True(volleyed > 0, "he never volleyed it");
         }
 
         [Fact]
