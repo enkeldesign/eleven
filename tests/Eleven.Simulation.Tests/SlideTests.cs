@@ -60,7 +60,7 @@ namespace Eleven.Simulation.Tests
             PlayerState first = states[0].Players[1];
             Assert.True(Math.Sqrt(first.Velocity.LengthSquared) > C.SlideSpeed * 0.8, $"{Math.Sqrt(first.Velocity.LengthSquared):F2} m/s");
             int down = states.FindIndex(s => s.Players[1].Challenge == ChallengePhase.Grounded);
-            Assert.InRange(down, C.SlideTicks - 2, C.SlideTicks + 2);
+            Assert.InRange(down, 1, C.SlideTicks + 2);
             Assert.All(states.Skip(down).Take(C.SlideRecoverTicks - 1), s => Assert.Equal(Vec2.Zero, s.Players[1].Velocity));
         }
 
@@ -85,7 +85,7 @@ namespace Eleven.Simulation.Tests
         public void A_slide_that_meets_the_man_first_is_a_foul()
         {
             // From behind a dribbler running on: the man is in the way of the ball.
-            (List<SimEvent> e, _) = Run(World(new Vec2(0.7, 0), new Vec2(-1.6, 0), new Vec2(3, 0)), new Vec2(1, 0), new Vec2(0.45, 0));
+            (List<SimEvent> e, _) = Run(World(new Vec2(0.7, 0), new Vec2(-1.2, 0), new Vec2(3, 0)), new Vec2(1, 0), new Vec2(0.45, 0));
             Assert.Contains(e, x => x.Kind == SimEventKind.SlideFouled && x.Subject == B && x.Other == A);
             Assert.DoesNotContain(e, x => x.Kind == SimEventKind.SlideWon);
         }

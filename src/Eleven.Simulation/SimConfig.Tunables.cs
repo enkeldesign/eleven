@@ -150,7 +150,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "shieldRange", "m", 0.5, 5, 1.5, 2.5),
             new TunableParameter(TunableParameter.ControlGroup, "shieldHold", "probability", 0, 1, 0.5, 0.75),
             new TunableParameter(TunableParameter.ControlGroup, "slideRange", "m", 1, 6, 2, 3),
-            new TunableParameter(TunableParameter.ControlGroup, "slideSpeed", "m/s", 3, 12, 6, 8),
+            new TunableParameter(TunableParameter.ControlGroup, "slideSpeed", "m/s", 3, 12, 7, 9),
             new TunableParameter(TunableParameter.ControlGroup, "slideTime", "s", 0.1, 1, 0.3, 0.5),
             new TunableParameter(TunableParameter.ControlGroup, "slideReach", "m", 0.3, 1.5, 0.7, 1.1),
             new TunableParameter(TunableParameter.ControlGroup, "slideRecover", "s", 0.2, 3, 0.8, 1.5),

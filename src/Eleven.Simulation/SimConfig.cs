@@ -109,7 +109,7 @@ namespace Eleven.Simulation
             double shieldRange = 2.0,
             double shieldHold = 0.6,
             double slideRange = 3.0,
-            double slideSpeed = 7.0,
+            double slideSpeed = 8.0,
             double slideTime = 0.4,
             double slideReach = 0.9,
             double slideRecover = 1.0)
@@ -581,7 +581,7 @@ namespace Eleven.Simulation
         /// <summary>How far from an opponent's ball a kick intent without the ball becomes a slide tackle (#98).</summary>
         public double SlideRange { get; }
 
-        /// <summary>How fast a slide carries the footballer along its line at its start (#98), slowing to a stop as it ends.</summary>
+        /// <summary>How fast a slide carries the footballer along its line at its start (#98), slowing to half of it as it ends: 2.4 m in 0.4 s at the reference.</summary>
         public double SlideSpeed { get; }
 
         /// <summary>How long a slide lasts (#98).</summary>

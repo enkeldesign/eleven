@@ -322,6 +322,20 @@ namespace Eleven.Simulation
                 return;
             }
 
+            if (player.Challenge == ChallengePhase.Slide)
+            {
+                // A slide (#98) carries him along its line, slowing from slideSpeed to half of it as it ends.
+                player.Velocity = player.ChallengeLine * (Config.SlideSpeed * (0.5 + 0.5 * player.ChallengeTicks / Config.SlideTicks));
+                player.Position += player.Velocity * dt;
+                return;
+            }
+
+            if (player.Challenge == ChallengePhase.Grounded)
+            {
+                player.Velocity = Vec2.Zero;
+                return;
+            }
+
             if (player.Challenge == ChallengePhase.Commit) move = player.ChallengeLine;
             else if (player.Challenge == ChallengePhase.Recover) move = Vec2.Zero;
             KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
@@ -348,6 +362,73 @@ namespace Eleven.Simulation
 
         /// <summary>m. A shielded ball this close to its place behind the carrier, and at rest with him, needs no touch (#97).</summary>
         public const double ShieldSettled = 0.15;
+
+        /// <summary>
+        /// Whether a kick intent is a slide tackle (#98): he hasn't the ball and can't kick it (out of
+        /// his kick reach, or not at his feet), and an opponent controls a ball on the ground within
+        /// slideRange of him.
+        /// </summary>
+        private bool SlideWanted(in PlayerState player)
+        {
+            BallState ball = _state.Ball;
+            if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight || KeeperOf(player.Id) >= 0) return false;
+            double distance = (ball.Position.Horizontal - player.Position).LengthSquared;
+            if (distance <= Config.KickReach * Config.KickReach || distance > Config.SlideRange * Config.SlideRange) return false;
+            int controller = ControllerOfBall();
+            return controller >= 0 && _state.Players[controller].TeamId != player.TeamId;
+        }
+
+        /// <summary>m. The man a slide meets: his body, a fraction of the slide's reach (#98).</summary>
+        private double SlideBodyReach => 0.5 * Config.SlideReach;
+
+        // One step of a slide (#98): it meets the ball, or the man who has it, whichever it reaches
+        // first; the ball first wins it, knocked on along the line; the man first is a foul, which
+        // #99 adjudicates. Meeting neither by its end, it misses. Either way he goes to ground.
+        private void StepSlide(ref PlayerState player, long tick, List<SimEvent> events)
+        {
+            ref BallState ball = ref _state.Ball;
+            int had = ControllerOfBall();
+            bool free = ball.HeldBy == 0 && ball.Position.Z <= Config.KickMaxBallHeight && !_kickConnected && !_challengeWon;
+            double toBall = (ball.Position.Horizontal - player.Position).LengthSquared;
+            bool ballMet = free && toBall <= Config.SlideReach * Config.SlideReach;
+            double toMan = double.PositiveInfinity;
+            if (had >= 0 && _state.Players[had].TeamId != player.TeamId) toMan = (_state.Players[had].Position - player.Position).LengthSquared;
+            bool manMet = toMan <= SlideBodyReach * SlideBodyReach;
+
+            if (manMet && !(ballMet && toBall <= toMan))
+            {
+                events.Add(new SimEvent(tick, SimEventKind.SlideFouled, player.Id, other: _state.Players[had].Id));
+            }
+            else if (ballMet)
+            {
+                if (ball.AttachedTo != 0) Release(tick, events);
+                Vec2 line = player.ChallengeLine;
+                ball.Velocity = new Vec3(line.X * Config.ChallengeImpulse, line.Y * Config.ChallengeImpulse, 0);
+                ball.Spin = Vec3.Zero;
+                ball.LastPlayedBy = player.Id;
+                for (int k = 0; k < _state.Players.Length; k++)
+                {
+                    _state.Players[k].AftertouchTicks = 0;
+                    _state.Players[k].Turning = false;
+                }
+
+                if (had >= 0) _state.Players[had].TouchCooldown = Config.TouchIntervalTicks;
+                _challengeWon = true;
+                events.Add(new SimEvent(tick, SimEventKind.SlideWon, player.Id, other: had >= 0 ? _state.Players[had].Id : 0));
+            }
+            else if (--player.ChallengeTicks > 0)
+            {
+                return;
+            }
+            else
+            {
+                events.Add(new SimEvent(tick, SimEventKind.SlideMissed, player.Id));
+            }
+
+            player.Challenge = ChallengePhase.Grounded;
+            player.ChallengeTicks = Config.SlideRecoverTicks;
+            player.Velocity = Vec2.Zero;
+        }
 
         /// <summary>
         /// Whether a carrier shields (#97): he has the ball, moves slower than shieldSpeed of his top
@@ -488,6 +569,20 @@ namespace Eleven.Simulation
                 // A manual kick, which also wins over a quick pass in the same command.
                 KickIntent intent = command.Value.Kick.Value;
                 Vec2 d = intent.Direction;
+
+                // Without the ball, near an opponent's (#98): the same intent is a slide tackle.
+                if (SlideWanted(player))
+                {
+                    Vec2 line = d.X == 0 && d.Y == 0 ? new Vec2(SimMath.Cos(player.Heading), SimMath.Sin(player.Heading)) : d * (1 / SimMath.Sqrt(d.LengthSquared));
+                    player.Challenge = ChallengePhase.Slide;
+                    player.ChallengeTicks = Config.SlideTicks;
+                    player.ChallengeLine = line;
+                    player.Velocity = line * Config.SlideSpeed;
+                    player.Turning = false;
+                    events.Add(new SimEvent(tick, SimEventKind.SlideStarted, player.Id));
+                    return;
+                }
+
                 StartWindUp(ref player, d.X == 0 && d.Y == 0 ? player.Heading : SimMath.Atan2(d.Y, d.X), intent.Strength, intent.Loft, 0);
             }
             else if (command.HasValue && ready && command.Value.QuickPass)
@@ -802,6 +897,20 @@ namespace Eleven.Simulation
             {
                 ref PlayerState player = ref _state.Players[i];
                 ref BallState ball = ref _state.Ball;
+                if (player.Challenge == ChallengePhase.Slide)
+                {
+                    StepSlide(ref player, tick, events);
+                    continue;
+                }
+
+                if (player.Challenge == ChallengePhase.Grounded)
+                {
+                    if (--player.ChallengeTicks > 0) continue;
+                    player.Challenge = ChallengePhase.Ready;
+                    player.ChallengeLine = Vec2.Zero;
+                    continue;
+                }
+
                 if (player.Challenge == ChallengePhase.Recover)
                 {
                     if (--player.ChallengeTicks > 0) continue;
