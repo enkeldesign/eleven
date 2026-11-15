@@ -1598,13 +1598,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       let shelf = await presetsLine(first.from);
       // Save: a name the build refuses, then one it takes.
       let fromSave = logs.length;
+      // The field takes the focus a frame or two after the tap: typing sooner goes nowhere.
       if (shelf.line) await tap(at(...point(shelf.line[3])));
+      await sleep(500);
       await page.keyboard.type('bad/name');
       if (shelf.line) await tap(at(...point(shelf.line[4])));
       const refused = await waitForLog(/ELEVEN bench preset refused (.*)/, 5_000, fromSave);
       // A refused save returns to the name with it selected, so typing replaces it. Back on the
       // field first: the press on Save took the focus.
       if (shelf.line) await tap(at(...point(shelf.line[3])));
+      await sleep(500);
       await page.keyboard.press('Control+A');
       await page.keyboard.press('End');
       for (let i = 0; i < 'bad/name'.length; i++) await page.keyboard.press('Backspace');
