@@ -156,6 +156,11 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "slideRecover", "s", 0.2, 3, 0.8, 1.5),
             new TunableParameter(TunableParameter.ControlGroup, "advantageTime", "s", 0, 6, 2, 4),
             new TunableParameter(TunableParameter.ControlGroup, "challengeFoulReach", "m", 0, 1, 0.4, 0.6),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueFrom", "fraction of top speed", 0.3, 1, 0.6, 0.8),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueDrain", "per s at top speed", 0, 0.1, 0.008, 0.02),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueRecover", "per s at rest", 0, 0.2, 0.01, 0.04),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueFloor", "fraction", 0.5, 1, 0.8, 0.9),
+            new TunableParameter(TunableParameter.ControlGroup, "halfTimeRecovery", "fraction", 0, 1, 0.3, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -243,6 +248,11 @@ namespace Eleven.Simulation
             "slideRecover" => SlideRecover,
             "advantageTime" => AdvantageTime,
             "challengeFoulReach" => ChallengeFoulReach,
+            "fatigueFrom" => FatigueFrom,
+            "fatigueDrain" => FatigueDrain,
+            "fatigueRecover" => FatigueRecover,
+            "fatigueFloor" => FatigueFloor,
+            "halfTimeRecovery" => HalfTimeRecovery,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -292,6 +302,7 @@ namespace Eleven.Simulation
             double shieldSpeed = ShieldSpeed, shieldRange = ShieldRange, shieldHold = ShieldHold;
             double slideRange = SlideRange, slideSpeed = SlideSpeed, slideTime = SlideTime, slideReach = SlideReach, slideRecover = SlideRecover;
             double advantageTime = AdvantageTime, challengeFoulReach = ChallengeFoulReach;
+            double fatigueFrom = FatigueFrom, fatigueDrain = FatigueDrain, fatigueRecover = FatigueRecover, fatigueFloor = FatigueFloor, halfTimeRecovery = HalfTimeRecovery;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -370,6 +381,11 @@ namespace Eleven.Simulation
                     case "slideRecover": slideRecover = o.Value; break;
                     case "advantageTime": advantageTime = o.Value; break;
                     case "challengeFoulReach": challengeFoulReach = o.Value; break;
+                    case "fatigueFrom": fatigueFrom = o.Value; break;
+                    case "fatigueDrain": fatigueDrain = o.Value; break;
+                    case "fatigueRecover": fatigueRecover = o.Value; break;
+                    case "fatigueFloor": fatigueFloor = o.Value; break;
+                    case "halfTimeRecovery": halfTimeRecovery = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -477,7 +493,12 @@ namespace Eleven.Simulation
                 slideReach: slideReach,
                 slideRecover: slideRecover,
                 advantageTime: advantageTime,
-                challengeFoulReach: challengeFoulReach);
+                challengeFoulReach: challengeFoulReach,
+                fatigueFrom: fatigueFrom,
+                fatigueDrain: fatigueDrain,
+                fatigueRecover: fatigueRecover,
+                fatigueFloor: fatigueFloor,
+                halfTimeRecovery: halfTimeRecovery);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -569,7 +590,12 @@ namespace Eleven.Simulation
             slideReach: SlideReach,
             slideRecover: SlideRecover,
             advantageTime: AdvantageTime,
-            challengeFoulReach: ChallengeFoulReach);
+            challengeFoulReach: ChallengeFoulReach,
+            fatigueFrom: FatigueFrom,
+            fatigueDrain: FatigueDrain,
+            fatigueRecover: FatigueRecover,
+            fatigueFloor: FatigueFloor,
+            halfTimeRecovery: HalfTimeRecovery);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

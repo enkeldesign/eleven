@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 21;
+        public const int FormatVersion = 22;
 
         public SimConfig(
             int tickRate = 60,
@@ -114,7 +114,12 @@ namespace Eleven.Simulation
             double slideReach = 0.9,
             double slideRecover = 1.0,
             double advantageTime = 3.0,
-            double challengeFoulReach = 0.45)
+            double challengeFoulReach = 0.45,
+            double fatigueFrom = 0.7,
+            double fatigueDrain = 0.012,
+            double fatigueRecover = 0.02,
+            double fatigueFloor = 0.85,
+            double halfTimeRecovery = 0.5)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -208,6 +213,11 @@ namespace Eleven.Simulation
             SlideRecover = slideRecover;
             AdvantageTime = advantageTime;
             ChallengeFoulReach = challengeFoulReach;
+            FatigueFrom = fatigueFrom;
+            FatigueDrain = fatigueDrain;
+            FatigueRecover = fatigueRecover;
+            FatigueFloor = fatigueFloor;
+            HalfTimeRecovery = halfTimeRecovery;
 
             CheckTunableRanges();
 
@@ -603,6 +613,21 @@ namespace Eleven.Simulation
         /// <summary>m. A standing challenge that ends this close to the man it challenged, missing the ball, is a foul (#99).</summary>
         public double ChallengeFoulReach { get; }
 
+        /// <summary>Above this share of his top speed a footballer's energy drains, below it it recovers (#100).</summary>
+        public double FatigueFrom { get; }
+
+        /// <summary>How fast energy drains at full speed, at the reference stamina (#100).</summary>
+        public double FatigueDrain { get; }
+
+        /// <summary>How fast energy recovers standing, at the reference stamina (#100).</summary>
+        public double FatigueRecover { get; }
+
+        /// <summary>The share of his top speed and acceleration a footballer keeps with no energy left (#100).</summary>
+        public double FatigueFloor { get; }
+
+        /// <summary>The share of a footballer's lost energy half-time gives back (#100).</summary>
+        public double HalfTimeRecovery { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -741,7 +766,12 @@ namespace Eleven.Simulation
                 slideReach: r.ReadDouble(nameof(SlideReach)),
                 slideRecover: r.ReadDouble(nameof(SlideRecover)),
                 advantageTime: r.ReadDouble(nameof(AdvantageTime)),
-                challengeFoulReach: r.ReadDouble(nameof(ChallengeFoulReach)));
+                challengeFoulReach: r.ReadDouble(nameof(ChallengeFoulReach)),
+                fatigueFrom: r.ReadDouble(nameof(FatigueFrom)),
+                fatigueDrain: r.ReadDouble(nameof(FatigueDrain)),
+                fatigueRecover: r.ReadDouble(nameof(FatigueRecover)),
+                fatigueFloor: r.ReadDouble(nameof(FatigueFloor)),
+                halfTimeRecovery: r.ReadDouble(nameof(HalfTimeRecovery)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -840,6 +870,11 @@ namespace Eleven.Simulation
             w.WriteDouble(SlideRecover, nameof(SlideRecover));
             w.WriteDouble(AdvantageTime, nameof(AdvantageTime));
             w.WriteDouble(ChallengeFoulReach, nameof(ChallengeFoulReach));
+            w.WriteDouble(FatigueFrom, nameof(FatigueFrom));
+            w.WriteDouble(FatigueDrain, nameof(FatigueDrain));
+            w.WriteDouble(FatigueRecover, nameof(FatigueRecover));
+            w.WriteDouble(FatigueFloor, nameof(FatigueFloor));
+            w.WriteDouble(HalfTimeRecovery, nameof(HalfTimeRecovery));
             return w.ToArray();
         }
 

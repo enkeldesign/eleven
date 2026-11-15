@@ -2020,6 +2020,7 @@ namespace Eleven.Simulation
 
                 // Kick state this config could have produced (#37). NaN fails the encoding above.
                 InRange(owner, nameof(p.Slot), p.Slot, MaxSlot);
+                if (!(p.Fatigue >= 0 && p.Fatigue <= 1)) throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: fatigue {p.Fatigue} is outside [0, 1].");
                 InRange(owner, nameof(p.KickCooldown), p.KickCooldown, config.KickCooldownTicks);
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);

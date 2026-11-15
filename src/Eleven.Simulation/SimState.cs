@@ -79,6 +79,7 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.OwnerControllerId);
                 w.WriteInt32(player.TeamId);
                 w.WriteInt32(player.Slot);
+                w.WriteDouble(player.Fatigue, "Player.Fatigue");
                 w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
                 w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
                 w.WriteDouble(player.Capabilities.KickPower, "Player.Capabilities.KickPower");
@@ -89,6 +90,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
                 w.WriteDouble(player.Capabilities.Heading, "Player.Capabilities.Heading");
                 w.WriteDouble(player.Capabilities.Strength, "Player.Capabilities.Strength");
+                w.WriteDouble(player.Capabilities.Stamina, "Player.Capabilities.Stamina");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -224,6 +226,7 @@ namespace Eleven.Simulation
                     OwnerControllerId = r.ReadInt32(),
                     TeamId = r.ReadInt32(),
                     Slot = r.ReadInt32(),
+                    Fatigue = r.ReadDouble("Player.Fatigue"),
                     Capabilities = new PlayerCapabilities
                     {
                         MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
@@ -236,6 +239,7 @@ namespace Eleven.Simulation
                         Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
                         Heading = r.ReadDouble("Player.Capabilities.Heading"),
                         Strength = r.ReadDouble("Player.Capabilities.Strength"),
+                        Stamina = r.ReadDouble("Player.Capabilities.Stamina"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -594,6 +598,13 @@ namespace Eleven.Simulation
         /// whoever controls him.
         /// </summary>
         public int Slot;
+
+        /// <summary>
+        /// 0–1. How tired he is (#100): 0 fresh, as every new state has him, 1 spent. Running fast
+        /// tires him, running slowly rests him; it scales his top speed and acceleration down to
+        /// fatigueFloor.
+        /// </summary>
+        public double Fatigue;
 
         /// <summary>What this footballer can do. Read by the simulation, never changed by it.</summary>
         public PlayerCapabilities Capabilities;
