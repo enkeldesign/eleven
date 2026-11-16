@@ -8,9 +8,9 @@ Issue #110, M4: Law 3's substitutions, a simplification recorded here with each 
 
 ## The command
 
-A substitution is an owned command (INV-10): `Command.SubOff` and `SubOn`, the footballer who goes off and the substitute who comes on. Any controller of the side may give it. It is checked with the command and made at the end of the step, so it is recorded and replays (command recording format 7).
+A substitution is an owned command (INV-10): `Command.SubOff` and `SubOn`, the footballer who goes off and the substitute who comes on. Any controller of the side may give it. It is checked with the command and made at the start of the step, on the state it was checked on, so nothing later in the step can undo what was allowed: not a restart taken, nor the end of a break. It is recorded and replays (command recording format 7).
 
-It is refused, with the reason as the command's rejection:
+It is refused, with the reason as the command's rejection. When two of a side's controllers ask in one step and the first uses the last substitution, or the same substitute, the second is refused with its reason too; the rest of its command stands.
 
 | Rejection | When |
 | --- | --- |
@@ -66,7 +66,7 @@ Twelve CPU 11v11 matches under the reference config, at each `cpuSubFatigue`. Mi
 - Goals, passes and completion stay within the spread between thresholds.
 - These are untuned references.
 
-The 12-match 11v11 reference with substitutions: 20 goals, 518 passes, 275 completed, all finished.
+The 12-match 11v11 reference with substitutions: 19 goals, 533 passes, 285 completed, all finished.
 
 ## The host
 
@@ -80,6 +80,8 @@ The CPU side's manager runs in the host as in the harness.
 - at a stoppage the substitute takes the slot and the place, fresh, with his own capabilities;
 - the CPU, the human, a keeper and a taker each hand over;
 - refused in play, after full time, with five made, and in a fourth window; two in one stoppage use one window, and half-time uses none;
+- asked on half-time's last step, or on the step a restart is taken, it is still made;
+- two controllers asking in one step for the last substitution, or the same substitute: one made, one refused aloud;
 - only a footballer of the side goes off, and only an unused substitute of its bench comes on;
 - a footballer sent off isn't replaced; one taken off injured is, and his side is whole again;
 - the offside flags follow; the result counts; a snapshot and a recording restore.
