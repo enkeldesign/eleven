@@ -26,6 +26,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>Whether a shield holds off a challenge through the carrier (#97).</summary>
         Shield = 7,
+
+        /// <summary>The referee's reading of a foul's severity (#108).</summary>
+        Card = 8,
     }
 
     /// <summary>

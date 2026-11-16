@@ -147,6 +147,12 @@ namespace Eleven.Simulation
 
         /// <summary>An offside offence (#107). Subject: the footballer offside. <see cref="SimEvent.Other"/>: the side awarded the indirect free kick.</summary>
         Offside = 38,
+
+        /// <summary>A caution (#108). Subject: the footballer cautioned. <see cref="SimEvent.Other"/>: his cautions now.</summary>
+        Cautioned = 39,
+
+        /// <summary>A sending-off (#108). Subject: the footballer sent off.</summary>
+        SentOff = 40,
     }
 
     /// <summary>
@@ -187,7 +193,7 @@ namespace Eleven.Simulation
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
             : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0)
-                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched || Kind == SimEventKind.Offside ? $"{Tick} {Kind} {Subject} {Other}"
+                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched || Kind == SimEventKind.Offside || Kind == SimEventKind.Cautioned ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

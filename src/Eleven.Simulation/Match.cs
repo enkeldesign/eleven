@@ -132,11 +132,16 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 2;
+        public const int SchemaVersion = 3;
 
         public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
-            int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0)
+            int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0,
+            int homeCautions = 0, int awayCautions = 0, int homeSendingsOff = 0, int awaySendingsOff = 0)
         {
+            HomeCautions = homeCautions;
+            AwayCautions = awayCautions;
+            HomeSendingsOff = homeSendingsOff;
+            AwaySendingsOff = awaySendingsOff;
             HomeFouls = homeFouls;
             AwayFouls = awayFouls;
             HomePenalties = homePenalties;
@@ -178,13 +183,23 @@ namespace Eleven.Simulation
 
         public int AwayPenalties { get; }
 
+        /// <summary>Cautions each side was shown, and footballers each had sent off (schema 3, #108).</summary>
+        public int HomeCautions { get; }
+
+        public int AwayCautions { get; }
+
+        public int HomeSendingsOff { get; }
+
+        public int AwaySendingsOff { get; }
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
             var text = new StringBuilder();
             text.Append("eleven-result/").Append(SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\n",
-                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties));
+            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\ncautions={11}-{12}\nsendingsoff={13}-{14}\n",
+                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties,
+                HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
@@ -200,6 +215,7 @@ namespace Eleven.Simulation
         private readonly List<ResultGoal> _goals = new List<ResultGoal>();
         private int _restarts;
         private int _homeFouls, _awayFouls, _homePenalties, _awayPenalties;
+        private int _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff;
 
         public MatchResult? Result { get; private set; }
 
@@ -220,6 +236,19 @@ namespace Eleven.Simulation
                     if (side == after.Teams[0].Id) _homeFouls++;
                     else if (side == after.Teams[1].Id) _awayFouls++;
                 }
+                else if (e.Kind == SimEventKind.Cautioned || e.Kind == SimEventKind.SentOff)
+                {
+                    // The footballer's side (#108).
+                    int side = Array.Find(after.Players, p => p.Id == e.Subject).TeamId;
+                    bool home = side == after.Teams[0].Id;
+                    if (e.Kind == SimEventKind.Cautioned)
+                    {
+                        if (home) _homeCautions++;
+                        else _awayCautions++;
+                    }
+                    else if (home) _homeSendingsOff++;
+                    else _awaySendingsOff++;
+                }
                 else if (e.Kind == SimEventKind.RestartAwarded && e.Other == (int)RestartKind.Penalty)
                 {
                     if (e.Subject == after.Teams[0].Id) _homePenalties++;
@@ -229,7 +258,7 @@ namespace Eleven.Simulation
                 {
                     TeamState home = after.Teams[0], away = after.Teams[1];
                     Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts,
-                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties);
+                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties, _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff);
                 }
             }
         }
