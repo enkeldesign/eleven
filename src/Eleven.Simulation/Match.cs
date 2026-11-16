@@ -17,7 +17,10 @@ namespace Eleven.Simulation
     public sealed partial class Simulator
     {
         // Whether the match is between its halves or over: then the ball is dead.
-        private bool MatchPaused => _state.Match.Phase == MatchPhase.HalfTime || _state.Match.Phase == MatchPhase.FullTime;
+        private bool MatchPaused => MatchBreak || _state.Match.Phase == MatchPhase.FullTime;
+
+        // Whether the match is in a break between halves (#86, #111): half-time, or one of extra time's.
+        private bool MatchBreak => _state.Match.Phase == MatchPhase.HalfTime || _state.Match.Phase == MatchPhase.ExtraBreak || _state.Match.Phase == MatchPhase.ExtraHalfTime;
 
         private void StepMatch(long tick, List<SimEvent> events)
         {
@@ -26,8 +29,11 @@ namespace Eleven.Simulation
             {
                 case MatchPhase.FirstHalf:
                 case MatchPhase.SecondHalf:
+                case MatchPhase.ExtraFirstHalf:
+                case MatchPhase.ExtraSecondHalf:
                     if (_state.Restart.Phase != RestartPhase.Live) return;
-                    if (++m.ClockTicks < Config.HalfTicks) return;
+                    bool extra = m.Phase == MatchPhase.ExtraFirstHalf || m.Phase == MatchPhase.ExtraSecondHalf;
+                    if (++m.ClockTicks < (extra ? Config.ExtraTicks : Config.HalfTicks)) return;
                     _state.Ball.AttachedTo = 0;
 
                     // The whistle ends any kick under way: nothing is played until the next kick-off.
@@ -48,12 +54,50 @@ namespace Eleven.Simulation
                         for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].Fatigue *= 1 - Config.HalfTimeRecovery;
                         events.Add(new SimEvent(tick, SimEventKind.HalfTime, 0));
                     }
+                    else if (m.Phase == MatchPhase.SecondHalf && Config.Knockout >= 0.5 && Level())
+                    {
+                        // A knockout level after two halves (#111): a break, then extra time.
+                        m.Phase = MatchPhase.ExtraBreak;
+                        m.PhaseTicks = Config.HalfTimeTicks;
+                        CloseSubstitutionWindows();
+                        events.Add(new SimEvent(tick, SimEventKind.ExtraTime, 0));
+                    }
+                    else if (m.Phase == MatchPhase.ExtraFirstHalf)
+                    {
+                        m.Phase = MatchPhase.ExtraHalfTime;
+                        m.PhaseTicks = Config.HalfTimeTicks;
+                        CloseSubstitutionWindows();
+                    }
+                    else if (m.Phase == MatchPhase.ExtraSecondHalf && Level())
+                    {
+                        StartShootout(tick, events);
+                    }
                     else
                     {
                         m.Phase = MatchPhase.FullTime;
                         events.Add(new SimEvent(tick, SimEventKind.FullTime, 0));
                     }
 
+                    return;
+
+                case MatchPhase.ExtraBreak:
+                case MatchPhase.ExtraHalfTime:
+                {
+                    // Extra time's halves (#111): the ends change before each, and the side that
+                    // kicked off the match kicks off the first, the other the second.
+                    if (--m.PhaseTicks > 0) return;
+                    bool first = m.Phase == MatchPhase.ExtraBreak;
+                    for (int i = 0; i < _state.Teams.Length; i++) _state.Teams[i].AttackSign = -_state.Teams[i].AttackSign;
+                    m.Phase = first ? MatchPhase.ExtraFirstHalf : MatchPhase.ExtraSecondHalf;
+                    CloseSubstitutionWindows();
+                    m.ClockTicks = 0;
+                    events.Add(new SimEvent(tick, SimEventKind.ExtraTime, 0, other: first ? 1 : 2));
+                    Stop(RestartKind.KickOff, first ? m.FirstKickOff : Opponents(m.FirstKickOff), Vec2.Zero, tick, events);
+                    return;
+                }
+
+                case MatchPhase.Shootout:
+                    StepShootout(tick, events);
                     return;
 
                 case MatchPhase.HalfTime:
@@ -97,7 +141,8 @@ namespace Eleven.Simulation
             if (!state.Restart.On) throw new ArgumentException("A match needs its referee: the restart sequencer on.", nameof(state));
             if (Array.FindIndex(state.Teams, t => t.Id == m.FirstKickOff) < 0) throw new ArgumentException($"The first kick-off's side {m.FirstKickOff} isn't one of the two.", nameof(state));
             if (m.ClockTicks < 0 || m.ClockTicks > config.HalfTicks) throw new ArgumentOutOfRangeException(nameof(state), $"The clock at {m.ClockTicks} steps is outside the half's [0, {config.HalfTicks}].");
-            int most = m.Phase == MatchPhase.HalfTime ? config.HalfTimeTicks : 0;
+            bool rest = m.Phase == MatchPhase.HalfTime || m.Phase == MatchPhase.ExtraBreak || m.Phase == MatchPhase.ExtraHalfTime;
+            int most = rest ? config.HalfTimeTicks : m.Phase == MatchPhase.Shootout ? config.ShootoutKickTicks : 0;
             if (m.PhaseTicks < 0 || m.PhaseTicks > most) throw new ArgumentOutOfRangeException(nameof(state), $"The break's {m.PhaseTicks} steps left are outside [0, {most}].");
         }
     }

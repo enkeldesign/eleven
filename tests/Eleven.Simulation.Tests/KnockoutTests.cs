@@ -294,14 +294,14 @@ namespace Eleven.Simulation.Tests
                     foreach (PlayerState p in s.Players) start[p.Id] = p.Position;
                 }
 
-                // Every controller pushes his stick; the taker's own command kicks when he may.
+                // Every controller but the taker's pushes his stick; the taker's own command kicks when he may.
                 var commands = new List<Command>();
                 foreach (PlayerState p in s.Players)
                 {
                     KickIntent? kick = p.Id == s.Restart.TakerId && s.Restart.Phase == RestartPhase.Ready && s.Restart.PhaseTicks == 0
                         ? new KickIntent(new Vec2(s.Teams.Single(x => x.Id == p.TeamId).AttackSign, 0.2), 0.9, 0.04)
                         : (KickIntent?)null;
-                    commands.Add(new Command(p.OwnerControllerId, s.Tick, new Vec2(0, 1), kick));
+                    commands.Add(new Command(p.OwnerControllerId, s.Tick, p.Id == s.Restart.TakerId ? Vec2.Zero : new Vec2(0, 1), kick));
                 }
 
                 sim.Step(commands, events);

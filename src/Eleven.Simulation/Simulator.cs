@@ -2020,7 +2020,8 @@ namespace Eleven.Simulation
                     && (ball.LastPlayedBy == 0 || ball.LastPlayedBy == _state.Restart.TakerId);
                 if (state == LineState.CrossingMouth && straightFromThrow) state = LineState.CrossingWide;
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
-                if (state == LineState.CrossingMouth)
+                // In a shootout (#111) a ball in the goal is a kick scored, not a goal of the match.
+                if (state == LineState.CrossingMouth && _state.Match.Phase != MatchPhase.Shootout)
                 {
                     events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
                     Credit(Attacking(goal));

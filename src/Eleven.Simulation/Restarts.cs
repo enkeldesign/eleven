@@ -434,7 +434,8 @@ namespace Eleven.Simulation
 
         // Whether this player is held still while a restart is set up: everyone but its taker.
         private bool Held(in PlayerState player) =>
-            _state.Restart.On && _state.Restart.Phase == RestartPhase.Ready && player.Id != _state.Restart.TakerId;
+            _state.Match.Phase == MatchPhase.Shootout ? HeldInShootout(player)
+            : _state.Restart.On && _state.Restart.Phase == RestartPhase.Ready && player.Id != _state.Restart.TakerId;
 
         // Whether this player may kick now: anyone in play; only the taker, once he may, at a restart.
         private bool MayKick(in PlayerState player) =>
@@ -517,6 +518,8 @@ namespace Eleven.Simulation
             {
                 case RestartPhase.Live:
                 {
+                    // A shootout's kick (#111) is judged by the shootout, not by the ordinary restarts.
+                    if (_state.Match.Phase == MatchPhase.Shootout) break;
                     ref BallState ball = ref _state.Ball;
                     int team = TeamOf(ball.LastPlayedBy);
                     if (team != 0) r.LastTouchedTeam = team;
