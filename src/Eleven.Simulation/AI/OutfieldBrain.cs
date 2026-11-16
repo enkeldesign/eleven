@@ -228,7 +228,7 @@ namespace Eleven.Simulation.AI
             bool shaped = seen.SideSize >= 3 && seen.Slot > 0;
             if (shaped)
             {
-                Meet(seen, config, me, seen.MaxSpeed, out double myFirst);
+                Meet(seen, config, me, OwnSpeed(seen, config), out double myFirst);
                 myFirst += seen.Fatigue * TiredDelay; // tired, he leaves the press to a fresher teammate (#100)
                 int sooner = 0;
                 foreach (SeenPlayer other in seen.Others)
@@ -253,7 +253,7 @@ namespace Eleven.Simulation.AI
             bool second = false;
             if (mateSeen && !shaped)
             {
-                Meet(seen, config, me, seen.MaxSpeed, out double mineFirst);
+                Meet(seen, config, me, OwnSpeed(seen, config), out double mineFirst);
                 mineFirst += seen.Fatigue * TiredDelay;
                 Meet(seen, config, mate, seen.MaxSpeed, out double mateFirst);
                 mateFirst += mateFatigue * TiredDelay;
@@ -287,7 +287,7 @@ namespace Eleven.Simulation.AI
             }
 
             // Where he can first meet the ball, by its own flight, and whether the opponent meets it sooner.
-            Vec2 meet = Meet(seen, config, me, seen.MaxSpeed, out double myTime);
+            Vec2 meet = Meet(seen, config, me, OwnSpeed(seen, config), out double myTime);
             double theirTime = double.PositiveInfinity;
             if (opponentSeen) Meet(seen, config, opponent, seen.MaxSpeed, out theirTime);
 
@@ -438,6 +438,10 @@ namespace Eleven.Simulation.AI
             double reach = AirReach * (header ? config.HeaderReach : config.KickReach);
             return (contact.Horizontal - there).LengthSquared <= reach * reach;
         }
+
+        // His own top speed for a run he reckons: hurt and playing on (#109), injuredSpeed of it,
+        // as his body runs (INV-13).
+        private static double OwnSpeed(OutfieldObservation seen, SimConfig config) => seen.Injured ? seen.MaxSpeed * config.InjuredSpeed : seen.MaxSpeed;
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the
         // ball gets there; where the ball ends up if he can't within the horizon.

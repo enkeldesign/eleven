@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 24;
+        public const int FormatVersion = 25;
 
         public SimConfig(
             int tickRate = 60,
@@ -125,7 +125,11 @@ namespace Eleven.Simulation
             double cautionFrom = 0.95,
             double sendOffFrom = 1.2,
             double cardNoise = 0.3,
-            double dogsoRange = 25)
+            double dogsoRange = 25,
+            double injuriesFrom = 10,
+            double injuryRisk = 0.01,
+            double injurySerious = 0.3,
+            double injuredSpeed = 0.85)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -230,6 +234,10 @@ namespace Eleven.Simulation
             SendOffFrom = sendOffFrom;
             CardNoise = cardNoise;
             DogsoRange = dogsoRange;
+            InjuriesFrom = injuriesFrom;
+            InjuryRisk = injuryRisk;
+            InjurySerious = injurySerious;
+            InjuredSpeed = injuredSpeed;
 
             CheckTunableRanges();
 
@@ -658,6 +666,18 @@ namespace Eleven.Simulation
         /// <summary>A foul on a carrier this near the goal he attacks, with no defender but the keeper between him and it, denies an obvious goal-scoring opportunity (#108).</summary>
         public double DogsoRange { get; }
 
+        /// <summary>Injuries (#109) happen in matches of at least this many outfielders a side: 10, eleven a side only.</summary>
+        public double InjuriesFrom { get; }
+
+        /// <summary>The chance a foul of severity 1 injures the fouled footballer, in proportion to its severity, on its own stream (#109).</summary>
+        public double InjuryRisk { get; }
+
+        /// <summary>The share of injuries serious enough to take him off; the rest he plays on with (#109).</summary>
+        public double InjurySerious { get; }
+
+        /// <summary>Injured but playing on, his top speed and acceleration fall to this share (#109).</summary>
+        public double InjuredSpeed { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -807,7 +827,11 @@ namespace Eleven.Simulation
                 cautionFrom: r.ReadDouble(nameof(CautionFrom)),
                 sendOffFrom: r.ReadDouble(nameof(SendOffFrom)),
                 cardNoise: r.ReadDouble(nameof(CardNoise)),
-                dogsoRange: r.ReadDouble(nameof(DogsoRange)));
+                dogsoRange: r.ReadDouble(nameof(DogsoRange)),
+                injuriesFrom: r.ReadDouble(nameof(InjuriesFrom)),
+                injuryRisk: r.ReadDouble(nameof(InjuryRisk)),
+                injurySerious: r.ReadDouble(nameof(InjurySerious)),
+                injuredSpeed: r.ReadDouble(nameof(InjuredSpeed)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -917,6 +941,10 @@ namespace Eleven.Simulation
             w.WriteDouble(SendOffFrom, nameof(SendOffFrom));
             w.WriteDouble(CardNoise, nameof(CardNoise));
             w.WriteDouble(DogsoRange, nameof(DogsoRange));
+            w.WriteDouble(InjuriesFrom, nameof(InjuriesFrom));
+            w.WriteDouble(InjuryRisk, nameof(InjuryRisk));
+            w.WriteDouble(InjurySerious, nameof(InjurySerious));
+            w.WriteDouble(InjuredSpeed, nameof(InjuredSpeed));
             return w.ToArray();
         }
 

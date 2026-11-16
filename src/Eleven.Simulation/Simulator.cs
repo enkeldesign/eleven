@@ -538,6 +538,13 @@ namespace Eleven.Simulation
             double fresh = Config.FatigueFloor + (1 - Config.FatigueFloor) * (1 - player.Fatigue);
             body.MaxSpeed *= fresh;
             body.Acceleration *= fresh;
+
+            // Hurt but playing on (#109): injuredSpeed of both.
+            if (player.Injury == InjuryLevel.Minor)
+            {
+                body.MaxSpeed *= Config.InjuredSpeed;
+                body.Acceleration *= Config.InjuredSpeed;
+            }
             if (!Carrying(player)) return body;
             body.MaxSpeed *= Config.DribbleSpeedPoor + (Config.DribbleSpeedGood - Config.DribbleSpeedPoor) * body.BallControl;
             return body;
@@ -717,7 +724,7 @@ namespace Eleven.Simulation
         private bool IsPassCandidate(PlayerState passer, PlayerState other, double cos, double sin)
         {
             // Never a footballer off the pitch (#108), wherever he stands.
-            if (other.Id == passer.Id || other.TeamId != passer.TeamId || other.SentOff) return false;
+            if (other.Id == passer.Id || other.TeamId != passer.TeamId || other.Off) return false;
             Vec2 to = other.Position - passer.Position;
             double distance = SimMath.Sqrt(to.LengthSquared);
             if (distance == 0 || distance > Config.PassMaxRange) return false;

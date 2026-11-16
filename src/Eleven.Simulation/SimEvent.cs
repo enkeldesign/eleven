@@ -153,6 +153,9 @@ namespace Eleven.Simulation
 
         /// <summary>A sending-off (#108). Subject: the footballer sent off.</summary>
         SentOff = 40,
+
+        /// <summary>An injury (#109). Subject: the footballer hurt. <see cref="SimEvent.Other"/>: its <see cref="InjuryLevel"/>.</summary>
+        Injured = 41,
     }
 
     /// <summary>
@@ -193,7 +196,7 @@ namespace Eleven.Simulation
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
             : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0)
-                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched || Kind == SimEventKind.Offside || Kind == SimEventKind.Cautioned ? $"{Tick} {Kind} {Subject} {Other}"
+                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched || Kind == SimEventKind.Offside || Kind == SimEventKind.Cautioned || Kind == SimEventKind.Injured ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

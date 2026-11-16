@@ -125,8 +125,9 @@ namespace Eleven.Simulation
 
         internal OutfieldObservation(long tick, Vec2 position, Vec2 velocity, double heading, double maxSpeed, bool kicking,
             Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0,
-            int slot = 0, int sideSize = 0, double fatigue = 0)
+            int slot = 0, int sideSize = 0, double fatigue = 0, bool injured = false)
         {
+            Injured = injured;
             Fatigue = fatigue;
             ReactionDelay = reactionDelay;
             Slot = slot;
@@ -170,6 +171,9 @@ namespace Eleven.Simulation
 
         /// <summary>0–1, his own fatigue (#100). Others' he reads only as the speed he sees.</summary>
         public double Fatigue { get; }
+
+        /// <summary>Whether he is hurt and playing on (#109): he runs at injuredSpeed of <see cref="MaxSpeed"/>.</summary>
+        public bool Injured { get; }
 
         /// <summary>Whether he is winding up a kick, or can't start one yet.</summary>
         public bool Kicking { get; }
@@ -282,7 +286,7 @@ namespace Eleven.Simulation
 
                 // Always two draws for each footballer, seen or not, so no one's error depends on who else is in sight.
                 Vec2 at = Seen(other.Position);
-                if (other.SentOff) continue; // off the pitch (#108)
+                if (other.Off) continue; // off the pitch (#108, #109)
                 if ((other.Position - body.Position).LengthSquared > c.Skill.VisionRange * c.Skill.VisionRange) continue;
                 others.Add(new SeenPlayer(turned ? Turn(at) : at, turned ? Turn(other.Velocity) : other.Velocity, teammate, keeper, teammate ? other.Fatigue : 0));
             }
@@ -292,9 +296,9 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue)
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor)
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue);
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor);
         }
 
         /// <summary>The sign of world x a side attacks toward (#82); +1 with no sides.</summary>

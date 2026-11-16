@@ -182,8 +182,8 @@ namespace Eleven.Host
                 if (i == me) continue;
                 PlayerState p = s.Players[i];
                 bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == p.Id) >= 0;
-                // Sent off (#108): drawn far beyond the pitch, out of the view and the cues' reach.
-                Vector2 at = p.SentOff ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
+                // Off the pitch (#108, #109): drawn far beyond it, out of the view and the cues' reach.
+                Vector2 at = p.Off ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
                 if (p.TeamId == OneVOne.HomeTeam)
                 {
                     if (!keeper) _mates.Add(at);
@@ -284,6 +284,16 @@ namespace Eleven.Host
                         _hud?.ShowStatus("Second half: ends changed. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match secondhalf tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
                         break;
+                    case SimEventKind.Injured:
+                    {
+                        // Injuries (#109), announced with the side.
+                        int hurt = Array.Find(s.Players, p => p.Id == e.Subject).TeamId;
+                        string whose = hurt == OneVOne.HomeTeam ? "Your" : "CPU";
+                        _hud?.ShowStatus(e.Other == (int)InjuryLevel.Serious ? $"{whose} footballer injured and off." : $"{whose} footballer hurt, playing on.");
+                        Log(FormattableString.Invariant($"ELEVEN match injury level={e.Other} player={e.Subject} team={hurt} tick={s.Tick}"));
+                        break;
+                    }
+
                     case SimEventKind.Cautioned:
                     case SimEventKind.SentOff:
                     {
