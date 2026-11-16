@@ -6,8 +6,8 @@ namespace Eleven.Simulation
     /// <summary>
     /// Substitutions (#110, Law 3): a side brings on up to <c>substitutions</c> substitutes from
     /// its bench, at a stoppage, in at most <c>substitutionWindows</c> stoppages in play;
-    /// half-time is free. A substitution is an owned command (INV-10), made at the end of the
-    /// step: the substitute takes the slot, the place and the controller of the man he replaces,
+    /// half-time is free. A substitution is an owned command (INV-10), made at the start of the
+    /// step, before anything moves: the substitute takes the slot, the place and the controller of the man he replaces,
     /// fresh, and the man replaced takes no further part. docs/simulation/substitutions.md.
     /// </summary>
     public sealed partial class Simulator
@@ -62,8 +62,16 @@ namespace Eleven.Simulation
                     if (_state.Players[i].OwnerControllerId == c.ControllerId) owner = i;
                 }
 
-                // Checked again: an earlier substitution this step may have used the last one, or him.
-                if (owner < 0 || MaySubstitute(_state.Players[owner].TeamId, c.SubOff, c.SubOn) != CommandRejection.None) continue;
+                // Checked again: an earlier substitution this step may have used the last one, or
+                // him. Refused then with its reason, like any other; the rest of the command stands.
+                if (owner < 0) continue;
+                CommandRejection why = MaySubstitute(_state.Players[owner].TeamId, c.SubOff, c.SubOn);
+                if (why != CommandRejection.None)
+                {
+                    events.Add(new SimEvent(tick, SimEventKind.CommandRejected, c.ControllerId, why));
+                    continue;
+                }
+
                 Substitute(IndexOfPlayer(c.SubOff), BenchOf(c.SubOn), tick, events);
             }
         }

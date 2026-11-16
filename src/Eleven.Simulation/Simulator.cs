@@ -76,6 +76,10 @@ namespace Eleven.Simulation
             _foulBy = _foulOn = -1;
             _crossedMouth = false;
             ResolveCommands(tick, commands, events);
+
+            // Substitutions (#110) first, on the state their commands were checked on: nothing
+            // later in the step, a restart taken or the end of a break, can undo what was allowed.
+            StepSubstitutions(tick, events);
             StepCpus(tick);
 
             double dt = Config.TickSeconds;
@@ -121,9 +125,6 @@ namespace Eleven.Simulation
             StepRestart(tick, events);
             StepMatch(tick, events);
             StepSwitches(tick, events);
-
-            // Substitutions (#110) last: the substitute is there from the next step.
-            StepSubstitutions(tick, events);
 
             _state.Tick = tick + 1;
         }

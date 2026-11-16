@@ -74,7 +74,7 @@ namespace Eleven.Simulation
         /// <summary>
         /// A substitution (#110): the id of the footballer of this controller's side who goes off,
         /// and of the substitute on its bench who comes on in his slot and place; both 0 for none.
-        /// Made at the end of the step, only at a stoppage or half-time, within the side's
+        /// Made at the start of the step, only at a stoppage or half-time, within the side's
         /// substitutions and windows; refused otherwise, with the reason as the rejection.
         /// </summary>
         public readonly int SubOff, SubOn;
