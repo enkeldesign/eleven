@@ -123,6 +123,27 @@ namespace Eleven.Simulation
 
         /// <summary>A kick that connected was a volley (#94). With <see cref="Kicked"/>.</summary>
         Volleyed = 30,
+
+        /// <summary>A shielding carrier held off a challenge that reached the ball (#97). Subject: the carrier. <see cref="SimEvent.Other"/>: the challenger.</summary>
+        ShieldHeld = 31,
+
+        /// <summary>A slide tackle began (#98). Subject: the slider.</summary>
+        SlideStarted = 32,
+
+        /// <summary>A slide met the ball first and knocked it away (#98). Subject: the slider. <see cref="SimEvent.Other"/>: who had it.</summary>
+        SlideWon = 33,
+
+        /// <summary>A slide met the man before the ball (#98): a foul once #99 adjudicates it. Subject: the slider. <see cref="SimEvent.Other"/>: the man.</summary>
+        SlideFouled = 34,
+
+        /// <summary>A slide ended meeting neither (#98). Subject: the slider.</summary>
+        SlideMissed = 35,
+
+        /// <summary>A foul (#99). Subject: the offender. <see cref="SimEvent.Other"/>: the footballer fouled.</summary>
+        Foul = 36,
+
+        /// <summary>Play goes on after a foul: the fouled side keeps the ball (#99). Subject: the fouled side.</summary>
+        AdvantagePlayed = 37,
     }
 
     /// <summary>

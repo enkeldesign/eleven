@@ -73,6 +73,7 @@ namespace Eleven.Simulation
             _kickConnected = false;
             _challengeWon = false;
             _crossedEnd = 0;
+            _foulBy = _foulOn = -1;
             _crossedMouth = false;
             ResolveCommands(tick, commands, events);
             StepCpus(tick);
@@ -322,19 +323,220 @@ namespace Eleven.Simulation
                 return;
             }
 
+            if (player.Challenge == ChallengePhase.Slide)
+            {
+                // A slide (#98) carries him along its line, slowing from slideSpeed to half of it as it ends.
+                player.Velocity = player.ChallengeLine * (Config.SlideSpeed * (0.5 + 0.5 * player.ChallengeTicks / Config.SlideTicks));
+                player.Position += player.Velocity * dt;
+                return;
+            }
+
+            if (player.Challenge == ChallengePhase.Grounded)
+            {
+                player.Velocity = Vec2.Zero;
+                return;
+            }
+
             if (player.Challenge == ChallengePhase.Commit) move = player.ChallengeLine;
             else if (player.Challenge == ChallengePhase.Recover) move = Vec2.Zero;
             KeeperPhase phase = keeper >= 0 ? _state.Keepers[keeper].Phase : KeeperPhase.Position;
             if (phase == KeeperPhase.Dive) player.Velocity = _state.Keepers[keeper].DiveVelocity;
             else if (phase == KeeperPhase.Recover) player.Velocity = Vec2.Zero;
-            else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, player.Capabilities, dt);
+            else player.Velocity = Accelerate(player.Velocity, phase == KeeperPhase.React ? Vec2.Zero : move, Body(player), dt);
             player.Position += player.Velocity * dt;
+            Tire(ref player, dt);
 
             // Below a millimetre per second the player counts as stopped and keeps its last heading.
             if (player.Velocity.LengthSquared > 1e-6)
             {
                 player.Heading = SimMath.Atan2(player.Velocity.Y, player.Velocity.X);
             }
+        }
+
+        /// <summary>
+        /// m. Under FREE, a dribbler still has the ball while it is this close (#96): his own touches,
+        /// a poor dribbler's heavier ones included, never leave him running free. A technical constant.
+        /// </summary>
+        public const double DribbleReach = 4.0;
+
+        /// <summary>The most places a side's shape has (#96): ten outfielders.</summary>
+        public const int MaxSlot = 10;
+
+        /// <summary>m. A shielded ball this close to its place behind the carrier, and at rest with him, needs no touch (#97).</summary>
+        public const double ShieldSettled = 0.15;
+
+        /// <summary>
+        /// Fatigue (#100), in a match world only: above fatigueFrom of his fresh top speed he tires, faster the nearer his top
+        /// speed; below it he rests, faster the slower he goes. Stamina scales both: reference 0.6 is
+        /// the knobs' own rates; 1 tires at 0.6 of them and rests at 1.4.
+        /// </summary>
+        private void Tire(ref PlayerState player, double dt)
+        {
+            // Only in a match world, two sides: practice and the benches measure the body as it is.
+            if (_state.Teams.Length != 2) return;
+            double fraction = SimMath.Sqrt(player.Velocity.LengthSquared) / player.Capabilities.MaxSpeed;
+            double from = Config.FatigueFrom, stamina = player.Capabilities.Stamina;
+            // At fatigueFrom 1 there is no band to tire in: only a body faster than his top speed
+            // (a keeper's dive) is above it, and tires at the full rate.
+            // The drain's arithmetic, in this order, is the recorded references' (INV-1).
+            double band = 1 - from;
+            double change = fraction > from
+                ? (band > 0 ? Config.FatigueDrain * (fraction - from) / band : Config.FatigueDrain) * (1.6 - stamina) * dt
+                : -Config.FatigueRecover * (1 - fraction / from) * (0.4 + stamina) * dt;
+            double fatigue = player.Fatigue + change;
+            player.Fatigue = fatigue < 0 ? 0 : fatigue > 1 ? 1 : fatigue;
+        }
+
+        /// <summary>
+        /// Whether a kick intent is a slide tackle (#98): he hasn't the ball and can't kick it (out of
+        /// his kick reach, or not at his feet), and an opponent controls a ball on the ground within
+        /// slideRange of him.
+        /// </summary>
+        private bool SlideWanted(in PlayerState player)
+        {
+            BallState ball = _state.Ball;
+            if (ball.HeldBy != 0 || ball.Position.Z > Config.KickMaxBallHeight || KeeperOf(player.Id) >= 0) return false;
+            double distance = (ball.Position.Horizontal - player.Position).LengthSquared;
+            if (distance <= Config.KickReach * Config.KickReach || distance > Config.SlideRange * Config.SlideRange) return false;
+            int controller = ControllerOfBall();
+            return controller >= 0 && _state.Players[controller].TeamId != player.TeamId;
+        }
+
+        /// <summary>m. The man a slide meets: his body, a fraction of the slide's reach (#98).</summary>
+        private double SlideBodyReach => 0.5 * Config.SlideReach;
+
+        // One step of a slide (#98): it meets the ball, or the man who has it, whichever it reaches
+        // first; the ball first wins it, knocked on along the line; the man first is a foul, which
+        // #99 adjudicates. Meeting neither by its end, it misses. Either way he goes to ground.
+        private void StepSlide(ref PlayerState player, long tick, List<SimEvent> events)
+        {
+            ref BallState ball = ref _state.Ball;
+            int had = ControllerOfBall();
+            bool free = ball.HeldBy == 0 && ball.Position.Z <= Config.KickMaxBallHeight && !_kickConnected && !_challengeWon;
+            double toBall = (ball.Position.Horizontal - player.Position).LengthSquared;
+            bool ballMet = free && toBall <= Config.SlideReach * Config.SlideReach;
+            double toMan = double.PositiveInfinity;
+            if (had >= 0 && _state.Players[had].TeamId != player.TeamId) toMan = (_state.Players[had].Position - player.Position).LengthSquared;
+            bool manMet = toMan <= SlideBodyReach * SlideBodyReach;
+
+            if (manMet && !(ballMet && toBall <= toMan))
+            {
+                events.Add(new SimEvent(tick, SimEventKind.SlideFouled, player.Id, other: _state.Players[had].Id));
+                RecordFoul(IndexOfPlayer(player.Id), had, tick, events);
+            }
+            else if (ballMet)
+            {
+                if (ball.AttachedTo != 0) Release(tick, events);
+                Vec2 line = player.ChallengeLine;
+                ball.Velocity = new Vec3(line.X * Config.ChallengeImpulse, line.Y * Config.ChallengeImpulse, 0);
+                ball.Spin = Vec3.Zero;
+                ball.LastPlayedBy = player.Id;
+                for (int k = 0; k < _state.Players.Length; k++)
+                {
+                    _state.Players[k].AftertouchTicks = 0;
+                    _state.Players[k].Turning = false;
+                }
+
+                if (had >= 0) _state.Players[had].TouchCooldown = Config.TouchIntervalTicks;
+                _challengeWon = true;
+                events.Add(new SimEvent(tick, SimEventKind.SlideWon, player.Id, other: had >= 0 ? _state.Players[had].Id : 0));
+            }
+            else if (--player.ChallengeTicks > 0)
+            {
+                return;
+            }
+            else
+            {
+                events.Add(new SimEvent(tick, SimEventKind.SlideMissed, player.Id));
+            }
+
+            player.Challenge = ChallengePhase.Grounded;
+            player.ChallengeTicks = Config.SlideRecoverTicks;
+            player.Velocity = Vec2.Zero;
+        }
+
+        /// <summary>
+        /// Whether a carrier shields (#97): he has the ball, moves slower than shieldSpeed of his top
+        /// speed, and an opponent is within shieldRange. <paramref name="away"/> is the way from the
+        /// nearest such opponent to him: where he keeps the ball.
+        /// </summary>
+        private bool Shields(in PlayerState player, out Vec2 away)
+        {
+            away = Vec2.Zero;
+            if (!Carrying(player)) return false;
+            double slow = Config.ShieldSpeed * Body(player).MaxSpeed;
+            if (player.Velocity.LengthSquared >= slow * slow) return false; // shieldSpeed 0: never
+            double nearest = Config.ShieldRange * Config.ShieldRange;
+            bool found = false;
+            foreach (PlayerState other in _state.Players)
+            {
+                if (other.Id == player.Id || other.TeamId == player.TeamId) continue;
+                Vec2 from = player.Position - other.Position;
+                double d = from.LengthSquared;
+                if (d > nearest || d == 0) continue;
+                nearest = d;
+                away = from * (1 / SimMath.Sqrt(d));
+                found = true;
+            }
+
+            return found;
+        }
+
+        // A challenge that reached the ball through a shielding carrier, his body between them
+        // along the challenge's line (#97): held by the contest's draw. Even, it holds at shieldHold; the carrier's strength over
+        // the challenger's adds to it, and the challenger's tackling takes from it.
+        private bool ShieldHolds(int carrier, in PlayerState challenger, long tick)
+        {
+            PlayerState c = _state.Players[carrier];
+            if (!Shields(c, out _)) return false;
+            // Between: the ball lies beyond him along the challenge's line. Footballers have no
+            // bodies to collide, so the challenger may end his commit past him; his line says
+            // which way he came.
+            Vec2 toBall = _state.Ball.Position.Horizontal - c.Position, line = challenger.ChallengeLine;
+            if (toBall.X * line.X + toBall.Y * line.Y <= 0) return false;
+            double hold = Config.ShieldHold + 0.5 * (c.Capabilities.Strength - challenger.Capabilities.Strength) - 0.3 * (challenger.Capabilities.Tackling - 0.5);
+            hold = hold < 0.05 ? 0.05 : hold > 0.95 ? 0.95 : hold;
+            var draws = new StreamDraws(_state.Seed, tick, RandomStream.Shield, challenger.Id);
+            return draws.NextUniform() < hold;
+        }
+
+        /// <summary>
+        /// Whether the footballer has the ball at his feet (#96): attached to him under ATTACHED;
+        /// under FREE, played by him last, on the ground and within <see cref="DribbleReach"/>.
+        /// </summary>
+        private bool Carrying(in PlayerState player) => Carries(_state, Config, player);
+
+        /// <summary>
+        /// Whether <paramref name="player"/> is carrying the ball in <paramref name="state"/>: it is
+        /// attached to him (ATTACHED), or (FREE) he played it last and it is on the ground within
+        /// <see cref="DribbleReach"/> of him; never while a keeper holds it. Public so a reader
+        /// of the state, such as the host's poses (#101), uses the simulation's own rule.
+        /// </summary>
+        public static bool Carries(SimState state, SimConfig config, in PlayerState player)
+        {
+            BallState ball = state.Ball;
+            if (ball.HeldBy != 0) return false;
+            if (ball.AttachedTo != 0) return ball.AttachedTo == player.Id;
+            if (ball.LastPlayedBy != player.Id || ball.Position.Z > config.KickMaxBallHeight) return false;
+            return (ball.Position.Horizontal - player.Position).LengthSquared <= DribbleReach * DribbleReach;
+        }
+
+        /// <summary>
+        /// The body he runs with (#96): with the ball at his feet, his top speed is the dribble share
+        /// of it, from dribbleSpeedPoor at no ball control to dribbleSpeedGood at full. The movement
+        /// and every prediction of his own run use it, so they agree (INV-13).
+        /// </summary>
+        private PlayerCapabilities Body(in PlayerState player)
+        {
+            PlayerCapabilities body = player.Capabilities;
+
+            // Tired (#100), his top speed and acceleration fall toward fatigueFloor of themselves.
+            double fresh = Config.FatigueFloor + (1 - Config.FatigueFloor) * (1 - player.Fatigue);
+            body.MaxSpeed *= fresh;
+            body.Acceleration *= fresh;
+            if (!Carrying(player)) return body;
+            body.MaxSpeed *= Config.DribbleSpeedPoor + (Config.DribbleSpeedGood - Config.DribbleSpeedPoor) * body.BallControl;
+            return body;
         }
 
         /// <summary>
@@ -405,6 +607,20 @@ namespace Eleven.Simulation
                 // A manual kick, which also wins over a quick pass in the same command.
                 KickIntent intent = command.Value.Kick.Value;
                 Vec2 d = intent.Direction;
+
+                // Without the ball, near an opponent's (#98): the same intent is a slide tackle.
+                if (SlideWanted(player))
+                {
+                    Vec2 line = d.X == 0 && d.Y == 0 ? new Vec2(SimMath.Cos(player.Heading), SimMath.Sin(player.Heading)) : d * (1 / SimMath.Sqrt(d.LengthSquared));
+                    player.Challenge = ChallengePhase.Slide;
+                    player.ChallengeTicks = Config.SlideTicks;
+                    player.ChallengeLine = line;
+                    player.Velocity = line * Config.SlideSpeed;
+                    player.Turning = false;
+                    events.Add(new SimEvent(tick, SimEventKind.SlideStarted, player.Id));
+                    return;
+                }
+
                 StartWindUp(ref player, d.X == 0 && d.Y == 0 ? player.Heading : SimMath.Atan2(d.Y, d.X), intent.Strength, intent.Loft, 0);
             }
             else if (command.HasValue && ready && command.Value.QuickPass)
@@ -719,6 +935,20 @@ namespace Eleven.Simulation
             {
                 ref PlayerState player = ref _state.Players[i];
                 ref BallState ball = ref _state.Ball;
+                if (player.Challenge == ChallengePhase.Slide)
+                {
+                    StepSlide(ref player, tick, events);
+                    continue;
+                }
+
+                if (player.Challenge == ChallengePhase.Grounded)
+                {
+                    if (--player.ChallengeTicks > 0) continue;
+                    player.Challenge = ChallengePhase.Ready;
+                    player.ChallengeLine = Vec2.Zero;
+                    continue;
+                }
+
                 if (player.Challenge == ChallengePhase.Recover)
                 {
                     if (--player.ChallengeTicks > 0) continue;
@@ -738,9 +968,21 @@ namespace Eleven.Simulation
                     foreach (PlayerState p in _state.Players) inFlight |= p.AftertouchTicks > 0;
                     bool there = !_kickConnected && !_challengeWon && !inFlight && ball.HeldBy == 0 && ball.Position.Z <= Config.KickMaxBallHeight
                         && (ball.Position.Horizontal - player.Position).LengthSquared <= reach * reach;
+                    int had = there ? ControllerOfBall() : -1;
+
+                    // Through a shielding carrier (#97): his body is between, and the challenge is a
+                    // contest of strength and tackling, drawn from its own stream.
+                    if (there && had >= 0 && ShieldHolds(had, player, tick))
+                    {
+                        events.Add(new SimEvent(tick, SimEventKind.ShieldHeld, _state.Players[had].Id, other: player.Id));
+                        events.Add(new SimEvent(tick, SimEventKind.ChallengeMissed, player.Id));
+                        player.Challenge = ChallengePhase.Recover;
+                        player.ChallengeTicks = Config.ChallengeRecoverTicks;
+                        continue;
+                    }
+
                     if (there)
                     {
-                        int had = ControllerOfBall();
                         Vec2 line = player.ChallengeLine;
                         double error = ChallengeError * (1 - player.Capabilities.Tackling);
                         if (error > 0)
@@ -785,6 +1027,14 @@ namespace Eleven.Simulation
                     else
                     {
                         events.Add(new SimEvent(tick, SimEventKind.ChallengeMissed, player.Id));
+
+                        // Missing the ball, into the man who has it: a foul (#99).
+                        int man = ControllerOfBall();
+                        if (man >= 0 && _state.Players[man].TeamId != player.TeamId
+                            && (_state.Players[man].Position - player.Position).LengthSquared <= Config.ChallengeFoulReach * Config.ChallengeFoulReach)
+                        {
+                            RecordFoul(i, man, tick, events);
+                        }
                     }
 
                     player.Challenge = ChallengePhase.Recover;
@@ -805,10 +1055,30 @@ namespace Eleven.Simulation
                 Vec2 stick = command.Value.Move;
                 if (stick.X * toward.X + stick.Y * toward.Y < Closing) continue;
 
+                // Only a commit that will reach the ball (#96): run along his line through the
+                // commit, with the simulation's own movement (INV-13), against the ball carried on
+                // with its dribbler. One that would end short of it, chasing alongside, waits.
+                Vec2 commitLine = stick * (1 / SimMath.Sqrt(stick.LengthSquared));
+                int commit = CommitTicksFor(player.Capabilities.Tackling, Config);
+                double dt = Config.TickSeconds;
+                Vec2 velocity = player.Velocity, at = player.Position;
+                PlayerCapabilities body = Body(player);
+                for (int k = 0; k < commit; k++)
+                {
+                    velocity = Accelerate(velocity, commitLine, body, dt);
+                    at += velocity * dt;
+                }
+
+                // A controlled ball goes where its dribbler goes: his touches and the ATTACHED
+                // steering keep it ahead of him, at his pace.
+                Vec2 ballThen = ball.Position.Horizontal + _state.Players[controller].Velocity * (commit * dt);
+                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling);
+                if ((ballThen - at).LengthSquared > reachThen * reachThen) continue;
+
                 // He goes the way his stick asks, so he can lead the tackle into the ball's path.
                 player.Challenge = ChallengePhase.Commit;
-                player.ChallengeTicks = CommitTicksFor(player.Capabilities.Tackling, Config);
-                player.ChallengeLine = stick * (1 / SimMath.Sqrt(stick.LengthSquared));
+                player.ChallengeTicks = commit;
+                player.ChallengeLine = commitLine;
                 player.Turning = false;
                 events.Add(new SimEvent(tick, SimEventKind.ChallengeStarted, player.Id));
             }
@@ -1074,6 +1344,12 @@ namespace Eleven.Simulation
                 ? holder.Velocity * (1 / speed)
                 : new Vec2(SimMath.Cos(holder.Heading), SimMath.Sin(holder.Heading));
             double lead = Config.AttachedLeadSlow + (Config.AttachedLeadFast - Config.AttachedLeadSlow) * fraction;
+            if (Shields(holder, out Vec2 away))
+            {
+                // Shielding (#97): steered round to his far side from the opponent.
+                along = away;
+                lead = Config.AttachedLeadSlow;
+            }
 
             Vec2 error = holder.Position + along * lead - ball.Position.Horizontal;
             double distance = SimMath.Sqrt(error.LengthSquared);
@@ -1115,7 +1391,15 @@ namespace Eleven.Simulation
             Vec2 move = command.HasValue ? command.Value.Move : Vec2.Zero;
             Vec2 ballVelocity = ball.Velocity.Horizontal;
 
-            if (Standing(player, move)) return false;
+            // A shielding carrier moves the ball to his far side, standing or not (#97).
+            bool shielding = Shields(player, out Vec2 shieldAway);
+            if (shielding && (player.Position + shieldAway * Config.DribbleLeadSlow - ball.Position.Horizontal).LengthSquared < ShieldSettled * ShieldSettled
+                && (ballVelocity - player.Velocity).LengthSquared <= Config.StopSpeed * Config.StopSpeed)
+            {
+                return false;
+            }
+
+            if (!shielding && Standing(player, move)) return false;
 
             Vec2 wanted = TouchTarget(player, move, Config.DribbleLeadSlow, Config.DribbleLeadFast);
             if (mayPush && Config.PushSpeed > 0 && PushWanted(player, move, out Vec2 push))
@@ -1176,9 +1460,10 @@ namespace Eleven.Simulation
 
             double dt = Config.TickSeconds;
             Vec2 velocity = player.Velocity;
-            for (int k = 1; k < Config.TouchIntervalTicks; k++) velocity = Accelerate(velocity, move, player.Capabilities, dt);
+            PlayerCapabilities body = Body(player);
+            for (int k = 1; k < Config.TouchIntervalTicks; k++) velocity = Accelerate(velocity, move, body, dt);
             double speed = SimMath.Sqrt(velocity.LengthSquared);
-            if (speed < from * player.Capabilities.MaxSpeed || speed < TrapSpeed) return false;
+            if (speed < from * body.MaxSpeed || speed < TrapSpeed) return false;
 
             // Only a ball they are already sprinting with: one rolling their way. A first touch on
             // a ball at rest, across them or coming at them is a receiving touch, and never starts
@@ -1210,9 +1495,10 @@ namespace Eleven.Simulation
             double dt = Config.TickSeconds;
             int steps = Config.TouchIntervalTicks;
             Vec2 velocity = player.Velocity, position = player.Position;
+            PlayerCapabilities body = Body(player);
             for (int k = 1; k < steps; k++)
             {
-                velocity = Accelerate(velocity, move, player.Capabilities, dt);
+                velocity = Accelerate(velocity, move, body, dt);
                 position += velocity * dt;
             }
 
@@ -1223,6 +1509,14 @@ namespace Eleven.Simulation
                 ? velocity * (1 / speed)
                 : new Vec2(SimMath.Cos(player.Heading), SimMath.Sin(player.Heading));
             double lead = leadSlow + (leadFast - leadSlow) * fraction;
+
+            // Shielding (#97): just off his feet on the far side from the opponent.
+            if (Shields(player, out Vec2 away))
+            {
+                along = away;
+                lead = leadSlow;
+            }
+
             return Roll(position + along * lead - _state.Ball.Position.Horizontal, steps * dt);
         }
 
@@ -1301,11 +1595,12 @@ namespace Eleven.Simulation
         {
             double dt = Config.TickSeconds;
             Vec2 v = p.Velocity, x = p.Position, u = p.Velocity;
-            int bound = (int)(2 * p.Capabilities.MaxSpeed / (p.Capabilities.Acceleration * dt)) + 2;
+            PlayerCapabilities body = Body(p);
+            int bound = (int)(2 * body.MaxSpeed / (body.Acceleration * dt)) + 2;
             steps = 0;
             while (steps < bound)
             {
-                Vec2 next = Accelerate(v, move, p.Capabilities, dt);
+                Vec2 next = Accelerate(v, move, body, dt);
                 if (next.X * u.X + next.Y * u.Y <= 0) break;
                 v = next;
                 x += v * dt;
@@ -1760,6 +2055,8 @@ namespace Eleven.Simulation
                 p.Capabilities.CheckRanges(owner);
 
                 // Kick state this config could have produced (#37). NaN fails the encoding above.
+                InRange(owner, nameof(p.Slot), p.Slot, MaxSlot);
+                if (!(p.Fatigue >= 0 && p.Fatigue <= 1)) throw new ArgumentOutOfRangeException(nameof(state), $"{owner}: fatigue {p.Fatigue} is outside [0, 1].");
                 InRange(owner, nameof(p.KickCooldown), p.KickCooldown, config.KickCooldownTicks);
                 InRange(owner, nameof(p.WindUpTicks), p.WindUpTicks, config.KickWindUpTicks);
                 InRange(owner, nameof(p.AftertouchTicks), p.AftertouchTicks, config.AftertouchTicks);
@@ -1767,9 +2064,15 @@ namespace Eleven.Simulation
                 InRange(owner, nameof(p.CutCooldown), p.CutCooldown, config.TouchIntervalTicks);
 
                 // A challenge phase this config could have produced (#84), with a unit line when not ready.
-                if (p.Challenge > ChallengePhase.Recover) throw new ArgumentException($"{owner}: unknown challenge phase {(byte)p.Challenge}.", nameof(state));
-                InRange(owner, nameof(p.ChallengeTicks), p.ChallengeTicks,
-                    p.Challenge == ChallengePhase.Commit ? CommitTicksFor(p.Capabilities.Tackling, config) : p.Challenge == ChallengePhase.Recover ? config.ChallengeRecoverTicks : 0);
+                if (p.Challenge > ChallengePhase.Grounded) throw new ArgumentException($"{owner}: unknown challenge phase {(byte)p.Challenge}.", nameof(state));
+                InRange(owner, nameof(p.ChallengeTicks), p.ChallengeTicks, p.Challenge switch
+                {
+                    ChallengePhase.Commit => CommitTicksFor(p.Capabilities.Tackling, config),
+                    ChallengePhase.Recover => config.ChallengeRecoverTicks,
+                    ChallengePhase.Slide => config.SlideTicks,
+                    ChallengePhase.Grounded => config.SlideRecoverTicks,
+                    _ => 0,
+                });
                 if (p.Challenge != ChallengePhase.Ready && p.ChallengeTicks == 0) throw new ArgumentException($"{owner}: a {p.Challenge} challenge needs steps left.", nameof(state));
                 double lineLength = p.ChallengeLine.LengthSquared;
                 if (p.Challenge == ChallengePhase.Ready ? lineLength != 0 : (lineLength < 1 - 1e-9 || lineLength > 1 + 1e-9))

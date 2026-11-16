@@ -144,6 +144,23 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.KickGroup, "headerReach", "m", 0.2, 1.2),
             new TunableParameter(TunableParameter.KickGroup, "volleyError", "rad per m/s", 0, 0.1),
             new TunableParameter(TunableParameter.KickGroup, "headerError", "rad", 0, 0.8),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedPoor", "fraction of top speed", 0.5, 1, 0.8, 0.9),
+            new TunableParameter(TunableParameter.ControlGroup, "dribbleSpeedGood", "fraction of top speed", 0.5, 1, 0.9, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldSpeed", "fraction of top speed", 0, 1, 0.3, 0.6),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldRange", "m", 0.5, 5, 1.5, 2.5),
+            new TunableParameter(TunableParameter.ControlGroup, "shieldHold", "probability", 0, 1, 0.5, 0.75),
+            new TunableParameter(TunableParameter.ControlGroup, "slideRange", "m", 1, 6, 2, 3),
+            new TunableParameter(TunableParameter.ControlGroup, "slideSpeed", "m/s", 3, 12, 7, 9),
+            new TunableParameter(TunableParameter.ControlGroup, "slideTime", "s", 0.1, 1, 0.3, 0.5),
+            new TunableParameter(TunableParameter.ControlGroup, "slideReach", "m", 0.3, 1.5, 0.7, 1.1),
+            new TunableParameter(TunableParameter.ControlGroup, "slideRecover", "s", 0.2, 3, 0.8, 1.5),
+            new TunableParameter(TunableParameter.ControlGroup, "advantageTime", "s", 0, 6, 2, 4),
+            new TunableParameter(TunableParameter.ControlGroup, "challengeFoulReach", "m", 0, 1, 0.4, 0.6),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueFrom", "fraction of top speed", 0.3, 1, 0.6, 0.8),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueDrain", "per s at top speed", 0, 0.1, 0.008, 0.02),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueRecover", "per s at rest", 0, 0.2, 0.01, 0.04),
+            new TunableParameter(TunableParameter.ControlGroup, "fatigueFloor", "fraction", 0.5, 1, 0.8, 0.9),
+            new TunableParameter(TunableParameter.ControlGroup, "halfTimeRecovery", "fraction", 0, 1, 0.3, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -219,6 +236,23 @@ namespace Eleven.Simulation
             "headerReach" => HeaderReach,
             "volleyError" => VolleyError,
             "headerError" => HeaderError,
+            "dribbleSpeedPoor" => DribbleSpeedPoor,
+            "dribbleSpeedGood" => DribbleSpeedGood,
+            "shieldSpeed" => ShieldSpeed,
+            "shieldRange" => ShieldRange,
+            "shieldHold" => ShieldHold,
+            "slideRange" => SlideRange,
+            "slideSpeed" => SlideSpeed,
+            "slideTime" => SlideTime,
+            "slideReach" => SlideReach,
+            "slideRecover" => SlideRecover,
+            "advantageTime" => AdvantageTime,
+            "challengeFoulReach" => ChallengeFoulReach,
+            "fatigueFrom" => FatigueFrom,
+            "fatigueDrain" => FatigueDrain,
+            "fatigueRecover" => FatigueRecover,
+            "fatigueFloor" => FatigueFloor,
+            "halfTimeRecovery" => HalfTimeRecovery,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -264,6 +298,11 @@ namespace Eleven.Simulation
             double touchlineY = TouchlineY, restartStop = RestartStop, restartReady = RestartReady, restartAuto = RestartAuto, throwSpeed = ThrowSpeed;
             double halfLength = HalfLength, halfTimeBreak = HalfTimeBreak;
             double volleyMaxHeight = VolleyMaxHeight, headerMinHeight = HeaderMinHeight, headerMaxHeight = HeaderMaxHeight, headerSpeed = HeaderSpeed, headerReach = HeaderReach, volleyError = VolleyError, headerError = HeaderError;
+            double dribbleSpeedPoor = DribbleSpeedPoor, dribbleSpeedGood = DribbleSpeedGood;
+            double shieldSpeed = ShieldSpeed, shieldRange = ShieldRange, shieldHold = ShieldHold;
+            double slideRange = SlideRange, slideSpeed = SlideSpeed, slideTime = SlideTime, slideReach = SlideReach, slideRecover = SlideRecover;
+            double advantageTime = AdvantageTime, challengeFoulReach = ChallengeFoulReach;
+            double fatigueFrom = FatigueFrom, fatigueDrain = FatigueDrain, fatigueRecover = FatigueRecover, fatigueFloor = FatigueFloor, halfTimeRecovery = HalfTimeRecovery;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -330,6 +369,23 @@ namespace Eleven.Simulation
                     case "headerReach": headerReach = o.Value; break;
                     case "volleyError": volleyError = o.Value; break;
                     case "headerError": headerError = o.Value; break;
+                    case "dribbleSpeedPoor": dribbleSpeedPoor = o.Value; break;
+                    case "dribbleSpeedGood": dribbleSpeedGood = o.Value; break;
+                    case "shieldSpeed": shieldSpeed = o.Value; break;
+                    case "shieldRange": shieldRange = o.Value; break;
+                    case "shieldHold": shieldHold = o.Value; break;
+                    case "slideRange": slideRange = o.Value; break;
+                    case "slideSpeed": slideSpeed = o.Value; break;
+                    case "slideTime": slideTime = o.Value; break;
+                    case "slideReach": slideReach = o.Value; break;
+                    case "slideRecover": slideRecover = o.Value; break;
+                    case "advantageTime": advantageTime = o.Value; break;
+                    case "challengeFoulReach": challengeFoulReach = o.Value; break;
+                    case "fatigueFrom": fatigueFrom = o.Value; break;
+                    case "fatigueDrain": fatigueDrain = o.Value; break;
+                    case "fatigueRecover": fatigueRecover = o.Value; break;
+                    case "fatigueFloor": fatigueFloor = o.Value; break;
+                    case "halfTimeRecovery": halfTimeRecovery = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -425,7 +481,24 @@ namespace Eleven.Simulation
                 headerSpeed: headerSpeed,
                 headerReach: headerReach,
                 volleyError: volleyError,
-                headerError: headerError);
+                headerError: headerError,
+                dribbleSpeedPoor: dribbleSpeedPoor,
+                dribbleSpeedGood: dribbleSpeedGood,
+                shieldSpeed: shieldSpeed,
+                shieldRange: shieldRange,
+                shieldHold: shieldHold,
+                slideRange: slideRange,
+                slideSpeed: slideSpeed,
+                slideTime: slideTime,
+                slideReach: slideReach,
+                slideRecover: slideRecover,
+                advantageTime: advantageTime,
+                challengeFoulReach: challengeFoulReach,
+                fatigueFrom: fatigueFrom,
+                fatigueDrain: fatigueDrain,
+                fatigueRecover: fatigueRecover,
+                fatigueFloor: fatigueFloor,
+                halfTimeRecovery: halfTimeRecovery);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -505,7 +578,24 @@ namespace Eleven.Simulation
             headerSpeed: HeaderSpeed,
             headerReach: HeaderReach,
             volleyError: VolleyError,
-            headerError: HeaderError);
+            headerError: HeaderError,
+            dribbleSpeedPoor: DribbleSpeedPoor,
+            dribbleSpeedGood: DribbleSpeedGood,
+            shieldSpeed: ShieldSpeed,
+            shieldRange: ShieldRange,
+            shieldHold: ShieldHold,
+            slideRange: SlideRange,
+            slideSpeed: SlideSpeed,
+            slideTime: SlideTime,
+            slideReach: SlideReach,
+            slideRecover: SlideRecover,
+            advantageTime: AdvantageTime,
+            challengeFoulReach: ChallengeFoulReach,
+            fatigueFrom: FatigueFrom,
+            fatigueDrain: FatigueDrain,
+            fatigueRecover: FatigueRecover,
+            fatigueFloor: FatigueFloor,
+            halfTimeRecovery: HalfTimeRecovery);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

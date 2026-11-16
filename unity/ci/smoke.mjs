@@ -442,6 +442,84 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       return;
     }
 
+    // The action sprites' sheet (#101): every pose in every kit over the play area, for the
+    // screenshot regression.
+    if (url.includes('sheet=1')) {
+      const sheet = (await waitForLog(/ELEVEN sprites sheet shown=(\d+) poses=(\d+) size=(\d+)/, 30_000))?.match ?? null;
+      const expected = sheet ? Number(sheet[2]) * 4 : 0;
+      check('the sprite sheet shows every pose in every kit', !!sheet && Number(sheet[1]) === expected && expected > 0,
+        sheet ? sheet[0].replace('ELEVEN ', '') : 'no sheet line');
+      await sleep(2000);
+      const shotPath = path.join(outDir, `${name}-sheet.png`);
+      await page.screenshot({ path: shotPath, timeout: 60_000 }).catch(() => {});
+      // Every opaque pixel of every sheet sprite, sampled at its centre in the screenshot and
+      // compared with the colour the generator gives it: the drawing must reproduce the art. The
+      // art itself is pinned in .NET (ActionSpriteTests).
+      const grids = new Map(logs.map((l) => /^ELEVEN sprites grid pose=(\d+) rows=(\S+)/.exec(l)).filter(Boolean).map((m) => [Number(m[1]), m[2].split('|')]));
+      const colours = lastLog(/ELEVEN sprites colours o=(#\w+) h=(#\w+) f=(#\w+) b=(#\w+) g=(#\w+) kits=(\S+)/);
+      const cells = lastLog(/ELEVEN sprites cells=(\S+)/);
+      const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const samples = [];
+      if (colours && cells && grids.size) {
+        const kits = colours[6].split(',').map((k) => k.split('/').map(hex));
+        const fixed = { o: hex(colours[1]), h: hex(colours[2]), f: hex(colours[3]), b: hex(colours[4]), g: hex(colours[5]) };
+        const poses = grids.size;
+        cells[1].split(';').forEach((cell, i) => {
+          const [cx, cy, size] = cell.split(',').map(Number);
+          const [kit, shorts] = kits[Math.floor(i / poses)] ?? kits[0];
+          const rows = grids.get(i % poses) ?? [];
+          rows.forEach((row, r) => [...row].forEach((ch, c) => {
+            const colour = ch === 'k' ? kit : ch === 's' ? shorts : fixed[ch];
+            if (!colour) return;
+            const p = at(cx + ((c + 0.5) / row.length - 0.5) * size, cy + ((r + 0.5) / rows.length - 0.5) * size);
+            // Pixel k covers [k, k + 1): the one holding the texel's centre, not the nearest index.
+            samples.push([Math.floor(p.x), Math.floor(p.y), ...colour, i]);
+          }));
+        });
+      }
+
+      const shot = fs.existsSync(shotPath) ? fs.readFileSync(shotPath).toString('base64') : null;
+      const compared = shot && samples.length ? await page.evaluate(async ([data, wanted]) => {
+        const img = await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = `data:image/png;base64,${data}`; });
+        if (!img) return null;
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0);
+        const p = x.getImageData(0, 0, img.width, img.height).data;
+        let match = 0, worst = 0;
+        const perCell = new Map();
+        for (const [sx, sy, r, g, b, cell] of wanted) {
+          const i = 4 * (sy * img.width + sx);
+          const off = Math.max(Math.abs(p[i] - r), Math.abs(p[i + 1] - g), Math.abs(p[i + 2] - b));
+          const tally = perCell.get(cell) ?? { ok: 0, all: 0, seen: null, want: null };
+          tally.all++;
+          if (off <= 40) {
+            match++;
+            tally.ok++;
+          } else if (!tally.seen) {
+            tally.seen = `rgb(${p[i]},${p[i + 1]},${p[i + 2]})@${sx},${sy}`;
+            tally.want = `rgb(${r},${g},${b})`;
+          }
+          perCell.set(cell, tally);
+          worst = Math.max(worst, off);
+        }
+        // The cells that fail most, with a pixel each: where the drawing departs from the art.
+        const bad = [...perCell.entries()].filter(([, t]) => t.ok / t.all < 0.9).map(([c, t]) => `${c}:${t.ok}/${t.all} ${t.seen} for ${t.want}`);
+        return { width: img.width, height: img.height, match, total: wanted.length, worst, bad };
+      }, [shot, samples]).catch(() => null) : null;
+      const share = compared ? compared.match / compared.total : 0;
+      check('the drawn sprite sheet reproduces the generator\'s pixels, 95 % of them within 40 a channel', !!compared && share >= 0.95,
+        compared ? `${compared.match} of ${compared.total} pixels match (${(share * 100).toFixed(1)} %), the worst off by ${compared.worst}; ${compared.width}x${compared.height}; cells under 90 %: ${compared.bad.slice(0, 12).join(' | ') || 'none'}`
+          : `no comparison: ${grids.size} grid(s), ${colours ? 'colours' : 'no colours'}, ${cells ? 'cells' : 'no cells'}`);
+      notes.sheet = compared ? `${(share * 100).toFixed(1)} % of ${compared.total} pixels match` : 'none';
+
+      const errorsS = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errorsS.length === 0, errorsS.length ? errorsS.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
     // Candidate B, SPLIT (#76): switched on through the bench, live; PASS at the press, KICK's
     // flick, hold → flick and re-touch, two thumbs, a finger held across a switch, and 180°.
     // Candidate C, ONE FIRE (#77), shares the pass's helpers: `fire=1`. So does the layout matrix
@@ -635,8 +713,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       if (url.includes('match=1')) {
         const shot = (label) => page.screenshot({ path: path.join(outDir, `${name}-${label}.png`), timeout: 60_000 }).catch(() => {});
         const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})(?: side=(\d+))?/;
-        // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH.
-        const side = url.includes('match2') ? 2 : 1;
+        // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH; ?match5=1 or ?mode=match5,
+        // the 5v5 match (#103).
+        const side = url.includes('match5') ? 5 : url.includes('match2') ? 2 : 1;
         const fromM = logs.length;
         let started = lastLog(startedPattern);
         if (!url.includes('mode=match')) {
@@ -644,8 +723,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openedM = await openBench(2, [], false);
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
-          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?/, 10_000, fromM))?.match ?? null;
-          if (play && (side === 1 || play[3])) await press(side === 1 ? play[2] : play[3], 2);
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?/, 10_000, fromM))?.match ?? null;
+          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : 4] : null;
+          if (segment) await press(segment, 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
             started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
@@ -673,11 +753,17 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('SWITCH is shown, at least 44 x 44 pt, beside the action area', big && switchBox[0] + switchBox[2] / 2 > Number(n[0]) / 2,
             switchBox.length ? `switch=${switchBox.join(',')} px at ${ppp} px/pt` : 'no switch in the layout line');
           const fromS = logs.length;
-          if (big) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
-          const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
-          const switched = (await waitForLog(/ELEVEN match switched to=(\d+) from=(\d+)/, 10_000, fromS))?.match ?? null;
-          check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
-            `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
+          // At five a side the match is left to run untouched from its seed, so that the foul it
+          // gives is the one the seed's match gave in .NET; the 2v2 pass presses SWITCH.
+          if (big && side === 2) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
+          if (side === 2) {
+            const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
+            // An automatic switch can land between the press and the one it asked for: the switch
+            // to look for is to the footballer asked for.
+            const switched = asked ? (await waitForLog(new RegExp(`ELEVEN match switched to=(${asked[2]}) from=(\\d+)`), 10_000, fromS))?.match ?? null : null;
+            check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
+              `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
+          }
         }
 
         if (url.includes('matchview=1')) {
@@ -715,10 +801,43 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!result && /score=\d+-\d+/.test(result[1]) && /played=\d+/.test(result[1]) && halves === 1 && fulls === 1,
           `${result ? result[1] : 'no result'}; ${halves} half-time(s), ${fulls} full time(s)`);
         notes.result = result ? result[1] : 'none';
-        if (side === 2) {
+        if (side > 1) {
           const switches = logs.slice(fromM).filter((l) => /^ELEVEN match switched /.test(l)).length;
-          check('control switched through the 2v2 match', switches >= 2, `${switches} switch(es)`);
+          check(`control switched through the ${side}v${side} match`, switches >= 2, `${switches} switch(es)`);
           notes.result += `; ${switches} switches`;
+        }
+
+        if (side === 5) {
+          // A foul, and a restart of each kind the seed's match gives taken (#103): kick-off,
+          // throw-in, goal kick, corner and free kick. A penalty is counted when there is one.
+          const fouls = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ Foul\b/.test(l)).length;
+          const kinds = ['', 'kick-off', 'throw-in', 'goal kick', 'corner', 'free kick', 'penalty'];
+          const taken = new Map();
+          for (const l of logs.slice(fromM)) {
+            const t = /^ELEVEN event \d+ RestartTaken \d+ (\d+)/.exec(l);
+            if (t) taken.set(Number(t[1]), (taken.get(Number(t[1])) ?? 0) + 1);
+          }
+          const seen = [...taken.entries()].sort((a, b) => a[0] - b[0]).map(([k, c]) => `${kinds[k] ?? k} ${c}`).join(', ');
+          check('the 5v5 match gives a foul, and a restart of each kind is taken',
+            fouls >= 1 && [1, 2, 3, 4, 5].every((k) => taken.has(k)), `${fouls} foul(s); taken: ${seen || 'none'}`);
+          notes.result += `; ${fouls} fouls; ${seen}`;
+
+          // The off-screen cues (#102): footballers just outside the view are cued at its edge,
+          // every cue inside the play area. Counted each second of the match clock.
+          const cueLines = logs.slice(fromM).map((l) => /^ELEVEN cues second=(\d+) shown=(\d+) play=(\d+),(\d+),(\d+),(\d+) at=(\S*)/.exec(l)).filter(Boolean);
+          let cues = 0, outside = 0;
+          for (const c of cueLines) {
+            const [px, py, pw, ph] = c.slice(3, 7).map(Number);
+            for (const one of c[7] ? c[7].split(';') : []) {
+              const [x, y, size] = one.split(',').map(Number);
+              cues++;
+              if (x - size / 2 < px - 1 || x + size / 2 > px + pw + 1 || y - size / 2 < py - 1 || y + size / 2 > py + ph + 1) outside++;
+            }
+          }
+          const perSecond = cueLines.length ? cues / cueLines.length : 0;
+          check('footballers just off the screen are cued at its edge, inside the play area', cueLines.length > 0 && cues > 0 && outside === 0,
+            `${cues} cue(s) over ${cueLines.length} s, ${perSecond.toFixed(2)} a second; ${outside} outside the play area`);
+          notes.result += `; ${perSecond.toFixed(2)} cues a second`;
         }
         console.log(`::notice title=match ${name}::${notes.result}`);
         await sleep(1500);
@@ -743,11 +862,23 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           toFire ? toFire[0].replace('ELEVEN ', '') : `no switch line${openedC ? '' : ' (the bench did not open)'}; since: ${since(fromC)}`);
         await closeBench(openedC, 2);
 
-        // A tap: the quick pass, at the release.
-        await settle();
-        const fromTap = logs.length;
-        await burst(['touchStart', [pt(fire, 1)]], ['touchEnd', [pt(fire, 1)]]);
-        const tapped = (await waitForLog(actionPattern, 20_000, fromTap))?.match ?? null;
+        // A tap: the quick pass, at the release. The press and the release are sent together, but
+        // a busy runner's main thread can deliver the release a frame later: held that long, the
+        // input wasn't a tap, so it is sent again (twice at most), and the delay is noted.
+        let fromTap = logs.length;
+        let tapped = null;
+        const lateTaps = [];
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await settle();
+          fromTap = logs.length;
+          await burst(['touchStart', [pt(fire, 1)]], ['touchEnd', [pt(fire, 1)]]);
+          tapped = (await waitForLog(actionPattern, 20_000, fromTap))?.match ?? null;
+          const held = Number(/held=(\d+)ms/.exec(logs.slice(fromTap).find((l) => /^ELEVEN release /.test(l)) ?? '')?.[1] ?? 0);
+          if (!tapped || tapped[1] === 'tap' || held < 120) break;
+          lateTaps.push(`${held} ms`);
+          await waitForLog(/ELEVEN event \d+ (Kicked|KickMissed)/, 5_000, fromTap);
+        }
+        if (lateTaps.length) notes.lateTaps = lateTaps.join(', ');
         const tapResolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 20_000, fromTap);
         const tapPress = logs.slice(fromTap).find((l) => l.startsWith('ELEVEN press'));
         notes.fireTapLatencyMs = tapped ? Number(tapped[5]) : NaN;
@@ -776,7 +907,44 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           !!short && !!long && short[1] === 'holdkick' && long[1] === 'holdkick' && Number(long[2]) === 1 && Number(long[2]) >= Number(short[2]),
           `${short ? short[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromShort)}`}; then ${long ? long[0].replace('ELEVEN action ', '') : `no action line; since: ${since(fromLong)}`}`);
 
-        // A re-touch while the hold's kick waits for its tick shapes it, and kicks nothing more.
+        const s0 = at(n[8], n[9]);
+        const reach = n[10] * sx;
+        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
+        const aimAt = (m) => {
+          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
+          const length = Math.hypot(dx, dy) || 1;
+          const on = toScreen({ x: dx / length, y: dy / length }, 0);
+          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
+        };
+        // The stick, finger 1, steered at the ball on every trace line until he touches it: then
+        // he has it. The finger stays down; the caller lifts it.
+        const runOntoBall = async (from) => {
+          let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
+          for (let i = 1; i <= 5; i++) {
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
+            await sleep(20);
+          }
+          let ran = null;
+          for (let until = Date.now() + 40_000; Date.now() < until;) {
+            if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) break;
+            const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
+            if (!line) break;
+            ran = line.match;
+            if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) break;
+            s1 = aimAt(line.match);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
+          }
+          return { s1, ran, hasBall: !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, from)) };
+        };
+
+        // A re-touch while the hold's kick is under way shapes it, and kicks nothing more. With the
+        // ball at his feet the kick meets it and its aftertouch keeps the window open: from 10 m
+        // the wind-up's 0.1 s alone closes before a slow runner's re-touch arrives.
+        await settle();
+        const fromOnto = logs.length;
+        const onto = await runOntoBall(fromOnto);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         await settle();
         const fromShapeC = logs.length;
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
@@ -789,39 +957,18 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
         const kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
         check('a re-touch on FIRE during a kick shapes it and kicks nothing more', shapedC.some((l) => /target=shaping/.test(l)) && kicksC === 1,
-          `${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
+          `${onto.hasBall ? 'from the ball at his feet' : 'he never reached the ball'}; ${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
 
         // Both thumbs, and the kick's line: the stick, steered at the ball, runs the footballer onto
-        // it; a hold on FIRE then kicks it on along his heading, ahead of him.
+        // it; a hold on FIRE then kicks it on along his heading, ahead of him. From the practice
+        // start: the re-touch's kick above met the ball and sent it toward the goal and its keeper.
+        const fromReset = logs.length;
+        await tap(at(n[4], n[5]));
+        const reset = await waitForLog(/^ELEVEN reset$/, 10_000, fromReset);
+        if (!reset) notes.fireReset = 'RESET was not acknowledged; running from where the ball lies';
         await settle();
         const fromRun = logs.length;
-        const s0 = at(n[8], n[9]);
-        const reach = n[10] * sx;
-        const ballPattern = /ELEVEN trace tick=(\d+) player=(-?[\d.]+),(-?[\d.]+) ball=(-?[\d.]+),(-?[\d.]+),/;
-        const aimAt = (m) => {
-          const dx = Number(m[4]) - Number(m[2]), dy = Number(m[5]) - Number(m[3]);
-          const length = Math.hypot(dx, dy) || 1;
-          const on = toScreen({ x: dx / length, y: dy / length }, 0);
-          return { x: s0.x + on.x * reach, y: s0.y - on.y * reach };
-        };
-        let s1 = aimAt((await waitForLog(ballPattern, 20_000, logs.length))?.match ?? [0, 0, 10, 0, 20, 1]);
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(s0, 1)] });
-        for (let i = 1; i <= 5; i++) {
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt({ x: s0.x + ((s1.x - s0.x) * i) / 5, y: s0.y + ((s1.y - s0.y) * i) / 5 }, 1)] });
-          await sleep(20);
-        }
-        // Steered at the ball on every trace line until he touches it: then he has it.
-        let ran = null;
-        for (let until = Date.now() + 40_000; Date.now() < until;) {
-          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
-          const line = await waitForLog(ballPattern, Math.max(1, until - Date.now()), logs.length);
-          if (!line) break;
-          ran = line.match;
-          if (await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun)) break;
-          s1 = aimAt(line.match);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(s1, 1)] });
-        }
-        const hasBall = !!(await waitForLog(/ELEVEN event \d+ Touched 1/, 0, fromRun));
+        const { s1, ran, hasBall } = await runOntoBall(fromRun);
         const fromKick = logs.length;
         await holdFire(600, 2, [pt(s1, 1)]);
         const both = (await waitForLog(actionPattern, 20_000, fromKick))?.match ?? null;
@@ -1908,6 +2055,12 @@ try {
   // The 2v2 match (#95): a whole one on a phone through the bench, and SWITCH in landscape.
   await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60`, 'match2-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2`, 'match2-phone-landscape', quick(750, 342), true);
+  // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
+  await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
+  // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
+  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape.
+  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=18`, 'match5-phone', quick(390, 664), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

@@ -13,8 +13,8 @@ namespace Eleven.Simulation.Harness
         public ulong Seed;
         public int Goals;
 
-        /// <summary>Restarts awarded, by <see cref="RestartKind"/>: none, kick-off, throw-in, goal kick, corner.</summary>
-        public int[] Awarded = new int[5];
+        /// <summary>Restarts awarded, by <see cref="RestartKind"/>: none, kick-off, throw-in, goal kick, corner, free kick, penalty (#99).</summary>
+        public int[] Awarded = new int[7];
 
         public int Taken;
 
@@ -105,17 +105,17 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(TextWriter w, SimConfig config, IReadOnlyList<RestartTrial> trials)
         {
-            w.WriteLine("config_hash,seed,goals,kick_offs,throw_ins,goal_kicks,corners,taken,mean_dead_s,longest_dead_s,longest_idle_s,final_hash");
+            w.WriteLine("config_hash,seed,goals,kick_offs,throw_ins,goal_kicks,corners,free_kicks,penalties,taken,mean_dead_s,longest_dead_s,longest_idle_s,final_hash");
             foreach (RestartTrial t in trials)
             {
-                w.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8:F2},{9:F2},{10:F2},{11:x16}",
-                    config.Hash, t.Seed, t.Goals, t.Awarded[1], t.Awarded[2], t.Awarded[3], t.Awarded[4], t.Taken, t.MeanDeadSeconds, t.LongestDeadSeconds, t.LongestIdleSeconds, t.FinalHash));
+                w.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9},{10:F2},{11:F2},{12:F2},{13:x16}",
+                    config.Hash, t.Seed, t.Goals, t.Awarded[1], t.Awarded[2], t.Awarded[3], t.Awarded[4], t.Awarded[5], t.Awarded[6], t.Taken, t.MeanDeadSeconds, t.LongestDeadSeconds, t.LongestIdleSeconds, t.FinalHash));
             }
         }
 
         public static string KeyNumbers(IReadOnlyList<RestartTrial> trials)
         {
-            int goals = 0, kickOffs = 0, throws = 0, goalKicks = 0, corners = 0;
+            int goals = 0, kickOffs = 0, throws = 0, goalKicks = 0, corners = 0, freeKicks = 0, penalties = 0;
             double dead = 0, longest = 0, idle = 0;
             foreach (RestartTrial t in trials)
             {
@@ -124,14 +124,16 @@ namespace Eleven.Simulation.Harness
                 throws += t.Awarded[2];
                 goalKicks += t.Awarded[3];
                 corners += t.Awarded[4];
+                freeKicks += t.Awarded[5];
+                penalties += t.Awarded[6];
                 dead += t.MeanDeadSeconds;
                 longest = Math.Max(longest, t.LongestDeadSeconds);
                 idle = Math.Max(idle, t.LongestIdleSeconds);
             }
 
             return string.Format(CultureInfo.InvariantCulture,
-                "{0} matches of {1:F0} s: {2} goals, restarts {3} kick-offs, {4} throw-ins, {5} goal kicks, {6} corners; dead ball mean {7:F2} s, longest {8:F2} s; longest idle {9:F1} s",
-                trials.Count, MatchSeconds, goals, kickOffs, throws, goalKicks, corners, dead / Math.Max(1, trials.Count), longest, idle);
+                "{0} matches of {1:F0} s: {2} goals, restarts {3} kick-offs, {4} throw-ins, {5} goal kicks, {6} corners, {10} free kicks, {11} penalties; dead ball mean {7:F2} s, longest {8:F2} s; longest idle {9:F1} s",
+                trials.Count, MatchSeconds, goals, kickOffs, throws, goalKicks, corners, dead / Math.Max(1, trials.Count), longest, idle, freeKicks, penalties);
         }
     }
 }

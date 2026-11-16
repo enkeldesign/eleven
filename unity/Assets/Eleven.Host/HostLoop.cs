@@ -6,6 +6,7 @@ using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Pose = Eleven.Presentation.Pose;
 
 namespace Eleven.Host
 {
@@ -93,6 +94,7 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
+            _poses.Clear();
             // The player keeps every key (WebGLInput.captureAllKeyboardInput stays at its default):
             // keyboard focus and activation are Unity's UI's (#53). A text field raises the phone's
             // keyboard.
@@ -109,6 +111,15 @@ namespace Eleven.Host
             int maxViewAt = url.IndexOf("maxview=", StringComparison.Ordinal);
             if (maxViewAt >= 0) float.TryParse(url.Substring(maxViewAt + 8).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out maxView);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40), Mathf.Clamp(maxView, 7, 60));
+            // ?cues=15: how far outside the view, in metres, a footballer is cued at the edge; 0 for none (#102).
+            int cuesAt = url.IndexOf("cues=", StringComparison.Ordinal);
+            if (cuesAt >= 0 && float.TryParse(url.Substring(cuesAt + 5).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float cues))
+            {
+                _view.CueReach = Mathf.Clamp(cues, 0, 40);
+            }
+
+            // ?sprites=0: the footballers as discs, as before the action sprites (#101), for comparison.
+            _view.Sprites = !url.Contains("sprites=0");
             // ?safe=47,0,34,0: safe-area insets to try, in points: top, right, bottom, left (#31).
             // A browser on a desktop has none, so this stands in for a notch and a home indicator.
             int safeAt = url.IndexOf("safe=", StringComparison.Ordinal);
@@ -166,9 +177,31 @@ namespace Eleven.Host
 
             if (url.Contains("autorun")) RunScenario();
 
+            // ?sheet=1: the action sprites' sheet (#101), every pose in every kit, for the screenshot regression.
+            if (url.Contains("sheet=1"))
+            {
+                _view.ShowSheet(true);
+                Log(FormattableString.Invariant($"ELEVEN sprites sheet shown={_view.SheetShown} poses={ActionSprites.All.Length} size={ActionSprites.Size}"));
+
+                // What the sheet should look like, from the generator itself: the smoke compares the
+                // drawn pixels with these, so a change in the drawing (filtering, turn, colour, scale)
+                // fails it. The art itself is pinned in .NET (ActionSpriteTests).
+                foreach (Pose pose in ActionSprites.All)
+                {
+                    var rows = new string[ActionSprites.Size];
+                    for (int r = 0; r < rows.Length; r++) rows[r] = ActionSprites.Row(pose, r);
+                    Log($"ELEVEN sprites grid pose={(int)pose} rows={string.Join("|", rows)}");
+                }
+
+                var kits = new List<string>();
+                foreach (Rgba kit in PitchView.SheetKits) kits.Add($"{kit.ToHex()}/{ActionSprites.Shorts(kit).ToHex()}");
+                Log($"ELEVEN sprites colours o={ActionSprites.Outline.ToHex()} h={ActionSprites.Hair.ToHex()} f={ActionSprites.Skin.ToHex()} b={ActionSprites.Boot.ToHex()} g={ActionSprites.Glove.ToHex()} kits={string.Join(",", kits)}");
+            }
+
             // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch;
-            // ?mode=match2, a 2v2 match (#95).
+            // ?mode=match2, a 2v2 match (#95); ?mode=match5, a 5v5 match (#103).
             if (url.Contains("mode=match2")) StartMatch("address", 2);
+            else if (url.Contains("mode=match5")) StartMatch("address", 5);
             else if (url.Contains("mode=match")) StartMatch("address", 1);
         }
 
@@ -235,13 +268,27 @@ namespace Eleven.Host
             Vector2? keeper = Keeper(state, out Vec2 at) ? Vector2.Lerp(_previousKeeper, ToVector(at), alpha) : (Vector2?)null;
             int me = Controlled(state);
             if (_match) RenderSides(state, me, alpha);
+            DrawPoses(state, me);
 
             _view.Render(
                 Vector2.Lerp(Previous(me, state), ToVector(state.Players[me].Position), alpha),
                 keeper,
                 Vector3.Lerp(_previousBall, ToVector(state.Ball.Position), alpha),
                 _layout);
+
+            // The sheet's cells on screen (#101), when they move: for the smoke's comparison.
+            if (_view.SheetShown > 0)
+            {
+                string cells = _view.SheetReport(_layout);
+                if (cells != _sheetCells)
+                {
+                    _sheetCells = cells;
+                    Log($"ELEVEN sprites cells={cells}");
+                }
+            }
         }
+
+        private string _sheetCells;
 
         private void StepOnce()
         {
@@ -256,6 +303,7 @@ namespace Eleven.Host
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
             _simulator.Step(_commands, _events);
+            _poses.Observe(_simulator.PeekState(), _events, _config);
             _feel.Record(_simulator, _commands, _events);
             ObserveMatch();
 
@@ -347,6 +395,7 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, _bench.PracticeStart());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
+            _poses.Clear();
             _input.Clear();
             RememberPrevious();
             Log("ELEVEN reset");
@@ -431,6 +480,7 @@ namespace Eleven.Host
             _view.Use(_config);
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
+            _poses.Clear();
 
             Log(FormattableString.Invariant(
                 $"ELEVEN model switched to={ModelName(model)} tick={_simulator.Tick} before={before:x16} after={_simulator.StateHash():x16} config={_config.Hash:x16}"));
@@ -551,7 +601,7 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => _match ? (_perSide > 1 ? 2 : 1) : 0, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
+                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -630,6 +680,7 @@ namespace Eleven.Host
             bool resized = _layout.ScreenWidth != 0 && (_layout.ScreenWidth != Screen.width || _layout.ScreenHeight != Screen.height);
             _layout = Layout();
             _input.Place(_layout, PixelsPerPoint());
+            _view.PixelsPerPoint = PixelsPerPoint();
             if (resized)
             {
                 _input.Clear();

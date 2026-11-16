@@ -20,7 +20,8 @@ namespace Eleven.Simulation.Tests
 
         private static SimConfig Free(double? cutStrength = null, double? touchError = null, double? cutInterval = null)
         {
-            SimConfig config = new SimConfig(controlModel: ControlModel.Free);
+            // One sprint speed for every profile: the dribble's speed cost off (#96).
+            SimConfig config = new SimConfig(controlModel: ControlModel.Free).With("dribbleSpeedPoor", 1).With("dribbleSpeedGood", 1);
             if (cutStrength.HasValue) config = config.With("cutStrength", cutStrength.Value);
             if (touchError.HasValue) config = config.With("touchError", touchError.Value);
             if (cutInterval.HasValue) config = config.With("cutInterval", cutInterval.Value);

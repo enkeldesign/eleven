@@ -425,7 +425,8 @@ namespace Eleven.Simulation.Tests
 
                 // Every trial ends at a goal, in a keeper's hands or out of play: none runs out of time.
                 Assert.All(of, t => Assert.NotEqual("time", t.Outcome));
-                Assert.All(of, t => Assert.True(t.HomeKicks + t.AwayKicks + t.ChallengesWon >= 1, $"{tier} {t.Seed:x}: no kick and no challenge won"));
+                // Someone plays: a kick, a challenge won, or a dribble carried over a line (#96).
+                Assert.All(of, t => Assert.True(t.HomeKicks + t.AwayKicks + t.ChallengesWon >= 1 || t.Outcome == "out", $"{tier} {t.Seed:x}: no kick, no challenge won, and the ball not out"));
                 Assert.All(of, t => Assert.True(t.LongestIdleSeconds < 10, $"{tier} {t.Seed:x}: {t.LongestIdleSeconds} s with no one on the ball"));
                 Assert.True(of.Select(t => t.Outcome).Distinct().Count() >= 2, $"{tier}: every trial ended {of[0].Outcome}");
 

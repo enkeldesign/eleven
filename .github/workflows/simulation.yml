@@ -239,6 +239,36 @@ jobs:
           path: squad-trials/
           if-no-files-found: error
 
+      # Five a side (#96): the shape, the press and the dribble's cost, against the recorded reference.
+      - name: Play the 5v5 trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-5v5 5 | tee squads5.txt
+          echo "::notice title=5v5 trials::$(sed 's| -> .*||' squads5.txt)"
+          diff docs/simulation/squad-5v5-reference.csv squad-5v5/squad-5v5-trials.csv
+
+      # M3's gate (#103): a double round robin of six sides at five a side, against the recorded
+      # reference. The command fails on a stuck match or no spread by tier.
+      - name: Play the 5v5 league
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll league league | tee league.txt
+          echo "::notice title=5v5 league::$(sed 's| -> .*||' league.txt)"
+          diff docs/simulation/league-reference.csv league/league-matches.csv
+
+      - name: Publish the 5v5 league
+        uses: actions/upload-artifact@v4
+        with:
+          name: league
+          path: league/
+          if-no-files-found: error
+
+      # Off-screen threat fairness (#102): how often the CPU decides on footballers outside the
+      # human's view, by tier, against the recorded reference. Fails past the recorded bounds.
+      - name: Measure off-screen fairness
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll fairness fairness | tee fairness.txt
+          echo "::notice title=Off-screen fairness::$(sed 's| -> .*||' fairness.txt)"
+          diff docs/simulation/fairness-reference.csv fairness/fairness.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |

@@ -9,7 +9,10 @@ namespace Eleven.Simulation.Tests
     /// <summary>The standing challenge (#84): a contest for a ball an opponent controls, decided by where the ball is.</summary>
     public class ChallengeTests
     {
-        private static readonly SimConfig Free = SpikeScenario.Config();
+        // The challenge's own mechanics, shielding off (#97): a standing dribbler would otherwise
+        // turn the ball away from the challenger. The bench characterises the default.
+        private static readonly SimConfig Free = SpikeScenario.Config().With("shieldSpeed", 0);
+        private static readonly SimConfig Default = SpikeScenario.Config();
         private static readonly SimConfig Attached = Free.WithControlModel(ControlModel.Attached);
 
         private const int A = 1, B = 2;
@@ -122,17 +125,43 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Movement_avoids_the_challenge()
         {
-            // B commits at the ball where it is; A takes it away across him at a sprint.
+            // A takes the ball away across B at a sprint: B's commit wouldn't reach it, so he doesn't
+            // commit (#96), or commits and misses; either way A keeps it.
             SimState s = World(Free, 0.8);
             s.Players[0].Velocity = new Vec2(0, 7);
             s.Ball.Velocity = new Vec3(0, 7, 0);
             s.Players[1].Position = new Vec2(1.3, 0);
             var sim = new Simulator(Free, s);
             List<SimEvent> events = Run(sim, 60, _ => new Vec2(0, 1), t => t == 0 ? new Vec2(-1, 0) : new Vec2(-1, 0));
-            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeStarted);
-            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeMissed && e.Subject == B);
             Assert.DoesNotContain(events, e => e.Kind == SimEventKind.ChallengeWon);
-            Assert.Contains(events, e => e.Kind == SimEventKind.Touched && e.Subject == A && e.Tick > events.First(x => x.Kind == SimEventKind.ChallengeMissed).Tick);
+            Assert.Equal(events.Count(e => e.Kind == SimEventKind.ChallengeStarted), events.Count(e => e.Kind == SimEventKind.ChallengeMissed));
+            Assert.Contains(events, e => e.Kind == SimEventKind.Touched && e.Subject == A && e.Tick > 30);
+        }
+
+        // #96: a defender running alongside a dribbler, as a chase ends. He commits only when his
+        // commit will reach the ball, so he waits until he can, and then wins it.
+        [Theory]
+        [InlineData(ControlModel.Free)]
+        [InlineData(ControlModel.Attached)]
+        public void Chasing_alongside_he_commits_only_when_he_can_reach_the_ball_and_wins_it(ControlModel model)
+        {
+            SimConfig c = Free.WithControlModel(model);
+            double speed = 6.4;
+            SimState s = World(c, 0, dribblerVelocity: new Vec2(speed, 0));
+            s.Players[1].Position = new Vec2(-0.3, 0.6);
+            s.Players[1].Velocity = new Vec2(7, 0);
+            s.Players[1].Heading = 0;
+            var sim = new Simulator(c, s);
+            List<SimEvent> events = Run(sim, 4 * c.TickRate, _ => new Vec2(1, 0), t =>
+            {
+                SimState now = sim.PeekState();
+                Vec2 to = now.Ball.Position.Horizontal - P(now, B).Position;
+                return to * (1 / Math.Sqrt(to.LengthSquared));
+            });
+
+            Assert.Contains(events, e => e.Kind == SimEventKind.ChallengeWon && e.Subject == B);
+            long won = events.First(e => e.Kind == SimEventKind.ChallengeWon && e.Subject == B).Tick;
+            Assert.DoesNotContain(events, e => e.Kind == SimEventKind.ChallengeMissed && e.Tick < won);
         }
 
         [Fact]
@@ -312,17 +341,25 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void The_challenge_bench_shows_the_contest_and_matches_its_reference()
         {
-            List<ChallengeCase> cases = ChallengeBench.Characterise(Free);
+            List<ChallengeCase> cases = ChallengeBench.Characterise(Default);
             Assert.Equal(2 * ChallengeBench.Approaches.Count * ChallengeBench.Speeds.Count * 3, cases.Count);
 
-            // Against a standing dribbler every challenge wins; a sprinting one avoids it; good tacklers win at least as often as poor ones.
-            Assert.All(cases.Where(c => c.DribblerSpeed == 0), c => Assert.Equal("won", c.Outcome));
-            Assert.All(cases.Where(c => c.DribblerSpeed == 7), c => Assert.NotEqual("won", c.Outcome));
+            // A jogging dribbler loses every challenge; a sprinting one avoids most, and more
+            // than a jogging one (since #96 a challenge commits only when it will reach the ball, so
+            // a well-timed one can win at a sprint); good tacklers win at least as often as poor ones.
+            // A standing dribbler shields (#97): the challenge is a contest, won some of the time.
+            int standing = cases.Count(c => c.DribblerSpeed == 0);
+            Assert.InRange(cases.Count(c => c.DribblerSpeed == 0 && c.Outcome == "won"), 1, standing - 1);
+            Assert.All(cases.Where(c => c.DribblerSpeed == 3.5), c => Assert.Equal("won", c.Outcome));
+            int WonAt(double speed) => cases.Count(c => c.DribblerSpeed == speed && c.Outcome == "won");
+            int sprints = cases.Count(c => c.DribblerSpeed == 7);
+            Assert.True(WonAt(7) * 2 < sprints, $"{WonAt(7)} of {sprints} sprinting dribblers lost the ball");
+            Assert.True(WonAt(7) < WonAt(3.5), $"won {WonAt(7)} at a sprint, {WonAt(3.5)} at a jog");
             int Won(string profile) => cases.Count(c => c.Profile == profile && c.Outcome == "won");
             Assert.True(Won("good") > Won("poor"), $"good {Won("good")}, poor {Won("poor")}");
 
             var csv = new System.IO.StringWriter();
-            ChallengeBench.WriteCsv(csv, Free, cases);
+            ChallengeBench.WriteCsv(csv, Default, cases);
             string reference = System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "challenge-reference.csv");
             Assert.Equal(System.IO.File.ReadAllText(reference), csv.ToString());
         }

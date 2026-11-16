@@ -42,6 +42,9 @@ namespace Eleven.Simulation
                     {
                         m.Phase = MatchPhase.HalfTime;
                         m.PhaseTicks = Config.HalfTimeTicks;
+
+                        // Half-time's rest (#100): a share of every footballer's fatigue goes.
+                        for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].Fatigue *= 1 - Config.HalfTimeRecovery;
                         events.Add(new SimEvent(tick, SimEventKind.HalfTime, 0));
                     }
                     else
@@ -129,10 +132,15 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
 
-        public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts)
+        public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
+            int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0)
         {
+            HomeFouls = homeFouls;
+            AwayFouls = awayFouls;
+            HomePenalties = homePenalties;
+            AwayPenalties = awayPenalties;
             HomeTeam = homeTeam;
             AwayTeam = awayTeam;
             HomeGoals = homeGoals;
@@ -160,13 +168,23 @@ namespace Eleven.Simulation
         /// <summary>Restarts taken, kick-offs included.</summary>
         public int Restarts { get; }
 
+        /// <summary>Fouls each side committed (schema 2, #99).</summary>
+        public int HomeFouls { get; }
+
+        public int AwayFouls { get; }
+
+        /// <summary>Penalties each side was awarded (schema 2, #99).</summary>
+        public int HomePenalties { get; }
+
+        public int AwayPenalties { get; }
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
             var text = new StringBuilder();
             text.Append("eleven-result/").Append(SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\n",
-                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts));
+            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\n",
+                HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
@@ -181,6 +199,7 @@ namespace Eleven.Simulation
     {
         private readonly List<ResultGoal> _goals = new List<ResultGoal>();
         private int _restarts;
+        private int _homeFouls, _awayFouls, _homePenalties, _awayPenalties;
 
         public MatchResult? Result { get; private set; }
 
@@ -194,10 +213,23 @@ namespace Eleven.Simulation
                     _goals.Add(new ResultGoal(e.Other, after.Ball.LastPlayedBy, half, after.Match.ClockTicks * config.TickSeconds));
                 }
                 else if (e.Kind == SimEventKind.RestartTaken) _restarts++;
+                else if (e.Kind == SimEventKind.Foul)
+                {
+                    // The offender's side, by who he is (#99).
+                    int side = Array.Find(after.Players, p => p.Id == e.Subject).TeamId;
+                    if (side == after.Teams[0].Id) _homeFouls++;
+                    else if (side == after.Teams[1].Id) _awayFouls++;
+                }
+                else if (e.Kind == SimEventKind.RestartAwarded && e.Other == (int)RestartKind.Penalty)
+                {
+                    if (e.Subject == after.Teams[0].Id) _homePenalties++;
+                    else if (e.Subject == after.Teams[1].Id) _awayPenalties++;
+                }
                 else if (e.Kind == SimEventKind.FullTime && Result == null)
                 {
                     TeamState home = after.Teams[0], away = after.Teams[1];
-                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts);
+                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts,
+                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties);
                 }
             }
         }

@@ -75,7 +75,9 @@ namespace Eleven.Simulation.Tests
             List<SquadTrial> trials = SquadTrials.Run(SpikeScenario.Config(), 2);
             Assert.All(trials, t => Assert.True(t.Finished, $"{t.Seed:x} didn't finish"));
             Assert.True(trials.Sum(t => t.PassesCompleted) > 10, $"{trials.Sum(t => t.PassesCompleted)} passes completed");
-            Assert.True(trials.Sum(t => t.PassesCompleted) * 3 > trials.Sum(t => t.Passes), "fewer than a third of the passes reached a teammate");
+            // Over these 12 seeds, at least 30 %: since #99 a pass broken up by a foul counts as missed,
+            // and 12 matches vary by a few points either way (50 matches: 38 %).
+            Assert.True(trials.Sum(t => t.PassesCompleted) * 10 >= trials.Sum(t => t.Passes) * 3, $"{trials.Sum(t => t.PassesCompleted)} of {trials.Sum(t => t.Passes)} passes reached a teammate");
 
             // Spread, not bunched: teammates about 20 m apart, and never stuck together for long.
             Assert.All(trials, t => Assert.InRange(t.MeanSpacing, 8, 35));

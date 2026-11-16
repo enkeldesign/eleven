@@ -161,6 +161,47 @@ internal static class Program
                 return 0;
             }
 
+            case "league" when args.Length >= 2:
+            {
+                // M3's gate (#103): a double round robin of six sides at five a side. Fails if a
+                // match is stuck or the strongest tier takes no more points than the weakest.
+                SimConfig leagueConfig = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> sides = League.Sides();
+                List<LeagueMatch> played = League.Run(leagueConfig, sides);
+                List<LeagueRow> table = League.Table(sides, played);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "league-matches.csv"))) League.WriteMatches(csv, leagueConfig, sides, played);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "league-table.csv"))) League.WriteTable(csv, table);
+                Console.WriteLine($"config {leagueConfig.Hash:x16}, {League.KeyNumbers(played, table)} -> {args[1]}");
+                var tiers = League.ByTier(table);
+                if (played.Any(m => m.Stuck) || tiers[tiers.Count - 1].PointsPerMatch <= tiers[0].PointsPerMatch)
+                {
+                    Console.Error.WriteLine("The league failed its gate: a match stuck, or no spread by tier.");
+                    return 1;
+                }
+
+                return 0;
+            }
+
+            case "fairness" when args.Length >= 2:
+            {
+                // Off-screen threat fairness (#102): how often the human's CPU opponents decide on a
+                // footballer outside his view, by tier. Fails past the recorded bounds.
+                SimConfig fairConfig = SpikeScenario.Config();
+                int fairSeeds = args.Length >= 3 && int.TryParse(args[2], out int fs) && fs > 0 ? fs : FairnessTrials.Seeds;
+                List<FairnessTrial> fair = FairnessTrials.Run(fairConfig, fairSeeds);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "fairness.csv"))) FairnessTrials.WriteCsv(csv, fairConfig, fair);
+                Console.WriteLine($"config {fairConfig.Hash:x16}, {FairnessTrials.KeyNumbers(fair)} -> {args[1]}");
+                if (!fair.All(FairnessTrials.Within))
+                {
+                    Console.Error.WriteLine("Off-screen dependence is past its bound.");
+                    return 1;
+                }
+
+                return 0;
+            }
+
             case "air" when args.Length >= 2:
             {
                 // Headers and volleys (#94): contact by height, incoming speed and heading, and in CPU matches.
@@ -181,7 +222,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir>");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds]");
                 return 2;
         }
     }

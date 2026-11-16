@@ -78,6 +78,8 @@ namespace Eleven.Simulation
                 w.WriteInt32(player.Id);
                 w.WriteInt32(player.OwnerControllerId);
                 w.WriteInt32(player.TeamId);
+                w.WriteInt32(player.Slot);
+                w.WriteDouble(player.Fatigue, "Player.Fatigue");
                 w.WriteDouble(player.Capabilities.MaxSpeed, "Player.Capabilities.MaxSpeed");
                 w.WriteDouble(player.Capabilities.Acceleration, "Player.Capabilities.Acceleration");
                 w.WriteDouble(player.Capabilities.KickPower, "Player.Capabilities.KickPower");
@@ -87,6 +89,8 @@ namespace Eleven.Simulation
                 w.WriteDouble(player.Capabilities.BallControl, "Player.Capabilities.BallControl");
                 w.WriteDouble(player.Capabilities.Tackling, "Player.Capabilities.Tackling");
                 w.WriteDouble(player.Capabilities.Heading, "Player.Capabilities.Heading");
+                w.WriteDouble(player.Capabilities.Strength, "Player.Capabilities.Strength");
+                w.WriteDouble(player.Capabilities.Stamina, "Player.Capabilities.Stamina");
                 WriteVec2(w, player.Position, "Player.Position");
                 WriteVec2(w, player.Velocity, "Player.Velocity");
                 w.WriteDouble(player.Heading, "Player.Heading");
@@ -139,6 +143,9 @@ namespace Eleven.Simulation
             w.WriteInt32(Restart.WaitTicks);
             w.WriteInt32(Restart.TakerId);
             w.WriteByte(Restart.FromThrow ? (byte)1 : (byte)0);
+            w.WriteInt32(Restart.AdvantageTeam);
+            w.WriteInt32(Restart.AdvantageTicks);
+            WriteVec2(w, Restart.AdvantagePoint, "Restart.AdvantagePoint");
 
             w.WriteByte((byte)Match.Phase);
             w.WriteInt32(Match.ClockTicks);
@@ -218,6 +225,8 @@ namespace Eleven.Simulation
                     Id = r.ReadInt32(),
                     OwnerControllerId = r.ReadInt32(),
                     TeamId = r.ReadInt32(),
+                    Slot = r.ReadInt32(),
+                    Fatigue = r.ReadDouble("Player.Fatigue"),
                     Capabilities = new PlayerCapabilities
                     {
                         MaxSpeed = r.ReadDouble("Player.Capabilities.MaxSpeed"),
@@ -229,6 +238,8 @@ namespace Eleven.Simulation
                         BallControl = r.ReadDouble("Player.Capabilities.BallControl"),
                         Tackling = r.ReadDouble("Player.Capabilities.Tackling"),
                         Heading = r.ReadDouble("Player.Capabilities.Heading"),
+                        Strength = r.ReadDouble("Player.Capabilities.Strength"),
+                        Stamina = r.ReadDouble("Player.Capabilities.Stamina"),
                     },
                     Position = ReadVec2(r, "Player.Position"),
                     Velocity = ReadVec2(r, "Player.Velocity"),
@@ -285,7 +296,7 @@ namespace Eleven.Simulation
             {
                 On = ReadFlag(r.ReadByte(), "Restart.On"),
                 Phase = r.ReadByte() is byte phase && phase <= (byte)RestartPhase.Ready ? (RestartPhase)phase : throw new FormatException("Unknown restart phase."),
-                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Corner ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
+                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Penalty ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
                 AwardedTeam = r.ReadInt32(),
                 LastTouchedTeam = r.ReadInt32(),
                 Point = ReadVec2(r, "Restart.Point"),
@@ -293,6 +304,9 @@ namespace Eleven.Simulation
                 WaitTicks = r.ReadInt32(),
                 TakerId = r.ReadInt32(),
                 FromThrow = ReadFlag(r.ReadByte(), "Restart.FromThrow"),
+                AdvantageTeam = r.ReadInt32(),
+                AdvantageTicks = r.ReadInt32(),
+                AdvantagePoint = ReadVec2(r, "Restart.AdvantagePoint"),
             };
 
             state.Match = new MatchState
@@ -448,6 +462,12 @@ namespace Eleven.Simulation
 
         /// <summary>From the corner, to the attackers, when a defender touched it last over his own goal line.</summary>
         Corner = 4,
+
+        /// <summary>A direct free kick where a foul was committed, to the fouled side (#99).</summary>
+        FreeKick = 5,
+
+        /// <summary>From the penalty mark, to the fouled side, for a foul in the offender's own penalty area (#99).</summary>
+        Penalty = 6,
     }
 
     /// <summary>
@@ -483,6 +503,16 @@ namespace Eleven.Simulation
 
         /// <summary>Whether the ball is live from a throw-in no one else has played yet: it can't score.</summary>
         public bool FromThrow;
+
+        /// <summary>
+        /// Advantage played after a foul (#99): the fouled side, 0 for none; the steps left in which,
+        /// if they lose the ball, the foul is given after all; and where it was committed.
+        /// </summary>
+        public int AdvantageTeam;
+
+        public int AdvantageTicks;
+
+        public Vec2 AdvantagePoint;
     }
 
     public struct BallState
@@ -544,6 +574,12 @@ namespace Eleven.Simulation
 
         /// <summary>After a challenge, won or missed: he brakes, and can't play the ball or challenge.</summary>
         Recover = 2,
+
+        /// <summary>A slide tackle (#98): committed along its line, slowing, meeting the ball or the man.</summary>
+        Slide = 3,
+
+        /// <summary>On the ground after a slide (#98): he can't move, play the ball or challenge.</summary>
+        Grounded = 4,
     }
 
     public struct PlayerState
@@ -555,6 +591,20 @@ namespace Eleven.Simulation
 
         /// <summary>The player's team. Teammates share it; a quick pass only ever goes to a teammate (#38).</summary>
         public int TeamId;
+
+        /// <summary>
+        /// His place in his side's shape (#96): 1 to the side's outfielders, numbered from the back;
+        /// 0 for none (a keeper, practice, or a side too small for a shape). The footballer keeps it
+        /// whoever controls him.
+        /// </summary>
+        public int Slot;
+
+        /// <summary>
+        /// 0–1. How tired he is (#100): 0 fresh, as every new state has him, 1 spent. Running fast
+        /// tires him, running slowly rests him; it scales his top speed and acceleration down to
+        /// fatigueFloor.
+        /// </summary>
+        public double Fatigue;
 
         /// <summary>What this footballer can do. Read by the simulation, never changed by it.</summary>
         public PlayerCapabilities Capabilities;

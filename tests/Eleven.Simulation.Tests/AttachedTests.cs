@@ -302,7 +302,8 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void Better_control_drifts_less_at_the_same_speed()
         {
-            SimConfig config = Attached();
+            // The same speed at both profiles: with the ball, his top speed is otherwise ball control's too (#96).
+            SimConfig config = Attached().With("dribbleSpeedPoor", 0.92).With("dribbleSpeedGood", 0.92);
             double Drift(double ballControl)
             {
                 Func<long, Command[]> weave = tick => new[] { new Command(A, tick, new Vec2(Math.Cos(tick * 0.035), Math.Sin(tick * 0.035))) };

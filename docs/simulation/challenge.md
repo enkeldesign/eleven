@@ -11,6 +11,7 @@ A challenge is contextual: there is no tackle button. A footballer **commits** w
 - an opponent **controls** the ball;
 - the ball is within `challengeRange` (1.0 m) of him;
 - his stick is **closing** on it: at least half of it points at the ball;
+- the commit **will reach the ball** (#96). He runs along his stick's line through the commit, with the simulation's own movement (INV-13). The ball is carried on with whoever controls it. It must end within his reach. A defender running alongside a dribbler, closing on him slowly, waits until he can reach it, rather than committing at 1 m and ending short;
 - he is ready: not in a challenge, not winding up a kick, and not a keeper.
 
 Then the simulation runs his phases (INV-12):
@@ -54,17 +55,17 @@ A ball an opponent controls is not there for an ordinary touch, or for an ATTACH
 
 | From | standing | 3.5 m/s | 7 m/s |
 | --- | --- | --- | --- |
-| 0° | won / won / won | won / missed / missed | missed / missed / missed |
-| 45° | won / won / won | won / won / missed | none / none / none |
-| 90° | won / won / won | won / won / won | none / none / none |
+| 0° | won / won / won | won / won / won | none / none / none |
+| 45° | won / won / won | won / won / won | won / won / missed |
+| 90° | won / won / won | won / won / won | won / missed / won |
 | 135° | won / won / won | won / won / won | none / none / none |
 | 180° | won / won / won | won / won / won | none / none / none |
 
-- **A standing dribbler** loses the ball to every challenge.
-- **A jogging dribbler** beats a poor tackler coming from in front or at 45°, where the ball moves out of his reach during the commit. The good tackler, sooner and longer, still wins those.
-- **A sprinting dribbler** can't be caught from the side or behind by a challenger as fast as he is ("none"), and from in front the challenge commits too early and misses.
-- **ATTACHED** gives the same outcomes.
-- **Overall:** good 10 won, bench 9, poor 8, of 15 cases each.
+Since #96 a commit must reach the ball, and the dribbler at 7 m/s runs without it: he has pushed it ahead.
+- **A standing or jogging dribbler** loses the ball to every challenge.
+- **A sprinting dribbler** escapes a challenger from in front or behind ("none"). From the side, a well-timed challenge now wins: 4 of 6.
+- **ATTACHED** gives similar outcomes, and every timed challenge wins there.
+- **Overall under FREE:** good 12 won, bench 11, poor 11, of 15 cases each. Before #96: 10, 9 and 8, with 18 commits missed at a sprint that are now never started.
 
 ## The CPU outfielder
 
@@ -72,7 +73,11 @@ A ball an opponent controls is not there for an ordinary touch, or for an ATTACH
 - **He leads his tackle:** within 4 m of an opponent's ball he runs at where it will be a commit's time on.
 - **He defends at full speed** to his goal-side spot, which moves with the ball.
 
-**Finding.** In the CPU-against-CPU trials (`cpu-trials-reference.csv`) the challenges are few: 1 to 4 a tier, mostly missed. The cause isn't the challenge. A footballer runs with the ball under FREE as fast as he runs without it, so a defender caught behind the ball never catches the carrier, and the trials, starting with the ball loose, usually begin that way. Before #84 the defender won the ball by getting nearer than its carrier, the steal this issue removes. Whether running with the ball should cost speed is a feel question for the bench, not decided here. Restarts (#85) put defenders goal-side, where challenges will come.
+**Finding, and its fix (#96).** In M1's trials the CPU started challenges and won none. A carrier ran as fast as a defender, so a defender caught behind never got closer. Committing at 1 m alongside, he ended a step's closing short of his 0.83 m reach. #96 fixes both:
+- running with the ball costs speed ([dribble.md](dribble.md#running-with-the-ball));
+- a commit must reach the ball.
+
+The CPU trials now see challenges won by every tier: Apprentice 3, Club 4, Pro 8, Elite 10 (`cpu-trials-reference.csv`).
 
 ## Tests
 

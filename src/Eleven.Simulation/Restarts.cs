@@ -23,11 +23,85 @@ namespace Eleven.Simulation
         /// <summary>m. The goal area's depth and reach past each post: Law 1's 5.5 m.</summary>
         public const double GoalArea = 5.5;
 
+        /// <summary>m. The penalty mark's distance from the goal line (Law 1, #99).</summary>
+        public const double PenaltyMark = 11;
+
+        /// <summary>m. A free kick this close to the goal it attacks is shot (#99), a technical constant.</summary>
+        public const double FreeKickShot = 25;
+
+        /// <summary>m. The penalty area's depth from the goal line, and its half-width (Law 1, #99).</summary>
+        public const double PenaltyAreaDepth = 16.5, PenaltyAreaHalfWidth = 20.16;
+
+        /// <summary>Whether <paramref name="at"/> is in the penalty area at the <paramref name="end"/> (+1 or −1) end (#99).</summary>
+        public static bool InPenaltyArea(Vec2 at, int end, SimConfig config) =>
+            at.X * end >= config.GoalLineX - PenaltyAreaDepth && at.X * end <= config.GoalLineX && (at.Y < 0 ? -at.Y : at.Y) <= PenaltyAreaHalfWidth;
+
         /// <summary>m. How far behind the ball its taker is placed.</summary>
         public const double TakerBehind = 0.6;
 
         // Set by the goal line on the step it judges a crossing (#85): which end, and whether it scored.
         private int _crossedEnd;
+
+        // This step's foul, if any (#99): the offender and the footballer fouled, by index; -1 for none.
+        private int _foulBy = -1, _foulOn = -1;
+
+        // A foul (#99), with a referee to see it: the first of a step counts.
+        private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
+        {
+            if (!_state.Restart.On || _foulBy >= 0 || offender < 0 || fouled < 0) return;
+            _foulBy = offender;
+            _foulOn = fouled;
+            events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
+        }
+
+        // The referee's call on this step's foul (#99): in the offender's penalty area a penalty;
+        // elsewhere advantage while the fouled side has the ball, or a direct free kick at once.
+        private void Judge(long tick, List<SimEvent> events)
+        {
+            PlayerState fouled = _state.Players[_foulOn];
+            int team = fouled.TeamId, end = AttackSignOf(team);
+            Vec2 at = fouled.Position;
+            double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
+            at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
+            if (InPenaltyArea(fouled.Position, end, Config))
+            {
+                Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
+                return;
+            }
+
+            int holder = ControllerOfBall();
+            int ticks = (int)System.Math.Round(Config.AdvantageTime * Config.TickRate);
+            if (holder >= 0 && _state.Players[holder].TeamId == team && ticks > 0)
+            {
+                ref RestartState r = ref _state.Restart;
+                r.AdvantageTeam = team;
+                r.AdvantageTicks = ticks;
+                r.AdvantagePoint = at;
+                events.Add(new SimEvent(tick, SimEventKind.AdvantagePlayed, team));
+                return;
+            }
+
+            Stop(RestartKind.FreeKick, team, at, tick, events);
+        }
+
+        // Advantage running (#99): given after all if the fouled side loses the ball within it.
+        private void StepAdvantage(long tick, List<SimEvent> events)
+        {
+            ref RestartState r = ref _state.Restart;
+            if (r.AdvantageTeam == 0) return;
+            int holder = ControllerOfBall();
+            if (holder >= 0 && _state.Players[holder].TeamId != r.AdvantageTeam)
+            {
+                Stop(RestartKind.FreeKick, r.AdvantageTeam, r.AdvantagePoint, tick, events);
+                return;
+            }
+
+            if (--r.AdvantageTicks <= 0)
+            {
+                r.AdvantageTeam = r.AdvantageTicks = 0;
+                r.AdvantagePoint = Vec2.Zero;
+            }
+        }
         private bool _crossedMouth;
 
         /// <summary>Whether the ball is in play: always without a referee, and only when live with one.</summary>
@@ -134,6 +208,14 @@ namespace Eleven.Simulation
                         int awarded = r.LastTouchedTeam != 0 ? Opponents(r.LastTouchedTeam) : TeamAttacking(x >= 0 ? -1 : 1);
                         Stop(RestartKind.ThrowIn, awarded, new Vec2(x, side * Config.TouchlineY), tick, events);
                     }
+                    else if (_foulBy >= 0)
+                    {
+                        Judge(tick, events);
+                    }
+                    else
+                    {
+                        StepAdvantage(tick, events);
+                    }
 
                     break;
                 }
@@ -160,6 +242,8 @@ namespace Eleven.Simulation
             r.WaitTicks = 0;
             r.TakerId = 0;
             r.FromThrow = false;
+            r.AdvantageTeam = r.AdvantageTicks = 0;
+            r.AdvantagePoint = Vec2.Zero;
             _state.Ball.AttachedTo = 0;
             events.Add(new SimEvent(tick, SimEventKind.RestartAwarded, awarded, other: (int)kind));
         }
@@ -244,6 +328,29 @@ namespace Eleven.Simulation
                 }
             }
 
+            // A penalty (#99, Law 14): the defending keeper on his line, between the posts; everyone
+            // else but the taker outside the area and the law's distance from the mark.
+            if (r.Kind == RestartKind.Penalty)
+            {
+                int end = AttackSignOf(r.AwardedTeam);
+                double back = Config.GoalLineX - PenaltyMark - RestartDistance - 0.5;
+                for (int i = 0; i < _state.Players.Length; i++)
+                {
+                    if (i == taker) continue;
+                    ref PlayerState p = ref _state.Players[i];
+                    bool defendingKeeper = KeeperOf(p.Id) >= 0 && p.TeamId != r.AwardedTeam;
+                    if (defendingKeeper)
+                    {
+                        p.Position = new Vec2(end * (Config.GoalLineX - 0.3), 0);
+                        p.Heading = end > 0 ? Math.PI : 0;
+                    }
+                    else if (InPenaltyArea(p.Position, end, Config) || (p.Position - r.Point).LengthSquared < RestartDistance * RestartDistance)
+                    {
+                        p.Position = new Vec2(end * back, p.Position.Y);
+                    }
+                }
+            }
+
             r.Phase = RestartPhase.Ready;
             r.PhaseTicks = Config.RestartReadyTicks;
             r.WaitTicks = 0;
@@ -272,7 +379,7 @@ namespace Eleven.Simulation
         private static void ValidateRestart(SimState state, SimConfig config)
         {
             RestartState r = state.Restart;
-            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.Corner) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
+            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.Penalty) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
             if (!r.On)
             {
                 if (r.Phase != RestartPhase.Live) throw new ArgumentException("With the sequencer off, the ball is live.", nameof(state));
@@ -350,6 +457,23 @@ namespace Eleven.Simulation
                 case RestartKind.ThrowIn: return new KickIntent(new Vec2(sign * 0.7, -side * 0.7), 0.6, 0.4);
                 case RestartKind.GoalKick: return new KickIntent(new Vec2(sign, -side * 0.3), 0.8, 0.45);
                 case RestartKind.Corner: return new KickIntent(new Vec2((r.Point.X < 0 ? -1 : 1) * (config.GoalLineX - 11), 0) - r.Point, 0.6, 0.5);
+                case RestartKind.Penalty:
+                {
+                    // Low and hard into a corner; the side the seed's taker favours by his id.
+                    double corner = (taker.Id % 2 == 0 ? 1 : -1) * (config.GoalWidth / 2 - 0.6);
+                    return new KickIntent(new Vec2(sign * config.GoalLineX, corner) - r.Point, 0.9, 0.04);
+                }
+
+                case RestartKind.FreeKick:
+                {
+                    // Within shooting distance at goal, otherwise a long ball up the pitch.
+                    var goal = new Vec2(sign * config.GoalLineX, 0);
+                    Vec2 to = goal - r.Point;
+                    return to.LengthSquared <= Simulator.FreeKickShot * Simulator.FreeKickShot
+                        ? new KickIntent(to + new Vec2(0, side * (config.GoalWidth / 2 - 0.8)), 0.9, 0.12)
+                        : new KickIntent(new Vec2(sign, -side * 0.2), 0.85, 0.4);
+                }
+
                 default: return new KickIntent(new Vec2(sign, 0.3), 0.25, 0);
             }
         }

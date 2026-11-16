@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Eleven.Presentation;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
+using Pose = Eleven.Presentation.Pose;
 
 namespace Eleven.Host
 {
@@ -85,6 +87,40 @@ namespace Eleven.Host
         private readonly System.Collections.Generic.List<Transform> _opponents = new System.Collections.Generic.List<Transform>();
         private readonly Transform _marker;
         private int _perSide = 1;
+
+        // The off-screen cues (#102): a pointer at the play area's edge for each footballer just
+        // outside it, in his side's colour, made as they are needed. Drawn over the play, under
+        // the HUD; they take no touch, since the pitch's sprites never do.
+        private readonly System.Collections.Generic.List<SpriteRenderer> _cues = new System.Collections.Generic.List<SpriteRenderer>();
+        private Sprite _cueSprite;
+        private int _cuesShown;
+
+        // The play area the cues were last placed in, and where on screen each went: the trace
+        // reports these, not a re-projection through a camera or a layout that may have changed
+        // since (the half-time turn happens between a frame and the next step's trace).
+        private Rect _cuedIn;
+        private readonly System.Collections.Generic.List<string> _placed = new System.Collections.Generic.List<string>();
+
+        // The action sprites (#101): each kit's poses, generated at start from ActionSprites' grids,
+        // in point filtering so they stay crisp pixels. Discs with ?sprites=0, as before.
+        private readonly System.Collections.Generic.Dictionary<Color, Sprite[]> _poses = new System.Collections.Generic.Dictionary<Color, Sprite[]>();
+        private readonly System.Collections.Generic.List<Transform> _sheet = new System.Collections.Generic.List<Transform>();
+
+        /// <summary>m. A sprite's side: its body, about ten of its sixteen pixels across, is a footballer's diameter.</summary>
+        private const float SpriteSide = PlayerDiameter * ActionSprites.Size / 10f;
+
+        /// <summary>Whether footballers are drawn as action sprites (#101) rather than discs.</summary>
+        public bool Sprites { get; set; } = true;
+
+        /// <summary>m. How far outside the view a footballer is cued; 0 for none (<c>?cues=</c>, #102).</summary>
+        public float CueReach { get; set; } = (float)Eleven.Presentation.EdgeCues.Reach;
+
+        /// <summary>The HUD's scale, for the cues' sizes in points.</summary>
+        public float PixelsPerPoint { get; set; } = 1;
+
+        /// <summary>For the trace: how many cues the last frame drew.</summary>
+        public int CuesShown => _cuesShown;
+
         private float _ballDiameter;
         private Vector3 _ballShown;
         private PitchOrientation _orientation = PitchOrientation.Practice;
@@ -154,6 +190,9 @@ namespace Eleven.Host
             _opponentKeeper = Shape(root, disc, "Opponent keeper", HostPalette.OpponentKeeper, 4, PlayerDiameter);
             _opponents.Add(_opponent);
             _ball = Shape(root, disc, "Ball", HostPalette.Ball, 5, _ballDiameter);
+            foreach (Rgba kit in new[] { Domain.Player, Domain.Keeper, Domain.Opponent, Domain.OpponentKeeper }) _poses[kit.ToColor()] = MakePoses(kit);
+            Texture2D pointer = MakePointerTexture(32);
+            _cueSprite = Sprite.Create(pointer, new Rect(0, 0, pointer.width, pointer.height), new Vector2(0.5f, 0.5f), pointer.width);
             ShowMatch(false);
         }
 
@@ -259,6 +298,228 @@ namespace Eleven.Host
 
             _ballShown = _ball.localPosition;
             Frame(player, new Vector2(_ballShown.x, _ballShown.y), layout);
+            PlaceCues(layout);
+            PlaceSheet(layout);
+        }
+
+        // A cue for each of the match's footballers drawn outside the play area, within the reach.
+        private void PlaceCues(in HudLayout layout)
+        {
+            _cuedIn = layout.PlayArea;
+            _placed.Clear();
+            int shown = 0;
+            if (_perSide > 0 && _opponentKeeper.gameObject.activeSelf)
+            {
+                for (int i = 0; i < _mates.Count; i++) Cue(_mates[i], HostPalette.Player, layout, ref shown);
+                for (int i = 0; i < _opponents.Count; i++) Cue(_opponents[i], HostPalette.Opponent, layout, ref shown);
+                Cue(_opponentKeeper, HostPalette.OpponentKeeper, layout, ref shown);
+                Cue(_keeper, HostPalette.Keeper, layout, ref shown);
+            }
+
+            for (int i = shown; i < _cues.Count; i++) _cues[i].gameObject.SetActive(false);
+            _cuesShown = shown;
+        }
+
+        private void Cue(Transform footballer, Color colour, in HudLayout layout, ref int shown)
+        {
+            if (!footballer.gameObject.activeSelf) return;
+            Vector3 screen = _camera.WorldToScreenPoint(footballer.position);
+            Rect play = layout.PlayArea;
+            Eleven.Presentation.EdgeCue? cue = Eleven.Presentation.EdgeCues.Place(screen.x, layout.ScreenHeight - screen.y, play.x, play.y, play.width, play.height,
+                _pixelsPerMetre, PixelsPerPoint, CueReach);
+            if (!cue.HasValue) return;
+            if (shown == _cues.Count)
+            {
+                Transform made = Shape(_root, _cueSprite, $"Cue {shown + 1}", colour, 6, 1);
+                _cues.Add(made.GetComponent<SpriteRenderer>());
+            }
+
+            SpriteRenderer r = _cues[shown++];
+            Eleven.Presentation.EdgeCue c = cue.Value;
+            _placed.Add(System.FormattableString.Invariant($"{c.X:F0},{c.Y:F0},{c.Size:F0}"));
+            r.color = colour;
+            r.gameObject.SetActive(true);
+            Vector3 world = _camera.ScreenToWorldPoint(new Vector3((float)c.X, layout.ScreenHeight - (float)c.Y, 10));
+            r.transform.position = new Vector3(world.x, world.y, 0);
+            r.transform.localScale = Vector3.one * ((float)c.Size / _pixelsPerMetre);
+            // The cue's angle is on screen with y down; the sprite points right in the camera's frame.
+            r.transform.rotation = Quaternion.Euler(0, 0, _camera.transform.eulerAngles.z - (float)c.Angle * Mathf.Rad2Deg);
+        }
+
+        /// <summary>One footballer's drawn action this frame (#101): his pose and the way it faces, in world radians.</summary>
+        public readonly struct Drawn
+        {
+            public Drawn(Pose pose, double facing)
+            {
+                Pose = pose;
+                Facing = facing;
+            }
+
+            public Pose Pose { get; }
+            public double Facing { get; }
+        }
+
+        /// <summary>
+        /// The poses of this frame's footballers (#101), in RenderSides' order: the controlled
+        /// footballer, his keeper, his teammates, the opponents' outfielders and their keeper.
+        /// Presentation only: chosen from the state, never written back.
+        /// </summary>
+        public void SetPoses(Drawn me, Drawn keeper, System.Collections.Generic.IReadOnlyList<Drawn> mates, System.Collections.Generic.IReadOnlyList<Drawn> opponents, Drawn theirKeeper)
+        {
+            Dress(_player, HostPalette.Player, me);
+            Dress(_keeper, HostPalette.Keeper, keeper);
+            for (int i = 0; i < mates.Count && i < _mates.Count; i++) Dress(_mates[i], HostPalette.Player, mates[i]);
+            for (int i = 0; i < opponents.Count && i < _opponents.Count; i++) Dress(_opponents[i], HostPalette.Opponent, opponents[i]);
+            Dress(_opponentKeeper, HostPalette.OpponentKeeper, theirKeeper);
+        }
+
+        private void Dress(Transform footballer, Color kit, Drawn drawn)
+        {
+            var r = footballer.GetComponent<SpriteRenderer>();
+            if (!Sprites)
+            {
+                r.sprite = _discSprite;
+                footballer.localScale = Vector3.one * PlayerDiameter;
+                footballer.localRotation = Quaternion.identity;
+                return;
+            }
+
+            r.sprite = _poses[kit][(int)drawn.Pose];
+            r.color = Color.white;
+            footballer.localScale = Vector3.one * SpriteSide;
+            // The sprite faces up its sheet: turned to his facing, to the nearest eighth of a turn.
+            footballer.localRotation = Quaternion.Euler(0, 0, ActionSprites.Facing(drawn.Facing) - 90);
+        }
+
+        /// <summary>
+        /// The sprite sheet (#101, <c>?sheet=1</c>): every pose in every kit, facing up the screen,
+        /// in a grid over the play area, for the screenshot regression. The footballers and the
+        /// ball are hidden under it.
+        /// </summary>
+        public void ShowSheet(bool show)
+        {
+            if (show && _sheet.Count == 0)
+            {
+                foreach (Rgba kit in SheetKits)
+                {
+                    foreach (Pose pose in ActionSprites.All)
+                    {
+                        Transform t = Shape(_camera.transform, _poses[kit.ToColor()][(int)pose], $"Sheet {kit} {pose}", Color.white, 7, 1);
+                        _sheet.Add(t);
+                    }
+                }
+            }
+
+            foreach (Transform t in _sheet) t.gameObject.SetActive(show);
+            _player.gameObject.SetActive(!show);
+            _ball.gameObject.SetActive(!show);
+            _ballShadow.gameObject.SetActive(!show);
+        }
+
+        /// <summary>The sheet's kits, a row of poses each, in order.</summary>
+        public static readonly Rgba[] SheetKits = { Domain.Player, Domain.Keeper, Domain.Opponent, Domain.OpponentKeeper };
+
+        // The sheet's columns: whichever count gives the largest cells in the area.
+        private int SheetColumns(in HudLayout layout)
+        {
+            Rect area = SheetArea(layout);
+            int best = 1;
+            float largest = 0;
+            for (int columns = 1; columns <= Mathf.Max(1, _sheet.Count); columns++)
+            {
+                int rows = (_sheet.Count + columns - 1) / columns;
+                float cell = Mathf.Min(area.width / columns, area.height / Mathf.Max(1, rows));
+                if (cell > largest)
+                {
+                    largest = cell;
+                    best = columns;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>For the smoke test (#101): each sheet sprite's centre and side, x,y,size in HUD pixels with y down, in the sheet's order.</summary>
+        public string SheetReport(in HudLayout layout)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            float cell = SheetCell(layout);
+            Rect play = SheetArea(layout);
+            int columns = SheetColumns(layout);
+            for (int i = 0; i < _sheet.Count; i++)
+            {
+                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
+                parts.Add(System.FormattableString.Invariant($"{x:F1},{y:F1},{cell * 0.8f:F1}"));
+            }
+
+            return string.Join(";", parts);
+        }
+
+        private float SheetCell(in HudLayout layout)
+        {
+            Rect area = SheetArea(layout);
+            int columns = SheetColumns(layout);
+            return Mathf.Min(area.width / columns, area.height / Mathf.Max(1, (_sheet.Count + columns - 1) / columns));
+        }
+
+        // The play area below the status line, which sits over its top (#53): the sheet is laid out
+        // where nothing of the HUD covers it, as the match is framed.
+        private static Rect SheetArea(in HudLayout layout)
+        {
+            Rect play = layout.PlayArea;
+            float band = Mathf.Clamp(layout.StatusArea.yMax - play.yMin, 0, play.height * 0.5f);
+            return new Rect(play.x, play.y + band, play.width, play.height - band);
+        }
+
+        /// <summary>For the smoke test: how many sheet sprites are shown.</summary>
+        public int SheetShown => _sheet.FindAll(t => t.gameObject.activeSelf).Count;
+
+        // The sheet's grid: a row of poses for each kit, inside the play area, upright on screen.
+        private void PlaceSheet(in HudLayout layout)
+        {
+            if (_sheet.Count == 0 || !_sheet[0].gameObject.activeSelf) return;
+            Rect play = SheetArea(layout);
+            float cell = SheetCell(layout);
+            int columns = SheetColumns(layout);
+            for (int i = 0; i < _sheet.Count; i++)
+            {
+                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
+                Vector3 world = _camera.ScreenToWorldPoint(new Vector3(x, layout.ScreenHeight - y, 10));
+                _sheet[i].position = new Vector3(world.x, world.y, 0);
+                _sheet[i].rotation = _camera.transform.rotation;
+                _sheet[i].localScale = Vector3.one * (cell * 0.8f / _pixelsPerMetre);
+            }
+        }
+
+        private static Sprite[] MakePoses(Rgba kit)
+        {
+            var sprites = new Sprite[ActionSprites.All.Length];
+            foreach (Pose pose in ActionSprites.All)
+            {
+                Rgba[] pixels = ActionSprites.Draw(pose, kit);
+                var colours = new Color32[pixels.Length];
+                for (int i = 0; i < pixels.Length; i++) colours[i] = new Color32(pixels[i].R, pixels[i].G, pixels[i].B, pixels[i].A);
+                var texture = new Texture2D(ActionSprites.Size, ActionSprites.Size, TextureFormat.RGBA32, false)
+                {
+                    name = $"{pose} {kit}",
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                texture.SetPixels32(colours);
+                texture.Apply(false, true);
+                sprites[(int)pose] = Sprite.Create(texture, new Rect(0, 0, ActionSprites.Size, ActionSprites.Size), new Vector2(0.5f, 0.5f), ActionSprites.Size);
+            }
+
+            return sprites;
+        }
+
+        /// <summary>
+        /// For the smoke test (#102): the play area the cues were placed in, then each cue drawn as
+        /// x,y,size in HUD pixels with y down.
+        /// </summary>
+        public string CueReport()
+        {
+            return System.FormattableString.Invariant($"play={_cuedIn.x:F0},{_cuedIn.y:F0},{_cuedIn.width:F0},{_cuedIn.height:F0} at={string.Join(";", _placed)}");
         }
 
         /// <summary>For the smoke test: whether the player and the drawn ball are inside the play area.</summary>
@@ -441,6 +702,36 @@ namespace Eleven.Host
             spriteRenderer.color = colour;
             spriteRenderer.sortingOrder = order;
             return shape.transform;
+        }
+
+        // A white pointer, pointing right: a triangle with a soft edge, so a cue reads by its shape
+        // before its colour.
+        private static Texture2D MakePointerTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Pointer",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            var pixels = new Color32[size * size];
+            float half = size / 2f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    // Inside when |y - half| is under the edge that narrows from the back to the tip.
+                    float px = x + 0.5f, py = Mathf.Abs(y + 0.5f - half);
+                    float edge = half * (1 - px / size);
+                    float alpha = Mathf.Clamp01(edge - py) * Mathf.Clamp01(px) * Mathf.Clamp01(size - px);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         private static Texture2D MakeDiscTexture(int size)
