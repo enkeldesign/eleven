@@ -195,15 +195,16 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_slide_at_pace_from_behind_is_graded_as_a_slide_at_pace()
         {
-            // The foul's severity is read as it happens: a slide (0.45), at full pace (0.3), from
-            // behind (0.2), 0.95 in all, cautioned at the default thresholds with the reading exact.
-            // Graded after the slide's end, it would read as a standing challenge at rest (0.45).
-            SimState s = Fouling(Base, new Vec2(-10, 0));
+            // The foul's severity is read as it happens: a slide (0.45), at pace (up to 0.3), from
+            // behind (0.2), well over 0.85 with the reading exact. Graded after the slide's end, it
+            // would read as a standing challenge at rest (0.45).
+            SimConfig c = Base.With("cautionFrom", 0.85).With("sendOffFrom", 2);
+            SimState s = Fouling(c, new Vec2(-10, 0));
             int f = Index(s, Defender);
             s.Players[f].Challenge = ChallengePhase.Slide;
             s.Players[f].ChallengeTicks = 10;
             s.Players[f].Velocity = new Vec2(s.Players[f].Capabilities.MaxSpeed, 0);
-            var sim = new Simulator(Base, s);
+            var sim = new Simulator(c, s);
             List<SimEvent> e = Step(sim);
             Assert.Contains(e, x => x.Kind == SimEventKind.SlideFouled && x.Subject == Defender);
             Assert.Contains(e, x => x.Kind == SimEventKind.Cautioned && x.Subject == Defender);

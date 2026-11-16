@@ -45,12 +45,17 @@ namespace Eleven.Simulation
         // This step's foul, if any (#99): the offender and the footballer fouled, by index; -1 for none.
         private int _foulBy = -1, _foulOn = -1;
 
+        // This step's foul's severity (#108), read as it happens: by the time it is judged, a slide
+        // has gone to ground and the challenger stopped.
+        private double _foulSeverity;
+
         // A foul (#99), with a referee to see it: the first of a step counts.
         private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
         {
             if (!_state.Restart.On || _foulBy >= 0 || offender < 0 || fouled < 0) return;
             _foulBy = offender;
             _foulOn = fouled;
+            _foulSeverity = Severity(_state.Players[offender], _state.Players[fouled]);
             events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
         }
 
@@ -117,14 +122,22 @@ namespace Eleven.Simulation
             }
 
             var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Card, by.Id);
+            double severity = _foulSeverity + (2 * draws.NextUniform() - 1) * Config.CardNoise;
+            if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
+            else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
+        }
+
+        // A foul's severity (#108), as it happens: a slide over a standing challenge, the
+        // challenger's pace as a share of his top speed, and coming from behind the fouled
+        // footballer's facing.
+        private static double Severity(in PlayerState by, in PlayerState on)
+        {
             double speed = SimMath.Sqrt(by.Velocity.LengthSquared) / by.Capabilities.MaxSpeed;
             Vec2 facing = new Vec2(SimMath.Cos(on.Heading), SimMath.Sin(on.Heading));
             Vec2 from = by.Position - on.Position;
             bool behind = from.X * facing.X + from.Y * facing.Y < 0;
-            double severity = (by.Challenge == ChallengePhase.Slide ? SlideSeverity : StandingSeverity)
-                + PaceSeverity * (speed > 1 ? 1 : speed) + (behind ? BehindSeverity : 0) + (2 * draws.NextUniform() - 1) * Config.CardNoise;
-            if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
-            else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
+            return (by.Challenge == ChallengePhase.Slide ? SlideSeverity : StandingSeverity)
+                + PaceSeverity * (speed > 1 ? 1 : speed) + (behind ? BehindSeverity : 0);
         }
 
         // Severity's parts (#108): a standing challenge's and a slide's own, the share for full pace,
