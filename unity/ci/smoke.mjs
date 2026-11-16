@@ -960,7 +960,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           `${onto.hasBall ? 'from the ball at his feet' : 'he never reached the ball'}; ${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
 
         // Both thumbs, and the kick's line: the stick, steered at the ball, runs the footballer onto
-        // it; a hold on FIRE then kicks it on along his heading, ahead of him.
+        // it; a hold on FIRE then kicks it on along his heading, ahead of him. From the practice
+        // start: the re-touch's kick above met the ball and sent it toward the goal and its keeper.
+        const fromReset = logs.length;
+        await tap(at(n[4], n[5]));
+        const reset = await waitForLog(/^ELEVEN reset$/, 10_000, fromReset);
+        if (!reset) notes.fireReset = 'RESET was not acknowledged; running from where the ball lies';
         await settle();
         const fromRun = logs.length;
         const { s1, ran, hasBall } = await runOntoBall(fromRun);
