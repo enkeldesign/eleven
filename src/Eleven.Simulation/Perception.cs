@@ -282,6 +282,7 @@ namespace Eleven.Simulation
 
                 // Always two draws for each footballer, seen or not, so no one's error depends on who else is in sight.
                 Vec2 at = Seen(other.Position);
+                if (other.SentOff) continue; // off the pitch (#108)
                 if ((other.Position - body.Position).LengthSquared > c.Skill.VisionRange * c.Skill.VisionRange) continue;
                 others.Add(new SeenPlayer(turned ? Turn(at) : at, turned ? Turn(other.Velocity) : other.Velocity, teammate, keeper, teammate ? other.Fatigue : 0));
             }
