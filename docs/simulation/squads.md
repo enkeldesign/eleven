@@ -165,6 +165,6 @@ Measured locally, three seeds each:
 | Goals | 5 | 9 |
 
 - **60 Hz stays.** 120 Hz costs twice as much per second of play, and three seeds show no difference worth it.
-- **The spikes are the brains deciding in bursts:** every CPU footballer's decision tick lands on the same steps. A spread of decision ticks would smooth them, if the browser's frames need it.
+- **The spikes are not yet explained.** The likeliest cause is the CPU footballers' decisions landing on the same steps. If the browser's frames need it, measuring that comes first, then spreading the decision ticks.
 
 In the browser, `?mode=match11` starts an eleven-a-side match from the address. In trace, the host reports the step's mean and longest every five seconds of match clock. The smoke's `match11-phone` pass checks the mean against the same 4.2 ms.
