@@ -84,6 +84,106 @@ namespace Eleven.Simulation
             Stop(RestartKind.FreeKick, team, at, tick, events);
         }
 
+        /// <summary>Whether offside applies in this match (#107): a referee, two sides, and sides of at least offsideFrom outfielders.</summary>
+        private bool OffsideApplies()
+        {
+            if (!_state.Restart.On || _state.Teams.Length != 2) return false;
+            int outfield = 0;
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.TeamId == _state.Teams[0].Id && KeeperOf(p.Id) < 0) outfield++;
+            }
+
+            return outfield >= Config.OffsideFrom;
+        }
+
+        // Offside (Law 11, #107), at each of this step's touches of the ball, in order. A touch by a
+        // flagged footballer is the offence: an indirect free kick to the defenders where he is. Any
+        // other touch judges afresh who of the toucher's side is in an offside position, and clears
+        // the other side's flags; straight from a goal kick, a throw-in or a corner nobody is.
+        // Simplified: the position is judged at the touch and the offence is the next touch, so
+        // interfering with an opponent without touching the ball is left out (docs/simulation/offside.md).
+        //
+        // Judged in its own phase of the step, after the ball moves and before the goal line: an
+        // offence came first, so it stops play before any goal is credited. Only this step's events
+        // count: a caller may keep every step's in one list, as a replay does.
+        private void StepOffside(long tick, Vec3 ballAtTouch, List<SimEvent> events)
+        {
+            ref RestartState r = ref _state.Restart;
+            if (!r.On || r.Phase != RestartPhase.Live || MatchPaused || !OffsideApplies()) return;
+            RestartKind taken = RestartKind.None;
+            int takenBy = 0;
+            int count = events.Count;
+            for (int k = 0; k < count; k++)
+            {
+                SimEvent e = events[k];
+                if (e.Tick != tick) continue;
+                if (e.Kind == SimEventKind.RestartTaken)
+                {
+                    taken = (RestartKind)e.Other;
+                    takenBy = e.Subject;
+                }
+            }
+
+            for (int k = 0; k < count; k++)
+            {
+                SimEvent e = events[k];
+                if (e.Tick != tick) continue;
+                bool touch = e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached
+                    || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon || e.Kind == SimEventKind.KeeperHeld
+                    || e.Kind == SimEventKind.KeeperParried;
+                if (!touch) continue;
+                int at = IndexOfPlayer(e.Subject);
+                if (at < 0) continue;
+                PlayerState toucher = _state.Players[at];
+                if (at < 64 && (r.OffsideFlags & (1UL << at)) != 0)
+                {
+                    int awarded = Opponents(toucher.TeamId);
+                    double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
+                    Vec2 point = new Vec2(toucher.Position.X > most ? most : toucher.Position.X < -most ? -most : toucher.Position.X,
+                        toucher.Position.Y > wide ? wide : toucher.Position.Y < -wide ? -wide : toucher.Position.Y);
+                    events.Add(new SimEvent(tick, SimEventKind.Offside, toucher.Id, other: awarded));
+                    Stop(RestartKind.IndirectFreeKick, awarded, point, tick, events);
+                    return;
+                }
+
+                bool exempt = toucher.Id == takenBy && (taken == RestartKind.GoalKick || taken == RestartKind.ThrowIn || taken == RestartKind.Corner);
+                r.OffsideFlags = exempt ? 0 : Positions(toucher, ballAtTouch);
+            }
+        }
+
+        // Who of the toucher's side is in an offside position at his touch (Law 11): in the
+        // opponents' half, nearer their goal line than both the ball and the second-last opponent.
+        // The ball is where it was played, before this step's flight: every touch comes before the
+        // ball moves, so a kick's own direction and pace never decide it.
+        private ulong Positions(in PlayerState toucher, Vec3 ballAtTouch)
+        {
+            int sign = AttackSignOf(toucher.TeamId);
+            double ball = sign * ballAtTouch.X, last = double.NegativeInfinity, secondLast = double.NegativeInfinity;
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.TeamId == toucher.TeamId) continue;
+                double x = sign * p.Position.X;
+                if (x > last)
+                {
+                    secondLast = last;
+                    last = x;
+                }
+                else if (x > secondLast) secondLast = x;
+            }
+
+            ulong flags = 0;
+            for (int i = 0; i < _state.Players.Length && i < 64; i++)
+            {
+                PlayerState p = _state.Players[i];
+                if (p.TeamId != toucher.TeamId || p.Id == toucher.Id) continue;
+                double x = sign * p.Position.X;
+                if (x > 0 && x > ball && x > secondLast) flags |= 1UL << i;
+            }
+
+            return flags;
+        }
+
         // Advantage running (#99): given after all if the fouled side loses the ball within it.
         private void StepAdvantage(long tick, List<SimEvent> events)
         {
@@ -165,7 +265,8 @@ namespace Eleven.Simulation
             ref RestartState r = ref _state.Restart;
             if (!r.On || r.Phase != RestartPhase.Ready || player.Id != r.TakerId) return;
             events.Add(new SimEvent(tick, SimEventKind.RestartTaken, player.Id, other: (int)r.Kind));
-            r.FromThrow = r.Kind == RestartKind.ThrowIn;
+            // No goal straight from a throw-in (Law 15) or an indirect free kick (Law 13, #107).
+            r.FromThrow = r.Kind == RestartKind.ThrowIn || r.Kind == RestartKind.IndirectFreeKick;
             r.Phase = RestartPhase.Live;
             r.PhaseTicks = r.WaitTicks = 0;
         }
@@ -244,6 +345,7 @@ namespace Eleven.Simulation
             r.FromThrow = false;
             r.AdvantageTeam = r.AdvantageTicks = 0;
             r.AdvantagePoint = Vec2.Zero;
+            r.OffsideFlags = 0;
             _state.Ball.AttachedTo = 0;
             events.Add(new SimEvent(tick, SimEventKind.RestartAwarded, awarded, other: (int)kind));
         }
@@ -379,7 +481,7 @@ namespace Eleven.Simulation
         private static void ValidateRestart(SimState state, SimConfig config)
         {
             RestartState r = state.Restart;
-            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.Penalty) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
+            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.IndirectFreeKick) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
             if (!r.On)
             {
                 if (r.Phase != RestartPhase.Live) throw new ArgumentException("With the sequencer off, the ball is live.", nameof(state));
@@ -463,6 +565,10 @@ namespace Eleven.Simulation
                     double corner = (taker.Id % 2 == 0 ? 1 : -1) * (config.GoalWidth / 2 - 0.6);
                     return new KickIntent(new Vec2(sign * config.GoalLineX, corner) - r.Point, 0.9, 0.04);
                 }
+
+                case RestartKind.IndirectFreeKick:
+                    // No goal straight from it: a long ball up the pitch for a teammate (#107).
+                    return new KickIntent(new Vec2(sign, -side * 0.2), 0.85, 0.4);
 
                 case RestartKind.FreeKick:
                 {
