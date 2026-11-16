@@ -37,7 +37,7 @@ namespace Eleven.Simulation.Tests
 
             // Earlier in the match he waits; and no one fresher than cpuSubFatigue goes off.
             Assert.Equal((0, 0), ManagerBrain.Decide(Seen(share: C.CpuSubAfter - 0.01, players: side), C));
-            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(share: 0.9, players: new[] { Man(1, C.CpuSubFatigue - 0.01), Man(4, 0.2) }), C));
+            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(share: 0.9, players: new[] { Man(1, C.CpuSubFatigue - 0.01), Man(4, 0.05) }), C));
         }
 
         [Fact]

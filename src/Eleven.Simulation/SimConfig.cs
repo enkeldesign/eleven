@@ -133,7 +133,7 @@ namespace Eleven.Simulation
             double substitutions = 5,
             double substitutionWindows = 3,
             double cpuSubAfter = 0.67,
-            double cpuSubFatigue = 0.5)
+            double cpuSubFatigue = 0.2)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));

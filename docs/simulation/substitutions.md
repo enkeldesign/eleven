@@ -46,9 +46,27 @@ It is refused, with the reason as the command's rejection:
 His policy, in order:
 1. a footballer taken off injured is replaced at once;
 2. then one hurt and playing on;
-3. then, from `cpuSubAfter` (0.67) of the match, the most tired outfielder, if his fatigue is at least `cpuSubFatigue`.
+3. then, from `cpuSubAfter` (0.67) of the match, the most tired outfielder, if his fatigue is at least `cpuSubFatigue` (0.2).
 
 The first unused substitute comes on. It is a simple policy, not tactics.
+
+### Measured
+
+Twelve CPU 11v11 matches under the reference config, at each `cpuSubFatigue`. Minutes are the match clock scaled to 90.
+
+| `cpuSubFatigue` | Substitutions a match | Most by one side | Matches with none | Goals |
+| --- | --- | --- | --- | --- |
+| 1 (injuries only) | 0.2 | 1 | 10 | 17 |
+| 0.4 | 0.3 | 1 | 8 | 17 |
+| 0.3 | 0.6 | 1 | 5 | 19 |
+| **0.2** | 2.7 | 3 | 0 | 20 |
+
+- In these six-minute matches an outfielder's fatigue rarely passes 0.4, so a higher threshold makes almost no change.
+- At 0.2 every match has a substitution, 1.3 a side on average, with a median minute of 70. Professional sides use about four of their five.
+- Goals, passes and completion stay within the spread between thresholds.
+- These are untuned references.
+
+The 12-match 11v11 reference with substitutions: 20 goals, 518 passes, 275 completed, all finished.
 
 ## The host
 
