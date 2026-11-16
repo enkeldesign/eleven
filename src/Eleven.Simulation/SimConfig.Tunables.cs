@@ -162,6 +162,11 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "fatigueFloor", "fraction", 0.5, 1, 0.8, 0.9),
             new TunableParameter(TunableParameter.ControlGroup, "halfTimeRecovery", "fraction", 0, 1, 0.3, 0.7),
             new TunableParameter(TunableParameter.ControlGroup, "offsideFrom", "outfielders a side", 1, 10),
+            new TunableParameter(TunableParameter.ControlGroup, "cardsFrom", "outfielders a side", 1, 10),
+            new TunableParameter(TunableParameter.ControlGroup, "cautionFrom", "severity", 0, 2),
+            new TunableParameter(TunableParameter.ControlGroup, "sendOffFrom", "severity", 0, 2),
+            new TunableParameter(TunableParameter.ControlGroup, "cardNoise", "severity", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "dogsoRange", "m", 0, 60),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -255,6 +260,11 @@ namespace Eleven.Simulation
             "fatigueFloor" => FatigueFloor,
             "halfTimeRecovery" => HalfTimeRecovery,
             "offsideFrom" => OffsideFrom,
+            "cardsFrom" => CardsFrom,
+            "cautionFrom" => CautionFrom,
+            "sendOffFrom" => SendOffFrom,
+            "cardNoise" => CardNoise,
+            "dogsoRange" => DogsoRange,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -314,6 +324,7 @@ namespace Eleven.Simulation
             double advantageTime = AdvantageTime, challengeFoulReach = ChallengeFoulReach;
             double fatigueFrom = FatigueFrom, fatigueDrain = FatigueDrain, fatigueRecover = FatigueRecover, fatigueFloor = FatigueFloor, halfTimeRecovery = HalfTimeRecovery;
             double offsideFrom = OffsideFrom;
+            double cardsFrom = CardsFrom, cautionFrom = CautionFrom, sendOffFrom = SendOffFrom, cardNoise = CardNoise, dogsoRange = DogsoRange;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -398,6 +409,11 @@ namespace Eleven.Simulation
                     case "fatigueFloor": fatigueFloor = o.Value; break;
                     case "halfTimeRecovery": halfTimeRecovery = o.Value; break;
                     case "offsideFrom": offsideFrom = o.Value; break;
+                    case "cardsFrom": cardsFrom = o.Value; break;
+                    case "cautionFrom": cautionFrom = o.Value; break;
+                    case "sendOffFrom": sendOffFrom = o.Value; break;
+                    case "cardNoise": cardNoise = o.Value; break;
+                    case "dogsoRange": dogsoRange = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -512,7 +528,12 @@ namespace Eleven.Simulation
                 fatigueRecover: fatigueRecover,
                 fatigueFloor: fatigueFloor,
                 halfTimeRecovery: halfTimeRecovery,
-                offsideFrom: offsideFrom);
+                offsideFrom: offsideFrom,
+                cardsFrom: cardsFrom,
+                cautionFrom: cautionFrom,
+                sendOffFrom: sendOffFrom,
+                cardNoise: cardNoise,
+                dogsoRange: dogsoRange);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -610,7 +631,12 @@ namespace Eleven.Simulation
             fatigueRecover: FatigueRecover,
             fatigueFloor: FatigueFloor,
             halfTimeRecovery: HalfTimeRecovery,
-            offsideFrom: OffsideFrom);
+            offsideFrom: OffsideFrom,
+            cardsFrom: CardsFrom,
+            cautionFrom: CautionFrom,
+            sendOffFrom: SendOffFrom,
+            cardNoise: CardNoise,
+            dogsoRange: DogsoRange);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

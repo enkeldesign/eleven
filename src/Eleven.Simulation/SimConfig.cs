@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 23;
+        public const int FormatVersion = 24;
 
         public SimConfig(
             int tickRate = 60,
@@ -120,7 +120,12 @@ namespace Eleven.Simulation
             double fatigueRecover = 0.02,
             double fatigueFloor = 0.85,
             double halfTimeRecovery = 0.5,
-            double offsideFrom = 10)
+            double offsideFrom = 10,
+            double cardsFrom = 10,
+            double cautionFrom = 0.95,
+            double sendOffFrom = 1.2,
+            double cardNoise = 0.3,
+            double dogsoRange = 25)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -220,6 +225,11 @@ namespace Eleven.Simulation
             FatigueFloor = fatigueFloor;
             HalfTimeRecovery = halfTimeRecovery;
             OffsideFrom = offsideFrom;
+            CardsFrom = cardsFrom;
+            CautionFrom = cautionFrom;
+            SendOffFrom = sendOffFrom;
+            CardNoise = cardNoise;
+            DogsoRange = dogsoRange;
 
             CheckTunableRanges();
 
@@ -633,6 +643,21 @@ namespace Eleven.Simulation
         /// <summary>Offside (Law 11, #107) applies in matches of at least this many outfielders a side: 10, eleven a side only; small-sided football plays without it.</summary>
         public double OffsideFrom { get; }
 
+        /// <summary>Cards (Law 12, #108) are shown in matches of at least this many outfielders a side: 10, eleven a side only, so a sending-off never empties a small side.</summary>
+        public double CardsFrom { get; }
+
+        /// <summary>A foul this severe or more is reckless: a caution (#108).</summary>
+        public double CautionFrom { get; }
+
+        /// <summary>A foul this severe or more uses excessive force: a sending-off (#108).</summary>
+        public double SendOffFrom { get; }
+
+        /// <summary>How far the referee's reading of a foul's severity may vary either way, drawn from its own stream (#108).</summary>
+        public double CardNoise { get; }
+
+        /// <summary>A foul on a carrier this near the goal he attacks, with no defender but the keeper between him and it, denies an obvious goal-scoring opportunity (#108).</summary>
+        public double DogsoRange { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -777,7 +802,12 @@ namespace Eleven.Simulation
                 fatigueRecover: r.ReadDouble(nameof(FatigueRecover)),
                 fatigueFloor: r.ReadDouble(nameof(FatigueFloor)),
                 halfTimeRecovery: r.ReadDouble(nameof(HalfTimeRecovery)),
-                offsideFrom: r.ReadDouble(nameof(OffsideFrom)));
+                offsideFrom: r.ReadDouble(nameof(OffsideFrom)),
+                cardsFrom: r.ReadDouble(nameof(CardsFrom)),
+                cautionFrom: r.ReadDouble(nameof(CautionFrom)),
+                sendOffFrom: r.ReadDouble(nameof(SendOffFrom)),
+                cardNoise: r.ReadDouble(nameof(CardNoise)),
+                dogsoRange: r.ReadDouble(nameof(DogsoRange)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -882,6 +912,11 @@ namespace Eleven.Simulation
             w.WriteDouble(FatigueFloor, nameof(FatigueFloor));
             w.WriteDouble(HalfTimeRecovery, nameof(HalfTimeRecovery));
             w.WriteDouble(OffsideFrom, nameof(OffsideFrom));
+            w.WriteDouble(CardsFrom, nameof(CardsFrom));
+            w.WriteDouble(CautionFrom, nameof(CautionFrom));
+            w.WriteDouble(SendOffFrom, nameof(SendOffFrom));
+            w.WriteDouble(CardNoise, nameof(CardNoise));
+            w.WriteDouble(DogsoRange, nameof(DogsoRange));
             return w.ToArray();
         }
 

@@ -45,12 +45,22 @@ namespace Eleven.Simulation
         // This step's foul, if any (#99): the offender and the footballer fouled, by index; -1 for none.
         private int _foulBy = -1, _foulOn = -1;
 
+        // This step's foul's severity (#108), read as it happens: by the time it is judged, a slide
+        // has gone to ground and the challenger stopped.
+        private double _foulSeverity;
+
+        // Whether this step's foul denied an obvious goal-scoring opportunity (#108), read as it
+        // happens: later in the step another touch may take the ball from the footballer fouled.
+        private bool _foulDogso;
+
         // A foul (#99), with a referee to see it: the first of a step counts.
         private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
         {
             if (!_state.Restart.On || _foulBy >= 0 || offender < 0 || fouled < 0) return;
             _foulBy = offender;
             _foulOn = fouled;
+            _foulSeverity = Severity(_state.Players[offender], _state.Players[fouled]);
+            _foulDogso = Dogso(_state.Players[offender], _state.Players[fouled]);
             events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
         }
 
@@ -63,7 +73,8 @@ namespace Eleven.Simulation
             Vec2 at = fouled.Position;
             double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
             at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
-            if (InPenaltyArea(fouled.Position, end, Config))
+            bool inArea = InPenaltyArea(fouled.Position, end, Config);
+            if (inArea)
             {
                 Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
                 return;
@@ -82,6 +93,168 @@ namespace Eleven.Simulation
             }
 
             Stop(RestartKind.FreeKick, team, at, tick, events);
+        }
+
+        // This step's foul's card (#108), given in StepRestart before anything else, so it stands
+        // whichever restart follows: the free kick or penalty, or one for the ball leaving play,
+        // offside or the whistle in the same step.
+        private void Sanction(long tick, List<SimEvent> events)
+        {
+            PlayerState fouled = _state.Players[_foulOn];
+            Discipline(_foulBy, _foulOn, InPenaltyArea(fouled.Position, AttackSignOf(fouled.TeamId), Config), tick, events);
+        }
+
+        /// <summary>Whether cards are shown in this match (#108): a referee, two sides, and sides of at least cardsFrom outfielders.</summary>
+        private bool CardsApply()
+        {
+            if (!_state.Restart.On || _state.Teams.Length != 2) return false;
+            int outfield = 0;
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.TeamId == _state.Teams[0].Id && KeeperOf(p.Id) < 0) outfield++;
+            }
+
+            return outfield >= Config.CardsFrom;
+        }
+
+        // The referee's card for a foul (Law 12, #108), on the foul as it happened (RecordFoul).
+        // Denying an obvious goal-scoring opportunity sends off, or cautions in the area, where every challenge here plays for the ball. Otherwise
+        // the foul's severity as he reads it: a slide over a standing challenge, the challenger's
+        // pace, and from behind, give or take his reading (cardNoise, on the Card stream). Reckless
+        // from cautionFrom, a caution; excessive from sendOffFrom, a sending-off; a second caution
+        // sends off. Technical references, not tuned refereeing.
+        private void Discipline(int offender, int fouled, bool inArea, long tick, List<SimEvent> events)
+        {
+            if (!CardsApply()) return;
+            PlayerState by = _state.Players[offender];
+            if (_foulDogso)
+            {
+                if (inArea) Caution(offender, tick, events);
+                else SendOff(offender, tick, events);
+                return;
+            }
+
+            var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Card, by.Id);
+            double severity = _foulSeverity + (2 * draws.NextUniform() - 1) * Config.CardNoise;
+            if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
+            else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
+        }
+
+        // A foul's severity (#108), as it happens: a slide over a standing challenge, the
+        // challenger's pace as a share of his top speed, and coming from behind the fouled
+        // footballer's facing.
+        private static double Severity(in PlayerState by, in PlayerState on)
+        {
+            double speed = SimMath.Sqrt(by.Velocity.LengthSquared) / by.Capabilities.MaxSpeed;
+            Vec2 facing = new Vec2(SimMath.Cos(on.Heading), SimMath.Sin(on.Heading));
+            Vec2 from = by.Position - on.Position;
+            bool behind = from.X * facing.X + from.Y * facing.Y < 0;
+            return (by.Challenge == ChallengePhase.Slide ? SlideSeverity : StandingSeverity)
+                + PaceSeverity * (speed > 1 ? 1 : speed) + (behind ? BehindSeverity : 0);
+        }
+
+        // Severity's parts (#108): a standing challenge's and a slide's own, the share for full pace,
+        // and the share for coming from behind. Technical references.
+        private const double StandingSeverity = 0.25, SlideSeverity = 0.45, PaceSeverity = 0.3, BehindSeverity = 0.2;
+
+        // Denying an obvious goal-scoring opportunity (#108), simplified: the fouled footballer was
+        // carrying the ball within dogsoRange of the goal he attacks, and none of the offender's
+        // side but its keeper, the offender and anyone sent off, stood nearer that goal line than him.
+        private bool Dogso(in PlayerState by, in PlayerState on)
+        {
+            if (!Carries(_state, Config, on)) return false;
+            int end = AttackSignOf(on.TeamId);
+            Vec2 goal = new Vec2(end * Config.GoalLineX, 0);
+            if ((goal - on.Position).LengthSquared > Config.DogsoRange * Config.DogsoRange) return false;
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.TeamId == on.TeamId || p.Id == by.Id || p.SentOff || KeeperOf(p.Id) >= 0) continue;
+                if (end * p.Position.X > end * on.Position.X) return false;
+            }
+
+            return true;
+        }
+
+        private void Caution(int index, long tick, List<SimEvent> events)
+        {
+            ref PlayerState p = ref _state.Players[index];
+            if (p.SentOff) return;
+            p.Cautions++;
+            events.Add(new SimEvent(tick, SimEventKind.Cautioned, p.Id, other: p.Cautions));
+            if (p.Cautions >= 2) SendOff(index, tick, events);
+        }
+
+        /// <summary>m beyond the touchline where a footballer sent off stands, out of every reach (#108).</summary>
+        public const double SentOffBeyond = 10;
+
+        // A sending-off (#108): he leaves the pitch for the rest of the match. He goes beyond the
+        // touchline, out of every reach, and his side's shape closes up behind him. No CPU plays him;
+        // if a human did, that controller takes over the nearest CPU teammate who isn't the keeper.
+        private void SendOff(int index, long tick, List<SimEvent> events)
+        {
+            ref PlayerState p = ref _state.Players[index];
+            if (p.SentOff) return;
+            p.SentOff = true;
+            events.Add(new SimEvent(tick, SimEventKind.SentOff, p.Id));
+            if (_state.Ball.AttachedTo == p.Id) _state.Ball.AttachedTo = 0;
+
+            int slot = p.Slot;
+            p.Slot = 0;
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                if (_state.Players[i].TeamId == p.TeamId && slot > 0 && _state.Players[i].Slot > slot) _state.Players[i].Slot--;
+            }
+
+            Vec2 was = p.Position;
+            p.Position = new Vec2(p.Position.X, (p.Position.Y < 0 ? -1 : 1) * (Config.TouchlineY + SentOffBeyond));
+            p.Velocity = Vec2.Zero;
+            p.WindUpTicks = p.AftertouchTicks = p.TouchCooldown = p.CutCooldown = 0;
+            p.WindUpTarget = 0;
+            p.Turning = false;
+            p.Challenge = ChallengePhase.Ready;
+            p.ChallengeTicks = 0;
+            p.ChallengeLine = Vec2.Zero;
+
+            int cpu = CpuOf(p.Id);
+            if (cpu >= 0)
+            {
+                RemoveCpu(cpu);
+                return;
+            }
+
+            // A human's footballer: his controller takes over the CPU teammate nearest where he was.
+            int controller = p.OwnerControllerId, best = -1;
+            double nearest = double.MaxValue;
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                PlayerState q = _state.Players[i];
+                if (q.TeamId != p.TeamId || q.SentOff || KeeperOf(q.Id) >= 0 || CpuOf(q.Id) < 0) continue;
+                double d = (q.Position - was).LengthSquared;
+                if (d < nearest)
+                {
+                    nearest = d;
+                    best = i;
+                }
+            }
+
+            if (best < 0) return;
+            ref PlayerState taken = ref _state.Players[best];
+            // He answers to no controller: 0 is none's.
+            p.OwnerControllerId = 0;
+            taken.OwnerControllerId = controller;
+            RemoveCpu(CpuOf(taken.Id));
+            events.Add(new SimEvent(tick, SimEventKind.Switched, taken.Id, other: p.Id));
+        }
+
+        private void RemoveCpu(int cpu)
+        {
+            var kept = new CpuState[_state.Cpus.Length - 1];
+            for (int i = 0, j = 0; i < _state.Cpus.Length; i++)
+            {
+                if (i != cpu) kept[j++] = _state.Cpus[i];
+            }
+
+            _state.Cpus = kept;
         }
 
         /// <summary>Whether offside applies in this match (#107): a referee, two sides, and sides of at least offsideFrom outfielders.</summary>
@@ -162,7 +335,7 @@ namespace Eleven.Simulation
             double ball = sign * ballAtTouch.X, last = double.NegativeInfinity, secondLast = double.NegativeInfinity;
             foreach (PlayerState p in _state.Players)
             {
-                if (p.TeamId == toucher.TeamId) continue;
+                if (p.TeamId == toucher.TeamId || p.SentOff) continue;
                 double x = sign * p.Position.X;
                 if (x > last)
                 {
@@ -176,7 +349,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length && i < 64; i++)
             {
                 PlayerState p = _state.Players[i];
-                if (p.TeamId != toucher.TeamId || p.Id == toucher.Id) continue;
+                if (p.TeamId != toucher.TeamId || p.Id == toucher.Id || p.SentOff) continue;
                 double x = sign * p.Position.X;
                 if (x > 0 && x > ball && x > secondLast) flags |= 1UL << i;
             }
@@ -280,7 +453,13 @@ namespace Eleven.Simulation
         private void StepRestart(long tick, List<SimEvent> events)
         {
             ref RestartState r = ref _state.Restart;
-            if (!r.On || MatchPaused) return;
+            if (!r.On) return;
+
+            // This step's foul is sanctioned whatever stops play in it (#108): the ball over a line,
+            // offside or the whistle for half- or full time may take precedence over its free kick,
+            // but not over its card.
+            if (_foulBy >= 0) Sanction(tick, events);
+            if (MatchPaused) return;
             switch (r.Phase)
             {
                 case RestartPhase.Live:
@@ -289,6 +468,8 @@ namespace Eleven.Simulation
                     int team = TeamOf(ball.LastPlayedBy);
                     if (team != 0) r.LastTouchedTeam = team;
                     if (r.FromThrow && ball.LastPlayedBy != 0 && ball.LastPlayedBy != r.TakerId) r.FromThrow = false;
+
+                    bool overTouchline = (ball.Position.Y < 0 ? -ball.Position.Y : ball.Position.Y) - Config.BallRadius > Config.TouchlineY;
 
                     if (_crossedEnd != 0)
                     {
@@ -299,7 +480,7 @@ namespace Eleven.Simulation
                         else if (r.LastTouchedTeam == attackers) Stop(RestartKind.GoalKick, defenders, new Vec2(end * (Config.GoalLineX - GoalArea), side * (Config.GoalWidth / 2 + GoalArea)), tick, events);
                         else Stop(RestartKind.Corner, attackers, new Vec2(end * (Config.GoalLineX - 0.5), side * (Config.TouchlineY - 0.5)), tick, events);
                     }
-                    else if ((ball.Position.Y < 0 ? -ball.Position.Y : ball.Position.Y) - Config.BallRadius > Config.TouchlineY)
+                    else if (overTouchline)
                     {
                         double side = ball.Position.Y > 0 ? 1 : -1;
                         double x = ball.Position.X;
@@ -373,7 +554,7 @@ namespace Eleven.Simulation
                 for (int i = 0; i < _state.Players.Length; i++)
                 {
                     PlayerState p = _state.Players[i];
-                    if (p.TeamId != r.AwardedTeam || (pass == 0 && KeeperOf(p.Id) >= 0)) continue;
+                    if (p.SentOff || p.TeamId != r.AwardedTeam || (pass == 0 && KeeperOf(p.Id) >= 0)) continue;
                     double d = (p.Position - r.Point).LengthSquared;
                     if (d < nearest)
                     {
@@ -389,6 +570,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 ref PlayerState p = ref _state.Players[i];
+                if (p.SentOff) continue; // off the pitch for the rest of the match (#108)
                 p.Velocity = Vec2.Zero;
                 p.WindUpTicks = p.AftertouchTicks = p.TouchCooldown = p.CutCooldown = p.KickCooldown = 0;
                 p.WindUpDirection = p.WindUpStrength = p.WindUpLoft = p.AftertouchDirection = 0;
@@ -438,7 +620,7 @@ namespace Eleven.Simulation
                 double back = Config.GoalLineX - PenaltyMark - RestartDistance - 0.5;
                 for (int i = 0; i < _state.Players.Length; i++)
                 {
-                    if (i == taker) continue;
+                    if (i == taker || _state.Players[i].SentOff) continue;
                     ref PlayerState p = ref _state.Players[i];
                     bool defendingKeeper = KeeperOf(p.Id) >= 0 && p.TeamId != r.AwardedTeam;
                     if (defendingKeeper)
