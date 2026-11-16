@@ -8,7 +8,7 @@ Injuries are a competition rule in config data (#80): `injuriesFrom`, in outfiel
 
 ## At a foul
 
-`Simulator.Injure`, at every foul (#99), after the referee's card (#108), whichever restart follows: if the ball leaves play in the foul's step, that restart takes precedence over the free kick, but the injury is still judged.
+`Simulator.Injure`, at every foul (#99), after the referee's card (#108), first in the restart step: whatever else stops play in the foul's step (the ball leaving play, offside or the whistle) may take precedence over the free kick, but the injury is still judged.
 1. **The chance** is `injuryRisk` (0.01) times the foul's severity, the same severity the cards read, graded as the foul happens (`Simulator.Severity`):
    - 0.25 for a standing challenge, 0.45 for a slide;
    - up to 0.3 for the challenger's pace;
