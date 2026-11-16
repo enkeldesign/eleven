@@ -122,8 +122,8 @@ namespace Eleven.Simulation
             double halfTimeRecovery = 0.5,
             double offsideFrom = 10,
             double cardsFrom = 10,
-            double cautionFrom = 0.8,
-            double sendOffFrom = 1.15,
+            double cautionFrom = 0.95,
+            double sendOffFrom = 1.2,
             double cardNoise = 0.3,
             double dogsoRange = 25)
         {
