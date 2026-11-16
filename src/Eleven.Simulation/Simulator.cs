@@ -275,7 +275,7 @@ namespace Eleven.Simulation
                 plan = new CpuPlan(p.Mode, AtMostUnit(p.Move), planned, p.QuickPass);
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo);
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo, c.SubOff, c.SubOn);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)

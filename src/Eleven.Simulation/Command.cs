@@ -71,9 +71,19 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly int SwitchTo;
 
+        /// <summary>
+        /// A substitution (#110): the id of the footballer of this controller's side who goes off,
+        /// and of the substitute on its bench who comes on in his slot and place; both 0 for none.
+        /// Made at the end of the step, only at a stoppage or half-time, within the side's
+        /// substitutions and windows; refused otherwise, with the reason as the rejection.
+        /// </summary>
+        public readonly int SubOff, SubOn;
+
         public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null, CpuPlan? plan = null,
-            int switchTo = 0)
+            int switchTo = 0, int subOff = 0, int subOn = 0)
         {
+            SubOff = subOff;
+            SubOn = subOn;
             SwitchTo = switchTo;
             Plan = plan;
             ControllerId = controllerId;
@@ -133,5 +143,17 @@ namespace Eleven.Simulation
 
         /// <summary>A switch (#93) to a footballer who isn't a CPU-played outfielder of the controller's side.</summary>
         SwitchRefused = 7,
+
+        /// <summary>A substitution (#110) while the ball is in play, or after full time.</summary>
+        SubNotStopped = 8,
+
+        /// <summary>A substitution (#110) with the side's substitutions all made.</summary>
+        SubNoneLeft = 9,
+
+        /// <summary>A substitution (#110) in a new stoppage with the side's windows all used.</summary>
+        SubNoWindow = 10,
+
+        /// <summary>A substitution (#110) naming someone who can't go off (not of the side, or sent off) or can't come on (not on its bench, or already used).</summary>
+        SubIneligible = 11,
     }
 }

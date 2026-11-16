@@ -156,6 +156,9 @@ namespace Eleven.Simulation
 
         /// <summary>An injury (#109). Subject: the footballer hurt. <see cref="SimEvent.Other"/>: its <see cref="InjuryLevel"/>.</summary>
         Injured = 41,
+
+        /// <summary>A substitution (#110). Subject: the substitute who came on. <see cref="SimEvent.Other"/>: the footballer who went off.</summary>
+        Substituted = 42,
     }
 
     /// <summary>

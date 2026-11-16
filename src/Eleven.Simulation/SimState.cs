@@ -42,6 +42,9 @@ namespace Eleven.Simulation
         /// <summary>The CPU outfielders (#83), in ascending player id order, each one of <see cref="Players"/> and not a keeper.</summary>
         public CpuState[] Cpus = Array.Empty<CpuState>();
 
+        /// <summary>Both sides' substitutes (#110), in ascending id order: none in practice or a small side.</summary>
+        public BenchPlayer[] Bench = Array.Empty<BenchPlayer>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
@@ -49,13 +52,14 @@ namespace Eleven.Simulation
             copy.Cpus = (CpuState[])Cpus.Clone();
             copy.Players = (PlayerState[])Players.Clone();
             copy.Keepers = (KeeperState[])Keepers.Clone();
+            copy.Bench = (BenchPlayer[])Bench.Clone();
             return copy;
         }
 
         /// <summary>
         /// Canonical encoding, in this order: Tick (int64), Seed (uint64), Ball (its goal-line state one byte), player count (int32),
         /// each player, keeper count (int32), each keeper, team count (int32), each team, the restart, CPU count
-        /// (int32), each CPU outfielder. Field order within each is as declared, capabilities in their own
+        /// (int32), each CPU outfielder, bench count (int32), each substitute. Field order within each is as declared, capabilities in their own
         /// declaration order. Fails on NaN or ±Infinity anywhere.
         /// </summary>
         public void Encode(CanonicalWriter w)
@@ -134,6 +138,9 @@ namespace Eleven.Simulation
                 w.WriteInt32(team.Id);
                 w.WriteInt32(team.AttackSign);
                 w.WriteInt32(team.Goals);
+                w.WriteByte(team.Substitutions);
+                w.WriteByte(team.SubWindows);
+                w.WriteByte(team.SubWindowOpen ? (byte)1 : (byte)0);
             }
 
             w.WriteByte(Restart.On ? (byte)1 : (byte)0);
@@ -168,6 +175,29 @@ namespace Eleven.Simulation
                 WritePlan(w, cpu.Plan);
                 w.WriteByte(cpu.HasNext ? (byte)1 : (byte)0);
                 WritePlan(w, cpu.Next);
+            }
+
+            w.WriteInt32(Bench.Length);
+            foreach (BenchPlayer b in Bench)
+            {
+                w.WriteInt32(b.Id);
+                w.WriteInt32(b.TeamId);
+                w.WriteDouble(b.Capabilities.MaxSpeed, "Bench.Capabilities.MaxSpeed");
+                w.WriteDouble(b.Capabilities.Acceleration, "Bench.Capabilities.Acceleration");
+                w.WriteDouble(b.Capabilities.KickPower, "Bench.Capabilities.KickPower");
+                w.WriteDouble(b.Capabilities.KickError, "Bench.Capabilities.KickError");
+                w.WriteDouble(b.Capabilities.PassVision, "Bench.Capabilities.PassVision");
+                w.WriteDouble(b.Capabilities.PassAnticipation, "Bench.Capabilities.PassAnticipation");
+                w.WriteDouble(b.Capabilities.BallControl, "Bench.Capabilities.BallControl");
+                w.WriteDouble(b.Capabilities.Tackling, "Bench.Capabilities.Tackling");
+                w.WriteDouble(b.Capabilities.Heading, "Bench.Capabilities.Heading");
+                w.WriteDouble(b.Capabilities.Strength, "Bench.Capabilities.Strength");
+                w.WriteDouble(b.Capabilities.Stamina, "Bench.Capabilities.Stamina");
+                w.WriteDouble(b.Skill.DecisionInterval, "Bench.Skill.DecisionInterval");
+                w.WriteDouble(b.Skill.ReactionDelay, "Bench.Skill.ReactionDelay");
+                w.WriteDouble(b.Skill.PerceptionError, "Bench.Skill.PerceptionError");
+                w.WriteDouble(b.Skill.VisionRange, "Bench.Skill.VisionRange");
+                w.WriteByte(b.Used ? (byte)1 : (byte)0);
             }
         }
 
@@ -296,7 +326,11 @@ namespace Eleven.Simulation
             state.Teams = new TeamState[teams];
             for (int i = 0; i < teams; i++)
             {
-                state.Teams[i] = new TeamState { Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32() };
+                state.Teams[i] = new TeamState
+                {
+                    Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32(),
+                    Substitutions = r.ReadByte(), SubWindows = r.ReadByte(), SubWindowOpen = ReadFlag(r.ReadByte(), "Team.SubWindowOpen"),
+                };
             }
 
             state.Restart = new RestartState
@@ -344,6 +378,40 @@ namespace Eleven.Simulation
                     Plan = ReadPlan(r),
                     HasNext = ReadFlag(r.ReadByte(), "Cpu.HasNext"),
                     Next = ReadPlan(r),
+                };
+            }
+
+            int bench = r.ReadInt32();
+            if (bench < 0 || bench > 1024) throw new FormatException($"Implausible bench count {bench}.");
+            state.Bench = new BenchPlayer[bench];
+            for (int i = 0; i < bench; i++)
+            {
+                state.Bench[i] = new BenchPlayer
+                {
+                    Id = r.ReadInt32(),
+                    TeamId = r.ReadInt32(),
+                    Capabilities = new PlayerCapabilities
+                    {
+                        MaxSpeed = r.ReadDouble("Bench.Capabilities.MaxSpeed"),
+                        Acceleration = r.ReadDouble("Bench.Capabilities.Acceleration"),
+                        KickPower = r.ReadDouble("Bench.Capabilities.KickPower"),
+                        KickError = r.ReadDouble("Bench.Capabilities.KickError"),
+                        PassVision = r.ReadDouble("Bench.Capabilities.PassVision"),
+                        PassAnticipation = r.ReadDouble("Bench.Capabilities.PassAnticipation"),
+                        BallControl = r.ReadDouble("Bench.Capabilities.BallControl"),
+                        Tackling = r.ReadDouble("Bench.Capabilities.Tackling"),
+                        Heading = r.ReadDouble("Bench.Capabilities.Heading"),
+                        Strength = r.ReadDouble("Bench.Capabilities.Strength"),
+                        Stamina = r.ReadDouble("Bench.Capabilities.Stamina"),
+                    },
+                    Skill = new CpuSkill
+                    {
+                        DecisionInterval = r.ReadDouble("Bench.Skill.DecisionInterval"),
+                        ReactionDelay = r.ReadDouble("Bench.Skill.ReactionDelay"),
+                        PerceptionError = r.ReadDouble("Bench.Skill.PerceptionError"),
+                        VisionRange = r.ReadDouble("Bench.Skill.VisionRange"),
+                    },
+                    Used = ReadFlag(r.ReadByte(), "Bench.Used"),
                 };
             }
 
@@ -407,6 +475,34 @@ namespace Eleven.Simulation
 
         /// <summary>Goals this side has scored in the match (#86).</summary>
         public int Goals;
+
+        /// <summary>Substitutes this side has brought on (#110).</summary>
+        public byte Substitutions;
+
+        /// <summary>Stoppages in play in which this side has substituted (#110); half-time doesn't count.</summary>
+        public byte SubWindows;
+
+        /// <summary>Whether this side has substituted in the present stoppage (#110): more changes in it use no further window.</summary>
+        public bool SubWindowOpen;
+    }
+
+    /// <summary>
+    /// A substitute on the bench (#110). He comes on with these capabilities, fresh; a CPU plays
+    /// him with <see cref="Skill"/> where no controller is there to take him.
+    /// </summary>
+    public struct BenchPlayer
+    {
+        /// <summary>His id, positive and unlike any footballer's on the pitch or the bench. It is his own controller's id too, when he needs one.</summary>
+        public int Id;
+
+        public int TeamId;
+
+        public PlayerCapabilities Capabilities;
+
+        public CpuSkill Skill;
+
+        /// <summary>He has come on: he is on the pitch, or has since gone off, and can't come on again.</summary>
+        public bool Used;
     }
 
     /// <summary>Where a match is (#86). Numeric values are stable and encoded as one byte.</summary>

@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 25;
+        public const int FormatVersion = 26;
 
         public SimConfig(
             int tickRate = 60,
@@ -129,7 +129,11 @@ namespace Eleven.Simulation
             double injuriesFrom = 10,
             double injuryRisk = 0.01,
             double injurySerious = 0.3,
-            double injuredSpeed = 0.85)
+            double injuredSpeed = 0.85,
+            double substitutions = 5,
+            double substitutionWindows = 3,
+            double cpuSubAfter = 0.67,
+            double cpuSubFatigue = 0.5)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -238,6 +242,10 @@ namespace Eleven.Simulation
             InjuryRisk = injuryRisk;
             InjurySerious = injurySerious;
             InjuredSpeed = injuredSpeed;
+            Substitutions = substitutions;
+            SubstitutionWindows = substitutionWindows;
+            CpuSubAfter = cpuSubAfter;
+            CpuSubFatigue = cpuSubFatigue;
 
             CheckTunableRanges();
 
@@ -678,6 +686,18 @@ namespace Eleven.Simulation
         /// <summary>Injured but playing on, his top speed and acceleration fall to this share (#109).</summary>
         public double InjuredSpeed { get; }
 
+        /// <summary>Substitutes a side may bring on in a match (#110, Law 3).</summary>
+        public double Substitutions { get; }
+
+        /// <summary>Stoppages in play in which a side may substitute (#110, Law 3); half-time is free.</summary>
+        public double SubstitutionWindows { get; }
+
+        /// <summary>Share of the match played before a CPU manager replaces a tired footballer (#110).</summary>
+        public double CpuSubAfter { get; }
+
+        /// <summary>Fatigue from which a CPU manager replaces a footballer (#110).</summary>
+        public double CpuSubFatigue { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -831,7 +851,11 @@ namespace Eleven.Simulation
                 injuriesFrom: r.ReadDouble(nameof(InjuriesFrom)),
                 injuryRisk: r.ReadDouble(nameof(InjuryRisk)),
                 injurySerious: r.ReadDouble(nameof(InjurySerious)),
-                injuredSpeed: r.ReadDouble(nameof(InjuredSpeed)));
+                injuredSpeed: r.ReadDouble(nameof(InjuredSpeed)),
+                substitutions: r.ReadDouble(nameof(Substitutions)),
+                substitutionWindows: r.ReadDouble(nameof(SubstitutionWindows)),
+                cpuSubAfter: r.ReadDouble(nameof(CpuSubAfter)),
+                cpuSubFatigue: r.ReadDouble(nameof(CpuSubFatigue)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -945,6 +969,10 @@ namespace Eleven.Simulation
             w.WriteDouble(InjuryRisk, nameof(InjuryRisk));
             w.WriteDouble(InjurySerious, nameof(InjurySerious));
             w.WriteDouble(InjuredSpeed, nameof(InjuredSpeed));
+            w.WriteDouble(Substitutions, nameof(Substitutions));
+            w.WriteDouble(SubstitutionWindows, nameof(SubstitutionWindows));
+            w.WriteDouble(CpuSubAfter, nameof(CpuSubAfter));
+            w.WriteDouble(CpuSubFatigue, nameof(CpuSubFatigue));
             return w.ToArray();
         }
 
