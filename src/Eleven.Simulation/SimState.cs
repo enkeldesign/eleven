@@ -146,6 +146,7 @@ namespace Eleven.Simulation
             w.WriteInt32(Restart.AdvantageTeam);
             w.WriteInt32(Restart.AdvantageTicks);
             WriteVec2(w, Restart.AdvantagePoint, "Restart.AdvantagePoint");
+            w.WriteUInt64(Restart.OffsideFlags);
 
             w.WriteByte((byte)Match.Phase);
             w.WriteInt32(Match.ClockTicks);
@@ -296,7 +297,7 @@ namespace Eleven.Simulation
             {
                 On = ReadFlag(r.ReadByte(), "Restart.On"),
                 Phase = r.ReadByte() is byte phase && phase <= (byte)RestartPhase.Ready ? (RestartPhase)phase : throw new FormatException("Unknown restart phase."),
-                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.Penalty ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
+                Kind = r.ReadByte() is byte kind && kind <= (byte)RestartKind.IndirectFreeKick ? (RestartKind)kind : throw new FormatException("Unknown restart kind."),
                 AwardedTeam = r.ReadInt32(),
                 LastTouchedTeam = r.ReadInt32(),
                 Point = ReadVec2(r, "Restart.Point"),
@@ -307,6 +308,7 @@ namespace Eleven.Simulation
                 AdvantageTeam = r.ReadInt32(),
                 AdvantageTicks = r.ReadInt32(),
                 AdvantagePoint = ReadVec2(r, "Restart.AdvantagePoint"),
+                OffsideFlags = r.ReadUInt64(),
             };
 
             state.Match = new MatchState
@@ -468,6 +470,9 @@ namespace Eleven.Simulation
 
         /// <summary>From the penalty mark, to the fouled side, for a foul in the offender's own penalty area (#99).</summary>
         Penalty = 6,
+
+        /// <summary>Where an offside offence was committed, to the defending side (#107). No goal straight from it.</summary>
+        IndirectFreeKick = 7,
     }
 
     /// <summary>
@@ -501,7 +506,10 @@ namespace Eleven.Simulation
         /// <summary>The footballer who takes it, once it is set up; 0 before.</summary>
         public int TakerId;
 
-        /// <summary>Whether the ball is live from a throw-in no one else has played yet: it can't score.</summary>
+        /// <summary>
+        /// Whether the ball is live from a throw-in, or since #107 an indirect free kick, that no
+        /// one else has played yet: it can't score.
+        /// </summary>
         public bool FromThrow;
 
         /// <summary>
@@ -513,6 +521,13 @@ namespace Eleven.Simulation
         public int AdvantageTicks;
 
         public Vec2 AdvantagePoint;
+
+        /// <summary>
+        /// Offside (#107): the footballers, by index into the players, who were in an offside
+        /// position when a teammate last played the ball. A flagged footballer's next touch is the
+        /// offence; an opponent's touch clears every flag.
+        /// </summary>
+        public ulong OffsideFlags;
     }
 
     public struct BallState

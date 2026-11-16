@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 22;
+        public const int FormatVersion = 23;
 
         public SimConfig(
             int tickRate = 60,
@@ -119,7 +119,8 @@ namespace Eleven.Simulation
             double fatigueDrain = 0.012,
             double fatigueRecover = 0.02,
             double fatigueFloor = 0.85,
-            double halfTimeRecovery = 0.5)
+            double halfTimeRecovery = 0.5,
+            double offsideFrom = 10)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -218,6 +219,7 @@ namespace Eleven.Simulation
             FatigueRecover = fatigueRecover;
             FatigueFloor = fatigueFloor;
             HalfTimeRecovery = halfTimeRecovery;
+            OffsideFrom = offsideFrom;
 
             CheckTunableRanges();
 
@@ -628,6 +630,9 @@ namespace Eleven.Simulation
         /// <summary>The share of a footballer's lost energy half-time gives back (#100).</summary>
         public double HalfTimeRecovery { get; }
 
+        /// <summary>Offside (Law 11, #107) applies in matches of at least this many outfielders a side: 10, eleven a side only; small-sided football plays without it.</summary>
+        public double OffsideFrom { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -771,7 +776,8 @@ namespace Eleven.Simulation
                 fatigueDrain: r.ReadDouble(nameof(FatigueDrain)),
                 fatigueRecover: r.ReadDouble(nameof(FatigueRecover)),
                 fatigueFloor: r.ReadDouble(nameof(FatigueFloor)),
-                halfTimeRecovery: r.ReadDouble(nameof(HalfTimeRecovery)));
+                halfTimeRecovery: r.ReadDouble(nameof(HalfTimeRecovery)),
+                offsideFrom: r.ReadDouble(nameof(OffsideFrom)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -875,6 +881,7 @@ namespace Eleven.Simulation
             w.WriteDouble(FatigueRecover, nameof(FatigueRecover));
             w.WriteDouble(FatigueFloor, nameof(FatigueFloor));
             w.WriteDouble(HalfTimeRecovery, nameof(HalfTimeRecovery));
+            w.WriteDouble(OffsideFrom, nameof(OffsideFrom));
             return w.ToArray();
         }
 

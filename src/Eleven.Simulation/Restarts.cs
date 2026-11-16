@@ -379,7 +379,7 @@ namespace Eleven.Simulation
         private static void ValidateRestart(SimState state, SimConfig config)
         {
             RestartState r = state.Restart;
-            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.Penalty) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
+            if (r.Phase > RestartPhase.Ready || r.Kind > RestartKind.IndirectFreeKick) throw new ArgumentException("Unknown restart phase or kind.", nameof(state));
             if (!r.On)
             {
                 if (r.Phase != RestartPhase.Live) throw new ArgumentException("With the sequencer off, the ball is live.", nameof(state));

@@ -144,6 +144,9 @@ namespace Eleven.Simulation
 
         /// <summary>Play goes on after a foul: the fouled side keeps the ball (#99). Subject: the fouled side.</summary>
         AdvantagePlayed = 37,
+
+        /// <summary>An offside offence (#107). Subject: the footballer offside. <see cref="SimEvent.Other"/>: the side awarded the indirect free kick.</summary>
+        Offside = 38,
     }
 
     /// <summary>
@@ -184,7 +187,7 @@ namespace Eleven.Simulation
         public override string ToString() =>
             Rejection != CommandRejection.None ? $"{Tick} {Kind} {Subject} {Rejection}"
             : Kind == SimEventKind.QuickPassResolved || Kind == SimEventKind.HitFrame || Kind == SimEventKind.Turned || (Kind == SimEventKind.Goal && Other != 0)
-                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched ? $"{Tick} {Kind} {Subject} {Other}"
+                || Kind == SimEventKind.RestartAwarded || Kind == SimEventKind.RestartPlaced || Kind == SimEventKind.RestartTaken || Kind == SimEventKind.Switched || Kind == SimEventKind.Offside ? $"{Tick} {Kind} {Subject} {Other}"
             : $"{Tick} {Kind} {Subject}";
     }
 }

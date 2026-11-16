@@ -161,6 +161,7 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "fatigueRecover", "per s at rest", 0, 0.2, 0.01, 0.04),
             new TunableParameter(TunableParameter.ControlGroup, "fatigueFloor", "fraction", 0.5, 1, 0.8, 0.9),
             new TunableParameter(TunableParameter.ControlGroup, "halfTimeRecovery", "fraction", 0, 1, 0.3, 0.7),
+            new TunableParameter(TunableParameter.ControlGroup, "offsideFrom", "outfielders a side", 1, 10),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -253,6 +254,7 @@ namespace Eleven.Simulation
             "fatigueRecover" => FatigueRecover,
             "fatigueFloor" => FatigueFloor,
             "halfTimeRecovery" => HalfTimeRecovery,
+            "offsideFrom" => OffsideFrom,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -311,6 +313,7 @@ namespace Eleven.Simulation
             double slideRange = SlideRange, slideSpeed = SlideSpeed, slideTime = SlideTime, slideReach = SlideReach, slideRecover = SlideRecover;
             double advantageTime = AdvantageTime, challengeFoulReach = ChallengeFoulReach;
             double fatigueFrom = FatigueFrom, fatigueDrain = FatigueDrain, fatigueRecover = FatigueRecover, fatigueFloor = FatigueFloor, halfTimeRecovery = HalfTimeRecovery;
+            double offsideFrom = OffsideFrom;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -394,6 +397,7 @@ namespace Eleven.Simulation
                     case "fatigueRecover": fatigueRecover = o.Value; break;
                     case "fatigueFloor": fatigueFloor = o.Value; break;
                     case "halfTimeRecovery": halfTimeRecovery = o.Value; break;
+                    case "offsideFrom": offsideFrom = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -507,7 +511,8 @@ namespace Eleven.Simulation
                 fatigueDrain: fatigueDrain,
                 fatigueRecover: fatigueRecover,
                 fatigueFloor: fatigueFloor,
-                halfTimeRecovery: halfTimeRecovery);
+                halfTimeRecovery: halfTimeRecovery,
+                offsideFrom: offsideFrom);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -604,7 +609,8 @@ namespace Eleven.Simulation
             fatigueDrain: FatigueDrain,
             fatigueRecover: FatigueRecover,
             fatigueFloor: FatigueFloor,
-            halfTimeRecovery: HalfTimeRecovery);
+            halfTimeRecovery: HalfTimeRecovery,
+            offsideFrom: OffsideFrom);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.
