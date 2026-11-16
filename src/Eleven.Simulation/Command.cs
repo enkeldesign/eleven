@@ -94,6 +94,9 @@ namespace Eleven.Simulation
             QuickPass = quickPass;
             Dive = dive;
         }
+
+        /// <summary>This command with a substitution (#110) added: everything else as it is.</summary>
+        public Command WithSubstitution(int off, int on) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, off, on);
     }
 
     /// <summary>

@@ -147,6 +147,11 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>Switches the seat's controller made, and how many were refused.</summary>
         public int Switches, SwitchesRefused;
+
+        /// <summary>Substitutes each side brought on (#110), and each one's minute, the match scaled to 90.</summary>
+        public int HomeSubstitutions, AwaySubstitutions;
+
+        public List<double> SubstitutionMinutes = new List<double>();
     }
 
     /// <summary>
@@ -215,11 +220,21 @@ namespace Eleven.Simulation.Harness
                 KeeperControllers.Append(sim, commands);
                 CpuControllers.Append(sim, commands);
                 RestartControllers.Append(sim, commands);
+                ManagerControllers.Append(sim, commands);
                 sim.Step(commands, events);
                 SimState s = sim.PeekState();
                 recorder.Observe(config, s, events);
                 foreach (SimEvent e in events)
                 {
+                    if (e.Kind == SimEventKind.Substituted)
+                    {
+                        // The substitute's side, and the match clock's minute as a share of the match scaled to 90.
+                        bool home = TeamOf(s, e.Subject) == Squads.HomeTeam;
+                        if (home) trial.HomeSubstitutions++;
+                        else trial.AwaySubstitutions++;
+                        trial.SubstitutionMinutes.Add(90 * ManagerControllers.Observe(s, config, home ? Squads.HomeTeam : Squads.AwayTeam).MatchShare);
+                    }
+
                     if (e.Kind == SimEventKind.Switched) trial.Switches++;
                     if (e.Kind == SimEventKind.CommandRejected && e.Subject == SeatController && e.Other == (int)CommandRejection.SwitchRefused) trial.SwitchesRefused++;
                     int team = TeamOf(s, e.Subject);
