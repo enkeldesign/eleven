@@ -31,6 +31,28 @@ namespace Eleven.Simulation.Tests
             return sim;
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(0.02)]
+        public void At_fatigueFrom_one_a_dive_faster_than_his_top_speed_tires_him_finitely(double drain)
+        {
+            // fatigueFrom = 1 leaves no band to tire in: faster than his fresh top speed, as a
+            // keeper's dive can be, he tires at the knob's full rate, and never by a division by 0.
+            SimConfig config = C.With("fatigueFrom", 1).With("fatigueDrain", drain);
+            SimState s = OneVOne.Start(config, seed: 2, homeAttackSign: 1);
+            int keeper = Array.FindIndex(s.Players, p => p.Id == s.Keepers[0].PlayerId);
+            s.Keepers[0].Phase = KeeperPhase.Dive;
+            s.Keepers[0].PhaseTicks = 20;
+            s.Keepers[0].DiveVelocity = new Vec2(0, 8);
+            Simulator sim = Simulator(config, s);
+            for (int t = 0; t < 10; t++) Step(sim);
+            double fatigue = sim.PeekState().Players[keeper].Fatigue;
+            Assert.True(double.IsFinite(fatigue), $"fatigue {fatigue}");
+            Assert.InRange(fatigue, 0, 1);
+            if (drain == 0) Assert.Equal(0, fatigue);
+            else Assert.True(fatigue > 0);
+        }
+
         [Fact]
         public void Practice_is_timeless()
         {

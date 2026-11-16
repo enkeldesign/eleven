@@ -98,6 +98,28 @@ namespace Eleven.Host.Tests
         }
 
         [Fact]
+        public void Under_FREE_the_carrier_is_the_last_to_touch_a_ball_at_his_feet_and_he_shields_it()
+        {
+            // FREE leaves the ball unattached (#38): the carrier is the simulation's, the last to play
+            // a ball on the ground within the dribble's reach of him.
+            var poses = new ActionPoses();
+            SimState s = World();
+            s.Ball.AttachedTo = 0;
+            s.Ball.LastPlayedBy = 1;
+            s.Ball.Position = new Vec3(0.6, 0, C.BallRadius);
+            s.Players[1].Position = new Vec2(C.ShieldRange * 0.5, 0);
+            Assert.Equal(Pose.Shield, poses.Of(s, 0, C));
+
+            s.Ball.LastPlayedBy = 2;
+            Assert.Equal(Pose.Stand, poses.Of(s, 0, C));
+            s.Ball.LastPlayedBy = 1;
+            s.Ball.Position = new Vec3(Simulator.DribbleReach + 1, 0, C.BallRadius);
+            Assert.Equal(Pose.Stand, poses.Of(s, 0, C));
+            s.Ball.Position = new Vec3(0.6, 0, C.KickMaxBallHeight + 0.5);
+            Assert.Equal(Pose.Stand, poses.Of(s, 0, C));
+        }
+
+        [Fact]
         public void A_slide_is_drawn_along_its_line_and_a_fall_after_it()
         {
             var poses = new ActionPoses();
