@@ -835,7 +835,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           // A foul, and a restart of each kind the seed's match gives taken (#103): kick-off,
           // throw-in, goal kick, corner and free kick. A penalty is counted when there is one.
           const fouls = logs.slice(fromM).filter((l) => /^ELEVEN event \d+ Foul\b/.test(l)).length;
-          const kinds = ['', 'kick-off', 'throw-in', 'goal kick', 'corner', 'free kick', 'penalty'];
+          const kinds = ['', 'kick-off', 'throw-in', 'goal kick', 'corner', 'free kick', 'penalty', 'indirect free kick'];
           const taken = new Map();
           for (const l of logs.slice(fromM)) {
             const t = /^ELEVEN event \d+ RestartTaken \d+ (\d+)/.exec(l);
