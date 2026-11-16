@@ -192,6 +192,62 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_flags_are_the_same_whether_or_not_the_events_of_earlier_steps_are_kept()
+        {
+            // The runner, flagged at the pass, runs back onside: his flag stands, judged at the pass
+            // (Law 11), and a caller that keeps every step's events in one list (a replay) must see
+            // the same state as one that clears them (the host).
+            Simulator Play(bool keep)
+            {
+                var sim = new Simulator(C, World(x: 10, runnerX: 30, defendersX: 20));
+                var kept = new List<SimEvent>();
+                for (int t = 0; t < 3 * C.TickRate; t++)
+                {
+                    var events = keep ? kept : new List<SimEvent>();
+                    KickIntent? kick = t < C.TickRate / 2 ? new KickIntent(new Vec2(1, 0), 0.5, 0) : (KickIntent?)null;
+                    sim.Step(new[]
+                    {
+                        new Command(Passer, sim.Tick, Vec2.Zero, kick),
+                        new Command(Runner, sim.Tick, t > C.TickRate / 2 ? new Vec2(-1, 0) : Vec2.Zero),
+                    }, events);
+                }
+
+                return sim;
+            }
+
+            Simulator cleared = Play(keep: false), kept = Play(keep: true);
+            Assert.True(Flagged(cleared.PeekState(), Runner), "flagged at the pass, whatever his run since");
+            Assert.True(cleared.PeekState().Players[IndexOf(cleared.PeekState(), Runner)].Position.X < 20, "he ran back onside");
+            Assert.Equal(cleared.StateHash(), kept.StateHash());
+        }
+
+        [Fact]
+        public void An_offside_touch_that_crosses_the_line_on_its_own_step_is_offside_not_a_goal()
+        {
+            // The runner, beyond everyone at the pass, then shoots from the goal line itself: the
+            // ball is over on the step he touches it. The offence came first.
+            SimState s = World(x: 30, runnerX: 51.6, defendersX: 20);
+            Put(s, Squads.AwayKeeper(Side), new Vec2(45, 25));
+            var sim = new Simulator(C, s);
+            KickBy(sim, Passer);
+            Assert.True(Flagged(sim.PeekState(), Runner));
+
+            SimState then = sim.PeekState().Clone();
+            then.Ball.Position = new Vec3(C.GoalLineX + C.BallRadius - 0.01, 1, C.BallRadius);
+            then.Ball.Velocity = Vec3.Zero;
+            then.Ball.Spin = Vec3.Zero;
+            then.Players[IndexOf(then, Runner)].Position = new Vec2(C.GoalLineX - 0.5, 1);
+            var shot = new Simulator(C, then);
+            List<SimEvent> events = KickBy(shot, Runner);
+            // On the kick's own step the ball is wholly over the line, in the mouth: a goal but for the offence.
+            BallState ball = shot.PeekState().Ball;
+            Assert.True(ball.Position.X - C.BallRadius > C.GoalLineX && Math.Abs(ball.Position.Y) < C.GoalWidth / 2, $"ball at {ball.Position}");
+            Assert.Contains(events, e => e.Kind == SimEventKind.Offside && e.Subject == Runner);
+            Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Goal);
+            Assert.Equal(0, shot.PeekState().Teams.Single(t => t.Id == Squads.HomeTeam).Goals);
+        }
+
+        [Fact]
         public void The_flags_survive_a_snapshot()
         {
             var sim = new Simulator(C, World(x: 10, runnerX: 30, defendersX: 20));
