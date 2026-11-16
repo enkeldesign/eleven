@@ -110,6 +110,7 @@ namespace Eleven.Simulation
                 WriteVec2(w, player.ChallengeLine, "Player.ChallengeLine");
                 w.WriteByte(player.Cautions);
                 w.WriteByte(player.SentOff ? (byte)1 : (byte)0);
+                w.WriteByte((byte)player.Injury);
             }
 
             w.WriteInt32(Keepers.Length);
@@ -263,6 +264,7 @@ namespace Eleven.Simulation
                     ChallengeLine = ReadVec2(r, "Player.ChallengeLine"),
                     Cautions = r.ReadByte() is byte cautions && cautions <= 2 ? cautions : throw new FormatException("A footballer has at most two cautions."),
                     SentOff = ReadFlag(r.ReadByte(), "Player.SentOff"),
+                    Injury = r.ReadByte() is byte injury && injury <= (byte)InjuryLevel.Serious ? (InjuryLevel)injury : throw new FormatException("Unknown injury."),
                 };
             }
 
@@ -716,5 +718,23 @@ namespace Eleven.Simulation
         /// no controller, seen by no one, placed at no restart.
         /// </summary>
         public bool SentOff;
+
+        /// <summary>Hurt this match (#109): none, playing on slower, or taken off.</summary>
+        public InjuryLevel Injury;
+
+        /// <summary>Out of play for the rest of the match: sent off (#108) or seriously injured (#109).</summary>
+        public bool Off => SentOff || Injury == InjuryLevel.Serious;
+    }
+
+    /// <summary>An injury's level (#109). Numeric values are stable and encoded as one byte.</summary>
+    public enum InjuryLevel : byte
+    {
+        None = 0,
+
+        /// <summary>He plays on, slower: injuredSpeed of his top speed and acceleration.</summary>
+        Minor = 1,
+
+        /// <summary>He is taken off for the rest of the match.</summary>
+        Serious = 2,
     }
 }

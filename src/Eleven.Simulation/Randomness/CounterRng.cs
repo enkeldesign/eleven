@@ -29,6 +29,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>The referee's reading of a foul's severity (#108).</summary>
         Card = 8,
+
+        /// <summary>Whether a foul injures, and how badly (#109).</summary>
+        Injury = 9,
     }
 
     /// <summary>

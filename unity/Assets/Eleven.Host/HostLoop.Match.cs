@@ -182,8 +182,8 @@ namespace Eleven.Host
                 if (i == me) continue;
                 PlayerState p = s.Players[i];
                 bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == p.Id) >= 0;
-                // Sent off (#108): drawn far beyond the pitch, out of the view and the cues' reach.
-                Vector2 at = p.SentOff ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
+                // Off the pitch (#108, #109): drawn far beyond it, out of the view and the cues' reach.
+                Vector2 at = p.Off ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
                 if (p.TeamId == OneVOne.HomeTeam)
                 {
                     if (!keeper) _mates.Add(at);

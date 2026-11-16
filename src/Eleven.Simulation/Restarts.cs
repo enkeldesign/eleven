@@ -142,7 +142,7 @@ namespace Eleven.Simulation
             if ((goal - on.Position).LengthSquared > Config.DogsoRange * Config.DogsoRange) return false;
             foreach (PlayerState p in _state.Players)
             {
-                if (p.TeamId == on.TeamId || p.Id == by.Id || p.SentOff || KeeperOf(p.Id) >= 0) continue;
+                if (p.TeamId == on.TeamId || p.Id == by.Id || p.Off || KeeperOf(p.Id) >= 0) continue;
                 if (end * p.Position.X > end * on.Position.X) return false;
             }
 
@@ -152,7 +152,7 @@ namespace Eleven.Simulation
         private void Caution(int index, long tick, List<SimEvent> events)
         {
             ref PlayerState p = ref _state.Players[index];
-            if (p.SentOff) return;
+            if (p.Off) return;
             p.Cautions++;
             events.Add(new SimEvent(tick, SimEventKind.Cautioned, p.Id, other: p.Cautions));
             if (p.Cautions >= 2) SendOff(index, tick, events);
@@ -168,8 +168,18 @@ namespace Eleven.Simulation
         {
             ref PlayerState p = ref _state.Players[index];
             if (p.SentOff) return;
+            bool wasOff = p.Off;
             p.SentOff = true;
             events.Add(new SimEvent(tick, SimEventKind.SentOff, p.Id));
+            if (!wasOff) LeavePitch(index, tick, events);
+        }
+
+        // Leaving the pitch for the rest of the match (#108, #109), sent off or hurt: he goes beyond
+        // the touchline, out of every reach, and his side's shape closes up behind him. No CPU plays
+        // him; if a human did, that controller takes over the nearest CPU teammate who isn't the keeper.
+        private void LeavePitch(int index, long tick, List<SimEvent> events)
+        {
+            ref PlayerState p = ref _state.Players[index];
             if (_state.Ball.AttachedTo == p.Id) _state.Ball.AttachedTo = 0;
 
             int slot = p.Slot;
@@ -201,7 +211,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 PlayerState q = _state.Players[i];
-                if (q.TeamId != p.TeamId || q.SentOff || KeeperOf(q.Id) >= 0 || CpuOf(q.Id) < 0) continue;
+                if (q.TeamId != p.TeamId || q.Off || KeeperOf(q.Id) >= 0 || CpuOf(q.Id) < 0) continue;
                 double d = (q.Position - p.Position).LengthSquared;
                 if (d < nearest)
                 {
@@ -308,7 +318,7 @@ namespace Eleven.Simulation
             double ball = sign * ballAtTouch.X, last = double.NegativeInfinity, secondLast = double.NegativeInfinity;
             foreach (PlayerState p in _state.Players)
             {
-                if (p.TeamId == toucher.TeamId || p.SentOff) continue;
+                if (p.TeamId == toucher.TeamId || p.Off) continue;
                 double x = sign * p.Position.X;
                 if (x > last)
                 {
@@ -322,7 +332,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length && i < 64; i++)
             {
                 PlayerState p = _state.Players[i];
-                if (p.TeamId != toucher.TeamId || p.Id == toucher.Id || p.SentOff) continue;
+                if (p.TeamId != toucher.TeamId || p.Id == toucher.Id || p.Off) continue;
                 double x = sign * p.Position.X;
                 if (x > 0 && x > ball && x > secondLast) flags |= 1UL << i;
             }
@@ -519,7 +529,7 @@ namespace Eleven.Simulation
                 for (int i = 0; i < _state.Players.Length; i++)
                 {
                     PlayerState p = _state.Players[i];
-                    if (p.SentOff || p.TeamId != r.AwardedTeam || (pass == 0 && KeeperOf(p.Id) >= 0)) continue;
+                    if (p.Off || p.TeamId != r.AwardedTeam || (pass == 0 && KeeperOf(p.Id) >= 0)) continue;
                     double d = (p.Position - r.Point).LengthSquared;
                     if (d < nearest)
                     {
@@ -535,7 +545,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 ref PlayerState p = ref _state.Players[i];
-                if (p.SentOff) continue; // off the pitch for the rest of the match (#108)
+                if (p.Off) continue; // off the pitch for the rest of the match (#108, #109)
                 p.Velocity = Vec2.Zero;
                 p.WindUpTicks = p.AftertouchTicks = p.TouchCooldown = p.CutCooldown = p.KickCooldown = 0;
                 p.WindUpDirection = p.WindUpStrength = p.WindUpLoft = p.AftertouchDirection = 0;
@@ -585,7 +595,7 @@ namespace Eleven.Simulation
                 double back = Config.GoalLineX - PenaltyMark - RestartDistance - 0.5;
                 for (int i = 0; i < _state.Players.Length; i++)
                 {
-                    if (i == taker || _state.Players[i].SentOff) continue;
+                    if (i == taker || _state.Players[i].Off) continue;
                     ref PlayerState p = ref _state.Players[i];
                     bool defendingKeeper = KeeperOf(p.Id) >= 0 && p.TeamId != r.AwardedTeam;
                     if (defendingKeeper)

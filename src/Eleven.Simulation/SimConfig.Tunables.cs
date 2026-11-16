@@ -167,6 +167,10 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "sendOffFrom", "severity", 0, 2),
             new TunableParameter(TunableParameter.ControlGroup, "cardNoise", "severity", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "dogsoRange", "m", 0, 60),
+            new TunableParameter(TunableParameter.ControlGroup, "injuriesFrom", "outfielders a side", 1, 10),
+            new TunableParameter(TunableParameter.ControlGroup, "injuryRisk", "chance a foul", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "injurySerious", "share", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "injuredSpeed", "fraction", 0.3, 1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -265,6 +269,10 @@ namespace Eleven.Simulation
             "sendOffFrom" => SendOffFrom,
             "cardNoise" => CardNoise,
             "dogsoRange" => DogsoRange,
+            "injuriesFrom" => InjuriesFrom,
+            "injuryRisk" => InjuryRisk,
+            "injurySerious" => InjurySerious,
+            "injuredSpeed" => InjuredSpeed,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -325,6 +333,7 @@ namespace Eleven.Simulation
             double fatigueFrom = FatigueFrom, fatigueDrain = FatigueDrain, fatigueRecover = FatigueRecover, fatigueFloor = FatigueFloor, halfTimeRecovery = HalfTimeRecovery;
             double offsideFrom = OffsideFrom;
             double cardsFrom = CardsFrom, cautionFrom = CautionFrom, sendOffFrom = SendOffFrom, cardNoise = CardNoise, dogsoRange = DogsoRange;
+            double injuriesFrom = InjuriesFrom, injuryRisk = InjuryRisk, injurySerious = InjurySerious, injuredSpeed = InjuredSpeed;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -414,6 +423,10 @@ namespace Eleven.Simulation
                     case "sendOffFrom": sendOffFrom = o.Value; break;
                     case "cardNoise": cardNoise = o.Value; break;
                     case "dogsoRange": dogsoRange = o.Value; break;
+                    case "injuriesFrom": injuriesFrom = o.Value; break;
+                    case "injuryRisk": injuryRisk = o.Value; break;
+                    case "injurySerious": injurySerious = o.Value; break;
+                    case "injuredSpeed": injuredSpeed = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -533,7 +546,11 @@ namespace Eleven.Simulation
                 cautionFrom: cautionFrom,
                 sendOffFrom: sendOffFrom,
                 cardNoise: cardNoise,
-                dogsoRange: dogsoRange);
+                dogsoRange: dogsoRange,
+                injuriesFrom: injuriesFrom,
+                injuryRisk: injuryRisk,
+                injurySerious: injurySerious,
+                injuredSpeed: injuredSpeed);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -636,7 +653,11 @@ namespace Eleven.Simulation
             cautionFrom: CautionFrom,
             sendOffFrom: SendOffFrom,
             cardNoise: CardNoise,
-            dogsoRange: DogsoRange);
+            dogsoRange: DogsoRange,
+            injuriesFrom: InjuriesFrom,
+            injuryRisk: InjuryRisk,
+            injurySerious: InjurySerious,
+            injuredSpeed: InjuredSpeed);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.
