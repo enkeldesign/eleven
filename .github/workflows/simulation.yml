@@ -269,6 +269,27 @@ jobs:
           echo "::notice title=Off-screen fairness::$(sed 's| -> .*||' fairness.txt)"
           diff docs/simulation/fairness-reference.csv fairness/fairness.csv
 
+      # Eleven a side (#106): ten outfielders and a keeper a side in a 4-4-2, against the recorded reference.
+      - name: Play the 11v11 trials
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll squads squad-11v11 10 | tee squads11.txt
+          echo "::notice title=11v11 trials::$(sed 's| -> .*||' squads11.txt)"
+          diff docs/simulation/squad-10v10-reference.csv squad-11v11/squad-10v10-trials.csv
+
+      # The tick budget (#106): 11v11 at 60 and 120 Hz, each step timed. Fails if a 60 Hz step
+      # averages over a quarter of its frame. The runner's timing: published, not diffed.
+      - name: Measure the tick budget
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll budget budget 3 | tee budget.txt
+          echo "::notice title=Tick budget::$(sed 's| -> .*||' budget.txt)"
+
+      - name: Publish the tick budget
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget
+          path: budget/
+          if-no-files-found: error
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |

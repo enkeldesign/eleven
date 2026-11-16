@@ -23,6 +23,17 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_config_at_another_tick_rate_keeps_every_tunable()
+        {
+            SimConfig at = C.AtTickRate(120);
+            Assert.Equal(120, at.TickRate);
+            Assert.NotEqual(C.Hash, at.Hash);
+            foreach (TunableParameter p in SimConfig.Tunables) Assert.Equal(C.Get(p.Name), at.Get(p.Name));
+            Assert.Equal(C.HalfLength, at.HalfTicks / (double)at.TickRate, 9);
+            Assert.Equal(C.Hash, at.AtTickRate(60).Hash);
+        }
+
+        [Fact]
         public void Ten_a_side_kicks_off_with_everyone_on_the_pitch_and_in_his_own_half()
         {
             SimState s = Squads.Match(C, 1, 10);

@@ -202,6 +202,77 @@ internal static class Program
                 return 0;
             }
 
+            case "budget" when args.Length >= 2:
+            {
+                // The tick budget (#106): whole CPU 11v11 matches at 60 and at 120 Hz, the same
+                // seeds and knobs, each step timed. Fails if a 60 Hz step averages over a quarter of
+                // its 16.7 ms frame. Timing is the runner's: published, not diffed.
+                int budgetSeeds = args.Length >= 3 && int.TryParse(args[2], out int bs) && bs > 0 ? bs : 3;
+                SimConfig budgetConfig = SpikeScenario.Config();
+                Directory.CreateDirectory(args[1]);
+                var lines = new List<string> { "tick_rate,seed,finished,home,away,steps,mean_step_ms,p99_step_ms,max_step_ms" };
+                var summary = new List<string>();
+                double mean60 = 0;
+                foreach (int rate in new[] { 60, 120 })
+                {
+                    SimConfig at = budgetConfig.AtTickRate(rate);
+                    var all = new List<double>();
+                    int goals = 0, finished = 0;
+                    for (int i = 1; i <= budgetSeeds; i++)
+                    {
+                        ulong seed = 0x106000000UL + (ulong)i;
+                        var sim = new Simulator(at, Squads.Match(at, seed, 10, bothCpu: true));
+                        var recorder = new MatchRecorder();
+                        var commands = new List<Command>();
+                        var events = new List<SimEvent>();
+                        var times = new List<double>();
+                        var watch = new Stopwatch();
+                        while (sim.Tick < 3 * 2 * at.HalfTicks && recorder.Result == null)
+                        {
+                            watch.Restart();
+                            commands.Clear();
+                            events.Clear();
+                            KeeperControllers.Append(sim, commands);
+                            CpuControllers.Append(sim, commands);
+                            RestartControllers.Append(sim, commands);
+                            sim.Step(commands, events);
+                            watch.Stop();
+                            times.Add(watch.Elapsed.TotalMilliseconds);
+                            recorder.Observe(at, sim.PeekState(), events);
+                        }
+
+                        times.Sort();
+                        all.AddRange(times);
+                        MatchResult? r = recorder.Result;
+                        if (r != null)
+                        {
+                            finished++;
+                            goals += r.HomeGoals + r.AwayGoals;
+                        }
+
+                        lines.Add(string.Format(CultureInfo.InvariantCulture, "{0},{1:x},{2},{3},{4},{5},{6:F4},{7:F4},{8:F4}", rate, seed, r != null ? "yes" : "no",
+                            r?.HomeGoals ?? 0, r?.AwayGoals ?? 0, times.Count, times.Average(), times[(int)(0.99 * (times.Count - 1))], times[times.Count - 1]));
+                    }
+
+                    all.Sort();
+                    double mean = all.Average();
+                    if (rate == 60) mean60 = mean;
+                    summary.Add(string.Format(CultureInfo.InvariantCulture, "{0} Hz: {1} of {2} finished, {3} goals, step {4:F3} ms mean, {5:F3} ms p99, {6:F2} ms a second of play",
+                        rate, finished, budgetSeeds, goals, mean, all[(int)(0.99 * (all.Count - 1))], mean * rate));
+                }
+
+                File.WriteAllLines(Path.Combine(args[1], "budget.csv"), lines);
+                Console.WriteLine($"config {budgetConfig.Hash:x16}, 11v11 tick budget: {string.Join("; ", summary)} -> {args[1]}");
+                const double Budget = 16.7 / 4;
+                if (mean60 > Budget)
+                {
+                    Console.Error.WriteLine($"A 60 Hz step averages {mean60:F3} ms, over its budget of {Budget:F2} ms.");
+                    return 1;
+                }
+
+                return 0;
+            }
+
             case "air" when args.Length >= 2:
             {
                 // Headers and volleys (#94): contact by height, incoming speed and heading, and in CPU matches.
@@ -222,7 +293,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds]");
                 return 2;
         }
     }
