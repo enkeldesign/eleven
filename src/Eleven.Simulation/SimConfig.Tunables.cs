@@ -276,7 +276,15 @@ namespace Eleven.Simulation
             With(new[] { new KeyValuePair<string, double>(name, value) });
 
         /// <summary>This config with several tunables changed, applied in order.</summary>
-        public SimConfig With(IEnumerable<KeyValuePair<string, double>> overrides)
+        public SimConfig With(IEnumerable<KeyValuePair<string, double>> overrides) => With(overrides, TickRate);
+
+        /// <summary>
+        /// This config stepped at <paramref name="tickRate"/> Hz, every tunable the same (#106): the
+        /// 60 against 120 Hz comparison. Durations in seconds keep their length in ticks' terms.
+        /// </summary>
+        public SimConfig AtTickRate(int tickRate) => With(System.Array.Empty<KeyValuePair<string, double>>(), tickRate);
+
+        private SimConfig With(IEnumerable<KeyValuePair<string, double>> overrides, int tickRate)
         {
             double gravity = Gravity, ballRadius = BallRadius, bounceRestitution = BounceRestitution;
             double bounceTangentialRetention = BounceTangentialRetention, settleSpeed = SettleSpeed;
@@ -406,7 +414,7 @@ namespace Eleven.Simulation
             }
 
             return new SimConfig(
-                tickRate: TickRate,
+                tickRate: tickRate,
                 gravity: gravity,
                 ballRadius: ballRadius,
                 bounceRestitution: bounceRestitution,
@@ -431,7 +439,8 @@ namespace Eleven.Simulation
                 passArrivalSpeed: passArrivalSpeed,
                 passBackWeight: passBackWeight,
                 passFreeDistance: passFreeDistance,
-                kickCooldownTicks: KickCooldownTicks,
+                // The one length set in ticks: at another rate it keeps its seconds (#106).
+                kickCooldownTicks: tickRate == TickRate ? KickCooldownTicks : (int)Math.Round(KickCooldownTicks * (double)tickRate / TickRate),
                 goalLineX: GoalLineX,
                 goalWidth: goalWidth,
                 goalHeight: goalHeight,

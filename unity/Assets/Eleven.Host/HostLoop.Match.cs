@@ -39,6 +39,30 @@ namespace Eleven.Host
         private SwitchController _switcher;
         private bool _switchRequested;
 
+        // A match's name: outfielders a side, or eleven a side counting the keeper, as football says.
+        private static string SideName(int perSide) => perSide >= 10 ? "11v11" : $"{perSide}v{perSide}";
+
+        // The step's cost in the browser (#106): each simulation step timed, reported every five
+        // seconds of match clock in trace.
+        private readonly System.Diagnostics.Stopwatch _stepWatch = new System.Diagnostics.Stopwatch();
+        private double _stepMsTotal, _stepMsMax;
+        private int _stepsTimed;
+
+        private void TimeStep(double ms)
+        {
+            _stepMsTotal += ms;
+            _stepMsMax = Math.Max(_stepMsMax, ms);
+            _stepsTimed++;
+        }
+
+        private void ReportBudget(int second)
+        {
+            if (!_trace || _stepsTimed == 0) return;
+            Log(FormattableString.Invariant($"ELEVEN match budget second={second} side={_perSide} steps={_stepsTimed} meanMs={_stepMsTotal / _stepsTimed:F3} maxMs={_stepMsMax:F3}"));
+            _stepMsTotal = _stepMsMax = 0;
+            _stepsTimed = 0;
+        }
+
         /// <summary>The play switch's segment for what is being played.</summary>
         private int PlayIndex => _match ? Math.Max(1, Array.IndexOf(PlaySizes, _perSide)) : 0;
         private int _switches;
@@ -72,7 +96,7 @@ namespace Eleven.Host
         {
             _match = true;
             _matchPaused = false;
-            _perSide = perSide >= 5 ? 5 : Math.Max(1, Math.Min(2, perSide));
+            _perSide = perSide >= 10 ? 10 : perSide >= 5 ? 5 : Math.Max(1, Math.Min(2, perSide));
             _config = MatchConfig();
             _view.Use(_config);
             _view.ShowMatch(true, _perSide);
@@ -95,7 +119,7 @@ namespace Eleven.Host
             UpdateMatchPanel();
             UpdateLayout(force: false);
             _hud?.SetMatchActions(true, false);
-            _hud?.ShowStatus($"{_perSide}v{_perSide} match: kick-off. Attacking up.");
+            _hud?.ShowStatus($"{SideName(_perSide)} match: kick-off. Attacking up.");
             Log(FormattableString.Invariant($"ELEVEN match started via={via} seed={_matchSeed} half={_config.HalfLength:F0}s tier={TierName(_opponentSkill)} config={_config.Hash:x16} start={_simulator.StateHash():x16} side={_perSide}"));
         }
 
@@ -285,6 +309,7 @@ namespace Eleven.Host
             {
                 _lastClockSecond = second;
                 UpdateMatchPanel();
+                if (second > 0 && second % 5 == 0) ReportBudget(second);
                 if (_trace && second % 10 == 0) Log(FormattableString.Invariant($"ELEVEN match clock phase={s.Match.Phase} clock={s.Match.ClockTicks} score={Score(s)} tick={s.Tick}"));
                 // The off-screen cues (#102), each second: how many, and where, inside the play area.
                 if (_trace)

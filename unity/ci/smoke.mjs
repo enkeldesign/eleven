@@ -715,7 +715,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const startedPattern = /ELEVEN match started via=(\w+) seed=(\d+) half=(\d+)s tier=(\w+) config=([0-9a-f]{16}) start=([0-9a-f]{16})(?: side=(\d+))?/;
         // ?match2=1 or ?mode=match2: the 2v2 match (#95), with SWITCH; ?match5=1 or ?mode=match5,
         // the 5v5 match (#103).
-        const side = url.includes('match5') ? 5 : url.includes('match2') ? 2 : 1;
+        // ?mode=match11: eleven a side (#106), ten outfielders and a keeper.
+        const side = url.includes('match11') ? 10 : url.includes('match5') ? 5 : url.includes('match2') ? 2 : 1;
         const fromM = logs.length;
         let started = lastLog(startedPattern);
         if (!url.includes('mode=match')) {
@@ -767,6 +768,29 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         }
 
         if (url.includes('matchview=1')) {
+          if (side === 10) {
+            // The tick budget in the browser (#106): the simulation's step, timed by the host
+            // over the match's first seconds, against a quarter of a 60 Hz frame on average.
+            const budgets = [];
+            for (let from = 0, until = Date.now() + 90_000; budgets.length < 3 && Date.now() < until;) {
+              const line = await waitForLog(/ELEVEN match budget second=(\d+) side=(\d+) steps=(\d+) meanMs=([\d.]+) maxMs=([\d.]+)/, Math.max(1, until - Date.now()), from);
+              if (!line) break;
+              from = line.index + 1;
+              budgets.push(line.match);
+            }
+            const steps = budgets.reduce((n, b) => n + Number(b[3]), 0);
+            const mean = steps ? budgets.reduce((t, b) => t + Number(b[3]) * Number(b[4]), 0) / steps : NaN;
+            const most = budgets.reduce((m, b) => Math.max(m, Number(b[5])), 0);
+            // A whole measurement or none: three reports, each five seconds of play (300 steps at
+            // 60 Hz; 250 allows for the clock's stops). A timeout fails rather than passing a part.
+            const complete = budgets.length === 3 && budgets.every((b) => Number(b[1]) > 0 && Number(b[3]) >= 250);
+            check('an 11v11 step fits its budget in the browser: a quarter of a 60 Hz frame on average', complete && mean <= 16.7 / 4,
+              `${budgets.length} of 3 reports${complete ? '' : ' (incomplete: the measurement needs three of five seconds each)'}; ` +
+                (steps ? `${steps} steps, ${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms the longest` : 'no budget lines'));
+            notes.budget = steps ? `${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms max over ${steps} steps` : 'none';
+            console.log(`::notice title=browser tick budget ${name}::${notes.budget}`);
+          }
+
           const errorsV = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
           check('no page errors or exceptions', errorsV.length === 0, errorsV.length ? errorsV.slice(0, 5).join(' | ') : 'none');
           return;
@@ -2061,6 +2085,8 @@ try {
   // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape.
   await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=18`, 'match5-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
+  // Eleven a side (#106): from the address on a phone, the simulation's step timed in the browser.
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match11`, 'match11-phone', quick(390, 664), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

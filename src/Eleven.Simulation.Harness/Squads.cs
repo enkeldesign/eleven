@@ -32,6 +32,22 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static int SlotOf(int perSide, int i) => perSide < ShapeFrom ? 0 : i == 0 ? perSide : i;
 
+        /// <summary>From this side size the kick-off's places are the shape's homes (#106); smaller sides keep M2's rows.</summary>
+        public const int ShapeStartFrom = 6;
+
+        // Home's outfielder i's place at the kick-off, in home's frame: 12 m back in rows either side,
+        // or, from ShapeStartFrom, his home in the shape inside his own half.
+        private static Vec2 StartAt(int perSide, int i)
+        {
+            if (perSide < ShapeStartFrom) return new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
+            Vec2 home = AI.OutfieldBrain.ShapeHome(perSide, SlotOf(perSide, i));
+            return new Vec2(Math.Min(home.X, -2), home.Y);
+        }
+
+        // Away's place: home's turned about the centre spot for a shape; M2's rows otherwise.
+        private static Vec2 Away(Vec2 home, int perSide) =>
+            perSide < ShapeStartFrom ? new Vec2(14, -home.Y) : new Vec2(-home.X, -home.Y);
+
         /// <summary>
         /// A match's start: home kicks off, the clock at nought. <paramref name="homeSide"/> and
         /// <paramref name="awaySide"/> give a side's outfielders their capabilities (#103's league);
@@ -47,7 +63,7 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < perSide; i++)
             {
                 int id = HomeOutfielder(i);
-                Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
+                Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : StartAt(perSide, i);
                 players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : homeSide ?? PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i) });
                 if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id, Skill = homeCpu ?? CpuSkill.Pro });
             }
@@ -56,7 +72,7 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < perSide; i++)
             {
                 int id = AwayOutfielder(perSide, i);
-                Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : new Vec2(14, (i % 2 == 1 ? -1 : 1) * 12 * ((i + 1) / 2));
+                Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : Away(StartAt(perSide, i), perSide);
                 players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i) });
                 cpus.Add(new CpuState { PlayerId = id, Skill = awayCpu ?? CpuSkill.Pro });
             }
