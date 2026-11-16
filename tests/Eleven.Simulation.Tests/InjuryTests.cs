@@ -178,6 +178,80 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_serious_injury_leaves_the_restart_where_the_foul_was()
+        {
+            // The fouled footballer is taken off beyond the touchline, but the foul was where it
+            // was: in the area a penalty still, elsewhere the free kick at the foul's place.
+            SimConfig c = Base.With("injuryRisk", 1).With("injurySerious", 1);
+            int penalties = 0, kicks = 0;
+            for (ulong seed = 1; seed <= 40; seed++)
+            {
+                foreach (Vec2 at in new[] { new Vec2(42, 0), new Vec2(-10, 0) })
+                {
+                    SimState s = Fouling(c, seed);
+                    int carrier = Index(s, Carrier), fouler = Index(s, Squads.AwayOutfielder(Side, 0));
+                    s.Players[carrier].Position = at;
+                    s.Players[fouler].Position = at + new Vec2(-0.3, 0);
+                    s.Ball.Position = new Vec3(at.X + 0.7, at.Y, c.BallRadius);
+                    var sim = new Simulator(c, s);
+                    var events = new List<SimEvent>();
+                    sim.Step(Array.Empty<Command>(), events);
+                    if (!events.Any(e => e.Kind == SimEventKind.Injured)) continue;
+                    Assert.True(sim.PeekState().Players[Index(sim.PeekState(), Carrier)].Off);
+                    RestartState r = sim.PeekState().Restart;
+                    if (at.X > 0)
+                    {
+                        Assert.Equal(RestartKind.Penalty, r.Kind);
+                        penalties++;
+                    }
+                    else
+                    {
+                        Assert.Equal(RestartKind.FreeKick, r.Kind);
+                        Assert.True((r.Point - at).LengthSquared < 1, $"the free kick at {r.Point}, the foul at {at}");
+                        kicks++;
+                    }
+                }
+            }
+
+            Assert.True(penalties > 0 && kicks > 0, $"{penalties} penalties and {kicks} free kicks judged");
+        }
+
+        [Fact]
+        public void Hurt_and_playing_on_a_cpu_footballer_reckons_his_run_at_his_slower_speed()
+        {
+            // As FatigueTests: five a side, a loose ball between two of home's midfielders; one a
+            // little nearer, so he is first to it whole, but not at injuredSpeed.
+            SimConfig c = SpikeScenario.Config();
+            SimState s = Squads.Match(c, 9, 5, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            int a = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 3);
+            int b = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 4);
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (s.Players[i].Slot > 0) s.Players[i].Position = new Vec2(s.Players[i].TeamId == Squads.HomeTeam ? -30 : 30, 20);
+            }
+
+            s.Players[a].Position = new Vec2(-10, -10);
+            s.Players[b].Position = new Vec2(-10, 11);
+            s.Ball.Position = new Vec3(0, 0, c.BallRadius);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Ball.LastPlayedBy = 0;
+            CpuMode Mode(int player)
+            {
+                int cpu = Array.FindIndex(s.Cpus, x => x.PlayerId == s.Players[player].Id);
+                return AI.OutfieldBrain.Decide(Perception.OfOutfielder(s, cpu), c).Mode;
+            }
+
+            Assert.Contains(Mode(a), new[] { CpuMode.SeekBall, CpuMode.Approach });
+            s.Players[a].Injury = InjuryLevel.Minor;
+            Assert.Equal(CpuMode.Support, Mode(a));
+        }
+
+        [Fact]
         public void A_harder_foul_injures_more_often()
         {
             // The same foul at a walk and at full pace: the faster one is more severe.
