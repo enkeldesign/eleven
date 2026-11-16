@@ -108,6 +108,8 @@ namespace Eleven.Simulation
                 w.WriteByte((byte)player.Challenge);
                 w.WriteInt32(player.ChallengeTicks);
                 WriteVec2(w, player.ChallengeLine, "Player.ChallengeLine");
+                w.WriteByte(player.Cautions);
+                w.WriteByte(player.SentOff ? (byte)1 : (byte)0);
             }
 
             w.WriteInt32(Keepers.Length);
@@ -259,6 +261,8 @@ namespace Eleven.Simulation
                     Challenge = ReadChallenge(r.ReadByte()),
                     ChallengeTicks = r.ReadInt32(),
                     ChallengeLine = ReadVec2(r, "Player.ChallengeLine"),
+                    Cautions = r.ReadByte() is byte cautions && cautions <= 2 ? cautions : throw new FormatException("A footballer has at most two cautions."),
+                    SentOff = ReadFlag(r.ReadByte(), "Player.SentOff"),
                 };
             }
 
@@ -703,5 +707,14 @@ namespace Eleven.Simulation
 
         /// <summary>The line he committed along: a unit vector, fixed as the challenge starts; zero when ready.</summary>
         public Vec2 ChallengeLine;
+
+        /// <summary>Cautions shown him this match (#108): a second sends him off.</summary>
+        public byte Cautions;
+
+        /// <summary>
+        /// Sent off (#108): off the pitch beyond the touchline for the rest of the match, played by
+        /// no controller, seen by no one, placed at no restart.
+        /// </summary>
+        public bool SentOff;
     }
 }

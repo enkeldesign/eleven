@@ -182,7 +182,8 @@ namespace Eleven.Host
                 if (i == me) continue;
                 PlayerState p = s.Players[i];
                 bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == p.Id) >= 0;
-                Vector2 at = Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
+                // Sent off (#108): drawn far beyond the pitch, out of the view and the cues' reach.
+                Vector2 at = p.SentOff ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
                 if (p.TeamId == OneVOne.HomeTeam)
                 {
                     if (!keeper) _mates.Add(at);
@@ -283,6 +284,17 @@ namespace Eleven.Host
                         _hud?.ShowStatus("Second half: ends changed. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match secondhalf tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
                         break;
+                    case SimEventKind.Cautioned:
+                    case SimEventKind.SentOff:
+                    {
+                        // Cards (#108), announced with the side.
+                        int side = Array.Find(s.Players, p => p.Id == e.Subject).TeamId;
+                        string who = side == OneVOne.HomeTeam ? "Your" : "CPU";
+                        _hud?.ShowStatus(e.Kind == SimEventKind.SentOff ? $"Red card: {who} footballer sent off." : $"Yellow card: {who} footballer cautioned.");
+                        Log(FormattableString.Invariant($"ELEVEN match card kind={(e.Kind == SimEventKind.SentOff ? "red" : "yellow")} player={e.Subject} team={side} tick={s.Tick}"));
+                        break;
+                    }
+
                     case SimEventKind.Switched:
                         // A gesture under way was for the footballer he left (#93).
                         _input.Clear();
