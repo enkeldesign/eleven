@@ -426,7 +426,7 @@ namespace Eleven.Host
         {
             var parts = new System.Collections.Generic.List<string>();
             float cell = SheetCell(layout);
-            Rect play = layout.PlayArea;
+            Rect play = SheetArea(layout);
             for (int i = 0; i < _sheet.Count; i++)
             {
                 float x = play.x + (i % SheetColumns + 0.5f) * cell, y = play.y + (i / SheetColumns + 0.5f) * cell;
@@ -436,8 +436,20 @@ namespace Eleven.Host
             return string.Join(";", parts);
         }
 
-        private float SheetCell(in HudLayout layout) =>
-            Mathf.Min(layout.PlayArea.width / SheetColumns, layout.PlayArea.height / Mathf.Max(1, _sheet.Count / SheetColumns));
+        private float SheetCell(in HudLayout layout)
+        {
+            Rect area = SheetArea(layout);
+            return Mathf.Min(area.width / SheetColumns, area.height / Mathf.Max(1, _sheet.Count / SheetColumns));
+        }
+
+        // The play area below the status line, which sits over its top (#53): the sheet is laid out
+        // where nothing of the HUD covers it, as the match is framed.
+        private static Rect SheetArea(in HudLayout layout)
+        {
+            Rect play = layout.PlayArea;
+            float band = Mathf.Clamp(layout.StatusArea.yMax - play.yMin, 0, play.height * 0.5f);
+            return new Rect(play.x, play.y + band, play.width, play.height - band);
+        }
 
         /// <summary>For the smoke test: how many sheet sprites are shown.</summary>
         public int SheetShown => _sheet.FindAll(t => t.gameObject.activeSelf).Count;
@@ -446,7 +458,7 @@ namespace Eleven.Host
         private void PlaceSheet(in HudLayout layout)
         {
             if (_sheet.Count == 0 || !_sheet[0].gameObject.activeSelf) return;
-            Rect play = layout.PlayArea;
+            Rect play = SheetArea(layout);
             float cell = SheetCell(layout);
             for (int i = 0; i < _sheet.Count; i++)
             {
