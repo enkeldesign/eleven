@@ -8,14 +8,14 @@ Injuries are a competition rule in config data (#80): `injuriesFrom`, in outfiel
 
 ## At a foul
 
-`Simulator.Injure`, at every foul (#99), after the referee's card (#108):
-1. **The chance** is `injuryRisk` (0.01) times the foul's severity, the same severity the cards read (`Simulator.Severity`):
+`Simulator.Injure`, at every foul (#99), after the referee's card (#108), whichever restart follows: if the ball leaves play in the foul's step, that restart takes precedence over the free kick, but the injury is still judged.
+1. **The chance** is `injuryRisk` (0.01) times the foul's severity, the same severity the cards read, graded as the foul happens (`Simulator.Severity`):
    - 0.25 for a standing challenge, 0.45 for a slide;
    - up to 0.3 for the challenger's pace;
    - 0.2 from behind.
 
    The draw is on the `Injury` stream, keyed by the fouled footballer (INV-6).
-2. **A share `injurySerious` (0.3) are serious.** He is taken off for the rest of the match: he leaves the pitch exactly as a sending-off does (`LeavePitch`, #108), and `PlayerState.Off` covers both.
+2. **A share `injurySerious` (0.3) are serious.** He is taken off for the rest of the match: he leaves the pitch exactly as a sending-off does (`LeavePitch`, #108), and `PlayerState.Off` covers both. No pass goes to him, and a human's controller takes the CPU teammate nearest where he was.
 3. **The rest are minor.** He plays on at `injuredSpeed` (0.85) of his top speed and acceleration, through his body, so every prediction of his run agrees (INV-13).
 4. **A second injury is never lighter** than the first.
 
@@ -36,7 +36,7 @@ Research starting point:
 
 `injuryRisk` 0.01 times a typical severity of about 0.5 gives that share. In 6-minute matches with about six fouls, that is roughly three injuries in a hundred matches.
 
-**Measured:** 32 CPU 11v11 matches, 203 fouls, no injury. That fits the rate, about one in 200 fouls. One of the 12 reference matches has an injury, and its values move.
+**Measured:** 32 CPU 11v11 matches, 203 fouls, no injury. That fits the rate, about one in 200 fouls. In the 12-match 11v11 reference, two matches (seeds 92000005 and 92000008) play out differently with injuries on: 20 goals, 527 passes, 280 completed.
 
 ## Tests
 
@@ -44,6 +44,8 @@ Research starting point:
 - with no risk, no foul injures;
 - at full risk some fouls do, and a minor injury keeps him on;
 - a serious one takes him off, unslotted, his controller's human onto a teammate;
+- no quick pass goes to a footballer taken off;
+- a foul may injure when the ball leaves play in its step;
 - a harder foul injures more often;
 - five a side plays without injuries;
 - hurt but playing on, he runs at `injuredSpeed`;
