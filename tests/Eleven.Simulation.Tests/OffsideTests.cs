@@ -134,6 +134,24 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_ball_is_judged_where_it_was_played_not_where_the_kick_sends_it()
+        {
+            // The runner level with the ball when it is played back: onside, though the kick has
+            // carried the ball behind him by the end of its step.
+            SimState s = World(x: 30, runnerX: 30.5, defendersX: 20);
+            var sim = new Simulator(C, s);
+            var events = new List<SimEvent>();
+            for (int t = 0; t < C.TickRate && !events.Any(e => e.Kind == SimEventKind.Kicked); t++)
+            {
+                sim.Step(new[] { new Command(Passer, sim.Tick, Vec2.Zero, new KickIntent(new Vec2(-1, 0), 1, 0)) }, events);
+            }
+
+            Assert.Contains(events, e => e.Kind == SimEventKind.Kicked && e.Subject == Passer);
+            Assert.True(sim.PeekState().Ball.Position.X < 30.5, "the kick has carried the ball behind him");
+            Assert.False(Flagged(sim.PeekState(), Runner));
+        }
+
+        [Fact]
         public void An_opponents_touch_clears_the_flag()
         {
             var sim = new Simulator(C, World(x: 10, runnerX: 30, defendersX: 20));
