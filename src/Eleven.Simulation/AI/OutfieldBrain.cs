@@ -371,28 +371,45 @@ namespace Eleven.Simulation.AI
         /// </summary>
         public static (int Back, int Middle, int Forward) Lines(int n)
         {
+            // From eight a side two play up front (#106): ten a side is a technical-reference 4-4-2.
+            if (n >= TwoForwardsFrom)
+            {
+                int rest = n - 2, backs = rest / 2;
+                return (backs, rest - backs, 2);
+            }
+
             int back = n / 2;
             return (back, n - 1 - back, 1);
         }
 
-        private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
+        // From this side size two play up front, and a row of four or more spreads wider (#106).
+        private const int TwoForwardsFrom = 8;
+        private const double WideRow = 22, ForwardsApart = 10;
+
+        /// <summary>
+        /// His home in his side's shape with the ball at the centre spot, in his own frame (#96,
+        /// #106): his line's x, spread across it by his place in the row. The shape follows the
+        /// ball from here.
+        /// </summary>
+        public static Vec2 ShapeHome(int n, int slot)
         {
-            int n = seen.SideSize, slot = seen.Slot;
-            (int back, int middle, int _) = Lines(n);
-            double x, y;
-            if (slot >= n)
+            (int back, int middle, int forward) = Lines(n);
+            if (slot > back + middle)
             {
-                x = ForwardLine;
-                y = 0;
-            }
-            else
-            {
-                bool inBack = slot <= back;
-                int count = inBack ? back : middle, index = inBack ? slot - 1 : slot - back - 1;
-                x = inBack ? BackLine : MiddleLine;
-                y = count <= 1 ? 0 : (-1 + 2.0 * index / (count - 1)) * ShapeWidth;
+                int index = slot - back - middle - 1;
+                return new Vec2(ForwardLine, forward <= 1 ? 0 : (-1 + 2.0 * index / (forward - 1)) * ForwardsApart);
             }
 
+            bool inBack = slot <= back;
+            int count = inBack ? back : middle, at = inBack ? slot - 1 : slot - back - 1;
+            double width = count >= 4 ? WideRow : ShapeWidth;
+            return new Vec2(inBack ? BackLine : MiddleLine, count <= 1 ? 0 : (-1 + 2.0 * at / (count - 1)) * width);
+        }
+
+        private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
+        {
+            Vec2 home = ShapeHome(seen.SideSize, seen.Slot);
+            double x = home.X, y = home.Y;
             x += ShapeFollow * ball.X + (ours ? ShapeStepUp : 0);
             y += ShapeDrift * ball.Y;
             double long_ = config.GoalLineX - ShapeInside, wide = config.TouchlineY - ShapeInside;
