@@ -296,6 +296,26 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_restarts_own_kick_for_a_waiting_human_taker_keeps_his_substitution()
+        {
+            // The human is the kick-off's taker and has waited past the restart's patience, so the
+            // basic taker's kick replaces his command. The substitution he asked for goes with it.
+            SimState s = World();
+            s.Restart.PhaseTicks = 0;
+            s.Restart.WaitTicks = C.RestartAutoTicks;
+            var sim = new Simulator(C, s);
+            var commands = new List<Command> { new Command(Seat, sim.Tick, Vec2.Zero, subOff: Mate, subOn: Sub) };
+            RestartControllers.Append(sim, commands);
+            Command taker = Assert.Single(commands, c => c.ControllerId == Seat);
+            Assert.True(taker.Kick.HasValue || taker.Move.LengthSquared > 0, "the restart's own command for the taker");
+            Assert.Equal((Mate, Sub), (taker.SubOff, taker.SubOn));
+
+            var events = new List<SimEvent>();
+            sim.Step(commands, events);
+            Assert.Contains(events, x => x.Kind == SimEventKind.Substituted && x.Subject == Sub);
+        }
+
+        [Fact]
         public void Only_a_footballer_of_the_side_goes_off_and_only_an_unused_substitute_of_its_bench_comes_on()
         {
             // An opponent off; an opponent's substitute on; nobody; half a pair; someone unknown.
