@@ -419,7 +419,25 @@ namespace Eleven.Host
         /// <summary>The sheet's kits, a row of poses each, in order.</summary>
         public static readonly Rgba[] SheetKits = { Domain.Player, Domain.Keeper, Domain.Opponent, Domain.OpponentKeeper };
 
-        private const int SheetColumns = 6;
+        // The sheet's columns: whichever count gives the largest cells in the area.
+        private int SheetColumns(in HudLayout layout)
+        {
+            Rect area = SheetArea(layout);
+            int best = 1;
+            float largest = 0;
+            for (int columns = 1; columns <= Mathf.Max(1, _sheet.Count); columns++)
+            {
+                int rows = (_sheet.Count + columns - 1) / columns;
+                float cell = Mathf.Min(area.width / columns, area.height / Mathf.Max(1, rows));
+                if (cell > largest)
+                {
+                    largest = cell;
+                    best = columns;
+                }
+            }
+
+            return best;
+        }
 
         /// <summary>For the smoke test (#101): each sheet sprite's centre and side, x,y,size in HUD pixels with y down, in the sheet's order.</summary>
         public string SheetReport(in HudLayout layout)
@@ -427,9 +445,10 @@ namespace Eleven.Host
             var parts = new System.Collections.Generic.List<string>();
             float cell = SheetCell(layout);
             Rect play = SheetArea(layout);
+            int columns = SheetColumns(layout);
             for (int i = 0; i < _sheet.Count; i++)
             {
-                float x = play.x + (i % SheetColumns + 0.5f) * cell, y = play.y + (i / SheetColumns + 0.5f) * cell;
+                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
                 parts.Add(System.FormattableString.Invariant($"{x:F1},{y:F1},{cell * 0.8f:F1}"));
             }
 
@@ -439,7 +458,8 @@ namespace Eleven.Host
         private float SheetCell(in HudLayout layout)
         {
             Rect area = SheetArea(layout);
-            return Mathf.Min(area.width / SheetColumns, area.height / Mathf.Max(1, _sheet.Count / SheetColumns));
+            int columns = SheetColumns(layout);
+            return Mathf.Min(area.width / columns, area.height / Mathf.Max(1, (_sheet.Count + columns - 1) / columns));
         }
 
         // The play area below the status line, which sits over its top (#53): the sheet is laid out
@@ -460,9 +480,10 @@ namespace Eleven.Host
             if (_sheet.Count == 0 || !_sheet[0].gameObject.activeSelf) return;
             Rect play = SheetArea(layout);
             float cell = SheetCell(layout);
+            int columns = SheetColumns(layout);
             for (int i = 0; i < _sheet.Count; i++)
             {
-                float x = play.x + (i % SheetColumns + 0.5f) * cell, y = play.y + (i / SheetColumns + 0.5f) * cell;
+                float x = play.x + (i % columns + 0.5f) * cell, y = play.y + (i / columns + 0.5f) * cell;
                 Vector3 world = _camera.ScreenToWorldPoint(new Vector3(x, layout.ScreenHeight - y, 10));
                 _sheet[i].position = new Vector3(world.x, world.y, 0);
                 _sheet[i].rotation = _camera.transform.rotation;

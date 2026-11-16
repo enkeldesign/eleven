@@ -472,7 +472,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             const colour = ch === 'k' ? kit : ch === 's' ? shorts : fixed[ch];
             if (!colour) return;
             const p = at(cx + ((c + 0.5) / row.length - 0.5) * size, cy + ((r + 0.5) / rows.length - 0.5) * size);
-            samples.push([Math.round(p.x), Math.round(p.y), ...colour, i]);
+            // Pixel k covers [k, k + 1): the one holding the texel's centre, not the nearest index.
+            samples.push([Math.floor(p.x), Math.floor(p.y), ...colour, i]);
           }));
         });
       }
