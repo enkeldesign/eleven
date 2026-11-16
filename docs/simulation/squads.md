@@ -115,3 +115,56 @@ Technical constants in `OutfieldBrain`, not tactics: formations and instructions
 - A kick-off places six footballers legally.
 - A 2v2 match is the same twice, from a snapshot and from its recording.
 - One a side is the 1v1 match.
+
+## Eleven a side
+
+Issue #106, M4's first step: ten outfielders and a keeper a side.
+
+### The lines
+
+`OutfieldBrain.Lines(n)` gives how many of a side's outfielders play at the back, in the middle and up front, numbered by slot from the back.
+
+| Outfielders | Back | Middle | Forward |
+| --- | --- | --- | --- |
+| 3 to 7 | half | the rest but one | 1 |
+| 8 | 3 | 3 | 2 |
+| 10 | 4 | 4 | 2: a technical-reference 4-4-2 |
+
+- **Rows of four or more spread 22 m either side** of the middle, not 14. Two forwards stand 10 m either side of it.
+- **The lines are M3's:** −24, −10 and +4 m in a side's own frame with the ball at the centre spot. They follow the ball as before (#96).
+- **The kick-off** places every outfielder at his home in his own half, from six a side up. The taker stays at the ball. Smaller sides keep M2's rows, so no 5v5 or 2v2 reference moves.
+
+`OutfieldBrain.ShapeHome(n, slot)` is a footballer's home with the ball at the centre spot. Formations as data are M5.
+
+### Measured
+
+`eleven-sim squads <dir> 10` plays 12 CPU matches of 2 × 180 s; `squad-10v10-reference.csv` is the record.
+
+| | |
+| --- | --- |
+| Finished | 12 of 12 |
+| Goals | 19 |
+| Passes | 539, 288 reaching a teammate |
+| The ball changing sides | 1,242 |
+| Mean spacing between teammates | 25.1 m |
+| Longest stretch bunched | none |
+
+Goals are fewer than at five a side (1.6 a match against 2.9): more defenders between the ball and the goal.
+
+### The tick budget
+
+`eleven-sim budget <dir> [seeds]` plays CPU 11v11 matches at 60 and at 120 Hz, the same seeds and knobs (`SimConfig.AtTickRate`), and times each step. It fails if a 60 Hz step averages over a quarter of its 16.7 ms frame, 4.2 ms. The timing is the runner's, so CI publishes it rather than diffing it.
+
+Measured locally, three seeds each:
+
+| | 60 Hz | 120 Hz |
+| --- | --- | --- |
+| Mean step | 0.54 ms | 0.53 ms |
+| 99th percentile step | 4.9 ms | 8.1 ms |
+| Simulation time per second of play | 32 ms | 64 ms |
+| Goals | 5 | 9 |
+
+- **60 Hz stays.** 120 Hz costs twice as much per second of play, and three seeds show no difference worth it.
+- **The spikes are the brains deciding in bursts:** every CPU footballer's decision tick lands on the same steps. A spread of decision ticks would smooth them, if the browser's frames need it.
+
+In the browser, `?mode=match11` starts an eleven-a-side match from the address. In trace, the host reports the step's mean and longest every five seconds of match clock. The smoke's `match11-phone` pass checks the mean against the same 4.2 ms.
