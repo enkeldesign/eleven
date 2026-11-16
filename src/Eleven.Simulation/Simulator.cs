@@ -538,6 +538,13 @@ namespace Eleven.Simulation
             double fresh = Config.FatigueFloor + (1 - Config.FatigueFloor) * (1 - player.Fatigue);
             body.MaxSpeed *= fresh;
             body.Acceleration *= fresh;
+
+            // Hurt but playing on (#109): injuredSpeed of both.
+            if (player.Injury == InjuryLevel.Minor)
+            {
+                body.MaxSpeed *= Config.InjuredSpeed;
+                body.Acceleration *= Config.InjuredSpeed;
+            }
             if (!Carrying(player)) return body;
             body.MaxSpeed *= Config.DribbleSpeedPoor + (Config.DribbleSpeedGood - Config.DribbleSpeedPoor) * body.BallControl;
             return body;

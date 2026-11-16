@@ -65,6 +65,7 @@ namespace Eleven.Simulation
             at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
             bool inArea = InPenaltyArea(fouled.Position, end, Config);
             Discipline(_foulBy, _foulOn, inArea, tick, events);
+            Injure(_foulBy, _foulOn, tick, events);
             if (inArea)
             {
                 Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
@@ -117,14 +118,55 @@ namespace Eleven.Simulation
             }
 
             var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Card, by.Id);
+            double severity = Severity(by, on) + (2 * draws.NextUniform() - 1) * Config.CardNoise;
+            if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
+            else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
+        }
+
+        // A foul's severity (#108), before the referee's reading: a slide over a standing challenge,
+        // the challenger's pace as a share of his top speed, and coming from behind the fouled
+        // footballer's facing.
+        private static double Severity(in PlayerState by, in PlayerState on)
+        {
             double speed = SimMath.Sqrt(by.Velocity.LengthSquared) / by.Capabilities.MaxSpeed;
             Vec2 facing = new Vec2(SimMath.Cos(on.Heading), SimMath.Sin(on.Heading));
             Vec2 from = by.Position - on.Position;
             bool behind = from.X * facing.X + from.Y * facing.Y < 0;
-            double severity = (by.Challenge == ChallengePhase.Slide ? SlideSeverity : StandingSeverity)
-                + PaceSeverity * (speed > 1 ? 1 : speed) + (behind ? BehindSeverity : 0) + (2 * draws.NextUniform() - 1) * Config.CardNoise;
-            if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
-            else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
+            return (by.Challenge == ChallengePhase.Slide ? SlideSeverity : StandingSeverity)
+                + PaceSeverity * (speed > 1 ? 1 : speed) + (behind ? BehindSeverity : 0);
+        }
+
+        /// <summary>Whether injuries happen in this match (#109): a referee, two sides, and sides of at least injuriesFrom outfielders.</summary>
+        private bool InjuriesApply()
+        {
+            if (!_state.Restart.On || _state.Teams.Length != 2) return false;
+            int outfield = 0;
+            foreach (PlayerState p in _state.Players)
+            {
+                if (p.TeamId == _state.Teams[0].Id && KeeperOf(p.Id) < 0) outfield++;
+            }
+
+            return outfield >= Config.InjuriesFrom;
+        }
+
+        // A foul's injury (#109): a bounded risk, never continuous damage. The fouled footballer is
+        // hurt with a chance of injuryRisk times the foul's severity, on the Injury stream; a share
+        // injurySerious of injuries take him off, the rest leave him playing on at injuredSpeed. A
+        // second injury is no lighter than the first.
+        private void Injure(int offender, int fouled, long tick, List<SimEvent> events)
+        {
+            if (!InjuriesApply()) return;
+            ref PlayerState on = ref _state.Players[fouled];
+            if (on.Off) return;
+            double chance = Config.InjuryRisk * Severity(_state.Players[offender], on);
+            var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Injury, on.Id);
+            double hurt = draws.NextUniform(), serious = draws.NextUniform();
+            if (hurt >= (chance > 1 ? 1 : chance)) return;
+            InjuryLevel level = serious < Config.InjurySerious ? InjuryLevel.Serious : InjuryLevel.Minor;
+            if (level < on.Injury) level = on.Injury;
+            on.Injury = level;
+            events.Add(new SimEvent(tick, SimEventKind.Injured, on.Id, other: (int)level));
+            if (level == InjuryLevel.Serious) LeavePitch(fouled, tick, events);
         }
 
         // Severity's parts (#108): a standing challenge's and a slide's own, the share for full pace,
