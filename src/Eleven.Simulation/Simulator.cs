@@ -113,7 +113,7 @@ namespace Eleven.Simulation
 
             // Offside (#107), on this step's touches, before the goal line: an offence stops play
             // before a goal from it can count.
-            StepOffside(tick, events);
+            StepOffside(tick, start, events);
             CheckGoalLine(tick, start, events);
 
             // Out of play, goals and restarts (#85), on where the ball ended the step, then the

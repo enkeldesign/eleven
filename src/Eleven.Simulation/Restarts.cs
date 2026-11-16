@@ -107,7 +107,7 @@ namespace Eleven.Simulation
         // Judged in its own phase of the step, after the ball moves and before the goal line: an
         // offence came first, so it stops play before any goal is credited. Only this step's events
         // count: a caller may keep every step's in one list, as a replay does.
-        private void StepOffside(long tick, List<SimEvent> events)
+        private void StepOffside(long tick, Vec3 ballAtTouch, List<SimEvent> events)
         {
             ref RestartState r = ref _state.Restart;
             if (!r.On || r.Phase != RestartPhase.Live || MatchPaused || !OffsideApplies()) return;
@@ -148,16 +148,18 @@ namespace Eleven.Simulation
                 }
 
                 bool exempt = toucher.Id == takenBy && (taken == RestartKind.GoalKick || taken == RestartKind.ThrowIn || taken == RestartKind.Corner);
-                r.OffsideFlags = exempt ? 0 : Positions(toucher);
+                r.OffsideFlags = exempt ? 0 : Positions(toucher, ballAtTouch);
             }
         }
 
         // Who of the toucher's side is in an offside position at his touch (Law 11): in the
         // opponents' half, nearer their goal line than both the ball and the second-last opponent.
-        private ulong Positions(in PlayerState toucher)
+        // The ball is where it was played, before this step's flight: every touch comes before the
+        // ball moves, so a kick's own direction and pace never decide it.
+        private ulong Positions(in PlayerState toucher, Vec3 ballAtTouch)
         {
             int sign = AttackSignOf(toucher.TeamId);
-            double ball = sign * _state.Ball.Position.X, last = double.NegativeInfinity, secondLast = double.NegativeInfinity;
+            double ball = sign * ballAtTouch.X, last = double.NegativeInfinity, secondLast = double.NegativeInfinity;
             foreach (PlayerState p in _state.Players)
             {
                 if (p.TeamId == toucher.TeamId) continue;
