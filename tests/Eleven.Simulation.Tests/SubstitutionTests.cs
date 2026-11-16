@@ -37,7 +37,7 @@ namespace Eleven.Simulation.Tests
 
         private static void Refused(List<SimEvent> events, CommandRejection why, int controller = Seat)
         {
-            Assert.Contains(events, e => e.Kind == SimEventKind.CommandRejected && e.Subject == controller && e.Other == (int)why);
+            Assert.Contains(events, e => e.Kind == SimEventKind.CommandRejected && e.Subject == controller && e.Rejection == why);
             Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Substituted);
         }
 

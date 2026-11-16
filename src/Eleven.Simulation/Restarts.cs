@@ -487,6 +487,7 @@ namespace Eleven.Simulation
             r.FromThrow = r.Kind == RestartKind.ThrowIn || r.Kind == RestartKind.IndirectFreeKick;
             r.Phase = RestartPhase.Live;
             r.PhaseTicks = r.WaitTicks = 0;
+            CloseSubstitutionWindows();
         }
 
         /// <summary>
