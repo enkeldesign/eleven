@@ -4,7 +4,7 @@ build=fixture
 controls=one-fire
 model=free
 configFormat=26
-configHash=44ac0bb151548d97
+configHash=c7367e0d8740a58b
 knobs=140
 values:
 gravity=40239eb851eb851f
@@ -92,7 +92,7 @@ injuredSpeed=3feb333333333333
 substitutions=4014000000000000
 substitutionWindows=4008000000000000
 cpuSubAfter=3fe570a3d70a3d71
-cpuSubFatigue=3fe0000000000000
+cpuSubFatigue=3fc999999999999a
 attachedLeadSlow=3fe0000000000000
 attachedLeadFast=3fe999999999999a
 attachedAcceleration=4039000000000000
