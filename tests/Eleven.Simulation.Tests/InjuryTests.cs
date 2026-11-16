@@ -111,6 +111,47 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_quick_pass_never_chooses_a_footballer_taken_off_injured()
+        {
+            // As CardTests: the human's new footballer by the touchline facing it, the footballer
+            // taken off beyond it straight ahead and in range; the rest of his side well behind him.
+            SimConfig c = Base.With("injuryRisk", 1).With("injurySerious", 1);
+            SimState s = null!;
+            for (ulong seed = 1; seed <= 40 && s == null; seed++)
+            {
+                var sim = new Simulator(c, Fouling(c, seed));
+                var events = new List<SimEvent>();
+                sim.Step(Array.Empty<Command>(), events);
+                if (events.Any(e => e.Kind == SimEventKind.Injured)) s = sim.PeekState().Clone();
+            }
+
+            Assert.NotNull(s);
+            int off = Index(s, Carrier);
+            Assert.True(s.Players[off].Off);
+            int passer = Array.FindIndex(s.Players, p => p.OwnerControllerId == SquadTrials.SeatController);
+            int mate = s.Players[passer].Id;
+            double side = Math.Sign(s.Players[off].Position.Y);
+            s.Players[passer].Position = new Vec2(s.Players[off].Position.X, side * (c.TouchlineY - 2));
+            s.Players[passer].Heading = side * Math.PI / 2;
+            s.Players[passer].Velocity = Vec2.Zero;
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.TakerId = 0;
+            s.Ball.Position = new Vec3(s.Players[passer].Position.X, s.Players[passer].Position.Y + side * 0.4, c.BallRadius);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Ball.LastPlayedBy = mate;
+            var then = new Simulator(c, s);
+            var seen = new List<SimEvent>();
+            for (int t = 0; t < c.TickRate && !seen.Any(x => x.Kind == SimEventKind.QuickPassResolved); t++)
+            {
+                then.Step(new[] { new Command(SquadTrials.SeatController, then.Tick, Vec2.Zero, quickPass: true) }, seen);
+            }
+
+            SimEvent pass = Assert.Single(seen, x => x.Kind == SimEventKind.QuickPassResolved);
+            Assert.NotEqual(Carrier, pass.Other);
+        }
+
+        [Fact]
         public void A_harder_foul_injures_more_often()
         {
             // The same foul at a walk and at full pace: the faster one is more severe.
