@@ -175,6 +175,10 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "substitutionWindows", "count", 0, 11),
             new TunableParameter(TunableParameter.ControlGroup, "cpuSubAfter", "fraction", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "cpuSubFatigue", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "knockout", "flag", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "extraTimeShare", "fraction", 0.05, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "shootoutKicks", "count", 1, 11),
+            new TunableParameter(TunableParameter.ControlGroup, "shootoutKickTime", "s", 1, 20),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -281,6 +285,10 @@ namespace Eleven.Simulation
             "substitutionWindows" => SubstitutionWindows,
             "cpuSubAfter" => CpuSubAfter,
             "cpuSubFatigue" => CpuSubFatigue,
+            "knockout" => Knockout,
+            "extraTimeShare" => ExtraTimeShare,
+            "shootoutKicks" => ShootoutKicks,
+            "shootoutKickTime" => ShootoutKickTime,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -343,6 +351,7 @@ namespace Eleven.Simulation
             double cardsFrom = CardsFrom, cautionFrom = CautionFrom, sendOffFrom = SendOffFrom, cardNoise = CardNoise, dogsoRange = DogsoRange;
             double injuriesFrom = InjuriesFrom, injuryRisk = InjuryRisk, injurySerious = InjurySerious, injuredSpeed = InjuredSpeed;
             double substitutions = Substitutions, substitutionWindows = SubstitutionWindows, cpuSubAfter = CpuSubAfter, cpuSubFatigue = CpuSubFatigue;
+            double knockout = Knockout, extraTimeShare = ExtraTimeShare, shootoutKicks = ShootoutKicks, shootoutKickTime = ShootoutKickTime;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -440,6 +449,10 @@ namespace Eleven.Simulation
                     case "substitutionWindows": substitutionWindows = o.Value; break;
                     case "cpuSubAfter": cpuSubAfter = o.Value; break;
                     case "cpuSubFatigue": cpuSubFatigue = o.Value; break;
+                    case "knockout": knockout = o.Value; break;
+                    case "extraTimeShare": extraTimeShare = o.Value; break;
+                    case "shootoutKicks": shootoutKicks = o.Value; break;
+                    case "shootoutKickTime": shootoutKickTime = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -567,7 +580,11 @@ namespace Eleven.Simulation
                 substitutions: substitutions,
                 substitutionWindows: substitutionWindows,
                 cpuSubAfter: cpuSubAfter,
-                cpuSubFatigue: cpuSubFatigue);
+                cpuSubFatigue: cpuSubFatigue,
+                knockout: knockout,
+                extraTimeShare: extraTimeShare,
+                shootoutKicks: shootoutKicks,
+                shootoutKickTime: shootoutKickTime);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -678,7 +695,11 @@ namespace Eleven.Simulation
             substitutions: Substitutions,
             substitutionWindows: SubstitutionWindows,
             cpuSubAfter: CpuSubAfter,
-            cpuSubFatigue: CpuSubFatigue);
+            cpuSubFatigue: CpuSubFatigue,
+            knockout: Knockout,
+            extraTimeShare: ExtraTimeShare,
+            shootoutKicks: ShootoutKicks,
+            shootoutKickTime: ShootoutKickTime);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

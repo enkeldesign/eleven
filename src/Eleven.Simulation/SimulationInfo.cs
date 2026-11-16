@@ -20,7 +20,7 @@ namespace Eleven.Simulation
         /// version 15 the restart sequencer (#85), version 16 the match's clock, halves and score (#86),
         /// version 17 each player's heading (#94), and version 18 each player's place in his side's shape (#96), version 19 each player's strength (#97), version 20 the restart's advantage (#99), and version 21 each player's stamina and fatigue (#100).
         /// </summary>
-        public const int StateSchemaVersion = 25;
+        public const int StateSchemaVersion = 26;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

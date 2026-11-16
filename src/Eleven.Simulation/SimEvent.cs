@@ -159,6 +159,18 @@ namespace Eleven.Simulation
 
         /// <summary>A substitution (#110). Subject: the substitute who came on. <see cref="SimEvent.Other"/>: the footballer who went off.</summary>
         Substituted = 42,
+
+        /// <summary>
+        /// Extra time (#111). <see cref="SimEvent.Other"/>: 0 when two halves end level in a knockout
+        /// and extra time is to come; 1 and 2 as each of its halves starts, the ends changed.
+        /// </summary>
+        ExtraTime = 43,
+
+        /// <summary>Extra time ended level (#111): kicks from the penalty mark follow.</summary>
+        ShootoutStarted = 44,
+
+        /// <summary>A shootout's kick is over (#111). Subject: its taker. <see cref="SimEvent.Other"/>: 1 scored, 0 not.</summary>
+        ShootoutKick = 45,
     }
 
     /// <summary>
