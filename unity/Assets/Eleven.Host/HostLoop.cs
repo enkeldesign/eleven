@@ -199,9 +199,10 @@ namespace Eleven.Host
             }
 
             // ?mode=match: straight into a 1v1 match (#87), as from the bench's play switch;
-            // ?mode=match2, a 2v2 match (#95); ?mode=match5, a 5v5 match (#103).
+            // ?mode=match2, a 2v2 match (#95); ?mode=match5, a 5v5 match (#103); ?mode=match11, eleven a side (#106).
             if (url.Contains("mode=match2")) StartMatch("address", 2);
             else if (url.Contains("mode=match5")) StartMatch("address", 5);
+            else if (url.Contains("mode=match11")) StartMatch("address", 10);
             else if (url.Contains("mode=match")) StartMatch("address", 1);
         }
 
@@ -302,7 +303,10 @@ namespace Eleven.Host
             AppendMatchControllers();
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
+            _stepWatch.Restart();
             _simulator.Step(_commands, _events);
+            _stepWatch.Stop();
+            if (_match) TimeStep(_stepWatch.Elapsed.TotalMilliseconds);
             _poses.Observe(_simulator.PeekState(), _events, _config);
             _feel.Record(_simulator, _commands, _events);
             ObserveMatch();
