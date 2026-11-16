@@ -200,6 +200,102 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void On_half_times_last_step_a_substitution_is_still_free()
+        {
+            // The break ends in this step: the change was asked for in it, and uses no window.
+            SimState s = World();
+            s.Match.Phase = MatchPhase.HalfTime;
+            s.Match.PhaseTicks = 1;
+            int home = Array.FindIndex(s.Teams, t => t.Id == Squads.HomeTeam);
+            s.Teams[home].SubWindows = 3;
+            var sim = new Simulator(C, s);
+            List<SimEvent> e = Substitute(sim, Mate, Sub);
+            Assert.Equal(MatchPhase.SecondHalf, sim.PeekState().Match.Phase);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Substituted && x.Subject == Sub);
+            Assert.Equal((1, 3), (Home(sim).Substitutions, Home(sim).SubWindows));
+            Assert.False(Home(sim).SubWindowOpen);
+        }
+
+        [Fact]
+        public void On_the_step_the_restart_is_taken_a_substitution_asked_for_in_it_is_made()
+        {
+            // The away side's taker kicks off; home asks on the very step the kick puts the ball in
+            // play. The ball was dead when it was asked, so the change is made.
+            SimState World2()
+            {
+                SimState s = World();
+                s.Restart.AwardedTeam = Squads.AwayTeam;
+                s.Restart.TakerId = Squads.AwayOutfielder(Side, 0);
+                s.Restart.PhaseTicks = 0;
+                int taker = Index(s, s.Restart.TakerId);
+                s.Players[taker].Position = new Vec2(Simulator.TakerBehind, 0);
+                s.Players[taker].Heading = Math.PI;
+                return s;
+            }
+
+            // The step the kick is taken on, with no substitution; then the same again, asking on it.
+            List<SimEvent> Run(long askOn, out long takenOn)
+            {
+                var sim = new Simulator(C, World2());
+                var e = new List<SimEvent>();
+                takenOn = -1;
+                for (int t = 0; t < C.TickRate && takenOn < 0; t++)
+                {
+                    e.Clear();
+                    var commands = new List<Command> { new Command(Squads.AwayOutfielder(Side, 0), sim.Tick, Vec2.Zero, new KickIntent(new Vec2(-1, 0), 0.3, 0)) };
+                    if (sim.Tick == askOn) commands.Add(new Command(Seat, sim.Tick, Vec2.Zero, subOff: Mate, subOn: Sub));
+                    long tick = sim.Tick;
+                    sim.Step(commands, e);
+                    if (e.Any(x => x.Kind == SimEventKind.RestartTaken)) takenOn = tick;
+                }
+
+                return e;
+            }
+
+            Run(-1, out long taken);
+            Assert.True(taken >= 0, "the kick-off was never taken");
+            List<SimEvent> events = Run(taken, out long again);
+            Assert.Equal(taken, again);
+            Assert.Contains(events, x => x.Kind == SimEventKind.Substituted && x.Subject == Sub);
+            Assert.DoesNotContain(events, x => x.Kind == SimEventKind.CommandRejected);
+        }
+
+        [Fact]
+        public void Two_of_a_sides_controllers_asking_in_one_step_for_its_last_substitution_one_is_made_and_one_refused()
+        {
+            SimState s = World();
+            s.Teams[Array.FindIndex(s.Teams, t => t.Id == Squads.HomeTeam)].Substitutions = 4;
+            var sim = new Simulator(C, s);
+            int other = Squads.HomeOutfielder(5);
+            var e = new List<SimEvent>();
+            sim.Step(new[]
+            {
+                new Command(Seat, sim.Tick, Vec2.Zero, subOff: Mate, subOn: Sub),
+                new Command(other, sim.Tick, Vec2.Zero, subOff: Squads.HomeOutfielder(4), subOn: Sub2),
+            }, e);
+            Assert.Single(e, x => x.Kind == SimEventKind.Substituted);
+            SimEvent refused = Assert.Single(e, x => x.Kind == SimEventKind.CommandRejected);
+            Assert.Equal((other, CommandRejection.SubNoneLeft), (refused.Subject, refused.Rejection));
+            Assert.Equal(5, Home(sim).Substitutions);
+        }
+
+        [Fact]
+        public void Two_controllers_asking_in_one_step_for_the_same_substitute_one_is_refused_as_ineligible()
+        {
+            var sim = new Simulator(C, World());
+            int other = Squads.HomeOutfielder(5);
+            var e = new List<SimEvent>();
+            sim.Step(new[]
+            {
+                new Command(Seat, sim.Tick, Vec2.Zero, subOff: Mate, subOn: Sub),
+                new Command(other, sim.Tick, Vec2.Zero, subOff: Squads.HomeOutfielder(4), subOn: Sub),
+            }, e);
+            Assert.Single(e, x => x.Kind == SimEventKind.Substituted);
+            SimEvent refused = Assert.Single(e, x => x.Kind == SimEventKind.CommandRejected);
+            Assert.Equal((other, CommandRejection.SubIneligible), (refused.Subject, refused.Rejection));
+        }
+
+        [Fact]
         public void Only_a_footballer_of_the_side_goes_off_and_only_an_unused_substitute_of_its_bench_comes_on()
         {
             // An opponent off; an opponent's substitute on; nobody; half a pair; someone unknown.
