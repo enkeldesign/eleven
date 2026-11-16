@@ -13,8 +13,8 @@ namespace Eleven.Simulation.Harness
         public ulong Seed;
         public int Goals;
 
-        /// <summary>Restarts awarded, by <see cref="RestartKind"/>: none, kick-off, throw-in, goal kick, corner, free kick, penalty (#99).</summary>
-        public int[] Awarded = new int[7];
+        /// <summary>Restarts awarded, by <see cref="RestartKind"/>: none, kick-off, throw-in, goal kick, corner, free kick, penalty (#99), indirect free kick (#107).</summary>
+        public int[] Awarded = new int[8];
 
         public int Taken;
 
