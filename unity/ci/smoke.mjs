@@ -472,7 +472,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             const colour = ch === 'k' ? kit : ch === 's' ? shorts : fixed[ch];
             if (!colour) return;
             const p = at(cx + ((c + 0.5) / row.length - 0.5) * size, cy + ((r + 0.5) / rows.length - 0.5) * size);
-            samples.push([Math.round(p.x), Math.round(p.y), ...colour]);
+            samples.push([Math.round(p.x), Math.round(p.y), ...colour, i]);
           }));
         });
       }
@@ -488,17 +488,29 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         x.drawImage(img, 0, 0);
         const p = x.getImageData(0, 0, img.width, img.height).data;
         let match = 0, worst = 0;
-        for (const [sx, sy, r, g, b] of wanted) {
+        const perCell = new Map();
+        for (const [sx, sy, r, g, b, cell] of wanted) {
           const i = 4 * (sy * img.width + sx);
           const off = Math.max(Math.abs(p[i] - r), Math.abs(p[i + 1] - g), Math.abs(p[i + 2] - b));
-          if (off <= 40) match++;
+          const tally = perCell.get(cell) ?? { ok: 0, all: 0, seen: null, want: null };
+          tally.all++;
+          if (off <= 40) {
+            match++;
+            tally.ok++;
+          } else if (!tally.seen) {
+            tally.seen = `rgb(${p[i]},${p[i + 1]},${p[i + 2]})@${sx},${sy}`;
+            tally.want = `rgb(${r},${g},${b})`;
+          }
+          perCell.set(cell, tally);
           worst = Math.max(worst, off);
         }
-        return { width: img.width, height: img.height, match, total: wanted.length, worst };
+        // The cells that fail most, with a pixel each: where the drawing departs from the art.
+        const bad = [...perCell.entries()].filter(([, t]) => t.ok / t.all < 0.9).map(([c, t]) => `${c}:${t.ok}/${t.all} ${t.seen} for ${t.want}`);
+        return { width: img.width, height: img.height, match, total: wanted.length, worst, bad };
       }, [shot, samples]).catch(() => null) : null;
       const share = compared ? compared.match / compared.total : 0;
       check('the drawn sprite sheet reproduces the generator\'s pixels, 95 % of them within 40 a channel', !!compared && share >= 0.95,
-        compared ? `${compared.match} of ${compared.total} pixels match (${(share * 100).toFixed(1)} %), the worst off by ${compared.worst}; ${compared.width}x${compared.height}`
+        compared ? `${compared.match} of ${compared.total} pixels match (${(share * 100).toFixed(1)} %), the worst off by ${compared.worst}; ${compared.width}x${compared.height}; cells under 90 %: ${compared.bad.slice(0, 12).join(' | ') || 'none'}`
           : `no comparison: ${grids.size} grid(s), ${colours ? 'colours' : 'no colours'}, ${cells ? 'cells' : 'no cells'}`);
       notes.sheet = compared ? `${(share * 100).toFixed(1)} % of ${compared.total} pixels match` : 'none';
 
@@ -745,7 +757,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           if (big && side === 2) await tap(at(switchBox[0] + switchBox[2] / 2, switchBox[1] + switchBox[3] / 2));
           if (side === 2) {
             const asked = (await waitForLog(/ELEVEN match switch asked tick=(\d+) to=(\d+)/, 10_000, fromS))?.match ?? null;
-            const switched = (await waitForLog(/ELEVEN match switched to=(\d+) from=(\d+)/, 10_000, fromS))?.match ?? null;
+            // An automatic switch can land between the press and the one it asked for: the switch
+            // to look for is to the footballer asked for.
+            const switched = asked ? (await waitForLog(new RegExp(`ELEVEN match switched to=(${asked[2]}) from=(\\d+)`), 10_000, fromS))?.match ?? null : null;
             check('a press on SWITCH takes over a teammate', !!asked && asked[2] !== '0' && !!switched && switched[1] === asked[2],
               `${asked ? asked[0].replace('ELEVEN ', '') : 'no switch asked'}; ${switched ? switched[0].replace('ELEVEN ', '') : 'no switch made'}`);
           }
@@ -847,11 +861,23 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           toFire ? toFire[0].replace('ELEVEN ', '') : `no switch line${openedC ? '' : ' (the bench did not open)'}; since: ${since(fromC)}`);
         await closeBench(openedC, 2);
 
-        // A tap: the quick pass, at the release.
-        await settle();
-        const fromTap = logs.length;
-        await burst(['touchStart', [pt(fire, 1)]], ['touchEnd', [pt(fire, 1)]]);
-        const tapped = (await waitForLog(actionPattern, 20_000, fromTap))?.match ?? null;
+        // A tap: the quick pass, at the release. The press and the release are sent together, but
+        // a busy runner's main thread can deliver the release a frame later: held that long, the
+        // input wasn't a tap, so it is sent again (twice at most), and the delay is noted.
+        let fromTap = logs.length;
+        let tapped = null;
+        const lateTaps = [];
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await settle();
+          fromTap = logs.length;
+          await burst(['touchStart', [pt(fire, 1)]], ['touchEnd', [pt(fire, 1)]]);
+          tapped = (await waitForLog(actionPattern, 20_000, fromTap))?.match ?? null;
+          const held = Number(/held=(\d+)ms/.exec(logs.slice(fromTap).find((l) => /^ELEVEN release /.test(l)) ?? '')?.[1] ?? 0);
+          if (!tapped || tapped[1] === 'tap' || held < 120) break;
+          lateTaps.push(`${held} ms`);
+          await waitForLog(/ELEVEN event \d+ (Kicked|KickMissed)/, 5_000, fromTap);
+        }
+        if (lateTaps.length) notes.lateTaps = lateTaps.join(', ');
         const tapResolved = await waitForLog(/ELEVEN event \d+ QuickPassResolved/, 20_000, fromTap);
         const tapPress = logs.slice(fromTap).find((l) => l.startsWith('ELEVEN press'));
         notes.fireTapLatencyMs = tapped ? Number(tapped[5]) : NaN;
