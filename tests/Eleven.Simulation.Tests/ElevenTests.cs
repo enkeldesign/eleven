@@ -30,6 +30,8 @@ namespace Eleven.Simulation.Tests
             Assert.NotEqual(C.Hash, at.Hash);
             foreach (TunableParameter p in SimConfig.Tunables) Assert.Equal(C.Get(p.Name), at.Get(p.Name));
             Assert.Equal(C.HalfLength, at.HalfTicks / (double)at.TickRate, 9);
+            // The kick's cooldown is set in ticks: its length in seconds is what is kept.
+            Assert.Equal(C.KickCooldownTicks / (double)C.TickRate, at.KickCooldownTicks / (double)at.TickRate, 9);
             Assert.Equal(C.Hash, at.AtTickRate(60).Hash);
         }
 
