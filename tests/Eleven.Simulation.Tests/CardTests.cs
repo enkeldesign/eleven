@@ -193,6 +193,37 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void His_controller_takes_the_teammate_nearest_the_foul_not_nearest_the_touchline()
+        {
+            // A teammate beside the foul, another by the touchline he is sent beyond: the one beside
+            // the foul is nearer where he was, the other nearer where he goes.
+            SimConfig c = Base.With("cautionFrom", 0).With("sendOffFrom", 0);
+            SimState s = Fouling(c, new Vec2(-10, 0), homeFouls: true);
+            s.Players[Index(s, Mate)].Position = new Vec2(-10, -3);
+            int wide = Squads.HomeOutfielder(2);
+            s.Players[Index(s, wide)].Position = new Vec2(-10, c.TouchlineY - 1);
+            var sim = new Simulator(c, s);
+            List<SimEvent> e = Step(sim);
+            Assert.Contains(e, x => x.Kind == SimEventKind.SentOff && x.Subject == Carrier);
+            Assert.Equal(Mate, sim.PeekState().Players.Single(p => p.OwnerControllerId == SquadTrials.SeatController).Id);
+        }
+
+        [Fact]
+        public void A_foul_is_carded_when_the_ball_leaves_play_on_its_step()
+        {
+            // The ball crosses the touchline in the step of the foul: the throw-in takes precedence
+            // over the free kick, but not over the card.
+            SimConfig c = Base.With("cautionFrom", 0).With("sendOffFrom", 2);
+            SimState s = Fouling(c, new Vec2(-10, c.TouchlineY - 0.3));
+            s.Ball.Velocity = new Vec3(0, 40, 0);
+            var sim = new Simulator(c, s);
+            List<SimEvent> e = Step(sim);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Foul && x.Subject == Defender);
+            Assert.Contains(e, x => x.Kind == SimEventKind.RestartAwarded && x.Other == (int)RestartKind.ThrowIn);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Cautioned && x.Subject == Defender);
+        }
+
+        [Fact]
         public void A_slide_at_pace_from_behind_is_graded_as_a_slide_at_pace()
         {
             // The foul's severity is read as it happens: a slide (0.45), at pace (up to 0.3), from
