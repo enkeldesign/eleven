@@ -50,10 +50,10 @@ Sixteen CPU 11v11 matches, four per tier, both sides at the tier, chose the refe
 
 | Thresholds | Cautions | Sendings-off |
 | --- | --- | --- |
-| 0.6 and 0.95 | 51 of 109 fouls (47 %) | 21, about 1.3 a match |
+| 0.6 and 0.95 | 51 of 105 fouls (49 %) | 21, about 1.3 a match |
 | **0.8 and 1.15** | 23 of 109 fouls (21 %) | 2 in 16 matches |
 
-Professional football cautions about one foul in six (17 %) and sees about 0.15 sendings-off a match. DOGSO never arose in these matches: the CPU's fouls come in midfield.
+Professional football cautions about one foul in six (17 %) and sees about 0.15 sendings-off a match. DOGSO never arose in these matches: with both thresholds out of reach, no card was shown in 16 more.
 
 The 12-match 11v11 reference moves with cards: 21 goals (19 before), 538 passes, 285 completed, never bunched.
 
