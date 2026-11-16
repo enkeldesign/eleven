@@ -69,7 +69,7 @@ namespace Eleven.Simulation
             double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
             at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
             bool inArea = InPenaltyArea(fouled.Position, end, Config);
-            Discipline(_foulBy, _foulOn, inArea, tick, events);
+            Sanction(tick, events);
             if (inArea)
             {
                 Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
@@ -89,6 +89,14 @@ namespace Eleven.Simulation
             }
 
             Stop(RestartKind.FreeKick, team, at, tick, events);
+        }
+
+        // This step's foul's card (#108), whichever restart follows: the free kick or penalty, or
+        // the restart for the ball leaving play in the same step, which takes precedence over it.
+        private void Sanction(long tick, List<SimEvent> events)
+        {
+            PlayerState fouled = _state.Players[_foulOn];
+            Discipline(_foulBy, _foulOn, InPenaltyArea(fouled.Position, AttackSignOf(fouled.TeamId), Config), tick, events);
         }
 
         /// <summary>Whether cards are shown in this match (#108): a referee, two sides, and sides of at least cardsFrom outfielders.</summary>
@@ -192,6 +200,7 @@ namespace Eleven.Simulation
                 if (_state.Players[i].TeamId == p.TeamId && slot > 0 && _state.Players[i].Slot > slot) _state.Players[i].Slot--;
             }
 
+            Vec2 was = p.Position;
             p.Position = new Vec2(p.Position.X, (p.Position.Y < 0 ? -1 : 1) * (Config.TouchlineY + SentOffBeyond));
             p.Velocity = Vec2.Zero;
             p.WindUpTicks = p.AftertouchTicks = p.TouchCooldown = p.CutCooldown = 0;
@@ -208,14 +217,14 @@ namespace Eleven.Simulation
                 return;
             }
 
-            // A human's footballer: his controller takes over the nearest CPU teammate.
+            // A human's footballer: his controller takes over the CPU teammate nearest where he was.
             int controller = p.OwnerControllerId, best = -1;
             double nearest = double.MaxValue;
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 PlayerState q = _state.Players[i];
                 if (q.TeamId != p.TeamId || q.SentOff || KeeperOf(q.Id) >= 0 || CpuOf(q.Id) < 0) continue;
-                double d = (q.Position - p.Position).LengthSquared;
+                double d = (q.Position - was).LengthSquared;
                 if (d < nearest)
                 {
                     nearest = d;
@@ -449,6 +458,9 @@ namespace Eleven.Simulation
                     if (team != 0) r.LastTouchedTeam = team;
                     if (r.FromThrow && ball.LastPlayedBy != 0 && ball.LastPlayedBy != r.TakerId) r.FromThrow = false;
 
+                    bool overTouchline = (ball.Position.Y < 0 ? -ball.Position.Y : ball.Position.Y) - Config.BallRadius > Config.TouchlineY;
+                    if ((_crossedEnd != 0 || overTouchline) && _foulBy >= 0) Sanction(tick, events);
+
                     if (_crossedEnd != 0)
                     {
                         int end = _crossedEnd;
@@ -458,7 +470,7 @@ namespace Eleven.Simulation
                         else if (r.LastTouchedTeam == attackers) Stop(RestartKind.GoalKick, defenders, new Vec2(end * (Config.GoalLineX - GoalArea), side * (Config.GoalWidth / 2 + GoalArea)), tick, events);
                         else Stop(RestartKind.Corner, attackers, new Vec2(end * (Config.GoalLineX - 0.5), side * (Config.TouchlineY - 0.5)), tick, events);
                     }
-                    else if ((ball.Position.Y < 0 ? -ball.Position.Y : ball.Position.Y) - Config.BallRadius > Config.TouchlineY)
+                    else if (overTouchline)
                     {
                         double side = ball.Position.Y > 0 ? 1 : -1;
                         double x = ball.Position.X;
