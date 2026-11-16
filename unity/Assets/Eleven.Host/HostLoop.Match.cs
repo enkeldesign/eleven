@@ -284,6 +284,16 @@ namespace Eleven.Host
                         _hud?.ShowStatus("Second half: ends changed. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match secondhalf tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
                         break;
+                    case SimEventKind.Injured:
+                    {
+                        // Injuries (#109), announced with the side.
+                        int hurt = Array.Find(s.Players, p => p.Id == e.Subject).TeamId;
+                        string whose = hurt == OneVOne.HomeTeam ? "Your" : "CPU";
+                        _hud?.ShowStatus(e.Other == (int)InjuryLevel.Serious ? $"{whose} footballer injured and off." : $"{whose} footballer hurt, playing on.");
+                        Log(FormattableString.Invariant($"ELEVEN match injury level={e.Other} player={e.Subject} team={hurt} tick={s.Tick}"));
+                        break;
+                    }
+
                     case SimEventKind.Cautioned:
                     case SimEventKind.SentOff:
                     {
