@@ -20,6 +20,9 @@ namespace Eleven.Host
         // ?half=60: a half's length in seconds of match clock, 60 to 600 (#86's range).
         private double _halfLength;
 
+        // ?knockout=1 (#111): a level match goes to extra time and then a shootout.
+        private bool _knockout;
+
         // ?tier=elite: the CPU opponent's difficulty (#83); pro unless given.
         private CpuSkill _opponentSkill = CpuSkill.Pro;
 
@@ -83,6 +86,7 @@ namespace Eleven.Host
                 _halfLength = Math.Max(60, Math.Min(600, half));
             }
 
+            _knockout = url.Contains("knockout=1");
             int seedAt = url.IndexOf("seed=", StringComparison.Ordinal);
             if (seedAt >= 0 && ulong.TryParse(url.Substring(seedAt + 5).Split('&', '#')[0], out ulong seed)) _matchSeed = seed;
             int tierAt = url.IndexOf("tier=", StringComparison.Ordinal);
@@ -91,7 +95,11 @@ namespace Eleven.Host
         }
 
         // The bench's values, with the half's length asked for in the address.
-        private SimConfig MatchConfig() => _halfLength > 0 ? _bench.Config.With("halfLength", _halfLength) : _bench.Config;
+        private SimConfig MatchConfig()
+        {
+            SimConfig config = _halfLength > 0 ? _bench.Config.With("halfLength", _halfLength) : _bench.Config;
+            return _knockout ? config.With("knockout", 1) : config;
+        }
 
         /// <summary>
         /// Starts a match at its kick-off, or a new one: the bench's values, the human's footballer,
@@ -327,6 +335,26 @@ namespace Eleven.Host
                         _hud?.ShowStatus("Second half: ends changed. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match secondhalf tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
                         break;
+                    case SimEventKind.ExtraTime:
+                        // Extra time (#111): level after two halves, then each of its halves, the ends changed.
+                        if (e.Other > 0) OrientForSide();
+                        _hud?.ShowStatus(e.Other == 0 ? $"Level at {Score(s)}: extra time." : e.Other == 1 ? "Extra time: ends changed. Attacking up." : "Extra time, second half. Attacking up.");
+                        Log(FormattableString.Invariant($"ELEVEN match extratime part={e.Other} score={Score(s)} tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
+                        break;
+                    case SimEventKind.ShootoutStarted:
+                        _hud?.ShowStatus($"Level at {Score(s)}: penalties.");
+                        Log(FormattableString.Invariant($"ELEVEN match shootout started score={Score(s)} tick={s.Tick}"));
+                        break;
+                    case SimEventKind.ShootoutKick:
+                    {
+                        // A shootout's kick (#111): whose, whether it scored, and the kicks' score.
+                        int kicker = Array.Find(s.Players, p => p.Id == e.Subject).TeamId;
+                        TeamState you = Array.Find(s.Teams, t => t.Id == OneVOne.HomeTeam), cpu = Array.Find(s.Teams, t => t.Id != OneVOne.HomeTeam);
+                        _hud?.ShowStatus(FormattableString.Invariant($"{(kicker == OneVOne.HomeTeam ? "You" : "CPU")}: {(e.Other == 1 ? "scored" : "missed")}. Penalties {you.ShootoutGoals}-{cpu.ShootoutGoals}"));
+                        Log(FormattableString.Invariant($"ELEVEN match shootout kick player={e.Subject} team={kicker} scored={e.Other} kicks={you.ShootoutKicks}-{cpu.ShootoutKicks} goals={you.ShootoutGoals}-{cpu.ShootoutGoals} tick={s.Tick}"));
+                        break;
+                    }
+
                     case SimEventKind.Injured:
                     {
                         // Injuries (#109), announced with the side.
@@ -381,7 +409,8 @@ namespace Eleven.Host
             if (_recorder.Result != null && _recorder.Result != _shownResult)
             {
                 _shownResult = _recorder.Result;
-                _hud?.ShowMatchResult(_shownResult.HomeGoals, _shownResult.AwayGoals);
+                if (_shownResult.HomeGoals != _shownResult.AwayGoals) _hud?.ShowMatchResult(_shownResult.HomeGoals, _shownResult.AwayGoals);
+                else _hud?.ShowMatchResult(_shownResult.HomeShootoutGoals, _shownResult.AwayShootoutGoals);
                 Log($"ELEVEN match result {_shownResult.ToText().Replace('\n', ' ').Trim()}");
                 Log($"ELEVEN match recording steps={_recording.StepCount} replay={(_recording.Replay(_config).StateHash() == _simulator.StateHash() ? "match" : "MISMATCH")}");
             }
@@ -424,7 +453,15 @@ namespace Eleven.Host
                 MatchPhase.FirstHalf => "1st half",
                 MatchPhase.HalfTime => "Half-time",
                 MatchPhase.SecondHalf => "2nd half",
-                MatchPhase.FullTime => Hud.FullTime(s.Teams[0].Goals, s.Teams[1].Goals),
+                MatchPhase.ExtraBreak => "Extra time",
+                MatchPhase.ExtraFirstHalf => "Extra 1st",
+                MatchPhase.ExtraHalfTime => "Extra time",
+                MatchPhase.ExtraSecondHalf => "Extra 2nd",
+                MatchPhase.Shootout => FormattableString.Invariant($"Pens {s.Teams[0].ShootoutGoals}-{s.Teams[1].ShootoutGoals}"),
+                // The verdict by goals, or by the shootout's kicks when the goals are level (#111).
+                MatchPhase.FullTime => s.Teams[0].Goals != s.Teams[1].Goals
+                    ? Hud.FullTime(s.Teams[0].Goals, s.Teams[1].Goals)
+                    : Hud.FullTime(s.Teams[0].ShootoutGoals, s.Teams[1].ShootoutGoals),
                 _ => "",
             };
             _hud.ShowMatch($"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), half);
