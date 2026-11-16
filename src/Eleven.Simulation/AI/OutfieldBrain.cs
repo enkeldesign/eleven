@@ -365,10 +365,20 @@ namespace Eleven.Simulation.AI
         // His place in his side's shape (#96), in his own frame: a back row of half the rest, a middle
         // row of the others and one forward, each row spread across the pitch. It follows the ball
         // up and down and a little across, and steps up when his side has the ball.
+        /// <summary>
+        /// A side's lines (#96, #106): how many of <paramref name="n"/> outfielders play at the back,
+        /// in the middle and up front, numbered by slot from the back.
+        /// </summary>
+        public static (int Back, int Middle, int Forward) Lines(int n)
+        {
+            int back = n / 2;
+            return (back, n - 1 - back, 1);
+        }
+
         private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
         {
             int n = seen.SideSize, slot = seen.Slot;
-            int back = n / 2, middle = n - 1 - back;
+            (int back, int middle, int _) = Lines(n);
             double x, y;
             if (slot >= n)
             {
