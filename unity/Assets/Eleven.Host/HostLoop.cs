@@ -299,7 +299,7 @@ namespace Eleven.Host
             // keepers' and the CPU's perception and decisions, then the simulation's step.
             _stepWatch.Restart();
             _commands.Clear();
-            _commands.Add(WithSwitch(_input.CommandFor(_simulator.Tick)));
+            _commands.Add(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick))));
 
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
@@ -608,7 +608,7 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
+                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
