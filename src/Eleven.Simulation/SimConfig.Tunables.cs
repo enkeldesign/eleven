@@ -439,7 +439,8 @@ namespace Eleven.Simulation
                 passArrivalSpeed: passArrivalSpeed,
                 passBackWeight: passBackWeight,
                 passFreeDistance: passFreeDistance,
-                kickCooldownTicks: KickCooldownTicks,
+                // The one length set in ticks: at another rate it keeps its seconds (#106).
+                kickCooldownTicks: tickRate == TickRate ? KickCooldownTicks : (int)Math.Round(KickCooldownTicks * (double)tickRate / TickRate),
                 goalLineX: GoalLineX,
                 goalWidth: goalWidth,
                 goalHeight: goalHeight,

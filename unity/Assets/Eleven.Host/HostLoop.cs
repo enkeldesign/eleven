@@ -294,6 +294,10 @@ namespace Eleven.Host
         private void StepOnce()
         {
             RememberPrevious();
+
+            // The step's cost (#106) is the whole football tick, as the CLI budget times it: the
+            // keepers' and the CPU's perception and decisions, then the simulation's step.
+            _stepWatch.Restart();
             _commands.Clear();
             _commands.Add(WithSwitch(_input.CommandFor(_simulator.Tick)));
 
@@ -303,7 +307,6 @@ namespace Eleven.Host
             AppendMatchControllers();
             _events.Clear();
             _recording.Record(_commands); // as passed, before the simulation applies any assistance (INV-10)
-            _stepWatch.Restart();
             _simulator.Step(_commands, _events);
             _stepWatch.Stop();
             if (_match) TimeStep(_stepWatch.Elapsed.TotalMilliseconds);

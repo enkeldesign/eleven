@@ -153,18 +153,18 @@ Goals are fewer than at five a side (1.6 a match against 2.9): more defenders be
 
 ### The tick budget
 
-`eleven-sim budget <dir> [seeds]` plays CPU 11v11 matches at 60 and at 120 Hz, the same seeds and knobs (`SimConfig.AtTickRate`), and times each step. It fails if a 60 Hz step averages over a quarter of its 16.7 ms frame, 4.2 ms. The timing is the runner's, so CI publishes it rather than diffing it.
+`eleven-sim budget <dir> [seeds]` plays CPU 11v11 matches at 60 and at 120 Hz, the same seeds and knobs (`SimConfig.AtTickRate`), and times each step. It fails if a 60 Hz step averages over a quarter of its 16.7 ms frame, 4.2 ms. A step is the whole football tick: the keepers' and the CPU's decisions, then the simulation's step. The kick's cooldown, the one length set in ticks, keeps its seconds at either rate. The timing is the runner's, so CI publishes it rather than diffing it.
 
 Measured locally, three seeds each:
 
 | | 60 Hz | 120 Hz |
 | --- | --- | --- |
-| Mean step | 0.54 ms | 0.53 ms |
-| 99th percentile step | 4.9 ms | 8.1 ms |
-| Simulation time per second of play | 32 ms | 64 ms |
+| Mean step | 0.58 ms | 0.56 ms |
+| 99th percentile step | 5.3 ms | 8.4 ms |
+| Simulation time per second of play | 35 ms | 68 ms |
 | Goals | 5 | 9 |
 
 - **60 Hz stays.** 120 Hz costs twice as much per second of play, and three seeds show no difference worth it.
 - **The spikes are not yet explained.** The likeliest cause is the CPU footballers' decisions landing on the same steps. If the browser's frames need it, measuring that comes first, then spreading the decision ticks.
 
-In the browser, `?mode=match11` starts an eleven-a-side match from the address. In trace, the host reports the step's mean and longest every five seconds of match clock. The smoke's `match11-phone` pass checks the mean against the same 4.2 ms.
+In the browser, `?mode=match11` starts an eleven-a-side match from the address. In trace, the host reports the step's mean and longest every five seconds of match clock, timed over the same work as the CLI's. The smoke's `match11-phone` pass checks the mean against the same 4.2 ms.
