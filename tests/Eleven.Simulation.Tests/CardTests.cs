@@ -133,6 +133,28 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void An_obvious_opportunity_is_judged_as_the_foul_happens_not_after_a_later_touch()
+        {
+            // The last attacker fouled outside the area, and a second defender, level with him and
+            // so no nearer the goal, ending a challenge on the ball: he wins it later in the foul's
+            // step, after the foul is recorded.
+            SimConfig c = Base.With("cautionFrom", 2).With("sendOffFrom", 2);
+            SimState s = Fouling(c, new Vec2(30, 0));
+            int second = Index(s, Squads.AwayOutfielder(Side, 1));
+            s.Players[second].Position = new Vec2(30, 0.3);
+            s.Players[second].Heading = -Math.PI / 2;
+            s.Players[second].Velocity = new Vec2(0, -3);
+            s.Players[second].Challenge = ChallengePhase.Commit;
+            s.Players[second].ChallengeTicks = 1;
+            s.Players[second].ChallengeLine = new Vec2(0, -1);
+            var sim = new Simulator(c, s);
+            List<SimEvent> e = Step(sim);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Foul && x.Subject == Defender);
+            Assert.NotEqual(Carrier, sim.PeekState().Ball.LastPlayedBy);
+            Assert.Contains(e, x => x.Kind == SimEventKind.SentOff && x.Subject == Defender);
+        }
+
+        [Fact]
         public void A_defender_between_him_and_the_goal_makes_it_no_obvious_opportunity()
         {
             SimConfig c = Base.With("cautionFrom", 2).With("sendOffFrom", 2);

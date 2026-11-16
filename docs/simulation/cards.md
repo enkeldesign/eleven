@@ -66,7 +66,7 @@ The 12-match 11v11 reference with cards: 17 goals, 525 passes, 281 completed, ne
 `CardTests`:
 - a careless foul is a free kick only;
 - reckless, a caution; excessive force, a sending-off at once; a second caution sends off;
-- DOGSO outside the area sends off, in it gives a penalty and a caution, and a defender between makes it none;
+- DOGSO outside the area sends off, in it gives a penalty and a caution, and a defender between makes it none; it is judged as the foul happens, not after a later touch;
 - five a side plays without cards;
 - sent off, he leaves the pitch: unslotted, unseen, unplaced, his side reslotted;
 - the human's controller takes the teammate nearest the foul;

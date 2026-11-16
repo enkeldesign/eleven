@@ -49,6 +49,10 @@ namespace Eleven.Simulation
         // has gone to ground and the challenger stopped.
         private double _foulSeverity;
 
+        // Whether this step's foul denied an obvious goal-scoring opportunity (#108), read as it
+        // happens: later in the step another touch may take the ball from the footballer fouled.
+        private bool _foulDogso;
+
         // A foul (#99), with a referee to see it: the first of a step counts.
         private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
         {
@@ -56,6 +60,7 @@ namespace Eleven.Simulation
             _foulBy = offender;
             _foulOn = fouled;
             _foulSeverity = Severity(_state.Players[offender], _state.Players[fouled]);
+            _foulDogso = Dogso(_state.Players[offender], _state.Players[fouled]);
             events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
         }
 
@@ -114,8 +119,8 @@ namespace Eleven.Simulation
             return outfield >= Config.CardsFrom;
         }
 
-        // The referee's card for a foul (Law 12, #108). Denying an obvious goal-scoring opportunity
-        // sends off, or cautions in the area, where every challenge here plays for the ball. Otherwise
+        // The referee's card for a foul (Law 12, #108), on the foul as it happened (RecordFoul).
+        // Denying an obvious goal-scoring opportunity sends off, or cautions in the area, where every challenge here plays for the ball. Otherwise
         // the foul's severity as he reads it: a slide over a standing challenge, the challenger's
         // pace, and from behind, give or take his reading (cardNoise, on the Card stream). Reckless
         // from cautionFrom, a caution; excessive from sendOffFrom, a sending-off; a second caution
@@ -123,8 +128,8 @@ namespace Eleven.Simulation
         private void Discipline(int offender, int fouled, bool inArea, long tick, List<SimEvent> events)
         {
             if (!CardsApply()) return;
-            PlayerState by = _state.Players[offender], on = _state.Players[fouled];
-            if (Dogso(by, on))
+            PlayerState by = _state.Players[offender];
+            if (_foulDogso)
             {
                 if (inArea) Caution(offender, tick, events);
                 else SendOff(offender, tick, events);
