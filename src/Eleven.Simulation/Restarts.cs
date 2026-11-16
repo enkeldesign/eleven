@@ -103,14 +103,21 @@ namespace Eleven.Simulation
         // the other side's flags; straight from a goal kick, a throw-in or a corner nobody is.
         // Simplified: the position is judged at the touch and the offence is the next touch, so
         // interfering with an opponent without touching the ball is left out (docs/simulation/offside.md).
-        private bool Offside(long tick, List<SimEvent> events)
+        //
+        // Judged in its own phase of the step, after the ball moves and before the goal line: an
+        // offence came first, so it stops play before any goal is credited. Only this step's events
+        // count: a caller may keep every step's in one list, as a replay does.
+        private void StepOffside(long tick, List<SimEvent> events)
         {
             ref RestartState r = ref _state.Restart;
-            if (!OffsideApplies()) return false;
+            if (!r.On || r.Phase != RestartPhase.Live || MatchPaused || !OffsideApplies()) return;
             RestartKind taken = RestartKind.None;
             int takenBy = 0;
-            foreach (SimEvent e in events)
+            int count = events.Count;
+            for (int k = 0; k < count; k++)
             {
+                SimEvent e = events[k];
+                if (e.Tick != tick) continue;
                 if (e.Kind == SimEventKind.RestartTaken)
                 {
                     taken = (RestartKind)e.Other;
@@ -118,8 +125,10 @@ namespace Eleven.Simulation
                 }
             }
 
-            foreach (SimEvent e in events)
+            for (int k = 0; k < count; k++)
             {
+                SimEvent e = events[k];
+                if (e.Tick != tick) continue;
                 bool touch = e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached
                     || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon || e.Kind == SimEventKind.KeeperHeld
                     || e.Kind == SimEventKind.KeeperParried;
@@ -135,14 +144,12 @@ namespace Eleven.Simulation
                         toucher.Position.Y > wide ? wide : toucher.Position.Y < -wide ? -wide : toucher.Position.Y);
                     events.Add(new SimEvent(tick, SimEventKind.Offside, toucher.Id, other: awarded));
                     Stop(RestartKind.IndirectFreeKick, awarded, point, tick, events);
-                    return true;
+                    return;
                 }
 
                 bool exempt = toucher.Id == takenBy && (taken == RestartKind.GoalKick || taken == RestartKind.ThrowIn || taken == RestartKind.Corner);
                 r.OffsideFlags = exempt ? 0 : Positions(toucher);
             }
-
-            return false;
         }
 
         // Who of the toucher's side is in an offside position at his touch (Law 11): in the
@@ -299,9 +306,6 @@ namespace Eleven.Simulation
                         if (x < -most) x = -most;
                         int awarded = r.LastTouchedTeam != 0 ? Opponents(r.LastTouchedTeam) : TeamAttacking(x >= 0 ? -1 : 1);
                         Stop(RestartKind.ThrowIn, awarded, new Vec2(x, side * Config.TouchlineY), tick, events);
-                    }
-                    else if (Offside(tick, events))
-                    {
                     }
                     else if (_foulBy >= 0)
                     {

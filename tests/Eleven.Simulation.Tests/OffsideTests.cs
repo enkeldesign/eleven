@@ -239,8 +239,9 @@ namespace Eleven.Simulation.Tests
             then.Players[IndexOf(then, Runner)].Position = new Vec2(C.GoalLineX - 0.5, 1);
             var shot = new Simulator(C, then);
             List<SimEvent> events = KickBy(shot, Runner);
-            long kicked = events.First(e => e.Kind == SimEventKind.Kicked).Tick;
-            Assert.Contains(events, e => e.Kind == SimEventKind.GoalLineCrossed && e.Tick == kicked);
+            // On the kick's own step the ball is wholly over the line, in the mouth: a goal but for the offence.
+            BallState ball = shot.PeekState().Ball;
+            Assert.True(ball.Position.X - C.BallRadius > C.GoalLineX && Math.Abs(ball.Position.Y) < C.GoalWidth / 2, $"ball at {ball.Position}");
             Assert.Contains(events, e => e.Kind == SimEventKind.Offside && e.Subject == Runner);
             Assert.DoesNotContain(events, e => e.Kind == SimEventKind.Goal);
             Assert.Equal(0, shot.PeekState().Teams.Single(t => t.Id == Squads.HomeTeam).Goals);
