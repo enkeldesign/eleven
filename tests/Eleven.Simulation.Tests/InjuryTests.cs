@@ -152,6 +152,32 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_foul_may_injure_when_the_ball_leaves_play_on_its_step()
+        {
+            // As CardTests: the ball crosses the touchline in the step of the foul, so the throw-in
+            // takes precedence over the free kick, but not over the injury.
+            SimConfig c = Base.With("injuryRisk", 1).With("injurySerious", 0);
+            int hurt = 0;
+            for (ulong seed = 1; seed <= 40; seed++)
+            {
+                SimState s = Fouling(c, seed);
+                int carrier = Index(s, Carrier), fouler = Index(s, Squads.AwayOutfielder(Side, 0));
+                var at = new Vec2(-10, c.TouchlineY - 0.3);
+                s.Players[carrier].Position = at;
+                s.Players[fouler].Position = at + new Vec2(-0.3, 0);
+                s.Ball.Position = new Vec3(at.X + 0.7, at.Y, c.BallRadius);
+                s.Ball.Velocity = new Vec3(0, 40, 0);
+                var sim = new Simulator(c, s);
+                var events = new List<SimEvent>();
+                sim.Step(Array.Empty<Command>(), events);
+                Assert.Contains(events, e => e.Kind == SimEventKind.RestartAwarded && e.Other == (int)RestartKind.ThrowIn);
+                if (events.Any(e => e.Kind == SimEventKind.Injured && e.Subject == Carrier)) hurt++;
+            }
+
+            Assert.True(hurt > 0, "no foul injured in 40 seeds");
+        }
+
+        [Fact]
         public void A_harder_foul_injures_more_often()
         {
             // The same foul at a walk and at full pace: the faster one is more severe.
