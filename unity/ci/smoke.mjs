@@ -781,8 +781,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             const steps = budgets.reduce((n, b) => n + Number(b[3]), 0);
             const mean = steps ? budgets.reduce((t, b) => t + Number(b[3]) * Number(b[4]), 0) / steps : NaN;
             const most = budgets.reduce((m, b) => Math.max(m, Number(b[5])), 0);
-            check('an 11v11 step fits its budget in the browser: a quarter of a 60 Hz frame on average', steps > 0 && mean <= 16.7 / 4,
-              steps ? `${steps} steps, ${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms the longest` : 'no budget lines');
+            // A whole measurement or none: three reports, each five seconds of play (300 steps at
+            // 60 Hz; 250 allows for the clock's stops). A timeout fails rather than passing a part.
+            const complete = budgets.length === 3 && budgets.every((b) => Number(b[1]) > 0 && Number(b[3]) >= 250);
+            check('an 11v11 step fits its budget in the browser: a quarter of a 60 Hz frame on average', complete && mean <= 16.7 / 4,
+              `${budgets.length} of 3 reports${complete ? '' : ' (incomplete: the measurement needs three of five seconds each)'}; ` +
+                (steps ? `${steps} steps, ${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms the longest` : 'no budget lines'));
             notes.budget = steps ? `${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms max over ${steps} steps` : 'none';
             console.log(`::notice title=browser tick budget ${name}::${notes.budget}`);
           }
