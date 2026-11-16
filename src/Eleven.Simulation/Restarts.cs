@@ -45,12 +45,17 @@ namespace Eleven.Simulation
         // This step's foul, if any (#99): the offender and the footballer fouled, by index; -1 for none.
         private int _foulBy = -1, _foulOn = -1;
 
+        // This step's foul's severity (#108), read as it happens: by the time it is judged, a slide
+        // has gone to ground and the challenger stopped.
+        private double _foulSeverity;
+
         // A foul (#99), with a referee to see it: the first of a step counts.
         private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
         {
             if (!_state.Restart.On || _foulBy >= 0 || offender < 0 || fouled < 0) return;
             _foulBy = offender;
             _foulOn = fouled;
+            _foulSeverity = Severity(_state.Players[offender], _state.Players[fouled]);
             events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
         }
 
@@ -118,13 +123,13 @@ namespace Eleven.Simulation
             }
 
             var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Card, by.Id);
-            double severity = Severity(by, on) + (2 * draws.NextUniform() - 1) * Config.CardNoise;
+            double severity = _foulSeverity + (2 * draws.NextUniform() - 1) * Config.CardNoise;
             if (severity >= Config.SendOffFrom) SendOff(offender, tick, events);
             else if (severity >= Config.CautionFrom) Caution(offender, tick, events);
         }
 
-        // A foul's severity (#108), before the referee's reading: a slide over a standing challenge,
-        // the challenger's pace as a share of his top speed, and coming from behind the fouled
+        // A foul's severity (#108), as it happens: a slide over a standing challenge, the
+        // challenger's pace as a share of his top speed, and coming from behind the fouled
         // footballer's facing.
         private static double Severity(in PlayerState by, in PlayerState on)
         {
@@ -158,7 +163,7 @@ namespace Eleven.Simulation
             if (!InjuriesApply()) return;
             ref PlayerState on = ref _state.Players[fouled];
             if (on.Off) return;
-            double chance = Config.InjuryRisk * Severity(_state.Players[offender], on);
+            double chance = Config.InjuryRisk * _foulSeverity;
             var draws = new Randomness.StreamDraws(_state.Seed, tick, Randomness.RandomStream.Injury, on.Id);
             double hurt = draws.NextUniform(), serious = draws.NextUniform();
             if (hurt >= (chance > 1 ? 1 : chance)) return;

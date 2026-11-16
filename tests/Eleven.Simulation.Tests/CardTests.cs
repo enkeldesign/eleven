@@ -193,6 +193,55 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_slide_at_pace_from_behind_is_graded_as_a_slide_at_pace()
+        {
+            // The foul's severity is read as it happens: a slide (0.45), at pace (up to 0.3), from
+            // behind (0.2), well over 0.85 with the reading exact. Graded after the slide's end, it
+            // would read as a standing challenge at rest (0.45).
+            SimConfig c = Base.With("cautionFrom", 0.85).With("sendOffFrom", 2);
+            SimState s = Fouling(c, new Vec2(-10, 0));
+            int f = Index(s, Defender);
+            s.Players[f].Challenge = ChallengePhase.Slide;
+            s.Players[f].ChallengeTicks = 10;
+            s.Players[f].Velocity = new Vec2(s.Players[f].Capabilities.MaxSpeed, 0);
+            var sim = new Simulator(c, s);
+            List<SimEvent> e = Step(sim);
+            Assert.Contains(e, x => x.Kind == SimEventKind.SlideFouled && x.Subject == Defender);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Cautioned && x.Subject == Defender);
+        }
+
+        [Fact]
+        public void A_quick_pass_never_chooses_a_footballer_sent_off()
+        {
+            // The passer by the touchline facing it, the footballer sent off beyond it straight
+            // ahead and in range; the rest of his side well behind him.
+            SimConfig c = Base.With("cautionFrom", 0).With("sendOffFrom", 0);
+            var sim = new Simulator(c, Fouling(c, new Vec2(-10, 0), homeFouls: true));
+            Step(sim);
+            SimState s = sim.PeekState().Clone();
+            int off = Index(s, Carrier);
+            Assert.True(s.Players[off].SentOff);
+            int passer = Index(s, Mate);
+            s.Players[passer].Position = new Vec2(s.Players[off].Position.X, Math.Sign(s.Players[off].Position.Y) * (c.TouchlineY - 2));
+            s.Players[passer].Heading = Math.Sign(s.Players[off].Position.Y) * Math.PI / 2;
+            s.Players[passer].Velocity = Vec2.Zero;
+            s.Restart.Phase = RestartPhase.Live;
+            s.Ball.Position = new Vec3(s.Players[passer].Position.X, s.Players[passer].Position.Y + Math.Sign(s.Players[off].Position.Y) * 0.4, c.BallRadius);
+            s.Ball.Velocity = Vec3.Zero;
+            s.Ball.LastPlayedBy = Mate;
+            int controller = s.Players[passer].OwnerControllerId;
+            var then = new Simulator(c, s);
+            var events = new List<SimEvent>();
+            for (int t = 0; t < c.TickRate && !events.Any(x => x.Kind == SimEventKind.QuickPassResolved); t++)
+            {
+                then.Step(new[] { new Command(controller, then.Tick, Vec2.Zero, quickPass: true) }, events);
+            }
+
+            SimEvent pass = Assert.Single(events, x => x.Kind == SimEventKind.QuickPassResolved);
+            Assert.NotEqual(Carrier, pass.Other);
+        }
+
+        [Fact]
         public void Cards_survive_a_snapshot()
         {
             SimConfig c = Base.With("cautionFrom", 0).With("sendOffFrom", 2);
