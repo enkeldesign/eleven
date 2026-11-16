@@ -23,6 +23,21 @@ namespace Eleven.Simulation.Harness
 
         public static int AwayKeeper(int perSide) => 2 * perSide + 2;
 
+        /// <summary>From this side size a side has a bench (#110): eleven a side.</summary>
+        public const int BenchFrom = 10;
+
+        /// <summary>Substitutes on a side's bench (#110, Law 3: up to nine named).</summary>
+        public const int BenchSize = 9;
+
+        /// <summary>A side's bench at this size: <see cref="BenchSize"/> from <see cref="BenchFrom"/>, none below.</summary>
+        public static int BenchOf(int perSide) => perSide >= BenchFrom ? BenchSize : 0;
+
+        /// <summary>Home's substitute i's id: after every footballer who starts.</summary>
+        public static int HomeBench(int perSide, int i) => 2 * perSide + 3 + i;
+
+        /// <summary>Away's substitute i's id: after home's bench.</summary>
+        public static int AwayBench(int perSide, int i) => 2 * perSide + 3 + BenchOf(perSide) + i;
+
         /// <summary>The smallest side that plays a shape (#96): smaller sides play M2's roles alone.</summary>
         public const int ShapeFrom = 3;
 
@@ -79,6 +94,11 @@ namespace Eleven.Simulation.Harness
 
             players.Add(new PlayerState { Id = AwayKeeper(perSide), OwnerControllerId = AwayKeeper(perSide), TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(keeperX, 0), Heading = Math.PI });
 
+            // The benches (#110): each side's substitutes, with its outfielders' capabilities and its CPU's skill.
+            var bench = new List<BenchPlayer>();
+            for (int i = 0; i < BenchOf(perSide); i++) bench.Add(new BenchPlayer { Id = HomeBench(perSide, i), TeamId = HomeTeam, Capabilities = homeSide ?? PlayerCapabilities.Reference, Skill = homeCpu ?? CpuSkill.Pro });
+            for (int i = 0; i < BenchOf(perSide); i++) bench.Add(new BenchPlayer { Id = AwayBench(perSide, i), TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Skill = awayCpu ?? CpuSkill.Pro });
+
             return new SimState
             {
                 Seed = seed,
@@ -91,6 +111,7 @@ namespace Eleven.Simulation.Harness
                     new KeeperState { PlayerId = AwayKeeper(perSide), Capabilities = KeeperCapabilities.Reference },
                 },
                 Cpus = cpus.ToArray(),
+                Bench = bench.ToArray(),
                 Restart = new RestartState
                 {
                     On = true, Phase = RestartPhase.Ready, Kind = RestartKind.KickOff, AwardedTeam = HomeTeam,
