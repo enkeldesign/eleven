@@ -114,6 +114,26 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_second_last_opponent_is_whoever_stands_second_deepest_with_the_keeper_off_his_line()
+        {
+            // The keeper up at 12 m and one defender deep at 45 m: a runner at 30 m, beyond every
+            // other defender at 20 m, has only that one opponent nearer the goal line than him.
+            SimState s = World(x: 10, runnerX: 30, defendersX: 20);
+            Put(s, Squads.AwayKeeper(Side), new Vec2(12, -20));
+            Put(s, Defender, new Vec2(45, -20));
+            var sim = new Simulator(C, s);
+            KickBy(sim, Passer);
+            Assert.True(Flagged(sim.PeekState(), Runner), "beyond the second-last opponent, the keeper being upfield");
+
+            // With the keeper back on his line he is the last, the deep defender second-last: onside.
+            SimState back = World(x: 10, runnerX: 30, defendersX: 20);
+            Put(back, Defender, new Vec2(45, -20));
+            var onside = new Simulator(C, back);
+            KickBy(onside, Passer);
+            Assert.False(Flagged(onside.PeekState(), Runner));
+        }
+
+        [Fact]
         public void An_opponents_touch_clears_the_flag()
         {
             var sim = new Simulator(C, World(x: 10, runnerX: 30, defendersX: 20));
