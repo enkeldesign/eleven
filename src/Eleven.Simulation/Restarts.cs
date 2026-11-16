@@ -53,6 +53,10 @@ namespace Eleven.Simulation
         // happens: later in the step another touch may take the ball from the footballer fouled.
         private bool _foulDogso;
 
+        // Where this step's foul was (#109): the footballer fouled may be taken off, hurt, before
+        // the restart for it is given.
+        private Vec2 _foulAt;
+
         // A foul (#99), with a referee to see it: the first of a step counts.
         private void RecordFoul(int offender, int fouled, long tick, List<SimEvent> events)
         {
@@ -61,6 +65,7 @@ namespace Eleven.Simulation
             _foulOn = fouled;
             _foulSeverity = Severity(_state.Players[offender], _state.Players[fouled]);
             _foulDogso = Dogso(_state.Players[offender], _state.Players[fouled]);
+            _foulAt = _state.Players[fouled].Position;
             events.Add(new SimEvent(tick, SimEventKind.Foul, _state.Players[offender].Id, other: _state.Players[fouled].Id));
         }
 
@@ -70,10 +75,12 @@ namespace Eleven.Simulation
         {
             PlayerState fouled = _state.Players[_foulOn];
             int team = fouled.TeamId, end = AttackSignOf(team);
-            Vec2 at = fouled.Position;
+
+            // Where the foul was, not where the footballer fouled is now: hurt, he may be off (#109).
+            Vec2 at = _foulAt;
             double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
             at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
-            bool inArea = InPenaltyArea(fouled.Position, end, Config);
+            bool inArea = InPenaltyArea(_foulAt, end, Config);
             if (inArea)
             {
                 Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
@@ -101,7 +108,7 @@ namespace Eleven.Simulation
         private void Sanction(long tick, List<SimEvent> events)
         {
             PlayerState fouled = _state.Players[_foulOn];
-            Discipline(_foulBy, _foulOn, InPenaltyArea(fouled.Position, AttackSignOf(fouled.TeamId), Config), tick, events);
+            Discipline(_foulBy, _foulOn, InPenaltyArea(_foulAt, AttackSignOf(fouled.TeamId), Config), tick, events);
             Injure(_foulBy, _foulOn, tick, events);
         }
 
