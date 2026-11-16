@@ -8,7 +8,7 @@ Cards are a competition rule in config data (#80): `cardsFrom`, in outfielders a
 
 ## The referee's call
 
-`Simulator.Discipline`, at every foul (#99), before the restart is given. If the ball leaves play in the foul's step, that restart takes precedence over the free kick, but the card is still given.
+`Simulator.Discipline`, at every foul (#99), first in the restart step. Whatever else stops play in the foul's step (the ball leaving play, offside, or the whistle for half- or full time) may take precedence over the free kick, but the card is still given.
 
 1. **Denying an obvious goal-scoring opportunity** (DOGSO), simplified, has three conditions:
    - the fouled footballer was carrying the ball;
@@ -71,6 +71,6 @@ The 12-match 11v11 reference with cards: 17 goals, 525 passes, 281 completed, ne
 - sent off, he leaves the pitch: unslotted, unseen, unplaced, his side reslotted;
 - the human's controller takes the teammate nearest the foul;
 - a slide at pace from behind is graded as one;
-- a foul is carded when the ball leaves play in its step;
+- a foul is carded when the ball leaves play in its step, or offside stops play in it;
 - no quick pass goes to a footballer sent off;
 - cards survive a snapshot.

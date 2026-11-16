@@ -74,7 +74,6 @@ namespace Eleven.Simulation
             double most = Config.GoalLineX - 1, wide = Config.TouchlineY - 1;
             at = new Vec2(at.X > most ? most : at.X < -most ? -most : at.X, at.Y > wide ? wide : at.Y < -wide ? -wide : at.Y);
             bool inArea = InPenaltyArea(fouled.Position, end, Config);
-            Sanction(tick, events);
             if (inArea)
             {
                 Stop(RestartKind.Penalty, team, new Vec2(end * (Config.GoalLineX - PenaltyMark), 0), tick, events);
@@ -96,9 +95,9 @@ namespace Eleven.Simulation
             Stop(RestartKind.FreeKick, team, at, tick, events);
         }
 
-        // This step's foul's card (#108) and injury (#109), whichever restart follows: the free kick
-        // or penalty, or the restart for the ball leaving play in the same step, which takes
-        // precedence over it.
+        // This step's foul's card (#108) and injury (#109), given in StepRestart before anything
+        // else, so they stand whichever restart follows: the free kick or penalty, or one for the
+        // ball leaving play, offside or the whistle in the same step.
         private void Sanction(long tick, List<SimEvent> events)
         {
             PlayerState fouled = _state.Players[_foulOn];
@@ -499,7 +498,13 @@ namespace Eleven.Simulation
         private void StepRestart(long tick, List<SimEvent> events)
         {
             ref RestartState r = ref _state.Restart;
-            if (!r.On || MatchPaused) return;
+            if (!r.On) return;
+
+            // This step's foul is sanctioned whatever stops play in it (#108): the ball over a line,
+            // offside or the whistle for half- or full time may take precedence over its free kick,
+            // but not over its card.
+            if (_foulBy >= 0) Sanction(tick, events);
+            if (MatchPaused) return;
             switch (r.Phase)
             {
                 case RestartPhase.Live:
@@ -510,7 +515,6 @@ namespace Eleven.Simulation
                     if (r.FromThrow && ball.LastPlayedBy != 0 && ball.LastPlayedBy != r.TakerId) r.FromThrow = false;
 
                     bool overTouchline = (ball.Position.Y < 0 ? -ball.Position.Y : ball.Position.Y) - Config.BallRadius > Config.TouchlineY;
-                    if ((_crossedEnd != 0 || overTouchline) && _foulBy >= 0) Sanction(tick, events);
 
                     if (_crossedEnd != 0)
                     {

@@ -246,6 +246,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_foul_is_carded_when_offside_stops_play_on_its_step()
+        {
+            // The footballer fouled is flagged offside and touches the ball later in the foul's
+            // step: the offside's indirect free kick stops play, but the card stands.
+            SimConfig c = Base.With("cautionFrom", 0).With("sendOffFrom", 2);
+            SimState s = Fouling(c, new Vec2(-10, 0));
+            s.Restart.OffsideFlags = 1UL << Index(s, Carrier);
+            var sim = new Simulator(c, s);
+            var e = new List<SimEvent>();
+            sim.Step(new[] { new Command(SquadTrials.SeatController, sim.Tick, new Vec2(1, 0)) }, e);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Foul && x.Subject == Defender);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Offside && x.Subject == Carrier);
+            Assert.Contains(e, x => x.Kind == SimEventKind.Cautioned && x.Subject == Defender);
+        }
+
+        [Fact]
         public void A_slide_at_pace_from_behind_is_graded_as_a_slide_at_pace()
         {
             // The foul's severity is read as it happens: a slide (0.45), at pace (up to 0.3), from
