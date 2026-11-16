@@ -109,10 +109,11 @@ namespace Eleven.Host
             return p.Heading;
         }
 
-        // The carrier slowed with an opponent close: the simulation's own test (#97), read from the state.
+        // The carrier slowed with an opponent close: the simulation's own test (#97), read from the
+        // state. The carrier is the simulation's, under FREE as under ATTACHED.
         private static bool Shielding(SimState state, PlayerState p, SimConfig config)
         {
-            if (state.Ball.AttachedTo != p.Id || config.ShieldSpeed <= 0) return false;
+            if (config.ShieldSpeed <= 0 || !Simulator.Carries(state, config, p)) return false;
             double slow = config.ShieldSpeed * p.Capabilities.MaxSpeed;
             if (p.Velocity.LengthSquared >= slow * slow) return false;
             foreach (PlayerState other in state.Players)

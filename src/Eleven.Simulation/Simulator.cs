@@ -376,8 +376,12 @@ namespace Eleven.Simulation
             if (_state.Teams.Length != 2) return;
             double fraction = SimMath.Sqrt(player.Velocity.LengthSquared) / player.Capabilities.MaxSpeed;
             double from = Config.FatigueFrom, stamina = player.Capabilities.Stamina;
+            // At fatigueFrom 1 there is no band to tire in: only a body faster than his top speed
+            // (a keeper's dive) is above it, and tires at the full rate.
+            // The drain's arithmetic, in this order, is the recorded references' (INV-1).
+            double band = 1 - from;
             double change = fraction > from
-                ? Config.FatigueDrain * (fraction - from) / (1 - from) * (1.6 - stamina) * dt
+                ? (band > 0 ? Config.FatigueDrain * (fraction - from) / band : Config.FatigueDrain) * (1.6 - stamina) * dt
                 : -Config.FatigueRecover * (1 - fraction / from) * (0.4 + stamina) * dt;
             double fatigue = player.Fatigue + change;
             player.Fatigue = fatigue < 0 ? 0 : fatigue > 1 ? 1 : fatigue;
@@ -500,12 +504,20 @@ namespace Eleven.Simulation
         /// Whether the footballer has the ball at his feet (#96): attached to him under ATTACHED;
         /// under FREE, played by him last, on the ground and within <see cref="DribbleReach"/>.
         /// </summary>
-        private bool Carrying(in PlayerState player)
+        private bool Carrying(in PlayerState player) => Carries(_state, Config, player);
+
+        /// <summary>
+        /// Whether <paramref name="player"/> is carrying the ball in <paramref name="state"/>: it is
+        /// attached to him (ATTACHED), or (FREE) he played it last and it is on the ground within
+        /// <see cref="DribbleReach"/> of him; never while a keeper holds it. Public so a reader
+        /// of the state, such as the host's poses (#101), uses the simulation's own rule.
+        /// </summary>
+        public static bool Carries(SimState state, SimConfig config, in PlayerState player)
         {
-            BallState ball = _state.Ball;
+            BallState ball = state.Ball;
             if (ball.HeldBy != 0) return false;
             if (ball.AttachedTo != 0) return ball.AttachedTo == player.Id;
-            if (ball.LastPlayedBy != player.Id || ball.Position.Z > Config.KickMaxBallHeight) return false;
+            if (ball.LastPlayedBy != player.Id || ball.Position.Z > config.KickMaxBallHeight) return false;
             return (ball.Position.Horizontal - player.Position).LengthSquared <= DribbleReach * DribbleReach;
         }
 
