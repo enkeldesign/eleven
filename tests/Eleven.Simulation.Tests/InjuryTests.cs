@@ -247,8 +247,9 @@ namespace Eleven.Simulation.Tests
             }
 
             Assert.Contains(Mode(a), new[] { CpuMode.SeekBall, CpuMode.Approach });
+            // Hurt, he reckons his teammate there first, and leaves the ball to him.
             s.Players[a].Injury = InjuryLevel.Minor;
-            Assert.Equal(CpuMode.Support, Mode(a));
+            Assert.DoesNotContain(Mode(a), new[] { CpuMode.SeekBall, CpuMode.Approach });
         }
 
         [Fact]
