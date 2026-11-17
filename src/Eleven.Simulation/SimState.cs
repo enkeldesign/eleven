@@ -143,6 +143,7 @@ namespace Eleven.Simulation
                 w.WriteByte(team.SubWindowOpen ? (byte)1 : (byte)0);
                 w.WriteByte(team.ShootoutKicks);
                 w.WriteByte(team.ShootoutGoals);
+                w.WriteByte((byte)team.Formation);
             }
 
             w.WriteByte(Restart.On ? (byte)1 : (byte)0);
@@ -333,6 +334,7 @@ namespace Eleven.Simulation
                     Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32(),
                     Substitutions = r.ReadByte(), SubWindows = r.ReadByte(), SubWindowOpen = ReadFlag(r.ReadByte(), "Team.SubWindowOpen"),
                     ShootoutKicks = r.ReadByte(), ShootoutGoals = r.ReadByte(),
+                    Formation = r.ReadByte() is byte formation && Formations.IsDefined((Formation)formation) ? (Formation)formation : throw new FormatException("Unknown formation."),
                 };
             }
 
@@ -492,6 +494,9 @@ namespace Eleven.Simulation
         public byte ShootoutKicks;
 
         public byte ShootoutGoals;
+
+        /// <summary>The side's formation (#125): where each place in its shape has its home.</summary>
+        public Formation Formation;
     }
 
     /// <summary>

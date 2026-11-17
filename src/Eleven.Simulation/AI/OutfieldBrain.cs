@@ -67,7 +67,6 @@ namespace Eleven.Simulation.AI
         // the middle row's and the forward's lines, and the rows' half-width; how much of the ball's
         // x and y the shape follows, how far it steps up when his side has the ball, how far inside
         // the lines it stays, and how far goal-side of the ball the cover stands.
-        private const double BackLine = -24, MiddleLine = -10, ForwardLine = 4, ShapeWidth = 14;
         private const double ShapeFollow = 0.55, ShapeDrift = 0.3, ShapeStepUp = 6, ShapeInside = 6, CoverGoalSide = 6;
 
         // The slide (#98): within this share of the slide's range he slides, only with the ball
@@ -362,53 +361,30 @@ namespace Eleven.Simulation.AI
             return false;
         }
 
-        // His place in his side's shape (#96), in his own frame: a back row of half the rest, a middle
-        // row of the others and one forward, each row spread across the pitch. It follows the ball
-        // up and down and a little across, and steps up when his side has the ball.
+        // His place in his side's shape (#96), in his own frame: his home in his side's formation
+        // (#125). It follows the ball up and down and a little across, and steps up when his side has the ball.
         /// <summary>
         /// A side's lines (#96, #106): how many of <paramref name="n"/> outfielders play at the back,
-        /// in the middle and up front, numbered by slot from the back.
+        /// in the middle and up front, numbered by slot from the back, before formations (#125).
         /// </summary>
         public static (int Back, int Middle, int Forward) Lines(int n)
         {
-            // From eight a side two play up front (#106): ten a side is a technical-reference 4-4-2.
-            if (n >= TwoForwardsFrom)
-            {
-                int rest = n - 2, backs = rest / 2;
-                return (backs, rest - backs, 2);
-            }
-
-            int back = n / 2;
-            return (back, n - 1 - back, 1);
+            FormationLine[] lines = Formations.Derived(n);
+            return (lines[0].Count, lines[1].Count, lines[2].Count);
         }
-
-        // From this side size two play up front, and a row of four or more spreads wider (#106).
-        private const int TwoForwardsFrom = 8;
-        private const double WideRow = 22, ForwardsApart = 10;
 
         /// <summary>
         /// His home in his side's shape with the ball at the centre spot, in his own frame (#96,
-        /// #106): his line's x, spread across it by his place in the row. The shape follows the
-        /// ball from here.
+        /// #106, #125): his place in his side's formation. The shape follows the ball from here.
         /// </summary>
-        public static Vec2 ShapeHome(int n, int slot)
-        {
-            (int back, int middle, int forward) = Lines(n);
-            if (slot > back + middle)
-            {
-                int index = slot - back - middle - 1;
-                return new Vec2(ForwardLine, forward <= 1 ? 0 : (-1 + 2.0 * index / (forward - 1)) * ForwardsApart);
-            }
+        public static Vec2 ShapeHome(int n, int slot) => ShapeHome(Formation.FourFourTwo, n, slot);
 
-            bool inBack = slot <= back;
-            int count = inBack ? back : middle, at = inBack ? slot - 1 : slot - back - 1;
-            double width = count >= 4 ? WideRow : ShapeWidth;
-            return new Vec2(inBack ? BackLine : MiddleLine, count <= 1 ? 0 : (-1 + 2.0 * at / (count - 1)) * width);
-        }
+        /// <inheritdoc cref="ShapeHome(int, int)"/>
+        public static Vec2 ShapeHome(Formation formation, int n, int slot) => Formations.Home(formation, n, slot);
 
         private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
         {
-            Vec2 home = ShapeHome(seen.SideSize, seen.Slot);
+            Vec2 home = ShapeHome(seen.Formation, seen.SideSize, seen.Slot);
             double x = home.X, y = home.Y;
             x += ShapeFollow * ball.X + (ours ? ShapeStepUp : 0);
             y += ShapeDrift * ball.Y;
