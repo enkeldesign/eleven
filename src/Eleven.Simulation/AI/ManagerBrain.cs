@@ -4,20 +4,58 @@ namespace Eleven.Simulation.AI
     /// A CPU side's manager (#110): pure and stateless, he decides on his
     /// <see cref="ManagerObservation"/> alone (INV-9). Code in this namespace can't name the
     /// simulation's state (ELEVEN003). He asks for a substitution; the simulation decides whether
-    /// it is made (INV-12). A simple policy, not tactics (M5): an injured footballer at once, then,
-    /// late in the match, the most tired. docs/simulation/substitutions.md.
+    /// it is made (INV-12). An injured footballer at once, then, late in the match, the most tired
+    /// (docs/simulation/substitutions.md). With cpuTactics, he also switches plans by the score, the
+    /// clock and the men on the pitch, and makes tactical substitutions (#127, docs/simulation/managers.md).
     /// </summary>
     public static class ManagerBrain
     {
-        /// <summary>The substitution he asks for now: who goes off and who comes on, or (0, 0) for none.</summary>
+        /// <summary>What he asks for now: a substitution (who goes off and who comes on, or none) and a plan to switch to (or none).</summary>
         public static ManagerDecision Decide(ManagerObservation seen, SimConfig config)
         {
-            (int off, int on) = Substitution(seen, config);
-            return new ManagerDecision(off, on);
+            bool tactics = config.CpuTactics >= 0.5;
+            byte to = tactics ? Plan(seen, config) : (byte)0;
+            (int off, int on) = Substitution(seen, config, tactics);
+            return new ManagerDecision(off, on, to);
+        }
+
+        private const int Balanced = 0, Chase = 1, Protect = 2;
+
+        // The plan he wants (#127), 1–3, or 0 for the one he has or none he may take. His plans are
+        // balanced, chase and protect, by convention; his spread shifts when he reacts.
+        private static byte Plan(ManagerObservation seen, SimConfig config)
+        {
+            if (!seen.MaySwitch) return 0;
+            int margin = seen.GoalsFor - seen.GoalsAgainst;
+            double share = seen.MatchShare - seen.Spread;
+            int want = Balanced;
+            if (-margin >= config.CpuChaseMargin && share >= config.CpuChaseFrom) want = Chase;
+            else if (margin > 0 && share >= config.CpuProtectFrom) want = Protect;
+            else if (margin >= 0 && seen.OnPitch < seen.TheirsOnPitch) want = Protect;
+            return want == seen.Plan ? (byte)0 : (byte)(want + 1);
+        }
+
+        // While chasing, his most tired forward; while protecting, his most tired midfielder (#127):
+        // from cpuSubAfter, fresh legs where the plan needs them.
+        private static int Tactical(ManagerObservation seen, SimConfig config)
+        {
+            if (seen.MatchShare < config.CpuSubAfter) return 0;
+            ManagedLine line = seen.Plan == Chase ? ManagedLine.Forward : seen.Plan == Protect ? ManagedLine.Middle : ManagedLine.None;
+            if (line == ManagedLine.None) return 0;
+            int off = 0;
+            double most = -1;
+            foreach (ManagedPlayer p in seen.Players)
+            {
+                if (p.Keeper || p.Line != line || p.Injury != InjuryLevel.None || p.Fatigue <= most) continue;
+                most = p.Fatigue;
+                off = p.Id;
+            }
+
+            return off;
         }
 
         // The substitution of #110: the injured at once, then late on the most tired.
-        private static (int Off, int On) Substitution(ManagerObservation seen, SimConfig config)
+        private static (int Off, int On) Substitution(ManagerObservation seen, SimConfig config, bool tactics)
         {
             if (!seen.MaySubstitute || seen.Bench.Count == 0) return (0, 0);
             int on = seen.Bench[0];
@@ -33,7 +71,9 @@ namespace Eleven.Simulation.AI
                 if (p.Injury == InjuryLevel.Minor) return (p.Id, on);
             }
 
-            // Late in the match, the most tired outfielder, if he is tired enough.
+            // A tactical substitution (#127), then late in the match the most tired outfielder, if he is tired enough.
+            int tactical = tactics ? Tactical(seen, config) : 0;
+            if (tactical != 0) return (tactical, on);
             if (seen.MatchShare < config.CpuSubAfter) return (0, 0);
             int off = 0;
             double most = config.CpuSubFatigue;
