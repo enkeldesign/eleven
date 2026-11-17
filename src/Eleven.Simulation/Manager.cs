@@ -3,11 +3,22 @@ using System.Collections.Generic;
 
 namespace Eleven.Simulation
 {
+    /// <summary>Which line of his side's formation a footballer plays in (#127), as his manager reads it.</summary>
+    public enum ManagedLine : byte
+    {
+        /// <summary>A keeper, or a side with no shape.</summary>
+        None = 0,
+        Back = 1,
+        Middle = 2,
+        Forward = 3,
+    }
+
     /// <summary>One of a manager's own footballers, as he reads him (#110).</summary>
     public readonly struct ManagedPlayer
     {
-        public ManagedPlayer(int id, double fatigue, InjuryLevel injury, bool keeper)
+        public ManagedPlayer(int id, double fatigue, InjuryLevel injury, bool keeper, ManagedLine line = ManagedLine.None)
         {
+            Line = line;
             Id = id;
             Fatigue = fatigue;
             Injury = injury;
@@ -23,6 +34,9 @@ namespace Eleven.Simulation
         public InjuryLevel Injury { get; }
 
         public bool Keeper { get; }
+
+        /// <summary>His line in his side's formation (#127): the back line, the last line forward, or in between.</summary>
+        public ManagedLine Line { get; }
     }
 
     /// <summary>
@@ -137,7 +151,7 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players)
             {
                 if (p.TeamId != team || p.SentOff) continue;
-                players.Add(new ManagedPlayer(p.Id, p.Fatigue, p.Injury, Array.FindIndex(state.Keepers, k => k.PlayerId == p.Id) >= 0));
+                players.Add(new ManagedPlayer(p.Id, p.Fatigue, p.Injury, Array.FindIndex(state.Keepers, k => k.PlayerId == p.Id) >= 0, LineOf(state, side, p)));
             }
 
             var bench = new List<int>();
@@ -158,6 +172,27 @@ namespace Eleven.Simulation
             var draws = new Randomness.StreamDraws(state.Seed, 0, Randomness.RandomStream.Manager, team);
             double spread = (2 * draws.NextUniform() - 1) * config.CpuTacticSpread;
             return new ManagerObservation(may, share > 1 ? 1 : share, players, bench, side.Goals, other >= 0 ? state.Teams[other].Goals : 0, onPitch, theirs, side.Tactic, maySwitch, spread);
+        }
+
+        // A footballer's line in his side's formation (#127), by his place in its shape; None for a keeper or no shape.
+        private static ManagedLine LineOf(SimState state, TeamState side, PlayerState p)
+        {
+            if (p.Slot <= 0) return ManagedLine.None;
+            int n = 0;
+            foreach (PlayerState q in state.Players)
+            {
+                if (q.TeamId == p.TeamId && q.Slot > 0) n++;
+            }
+
+            FormationLine[] lines = Formations.Lines(side.Formation, n);
+            int at = p.Slot;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (at <= lines[i].Count) return i == 0 ? ManagedLine.Back : i == lines.Length - 1 ? ManagedLine.Forward : ManagedLine.Middle;
+                at -= lines[i].Count;
+            }
+
+            return ManagedLine.Forward;
         }
 
         /// <summary>Whether <paramref name="team"/> is the CPU's to manage: no human plays any of its outfielders on the pitch.</summary>
