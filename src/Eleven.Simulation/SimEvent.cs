@@ -171,6 +171,9 @@ namespace Eleven.Simulation
 
         /// <summary>A shootout's kick is over (#111). Subject: its taker. <see cref="SimEvent.Other"/>: 1 scored, 0 not.</summary>
         ShootoutKick = 45,
+
+        /// <summary>A side switched tactical plan (#126). Subject: the side. <see cref="SimEvent.Other"/>: the plan, 0 to 2.</summary>
+        TacticSwitched = 46,
     }
 
     /// <summary>

@@ -28,7 +28,7 @@ namespace Eleven.Simulation.Harness
     /// </summary>
     public sealed class CommandRecording
     {
-        public const int FormatVersion = 7;
+        public const int FormatVersion = 8;
         private static readonly byte[] Magic = { (byte)'E', (byte)'L', (byte)'R', (byte)'C' };
 
         private readonly List<Command[]> _steps = new List<Command[]>();
@@ -136,6 +136,7 @@ namespace Eleven.Simulation.Harness
                     w.WriteInt32(c.SwitchTo);
                     w.WriteInt32(c.SubOff);
                     w.WriteInt32(c.SubOn);
+                    w.WriteByte(c.TacticTo);
                 }
             }
 
@@ -195,7 +196,8 @@ namespace Eleven.Simulation.Harness
                     }
 
                     int switchTo = r.ReadInt32(), subOff = r.ReadInt32();
-                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive, plan, switchTo, subOff, r.ReadInt32());
+                    int subOn = r.ReadInt32();
+                    step[i] = new Command(controller, tick, move, kick, aftertouch, quickPass, dive, plan, switchTo, subOff, subOn, r.ReadByte());
                 }
 
                 recording._steps.Add(step);

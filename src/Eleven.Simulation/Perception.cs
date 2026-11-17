@@ -108,6 +108,29 @@ namespace Eleven.Simulation
     }
 
     /// <summary>
+    /// A side's tactical plan as its footballers see it (#126): the plan it is settling from, the
+    /// one it is settling to, and how far it has settled, 0 to 1.
+    /// </summary>
+    public readonly struct SeenTactic
+    {
+        public SeenTactic(TeamTactic from, TeamTactic to, double settled)
+        {
+            From = from;
+            To = to;
+            Settled = settled;
+        }
+
+        public TeamTactic From { get; }
+
+        public TeamTactic To { get; }
+
+        public double Settled { get; }
+
+        /// <summary>One of the plan's numbers, blended as the side settles.</summary>
+        public double Blend(double from, double to) => from + (to - from) * Settled;
+    }
+
+    /// <summary>
     /// What a CPU outfielder perceives (#83, INV-9): his own body, the ball and the footballers in
     /// his sight, as seen now. No command, no other controller's input or plan, no wind-up intent,
     /// no seed and no reference to state: his brain decides on this alone.
@@ -125,9 +148,10 @@ namespace Eleven.Simulation
 
         internal OutfieldObservation(long tick, Vec2 position, Vec2 velocity, double heading, double maxSpeed, bool kicking,
             Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0,
-            int slot = 0, int sideSize = 0, double fatigue = 0, bool injured = false, Formation formation = Formation.FourFourTwo)
+            int slot = 0, int sideSize = 0, double fatigue = 0, bool injured = false, Formation formation = Formation.FourFourTwo, SeenTactic? tactic = null)
         {
             Formation = formation;
+            Tactic = tactic ?? new SeenTactic(TeamTactic.Reference(0, formation), TeamTactic.Reference(0, formation), 1);
             Injured = injured;
             Fatigue = fatigue;
             ReactionDelay = reactionDelay;
@@ -172,6 +196,9 @@ namespace Eleven.Simulation
 
         /// <summary>His side's formation (#125): where each place in its shape has its home.</summary>
         public Formation Formation { get; }
+
+        /// <summary>His side's tactical plan (#126), as it settles from the last.</summary>
+        public SeenTactic Tactic { get; }
 
         /// <summary>0–1, his own fatigue (#100). Others' he reads only as the speed he sees.</summary>
         public double Fatigue { get; }
@@ -300,9 +327,26 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId))
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId))
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId));
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId));
+        }
+
+        /// <summary>A side's tactical plan (#126) as its footballers see it: their own side's, settling.</summary>
+        public static SeenTactic TacticOf(SimState state, int team)
+        {
+            int t = Array.FindIndex(state.Teams, x => x.Id == team);
+            if (t < 0) return new SeenTactic(TeamTactic.Reference(team), TeamTactic.Reference(team), 1);
+            TeamState side = state.Teams[t];
+            if (state.Tactics.Length == 0)
+            {
+                TeamTactic only = TeamTactic.Reference(team, side.Formation);
+                return new SeenTactic(only, only, 1);
+            }
+
+            TeamTactic from = state.Tactics[t * TeamTactics.PerSide + side.TacticFrom], to = state.Tactics[t * TeamTactics.PerSide + side.Tactic];
+            double settled = side.TacticSettleOf > 0 ? 1 - side.TacticSettle / (double)side.TacticSettleOf : 1;
+            return new SeenTactic(from, to, settled);
         }
 
         // A side's formation (#125); the default with no sides.

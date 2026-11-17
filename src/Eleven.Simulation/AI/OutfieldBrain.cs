@@ -67,7 +67,7 @@ namespace Eleven.Simulation.AI
         // the middle row's and the forward's lines, and the rows' half-width; how much of the ball's
         // x and y the shape follows, how far it steps up when his side has the ball, how far inside
         // the lines it stays, and how far goal-side of the ball the cover stands.
-        private const double ShapeFollow = 0.55, ShapeDrift = 0.3, ShapeStepUp = 6, ShapeInside = 6, CoverGoalSide = 6;
+        private const double ShapeFollow = 0.55, ShapeDrift = 0.3, ShapeInside = 6, CoverGoalSide = 6;
 
         // The slide (#98): within this share of the slide's range he slides, only with the ball
         // this much nearer him than the man, and beyond this many standing challenge ranges.
@@ -239,6 +239,15 @@ namespace Eleven.Simulation.AI
                 }
 
                 bool ours = mates <= HasBall && mates <= theirs;
+
+                // His side's press line (#126): with the opponents on the ball beyond it, the first
+                // and second to it hold their places in the shape instead of going at it.
+                bool theirsNow = theirs <= HasBall && theirs < mates && theirs < mine;
+                if (sooner <= 1 && theirsNow && ball.X > seen.Tactic.Blend(seen.Tactic.From.Press, seen.Tactic.To.Press))
+                {
+                    return new CpuPlan(CpuMode.Support, Ease(ShapePlace(seen, config, ball, ours) - me));
+                }
+
                 if (sooner == 1 && !ours)
                 {
                     Vec2 cover = ball + Unit(ownGoal - ball) * CoverGoalSide;
@@ -382,11 +391,16 @@ namespace Eleven.Simulation.AI
         /// <inheritdoc cref="ShapeHome(int, int)"/>
         public static Vec2 ShapeHome(Formation formation, int n, int slot) => Formations.Home(formation, n, slot);
 
+        // His place: his home in his side's plan (#126), blended from the last plan's as the side
+        // settles, its line and width applied; shifted with the ball, up by the plan's step-up when
+        // his side has it, and kept inside the lines.
         private static Vec2 ShapePlace(OutfieldObservation seen, SimConfig config, Vec2 ball, bool ours)
         {
-            Vec2 home = ShapeHome(seen.Formation, seen.SideSize, seen.Slot);
-            double x = home.X, y = home.Y;
-            x += ShapeFollow * ball.X + (ours ? ShapeStepUp : 0);
+            SeenTactic plan = seen.Tactic;
+            Vec2 from = ShapeHome(plan.From.Formation, seen.SideSize, seen.Slot), to = ShapeHome(plan.To.Formation, seen.SideSize, seen.Slot);
+            double x = plan.Blend(from.X + plan.From.Line, to.X + plan.To.Line);
+            double y = plan.Blend(from.Y * plan.From.Width, to.Y * plan.To.Width);
+            x += ShapeFollow * ball.X + (ours ? plan.Blend(plan.From.StepUp, plan.To.StepUp) : 0);
             y += ShapeDrift * ball.Y;
             double long_ = config.GoalLineX - ShapeInside, wide = config.TouchlineY - ShapeInside;
             return new Vec2(x > long_ ? long_ : x < -long_ ? -long_ : x, y > wide ? wide : y < -wide ? -wide : y);

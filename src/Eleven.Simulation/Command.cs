@@ -79,9 +79,17 @@ namespace Eleven.Simulation
         /// </summary>
         public readonly int SubOff, SubOn;
 
+        /// <summary>
+        /// A switch of this controller's side's tactical plan (#126): 1 to 3 for its stored plans,
+        /// 0 for none. Taken at the next stoppage or at once, by planSwitchAt; refused, with the
+        /// reason, inside the cooldown or for the plan it already plays or awaits.
+        /// </summary>
+        public readonly byte TacticTo;
+
         public Command(int controllerId, long tick, Vec2 move, KickIntent? kick = null, Vec2 aftertouch = default, bool quickPass = false, Vec3? dive = null, CpuPlan? plan = null,
-            int switchTo = 0, int subOff = 0, int subOn = 0)
+            int switchTo = 0, int subOff = 0, int subOn = 0, byte tacticTo = 0)
         {
+            TacticTo = tacticTo;
             SubOff = subOff;
             SubOn = subOn;
             SwitchTo = switchTo;
@@ -96,7 +104,10 @@ namespace Eleven.Simulation
         }
 
         /// <summary>This command with a substitution (#110) added: everything else as it is.</summary>
-        public Command WithSubstitution(int off, int on) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, off, on);
+        public Command WithSubstitution(int off, int on) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, off, on, TacticTo);
+
+        /// <summary>This command with a switch of tactical plan (#126) added: everything else as it is.</summary>
+        public Command WithTactic(byte to) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, SubOff, SubOn, to);
     }
 
     /// <summary>
@@ -158,5 +169,11 @@ namespace Eleven.Simulation
 
         /// <summary>A substitution (#110) naming someone who can't go off (not of the side, or sent off) or can't come on (not on its bench, or already used).</summary>
         SubIneligible = 11,
+
+        /// <summary>A switch of tactical plan (#126) inside the side's cooldown.</summary>
+        TacticCooldown = 12,
+
+        /// <summary>A switch of tactical plan (#126) to no stored plan, or to the one the side already plays or awaits.</summary>
+        TacticRefused = 13,
     }
 }

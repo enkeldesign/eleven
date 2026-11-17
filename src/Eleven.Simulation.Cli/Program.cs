@@ -215,6 +215,17 @@ internal static class Program
                 return formations.All(t => t.Finished) ? 0 : 1;
             }
 
+            case "plans" when args.Length >= 2:
+            {
+                // #126: the plans' contrast and the switch's cost, CPU against CPU, over fixed seeds.
+                SimConfig planConfig = SpikeScenario.Config();
+                List<TacticTrial> plans = TacticTrials.Run(planConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "tactic-trials.csv"))) TacticTrials.WriteCsv(csv, planConfig, plans);
+                Console.WriteLine($"config {planConfig.Hash:x16}, {TacticTrials.KeyNumbers(plans)} -> {args[1]}");
+                return plans.All(t => t.Finished) ? 0 : 1;
+            }
+
             case "fairness" when args.Length >= 2:
             {
                 // Off-screen threat fairness (#102): how often the human's CPU opponents decide on a
@@ -326,7 +337,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds] | gate11 <dir> | formations <dir> [seeds]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds] | gate11 <dir> | formations <dir> [seeds] | plans <dir>");
                 return 2;
         }
     }

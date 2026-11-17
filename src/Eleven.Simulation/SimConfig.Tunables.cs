@@ -179,6 +179,9 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "extraTimeShare", "fraction", 0.05, 1),
             new TunableParameter(TunableParameter.ControlGroup, "shootoutKicks", "count", 1, 11),
             new TunableParameter(TunableParameter.ControlGroup, "shootoutKickTime", "s", 1, 20),
+            new TunableParameter(TunableParameter.ControlGroup, "planSwitchAt", "flag", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "planSettleSeconds", "s", 0, 30),
+            new TunableParameter(TunableParameter.ControlGroup, "planSwitchCooldown", "s", 0, 120),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -289,6 +292,9 @@ namespace Eleven.Simulation
             "extraTimeShare" => ExtraTimeShare,
             "shootoutKicks" => ShootoutKicks,
             "shootoutKickTime" => ShootoutKickTime,
+            "planSwitchAt" => PlanSwitchAt,
+            "planSettleSeconds" => PlanSettleSeconds,
+            "planSwitchCooldown" => PlanSwitchCooldown,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -352,6 +358,7 @@ namespace Eleven.Simulation
             double injuriesFrom = InjuriesFrom, injuryRisk = InjuryRisk, injurySerious = InjurySerious, injuredSpeed = InjuredSpeed;
             double substitutions = Substitutions, substitutionWindows = SubstitutionWindows, cpuSubAfter = CpuSubAfter, cpuSubFatigue = CpuSubFatigue;
             double knockout = Knockout, extraTimeShare = ExtraTimeShare, shootoutKicks = ShootoutKicks, shootoutKickTime = ShootoutKickTime;
+            double planSwitchAt = PlanSwitchAt, planSettleSeconds = PlanSettleSeconds, planSwitchCooldown = PlanSwitchCooldown;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -453,6 +460,9 @@ namespace Eleven.Simulation
                     case "extraTimeShare": extraTimeShare = o.Value; break;
                     case "shootoutKicks": shootoutKicks = o.Value; break;
                     case "shootoutKickTime": shootoutKickTime = o.Value; break;
+                    case "planSwitchAt": planSwitchAt = o.Value; break;
+                    case "planSettleSeconds": planSettleSeconds = o.Value; break;
+                    case "planSwitchCooldown": planSwitchCooldown = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -584,7 +594,10 @@ namespace Eleven.Simulation
                 knockout: knockout,
                 extraTimeShare: extraTimeShare,
                 shootoutKicks: shootoutKicks,
-                shootoutKickTime: shootoutKickTime);
+                shootoutKickTime: shootoutKickTime,
+                planSwitchAt: planSwitchAt,
+                planSettleSeconds: planSettleSeconds,
+                planSwitchCooldown: planSwitchCooldown);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -699,7 +712,10 @@ namespace Eleven.Simulation
             knockout: Knockout,
             extraTimeShare: ExtraTimeShare,
             shootoutKicks: ShootoutKicks,
-            shootoutKickTime: ShootoutKickTime);
+            shootoutKickTime: ShootoutKickTime,
+            planSwitchAt: PlanSwitchAt,
+            planSettleSeconds: PlanSettleSeconds,
+            planSwitchCooldown: PlanSwitchCooldown);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

@@ -2,6 +2,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Eleven.Simulation.Harness
 {
@@ -67,6 +68,19 @@ namespace Eleven.Simulation.Harness
 
         private const double KickOffClear = 5;
 
+        // A side's three stored plans (#126), each its own.
+        private static TeamTactic[] Plans(int team, Formation formation, TeamTactic[]? given)
+        {
+            var plans = new TeamTactic[TeamTactics.PerSide];
+            for (int i = 0; i < plans.Length; i++)
+            {
+                plans[i] = given != null ? given[i] : TeamTactic.Reference(team, formation);
+                plans[i].TeamId = team;
+            }
+
+            return plans;
+        }
+
         // Away's place: home's turned about the centre spot for a shape; M2's rows otherwise.
         private static Vec2 Away(Vec2 home, int perSide) =>
             perSide < ShapeStartFrom ? new Vec2(14, -home.Y) : new Vec2(-home.X, -home.Y);
@@ -75,13 +89,20 @@ namespace Eleven.Simulation.Harness
         /// A match's start: home kicks off, the clock at nought. <paramref name="homeSide"/> and
         /// <paramref name="awaySide"/> give a side's outfielders their capabilities (#103's league);
         /// <paramref name="home"/> is the human's own footballer's. Each side lines up in its
-        /// formation (#125), the 4-4-2 unless given.
+        /// formation (#125), the 4-4-2 unless given, and, from <see cref="ShapeFrom"/> a side, stores three tactical plans (#126): those
+        /// given, its side's id set on each, or else the reference plan three times in its formation.
+        /// It starts on its first; given plans, the formation is the first plan's.
         /// </summary>
         public static SimState Match(SimConfig config, ulong seed, int perSide, bool bothCpu = false, CpuSkill? awayCpu = null, CpuSkill? homeCpu = null,
             PlayerCapabilities? home = null, PlayerCapabilities? homeSide = null, PlayerCapabilities? awaySide = null,
-            Formation homeFormation = Formation.FourFourTwo, Formation awayFormation = Formation.FourFourTwo)
+            Formation homeFormation = Formation.FourFourTwo, Formation awayFormation = Formation.FourFourTwo,
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null)
         {
             if (perSide < 1) throw new ArgumentOutOfRangeException(nameof(perSide), perSide, "A side has at least one outfielder.");
+            if (homeTactics != null && homeTactics.Length != TeamTactics.PerSide) throw new ArgumentException($"A side stores {TeamTactics.PerSide} plans.", nameof(homeTactics));
+            if (awayTactics != null && awayTactics.Length != TeamTactics.PerSide) throw new ArgumentException($"A side stores {TeamTactics.PerSide} plans.", nameof(awayTactics));
+            if (homeTactics != null) homeFormation = homeTactics[0].Formation;
+            if (awayTactics != null) awayFormation = awayTactics[0].Formation;
             double keeperX = config.GoalLineX - OneVOne.KeeperStandOff;
             var players = new List<PlayerState>();
             var cpus = new List<CpuState>();
@@ -114,6 +135,7 @@ namespace Eleven.Simulation.Harness
                 Seed = seed,
                 Ball = new BallState { Id = OneVOne.BallId, Position = new Vec3(0, 0, config.BallRadius) },
                 Teams = new[] { new TeamState { Id = HomeTeam, AttackSign = 1, Formation = homeFormation }, new TeamState { Id = AwayTeam, AttackSign = -1, Formation = awayFormation } },
+                Tactics = perSide < ShapeFrom ? Array.Empty<TeamTactic>() : Plans(HomeTeam, homeFormation, homeTactics).Concat(Plans(AwayTeam, awayFormation, awayTactics)).ToArray(),
                 Players = players.ToArray(),
                 Keepers = new[]
                 {
