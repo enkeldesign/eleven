@@ -45,6 +45,13 @@ namespace Eleven.Simulation
         /// <summary>Both sides' substitutes (#110), in ascending id order: none in practice or a small side.</summary>
         public BenchPlayer[] Bench = Array.Empty<BenchPlayer>();
 
+        /// <summary>
+        /// Each side's three stored tactical plans (#126), the first side's then the second's: none in
+        /// practice, or <see cref="TeamTactics.PerSide"/> a side. With none, a side plays the
+        /// reference plan in its <see cref="TeamState.Formation"/>.
+        /// </summary>
+        public TeamTactic[] Tactics = Array.Empty<TeamTactic>();
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
@@ -53,6 +60,7 @@ namespace Eleven.Simulation
             copy.Players = (PlayerState[])Players.Clone();
             copy.Keepers = (KeeperState[])Keepers.Clone();
             copy.Bench = (BenchPlayer[])Bench.Clone();
+            copy.Tactics = (TeamTactic[])Tactics.Clone();
             return copy;
         }
 
@@ -144,6 +152,12 @@ namespace Eleven.Simulation
                 w.WriteByte(team.ShootoutKicks);
                 w.WriteByte(team.ShootoutGoals);
                 w.WriteByte((byte)team.Formation);
+                w.WriteByte(team.Tactic);
+                w.WriteByte(team.TacticFrom);
+                w.WriteInt32(team.TacticSettle);
+                w.WriteInt32(team.TacticSettleOf);
+                w.WriteInt32(team.TacticCooldown);
+                w.WriteByte(team.TacticPending);
             }
 
             w.WriteByte(Restart.On ? (byte)1 : (byte)0);
@@ -201,6 +215,17 @@ namespace Eleven.Simulation
                 w.WriteDouble(b.Skill.PerceptionError, "Bench.Skill.PerceptionError");
                 w.WriteDouble(b.Skill.VisionRange, "Bench.Skill.VisionRange");
                 w.WriteByte(b.Used ? (byte)1 : (byte)0);
+            }
+
+            w.WriteInt32(Tactics.Length);
+            foreach (TeamTactic t in Tactics)
+            {
+                w.WriteInt32(t.TeamId);
+                w.WriteByte((byte)t.Formation);
+                w.WriteDouble(t.StepUp, "Tactic.StepUp");
+                w.WriteDouble(t.Line, "Tactic.Line");
+                w.WriteDouble(t.Width, "Tactic.Width");
+                w.WriteDouble(t.Press, "Tactic.Press");
             }
         }
 
@@ -335,6 +360,7 @@ namespace Eleven.Simulation
                     Substitutions = r.ReadByte(), SubWindows = r.ReadByte(), SubWindowOpen = ReadFlag(r.ReadByte(), "Team.SubWindowOpen"),
                     ShootoutKicks = r.ReadByte(), ShootoutGoals = r.ReadByte(),
                     Formation = r.ReadByte() is byte formation && Formations.IsDefined((Formation)formation) ? (Formation)formation : throw new FormatException("Unknown formation."),
+                    Tactic = r.ReadByte(), TacticFrom = r.ReadByte(), TacticSettle = r.ReadInt32(), TacticSettleOf = r.ReadInt32(), TacticCooldown = r.ReadInt32(), TacticPending = r.ReadByte(),
                 };
             }
 
@@ -420,6 +446,22 @@ namespace Eleven.Simulation
                 };
             }
 
+            int tactics = r.ReadInt32();
+            if (tactics != 0 && tactics != 2 * TeamTactics.PerSide) throw new FormatException($"A state has no tactical plans or {2 * TeamTactics.PerSide}, not {tactics}.");
+            state.Tactics = new TeamTactic[tactics];
+            for (int i = 0; i < tactics; i++)
+            {
+                state.Tactics[i] = new TeamTactic
+                {
+                    TeamId = r.ReadInt32(),
+                    Formation = r.ReadByte() is byte f && Formations.IsDefined((Formation)f) ? (Formation)f : throw new FormatException("Unknown formation."),
+                    StepUp = r.ReadDouble("Tactic.StepUp"),
+                    Line = r.ReadDouble("Tactic.Line"),
+                    Width = r.ReadDouble("Tactic.Width"),
+                    Press = r.ReadDouble("Tactic.Press"),
+                };
+            }
+
             return state;
         }
 
@@ -495,8 +537,20 @@ namespace Eleven.Simulation
 
         public byte ShootoutGoals;
 
-        /// <summary>The side's formation (#125): where each place in its shape has its home.</summary>
+        /// <summary>The side's formation (#125): where each place in its shape has its home. Its current plan's, with plans (#126).</summary>
         public Formation Formation;
+
+        /// <summary>Its current tactical plan (#126), 0 to 2, and the one it is settling from.</summary>
+        public byte Tactic, TacticFrom;
+
+        /// <summary>Steps left of the settling from <see cref="TacticFrom"/> to <see cref="Tactic"/> (#126), of <see cref="TacticSettleOf"/>; 0 settled.</summary>
+        public int TacticSettle, TacticSettleOf;
+
+        /// <summary>Steps of the match clock before it may switch plan again (#126).</summary>
+        public int TacticCooldown;
+
+        /// <summary>A plan waiting for the next stoppage (#126), 1 to 3; 0 none.</summary>
+        public byte TacticPending;
     }
 
     /// <summary>

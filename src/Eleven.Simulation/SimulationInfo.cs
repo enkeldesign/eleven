@@ -18,9 +18,9 @@ namespace Eleven.Simulation
         /// version 13 the CPU outfielders, their plans and their timers (#83),
         /// version 14 the standing challenge: each player's tackling, phase and line, and who last played the ball (#84),
         /// version 15 the restart sequencer (#85), version 16 the match's clock, halves and score (#86),
-        /// version 17 each player's heading (#94), and version 18 each player's place in his side's shape (#96), version 19 each player's strength (#97), version 20 the restart's advantage (#99), and version 21 each player's stamina and fatigue (#100), and version 27 each side's formation (#125).
+        /// version 17 each player's heading (#94), and version 18 each player's place in his side's shape (#96), version 19 each player's strength (#97), version 20 the restart's advantage (#99), and version 21 each player's stamina and fatigue (#100), version 27 each side's formation (#125), and version 28 each side's tactical plans and its switching between them (#126).
         /// </summary>
-        public const int StateSchemaVersion = 27;
+        public const int StateSchemaVersion = 28;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

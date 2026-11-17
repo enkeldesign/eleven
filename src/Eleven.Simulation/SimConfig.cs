@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 27;
+        public const int FormatVersion = 28;
 
         public SimConfig(
             int tickRate = 60,
@@ -137,7 +137,10 @@ namespace Eleven.Simulation
             double knockout = 0,
             double extraTimeShare = 0.3333,
             double shootoutKicks = 5,
-            double shootoutKickTime = 4)
+            double shootoutKickTime = 4,
+            double planSwitchAt = 0,
+            double planSettleSeconds = 8,
+            double planSwitchCooldown = 30)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -254,6 +257,9 @@ namespace Eleven.Simulation
             ExtraTimeShare = extraTimeShare;
             ShootoutKicks = shootoutKicks;
             ShootoutKickTime = shootoutKickTime;
+            PlanSwitchAt = planSwitchAt;
+            PlanSettleSeconds = planSettleSeconds;
+            PlanSwitchCooldown = planSwitchCooldown;
 
             CheckTunableRanges();
 
@@ -718,6 +724,21 @@ namespace Eleven.Simulation
         /// <summary>Seconds after a shootout's kick before it is called a miss (#111).</summary>
         public double ShootoutKickTime { get; }
 
+        /// <summary>When a side's switch of tactical plan (#126) takes effect: 0 at the next stoppage, or at once in a break; 1 at once.</summary>
+        public double PlanSwitchAt { get; }
+
+        /// <summary>s. Over how long a side's homes blend from its old plan to its new one (#126).</summary>
+        public double PlanSettleSeconds { get; }
+
+        /// <summary>s of the match clock. The least time between two of a side's plan switches (#126).</summary>
+        public double PlanSwitchCooldown { get; }
+
+        /// <summary>Steps over which a side's plan settles (#126): planSettleSeconds at the tick rate.</summary>
+        public int PlanSettleTicks => (int)Math.Round(PlanSettleSeconds * TickRate);
+
+        /// <summary>Steps of the match clock between a side's plan switches (#126): planSwitchCooldown at the tick rate.</summary>
+        public int PlanCooldownTicks => (int)Math.Round(PlanSwitchCooldown * TickRate);
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
@@ -885,7 +906,10 @@ namespace Eleven.Simulation
                 knockout: r.ReadDouble(nameof(Knockout)),
                 extraTimeShare: r.ReadDouble(nameof(ExtraTimeShare)),
                 shootoutKicks: r.ReadDouble(nameof(ShootoutKicks)),
-                shootoutKickTime: r.ReadDouble(nameof(ShootoutKickTime)));
+                shootoutKickTime: r.ReadDouble(nameof(ShootoutKickTime)),
+                planSwitchAt: r.ReadDouble(nameof(PlanSwitchAt)),
+                planSettleSeconds: r.ReadDouble(nameof(PlanSettleSeconds)),
+                planSwitchCooldown: r.ReadDouble(nameof(PlanSwitchCooldown)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1007,6 +1031,9 @@ namespace Eleven.Simulation
             w.WriteDouble(ExtraTimeShare, nameof(ExtraTimeShare));
             w.WriteDouble(ShootoutKicks, nameof(ShootoutKicks));
             w.WriteDouble(ShootoutKickTime, nameof(ShootoutKickTime));
+            w.WriteDouble(PlanSwitchAt, nameof(PlanSwitchAt));
+            w.WriteDouble(PlanSettleSeconds, nameof(PlanSettleSeconds));
+            w.WriteDouble(PlanSwitchCooldown, nameof(PlanSwitchCooldown));
             return w.ToArray();
         }
 

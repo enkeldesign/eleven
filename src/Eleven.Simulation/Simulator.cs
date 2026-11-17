@@ -200,6 +200,12 @@ namespace Eleven.Simulation
                     if (why != CommandRejection.None) return why;
                 }
 
+                if (c.TacticTo != 0)
+                {
+                    CommandRejection why = MaySwitchTactic(player.TeamId, c.TacticTo);
+                    if (why != CommandRejection.None) return why;
+                }
+
                 if (!c.Plan.HasValue) return CommandRejection.None;
 
                 // A plan (#83) only from a CPU outfielder's controller, and only when he may decide.
@@ -285,7 +291,7 @@ namespace Eleven.Simulation
                 plan = new CpuPlan(p.Mode, AtMostUnit(p.Move), planned, p.QuickPass);
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo, c.SubOff, c.SubOn);
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo, c.SubOff, c.SubOn, c.TacticTo);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)
@@ -2164,6 +2170,20 @@ namespace Eleven.Simulation
                 foreach (TeamState t in state.Teams)
                 {
                     if (!Formations.IsDefined(t.Formation)) throw new ArgumentException($"Team {t.Id}: unknown formation {(byte)t.Formation}.", nameof(state));
+                    if (t.Tactic >= TeamTactics.PerSide || t.TacticFrom >= TeamTactics.PerSide || t.TacticPending > TeamTactics.PerSide) throw new ArgumentException($"Team {t.Id}: a tactical plan outside its {TeamTactics.PerSide}.", nameof(state));
+                    if (t.TacticSettle < 0 || t.TacticSettle > t.TacticSettleOf || t.TacticSettleOf > config.PlanSettleTicks || t.TacticCooldown < 0 || t.TacticCooldown > config.PlanCooldownTicks) throw new ArgumentException($"Team {t.Id}: its plan's settling or cooldown is outside this config's.", nameof(state));
+                }
+
+                // The tactical plans (#126): none, or three a side in the sides' order.
+                if (state.Tactics.Length != 0)
+                {
+                    if (state.Tactics.Length != 2 * TeamTactics.PerSide) throw new ArgumentException($"A state has no tactical plans or {2 * TeamTactics.PerSide}, not {state.Tactics.Length}.", nameof(state));
+                    for (int i = 0; i < state.Tactics.Length; i++)
+                    {
+                        TeamTactic plan = state.Tactics[i];
+                        if (plan.TeamId != state.Teams[i / TeamTactics.PerSide].Id) throw new ArgumentException($"Tactical plan {i} is not its side's.", nameof(state));
+                        plan.CheckRanges($"Tactical plan {i}");
+                    }
                 }
 
                 foreach (PlayerState p in state.Players)

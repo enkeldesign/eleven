@@ -785,8 +785,9 @@ namespace Eleven.Simulation
             // (#110) is not about the kick, and goes with it.
             int asked = commands.FindIndex(c => c.ControllerId == body.OwnerControllerId);
             int subOff = asked >= 0 ? commands[asked].SubOff : 0, subOn = asked >= 0 ? commands[asked].SubOn : 0;
+            byte tacticTo = asked >= 0 ? commands[asked].TacticTo : (byte)0; // nor is a switch of plan (#126)
             commands.RemoveAll(c => c.ControllerId == body.OwnerControllerId);
-            commands.Add(new Command(body.OwnerControllerId, state.Tick, move, kick ? Take(state, config, r, body) : (KickIntent?)null, subOff: subOff, subOn: subOn));
+            commands.Add(new Command(body.OwnerControllerId, state.Tick, move, kick ? Take(state, config, r, body) : (KickIntent?)null, subOff: subOff, subOn: subOn, tacticTo: tacticTo));
         }
 
         /// <summary>
