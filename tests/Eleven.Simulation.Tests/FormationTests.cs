@@ -155,6 +155,41 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_formation_library_cannot_be_changed()
+        {
+            // No static mutable state in the simulation (AGENTS.md).
+            var all = (IList<Formation>)Formations.All;
+            Formation first = all[0];
+            try
+            {
+                Assert.Throws<NotSupportedException>(() => all[0] = Formation.ThreeFourThree);
+            }
+            finally
+            {
+                if (all[0] != first) all[0] = first; // leave it as found for the other tests
+            }
+        }
+
+        [Theory]
+        [InlineData(SimEventKind.Kicked)]
+        [InlineData(SimEventKind.Headed)]
+        [InlineData(SimEventKind.Volleyed)]
+        public void The_contrasts_possession_follows_whoever_last_played_the_ball(SimEventKind kind)
+        {
+            SimState s = Squads.Match(C, 1, 10);
+            var possession = new Possession();
+            int home = Squads.HomeOutfielder(3), away = Squads.AwayOutfielder(10, 3);
+            s.Ball.LastPlayedBy = home;
+            possession.Observe(s, new[] { new SimEvent(1, SimEventKind.Touched, home) });
+            Assert.Equal(Squads.HomeTeam, possession.Team);
+
+            // Away plays it first time, with no touch: away has it, and won it.
+            s.Ball.LastPlayedBy = away;
+            Assert.Equal(Squads.AwayTeam, possession.Observe(s, new[] { new SimEvent(2, kind, away) }));
+            Assert.Equal(Squads.AwayTeam, possession.Team);
+        }
+
+        [Fact]
         public void A_state_with_an_unknown_formation_is_refused()
         {
             SimState s = Squads.Match(C, 3, 10);
