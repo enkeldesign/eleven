@@ -92,6 +92,16 @@ namespace Eleven.Host
         }
 
         /// <summary>
+        /// The human's side's keeper's place in <see cref="SimState.Keepers"/> (#110): the first
+        /// side's, by who he plays for; the first keeper in a world without sides; -1 with none.
+        /// Never by the array's order, which a substitution changes.
+        /// </summary>
+        public static int HomeKeeper(SimState state)
+        {
+            return state.Keepers.Length == 0 ? -1 : 0;
+        }
+
+        /// <summary>
         /// rad, world. The way the pose is drawn facing: his heading; a slide along its line; a dive
         /// gloves first, which the sprite draws to its left.
         /// </summary>
