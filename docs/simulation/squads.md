@@ -64,6 +64,7 @@ From three a side (`Squads.ShapeFrom`), each outfielder has a place in his side'
 
 **The slot's place.**
 - **Rows:** a back row of half the rest, a middle row of the others, and one forward. At five a side that's 2-2-1, on lines at −24, −10 and +4 m.
+  From eight a side the side plays its formation instead ([formations.md](formations.md), #125).
 - **Spread:** each row is spread 14 m either side of the middle.
 - **Follow:** the rows move with 0.55 of the ball's x and 0.3 of its y.
 - **Step up:** they push 6 m further up when his side has the ball.
