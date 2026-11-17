@@ -36,19 +36,19 @@ The kick-off's places are the homes inside the side's own half, as before. A hom
 
 `eleven-sim formations <dir>`, in CI against `formation-reference.csv`: home in each formation against the 4-4-2, CPU against CPU at the reference config, six seeds each.
 
-A **shot** here is a kick, header or volley that next reaches the goal line at the end the kicker's side attacks, the frame, or the other side's keeper. **Above last man** is how far the side's mean x stands above its deepest outfielder's: the shape, apart from where the ball is.
+**Possession** is the side that last played the ball, by the simulation's own record: a touch, kick, header, volley, challenge or keeper's save. A **shot** here is a kick, header or volley that next reaches the goal line at the end the kicker's side attacks, the frame, or the other side's keeper. **Above last man** is how far the side's mean x stands above its deepest outfielder's: the shape, apart from where the ball is.
 
 | Home | Goals | Shots | Possession | Depth | Above last man | Wins the ball at |
 | --- | --- | --- | --- | --- | --- | --- |
-| **4-4-2** | 1.0–1.0 | 5.7–6.3 | 50 % | −9.3 m | 13.2 m | −3.7 m |
-| 4-3-3 | 0.7–1.2 | 8.7–5.0 | 50 % | −6.0 m | 14.7 m | −1.8 m |
-| 4-2-3-1 | 1.2–0.5 | 8.0–5.2 | 50 % | −8.0 m | 13.0 m | −3.7 m |
-| 3-5-2 | 0.7–1.3 | 6.0–6.3 | 49 % | −8.0 m | 14.2 m | −5.0 m |
-| 5-3-2 | 0.5–1.2 | 4.5–5.5 | 49 % | −13.2 m | 12.3 m | −8.2 m |
-| 3-4-3 | 0.7–1.2 | 4.7–8.3 | 50 % | −8.5 m | 15.3 m | −7.6 m |
+| **4-4-2** | 1.0–1.0 | 5.7–6.3 | 51 % | −9.3 m | 13.2 m | −2.8 m |
+| 4-3-3 | 0.7–1.2 | 8.7–5.0 | 50 % | −6.0 m | 14.7 m | −2.5 m |
+| 4-2-3-1 | 1.2–0.5 | 8.0–5.2 | 49 % | −8.0 m | 13.0 m | −2.0 m |
+| 3-5-2 | 0.7–1.3 | 6.0–6.3 | 50 % | −8.0 m | 14.2 m | −4.4 m |
+| 5-3-2 | 0.5–1.2 | 4.5–5.5 | 49 % | −13.2 m | 12.3 m | −7.2 m |
+| 3-4-3 | 0.7–1.2 | 4.7–8.3 | 52 % | −8.5 m | 15.3 m | −6.0 m |
 
 **What it shows:**
-- **The shape changes where a side plays.** A 5-3-2 stands 4 m deeper than the 4-4-2 and wins the ball 4.5 m deeper. A 4-3-3 stands 3 m higher, wins the ball higher and shoots most.
+- **The shape changes where a side plays.** A 5-3-2 stands 4 m deeper than the 4-4-2 and wins the ball 4.4 m deeper. A 4-3-3 stands 3 m higher and shoots most.
 - **Possession doesn't move.** The CPU's passing doesn't depend on the shape yet.
 - **Goals at six seeds are noise:** a 10v10 match has about two. Shots and depths are the contrast's measures.
 - **The 3-4-3 concedes more shots than it takes** (4.7 to 8.3). Why isn't measured yet; M5.02's plans and M5.03's measures look at it.
