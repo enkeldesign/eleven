@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 28;
+        public const int FormatVersion = 29;
 
         public SimConfig(
             int tickRate = 60,
@@ -140,7 +140,12 @@ namespace Eleven.Simulation
             double shootoutKickTime = 4,
             double planSwitchAt = 0,
             double planSettleSeconds = 8,
-            double planSwitchCooldown = 30)
+            double planSwitchCooldown = 30,
+            double cpuTactics = 0,
+            double cpuChaseFrom = 0.67,
+            double cpuChaseMargin = 1,
+            double cpuProtectFrom = 0.67,
+            double cpuTacticSpread = 0.05)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -260,6 +265,11 @@ namespace Eleven.Simulation
             PlanSwitchAt = planSwitchAt;
             PlanSettleSeconds = planSettleSeconds;
             PlanSwitchCooldown = planSwitchCooldown;
+            CpuTactics = cpuTactics;
+            CpuChaseFrom = cpuChaseFrom;
+            CpuChaseMargin = cpuChaseMargin;
+            CpuProtectFrom = cpuProtectFrom;
+            CpuTacticSpread = cpuTacticSpread;
 
             CheckTunableRanges();
 
@@ -733,6 +743,21 @@ namespace Eleven.Simulation
         /// <summary>s of the match clock. The least time between two of a side's plan switches (#126).</summary>
         public double PlanSwitchCooldown { get; }
 
+        /// <summary>Whether a CPU side's manager switches tactical plans and makes tactical substitutions (#127): 1 on, 0 off.</summary>
+        public double CpuTactics { get; }
+
+        /// <summary>The share of the match from which a CPU manager behind chases (#127), his spread aside.</summary>
+        public double CpuChaseFrom { get; }
+
+        /// <summary>Goals behind from which a CPU manager chases (#127).</summary>
+        public double CpuChaseMargin { get; }
+
+        /// <summary>The share of the match from which a CPU manager ahead protects his lead (#127), his spread aside.</summary>
+        public double CpuProtectFrom { get; }
+
+        /// <summary>How far either way a CPU manager's own draw shifts his thresholds (#127), as a share of the match.</summary>
+        public double CpuTacticSpread { get; }
+
         /// <summary>Steps over which a side's plan settles (#126): planSettleSeconds at the tick rate.</summary>
         public int PlanSettleTicks => (int)Math.Round(PlanSettleSeconds * TickRate);
 
@@ -909,7 +934,12 @@ namespace Eleven.Simulation
                 shootoutKickTime: r.ReadDouble(nameof(ShootoutKickTime)),
                 planSwitchAt: r.ReadDouble(nameof(PlanSwitchAt)),
                 planSettleSeconds: r.ReadDouble(nameof(PlanSettleSeconds)),
-                planSwitchCooldown: r.ReadDouble(nameof(PlanSwitchCooldown)));
+                planSwitchCooldown: r.ReadDouble(nameof(PlanSwitchCooldown)),
+                cpuTactics: r.ReadDouble(nameof(CpuTactics)),
+                cpuChaseFrom: r.ReadDouble(nameof(CpuChaseFrom)),
+                cpuChaseMargin: r.ReadDouble(nameof(CpuChaseMargin)),
+                cpuProtectFrom: r.ReadDouble(nameof(CpuProtectFrom)),
+                cpuTacticSpread: r.ReadDouble(nameof(CpuTacticSpread)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1034,6 +1064,11 @@ namespace Eleven.Simulation
             w.WriteDouble(PlanSwitchAt, nameof(PlanSwitchAt));
             w.WriteDouble(PlanSettleSeconds, nameof(PlanSettleSeconds));
             w.WriteDouble(PlanSwitchCooldown, nameof(PlanSwitchCooldown));
+            w.WriteDouble(CpuTactics, nameof(CpuTactics));
+            w.WriteDouble(CpuChaseFrom, nameof(CpuChaseFrom));
+            w.WriteDouble(CpuChaseMargin, nameof(CpuChaseMargin));
+            w.WriteDouble(CpuProtectFrom, nameof(CpuProtectFrom));
+            w.WriteDouble(CpuTacticSpread, nameof(CpuTacticSpread));
             return w.ToArray();
         }
 

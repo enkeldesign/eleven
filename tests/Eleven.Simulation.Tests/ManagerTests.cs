@@ -13,6 +13,8 @@ namespace Eleven.Simulation.Tests
     /// </summary>
     public class ManagerTests
     {
+        private static (int, int) Sub(ManagerDecision d) => (d.Off, d.On);
+
         private static readonly SimConfig C = SpikeScenario.Config();
 
         private const int Side = 10;
@@ -25,27 +27,27 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void A_footballer_taken_off_injured_is_replaced_first_then_one_hurt_and_playing_on()
         {
-            Assert.Equal((3, 40), ManagerBrain.Decide(Seen(share: 0.1, players: new[] { Man(1, 0.9), Man(2, injury: InjuryLevel.Minor), Man(3, injury: InjuryLevel.Serious) }), C));
-            Assert.Equal((2, 40), ManagerBrain.Decide(Seen(share: 0.1, players: new[] { Man(1, 0.9), Man(2, injury: InjuryLevel.Minor), Man(3) }), C));
+            Assert.Equal((3, 40), Sub(ManagerBrain.Decide(Seen(share: 0.1, players: new[] { Man(1, 0.9), Man(2, injury: InjuryLevel.Minor), Man(3, injury: InjuryLevel.Serious) }), C)));
+            Assert.Equal((2, 40), Sub(ManagerBrain.Decide(Seen(share: 0.1, players: new[] { Man(1, 0.9), Man(2, injury: InjuryLevel.Minor), Man(3) }), C)));
         }
 
         [Fact]
         public void Late_in_the_match_the_most_tired_outfielder_goes_off_if_he_is_tired_enough()
         {
             ManagedPlayer[] side = { Man(1, 0.6), Man(2, 0.8), Man(3, 0.95, keeper: true), Man(4, 0.2) };
-            Assert.Equal((2, 40), ManagerBrain.Decide(Seen(share: C.CpuSubAfter + 0.01, players: side), C));
+            Assert.Equal((2, 40), Sub(ManagerBrain.Decide(Seen(share: C.CpuSubAfter + 0.01, players: side), C)));
 
             // Earlier in the match he waits; and no one fresher than cpuSubFatigue goes off.
-            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(share: C.CpuSubAfter - 0.01, players: side), C));
-            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(share: 0.9, players: new[] { Man(1, C.CpuSubFatigue - 0.01), Man(4, 0.05) }), C));
+            Assert.Equal((0, 0), Sub(ManagerBrain.Decide(Seen(share: C.CpuSubAfter - 0.01, players: side), C)));
+            Assert.Equal((0, 0), Sub(ManagerBrain.Decide(Seen(share: 0.9, players: new[] { Man(1, C.CpuSubFatigue - 0.01), Man(4, 0.05) }), C)));
         }
 
         [Fact]
         public void He_asks_for_nothing_when_he_may_not_substitute_or_has_no_one_to_bring_on()
         {
             ManagedPlayer[] side = { Man(1, 0.9), Man(2, injury: InjuryLevel.Serious) };
-            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(may: false, players: side), C));
-            Assert.Equal((0, 0), ManagerBrain.Decide(Seen(bench: Array.Empty<int>(), players: side), C));
+            Assert.Equal((0, 0), Sub(ManagerBrain.Decide(Seen(may: false, players: side), C)));
+            Assert.Equal((0, 0), Sub(ManagerBrain.Decide(Seen(bench: Array.Empty<int>(), players: side), C)));
         }
 
         [Fact]

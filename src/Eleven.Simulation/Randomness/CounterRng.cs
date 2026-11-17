@@ -32,6 +32,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>Whether a foul injures, and how badly (#109).</summary>
         Injury = 9,
+
+        /// <summary>A CPU manager's own spread (#127): one draw a side a match, at tick 0.</summary>
+        Manager = 10,
     }
 
     /// <summary>
