@@ -159,7 +159,27 @@ namespace Eleven.Simulation.Tests
 
             Assert.Equal(1.0, Perception.TacticOf(sim.PeekState(), Squads.HomeTeam).Settled, 9);
             Assert.Equal(0, Home(sim).TacticSettle);
-            Assert.True(Home(sim).TacticCooldown < C.PlanCooldownTicks);
+        }
+
+        [Fact]
+        public void The_cooldown_runs_with_the_match_clock_not_while_the_ball_is_dead()
+        {
+            // Switched at the kick-off, before it is taken: the clock stands, and so does the cooldown.
+            var sim = new Simulator(C, World());
+            Switch(sim, 2);
+            var events = new List<SimEvent>();
+            for (int i = 0; i < 10 && sim.PeekState().Restart.Phase != RestartPhase.Live; i++)
+            {
+                sim.Step(Array.Empty<Command>(), events);
+                Assert.Equal(0, sim.PeekState().Match.ClockTicks);
+                Assert.Equal(C.PlanCooldownTicks, Home(sim).TacticCooldown);
+            }
+
+            // In play it runs down step for step with the clock.
+            StepToLive(sim);
+            int clock = sim.PeekState().Match.ClockTicks, cooldown = Home(sim).TacticCooldown;
+            for (int i = 0; i < 30; i++) sim.Step(Array.Empty<Command>(), events);
+            Assert.Equal(sim.PeekState().Match.ClockTicks - clock, cooldown - Home(sim).TacticCooldown);
         }
 
         [Fact]
