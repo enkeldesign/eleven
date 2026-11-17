@@ -89,7 +89,7 @@ namespace Eleven.Simulation.Harness
         /// A match's start: home kicks off, the clock at nought. <paramref name="homeSide"/> and
         /// <paramref name="awaySide"/> give a side's outfielders their capabilities (#103's league);
         /// <paramref name="home"/> is the human's own footballer's. Each side lines up in its
-        /// formation (#125), the 4-4-2 unless given, and stores three tactical plans (#126): those
+        /// formation (#125), the 4-4-2 unless given, and, from <see cref="ShapeFrom"/> a side, stores three tactical plans (#126): those
         /// given, its side's id set on each, or else the reference plan three times in its formation.
         /// It starts on its first; given plans, the formation is the first plan's.
         /// </summary>
@@ -135,7 +135,7 @@ namespace Eleven.Simulation.Harness
                 Seed = seed,
                 Ball = new BallState { Id = OneVOne.BallId, Position = new Vec3(0, 0, config.BallRadius) },
                 Teams = new[] { new TeamState { Id = HomeTeam, AttackSign = 1, Formation = homeFormation }, new TeamState { Id = AwayTeam, AttackSign = -1, Formation = awayFormation } },
-                Tactics = Plans(HomeTeam, homeFormation, homeTactics).Concat(Plans(AwayTeam, awayFormation, awayTactics)).ToArray(),
+                Tactics = perSide < ShapeFrom ? Array.Empty<TeamTactic>() : Plans(HomeTeam, homeFormation, homeTactics).Concat(Plans(AwayTeam, awayFormation, awayTactics)).ToArray(),
                 Players = players.ToArray(),
                 Keepers = new[]
                 {
