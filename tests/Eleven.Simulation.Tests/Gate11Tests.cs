@@ -39,6 +39,28 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void Each_match_is_written_with_the_hash_of_the_config_it_was_played_under()
+        {
+            // A cup tie is played with knockout on; the writer is given the league's config.
+            SimConfig league = SpikeScenario.Config(), cup = league.With("knockout", 1);
+            Assert.NotEqual(league.Hash, cup.Hash);
+            var m = new GateMatch { Stage = "final", Home = 0, Away = 1, Finished = true, Winner = 0 };
+            m.ConfigHash = cup.Hash;
+            var w = new StringWriter();
+            Gate11.WriteMatches(w, league, League.Sides(), new[] { m });
+            string row = w.ToString().Split('\n')[1];
+            Assert.StartsWith(cup.Hash.ToString("x16") + ",", row);
+        }
+
+        [Fact]
+        public void Play_records_its_configs_hash()
+        {
+            SimConfig cup = SpikeScenario.Config().With("knockout", 1).With("halfLength", 60);
+            GateMatch m = Gate11.Play(cup, League.Sides(), 0, 1, 0x112999999UL, "final");
+            Assert.Equal(cup.Hash, m.ConfigHash);
+        }
+
+        [Fact]
         public void The_matches_csv_has_a_line_a_match_under_its_header()
         {
             IReadOnlyList<LeagueSide> sides = League.Sides();

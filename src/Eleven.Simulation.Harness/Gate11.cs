@@ -11,6 +11,9 @@ namespace Eleven.Simulation.Harness
     /// <summary>One eleven-a-side match of M4's gate (#112): its result, what the laws gave, and whether anyone got stuck.</summary>
     public sealed class GateMatch
     {
+        /// <summary>The hash of the config the match was played under (INV-11): a cup tie's has knockout on.</summary>
+        public ulong ConfigHash;
+
         /// <summary>"league", "semi-final" or "final".</summary>
         public string Stage = "";
 
