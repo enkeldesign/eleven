@@ -25,7 +25,7 @@ Issue #126, M5 (#80), and the brief's hypothesis: "saved tactical setups, switch
 1. **Checked as it is accepted, and again at the start of the step.** It is refused, with `TacticRefused`, for no stored plan, or for the plan the side already plays or awaits. It is refused with `TacticCooldown` inside the cooldown.
 2. **Taken at once at a stoppage or a break.** In play it waits for the next stoppage, unless `planSwitchAt` is 1.
 3. **Taken, the side settles.** Its homes and instructions blend from the old plan to the new over `planSettleSeconds`. Its formation is the new plan's at once. `TacticSwitched` is raised.
-4. **Then a cooldown,** `planSwitchCooldown` of the match clock, before it may switch again.
+4. **Then a cooldown,** `planSwitchCooldown` of the match clock, before it may switch again. Like the clock, it stands while a restart waits.
 
 | Knob | Range | Default | Meaning |
 | --- | --- | --- | --- |
@@ -60,15 +60,14 @@ Home on each plan, all in a 4-4-2, against the reference plan, six seeds:
 
 ### The switch's cost
 
-Home asks to switch from the reference to the high press at a third of the match, under each preset, four seeds each. Away's shots and goals are counted in the 20 s after the switch is taken, against the same seeds unswitched from the same tick.
+Home asks to switch from the reference to the high press at a third of the match, under each preset, four seeds each. Away's shots and goals are counted in the 20 s after the switch is taken. The control is the same seed unswitched, over that same window.
 
-| Preset | Waited for the switch | Away's shots in the window | Away's goals |
-| --- | --- | --- | --- |
-| No switch | — | 0 | 0 |
-| **At the next stoppage, 8 s settle** | 22–57 s (34 s mean) | 0 | 0 |
-| At once, 8 s settle | 0 s | 0.25 | 0 |
-| At the next stoppage, no settle | 34 s mean | 0 | 0 |
-| At the next stoppage, 20 s settle | 34 s mean | 0 | 0 |
+| Preset | Waited for the switch | Away's shots in the window | Unswitched | Away's goals |
+| --- | --- | --- | --- | --- |
+| **At the next stoppage, 8 s settle** | 22–57 s (34 s mean) | 0 | 0 | 0 |
+| At once, 8 s settle | 0 s | 0.25 | 0 | 0 |
+| At the next stoppage, no settle | 34 s mean | 0 | 0 | 0 |
+| At the next stoppage, 20 s settle | 34 s mean | 0 | 0 | 0 |
 
 - **The measurable cost is the wait.** At the next stoppage, a switch asked for at 120 s took effect 22 to 57 s later, about a tenth of the match. A plan chosen to chase a game arrives late.
 - **Conceded in the window is too rare to resolve at this sample.** About 0.3 away shots fall in any 20 s window, so four seeds can't separate the presets. Whether the settling is a felt cost is for M7's sessions with a player. M5.03's decision distributions measure how often managers switch.
@@ -80,7 +79,10 @@ Home asks to switch from the reference to the high press at a third of the match
 - at a stoppage a switch is taken at once and the side settles; in play it waits for the next stoppage, or not with `planSwitchAt` 1;
 - inside the cooldown a switch is refused, as is one to the plan played, awaited or not stored;
 - a side without plans can't switch;
-- the side settles over `planSettleSeconds` and the cooldown runs down;
+- the side settles over `planSettleSeconds`;
+- the cooldown runs down with the match clock, and stands while the ball is dead;
 - a restart taker's command keeps the switch;
 - a CPU side on a low block stands deeper than on a high press in the same formation;
 - a recorded switch replays, and a snapshot mid-settle restores.
+
+`TacticTrialsTests`: a switch's control is the same seed's unswitched match, over the window from the switch.
