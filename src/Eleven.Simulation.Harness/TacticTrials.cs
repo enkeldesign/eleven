@@ -210,6 +210,15 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static void Pair(IReadOnlyList<TacticTrial> trials, int windowTicks)
         {
+            foreach (TacticTrial t in trials)
+            {
+                if (t.Kind != "switch" || t.SwitchedAt < 0) continue;
+                TacticTrial? control = trials.FirstOrDefault(x => x.Kind == "switch" && x.Name == "none" && x.Seed == t.Seed);
+                if (control == null) continue;
+                long from = t.SwitchedAt, to = t.SwitchedAt + windowTicks;
+                t.ControlShots = control.AwayShotTicks.Count(k => k >= from && k < to);
+                t.ControlGoals = control.AwayGoalTicks.Count(k => k >= from && k < to);
+            }
         }
 
         private static void Shot(TacticTrial trial, int team, long tick, long windowFrom, int windowTicks, bool goal)

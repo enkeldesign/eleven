@@ -82,8 +82,10 @@ namespace Eleven.Simulation
         // Whether play is stopped, so that a waiting switch is taken: a break, or a restart not yet taken.
         private bool TacticStopped => MatchBreak || (_state.Restart.On && _state.Restart.Phase != RestartPhase.Live);
 
-        private bool ClockRuns => _state.Match.Phase == MatchPhase.FirstHalf || _state.Match.Phase == MatchPhase.SecondHalf
-            || _state.Match.Phase == MatchPhase.ExtraFirstHalf || _state.Match.Phase == MatchPhase.ExtraSecondHalf;
+        // Whether the match clock runs this step: a half under way, with the ball live (StepMatch's own rule).
+        private bool ClockRuns => (_state.Match.Phase == MatchPhase.FirstHalf || _state.Match.Phase == MatchPhase.SecondHalf
+            || _state.Match.Phase == MatchPhase.ExtraFirstHalf || _state.Match.Phase == MatchPhase.ExtraSecondHalf)
+            && _state.Restart.Phase == RestartPhase.Live;
 
         private void StepTactics(long tick, List<SimEvent> events)
         {
