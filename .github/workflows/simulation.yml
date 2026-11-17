@@ -290,6 +290,23 @@ jobs:
           path: budget/
           if-no-files-found: error
 
+      # M4's gate (#112): a round robin and a knockout cup at eleven a side, with every law of M4
+      # and each cup tie replayed from its recording. Fails if a match is stuck, a replay differs
+      # or the cup has no winner, and its matches are diffed against the reference.
+      - name: Play the 11v11 gate
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll gate11 gate11 | tee gate11.txt
+          echo "::notice title=11v11 gate::$(sed 's| -> .*||' gate11.txt)"
+          diff docs/simulation/gate11-reference.csv gate11/gate11-matches.csv
+
+      - name: Publish the 11v11 gate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate11
+          path: gate11/
+          if-no-files-found: warn
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |

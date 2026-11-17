@@ -724,8 +724,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openedM = await openBench(2, [], false);
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
-          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?/, 10_000, fromM))?.match ?? null;
-          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : 4] : null;
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?(?: match11=(\S+))?/, 10_000, fromM))?.match ?? null;
+          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : side === 5 ? 4 : 5] : null;
           if (segment) await press(segment, 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
@@ -844,6 +844,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           notes.result += `; ${switches} switches`;
         }
 
+        if (side === 10) {
+          // Eleven a side through the bench (#112), on a seed whose untouched match in .NET gives
+          // a foul, a caution and substitutions (90 s halves): every law of M4 that the seed
+          // gives, made in the browser as in .NET. Offside is checked where it happens.
+          const count = (re) => logs.slice(fromM).filter((l) => re.test(l)).length;
+          const cards = count(/^ELEVEN match card kind=yellow /), reds = count(/^ELEVEN match card kind=red /);
+          const subs = logs.slice(fromM).filter((l) => /^ELEVEN match substituted /.test(l));
+          const offsides = count(/^ELEVEN event \d+ Offside\b/);
+          check('the 11v11 match gives a caution and the CPU managers substitute', cards >= 1 && subs.length >= 1,
+            `${cards} caution(s), ${reds} sending(s)-off, ${subs.length} substitution(s), ${offsides} offside(s)`);
+          notes.result += `; ${cards} cautions, ${subs.length} substitutions, ${offsides} offsides`;
+        }
+
         if (side === 5) {
           // A foul, and a restart of each kind the seed's match gives taken (#103): kick-off,
           // throw-in, goal kick, corner and free kick. A penalty is counted when there is one.
@@ -858,7 +871,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('the 5v5 match gives a foul, and a restart of each kind is taken',
             fouls >= 1 && [1, 2, 3, 4, 5].every((k) => taken.has(k)), `${fouls} foul(s); taken: ${seen || 'none'}`);
           notes.result += `; ${fouls} fouls; ${seen}`;
+        }
 
+        if (side === 5 || side === 10) {
           // The off-screen cues (#102): footballers just outside the view are cued at its edge,
           // every cue inside the play area. Counted each second of the match clock.
           const cueLines = logs.slice(fromM).map((l) => /^ELEVEN cues second=(\d+) shown=(\d+) play=(\d+),(\d+),(\d+),(\d+) at=(\S*)/.exec(l)).filter(Boolean);
@@ -2100,6 +2115,9 @@ try {
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
   // Eleven a side (#106): from the address on a phone, the simulation's step timed in the browser.
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match11`, 'match11-phone', quick(390, 664), true);
+  // A whole 11v11 match (#112), through the bench, on a seed whose untouched match gives a caution
+  // and substitutions in .NET (90 s halves), with the recording replayed at full time.
+  await runPass(browser, `${base}?trace=1&match=1&match11=1&half=90&seed=10`, 'match11-whole', quick(390, 664), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at
