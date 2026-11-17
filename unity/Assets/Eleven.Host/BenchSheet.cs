@@ -29,7 +29,7 @@ namespace Eleven.Host
 
         // The touch candidates (#28, #76, #77), in ControlCandidate's order.
         private static readonly string[] Controls = { "A · Action", "B · Pass + Kick", "C · One fire" };
-        private static readonly string[] Plays = { "Practice", "1v1", "2v2", "5v5" };
+        private static readonly string[] Plays = { "Practice", "1v1", "2v2", "5v5", "11v11" };
         private readonly Func<int> _play;
         private readonly Action<int> _switchPlay;
         private UiKit.Segmented _plays;
@@ -477,7 +477,7 @@ namespace Eleven.Host
             if (!_trace || !Open || !PresetsShown) return;
             float s = _ui.PixelsPerPoint;
             string P(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
-            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)}");
+            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)} match11={P(_plays.Segments[4].Element)}");
         }
 
         // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with

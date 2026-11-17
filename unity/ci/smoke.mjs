@@ -724,8 +724,8 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openedM = await openBench(2, [], false);
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
-          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?/, 10_000, fromM))?.match ?? null;
-          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : 4] : null;
+          const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?(?: match11=(\S+))?/, 10_000, fromM))?.match ?? null;
+          const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : side === 5 ? 4 : 5] : null;
           if (segment) await press(segment, 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),

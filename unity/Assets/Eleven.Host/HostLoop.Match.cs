@@ -35,7 +35,7 @@ namespace Eleven.Host
         private int _perSide = 1;
 
         // The bench's play switch, by segment (#103): practice, then the match sizes.
-        private static readonly int[] PlaySizes = { 0, 1, 2, 5 };
+        private static readonly int[] PlaySizes = { 0, 1, 2, 5, 10 };
 
         // Who the human controls in a 2v2 match (#93): automatic at the ball's changes of hands, and
         // SWITCH's own request, which the next step's command carries.
@@ -161,7 +161,7 @@ namespace Eleven.Host
             Log("ELEVEN match ended to=practice");
         }
 
-        /// <summary>The bench's play switch (#87, #95, #103): 0 practice, 1 a 1v1 match, 2 a 2v2 match, 3 a 5v5 match.</summary>
+        /// <summary>The bench's play switch (#87, #95, #103, #112): 0 practice, 1 a 1v1 match, 2 a 2v2 match, 3 a 5v5 match, 4 eleven a side.</summary>
         private void SwitchPlay(int index)
         {
             if (index == 0)
