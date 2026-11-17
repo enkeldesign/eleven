@@ -98,6 +98,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void He_never_replaces_fresh_legs_with_fresh_legs()
+        {
+            // Chasing, with both forwards below half of cpuSubFatigue (one of them a substitute
+            // just on): no tactical substitution, and #110's rule finds the tired midfielder.
+            double fresh = On.CpuSubFatigue / 2 - 0.01;
+            var side = new[]
+            {
+                new ManagedPlayer(2, On.CpuSubFatigue + 0.1, InjuryLevel.None, false, ManagedLine.Middle),
+                new ManagedPlayer(4, fresh, InjuryLevel.None, false, ManagedLine.Forward),
+                new ManagedPlayer(5, 0, InjuryLevel.None, false, ManagedLine.Forward),
+            };
+            var seen = new ManagerObservation(true, On.CpuSubAfter + 0.01, side, new[] { 40 }, 0, 1, 11, 11, 1, true, 0);
+            Assert.Equal(2, ManagerBrain.Decide(seen, On).Off);
+        }
+
+        [Fact]
         public void Each_side_draws_its_own_spread_and_the_same_one_every_time()
         {
             SimState s = Squads.Match(On, 9, 10, bothCpu: true);
