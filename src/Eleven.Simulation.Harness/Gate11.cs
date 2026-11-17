@@ -116,7 +116,7 @@ namespace Eleven.Simulation.Harness
             LeagueSide hs = sides[home], aw = sides[away];
             var sim = new Simulator(config, Squads.Match(config, seed, PerSide, bothCpu: true, awayCpu: aw.Skill, homeCpu: hs.Skill,
                 homeSide: hs.Capabilities, awaySide: aw.Capabilities));
-            var m = new GateMatch { Stage = stage, Home = home, Away = away, Seed = seed };
+            var m = new GateMatch { Stage = stage, Home = home, Away = away, Seed = seed, ConfigHash = config.Hash };
             CommandRecording? recording = replays > 0 ? CommandRecording.StartFrom(sim) : null;
             var recorder = new MatchRecorder();
             var commands = new List<Command>();
@@ -253,7 +253,7 @@ namespace Eleven.Simulation.Harness
             {
                 w.WriteLine(string.Format(CultureInfo.InvariantCulture,
                     "{0:x16},{1},{2:x},{3},{4},{5},{6},{7},{8},{9}-{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24:F2},{25:F2},{26},{27}/{28},{29:F2},{30:x16}",
-                    config.Hash, m.Stage, m.Seed, sides[m.Home].Name, sides[m.Away].Name, m.Finished ? "yes" : "no", m.HomeGoals, m.AwayGoals, m.ExtraTime ? "yes" : "no",
+                    m.ConfigHash, m.Stage, m.Seed, sides[m.Home].Name, sides[m.Away].Name, m.Finished ? "yes" : "no", m.HomeGoals, m.AwayGoals, m.ExtraTime ? "yes" : "no",
                     m.HomeShootout, m.AwayShootout, m.Winner >= 0 ? sides[m.Winner].Name : "none", m.Fouls, m.Offsides, m.Cautions, m.SendingsOff, m.Injuries, m.Substitutions,
                     m.Penalties, m.FreeKicks, m.IndirectFreeKicks, m.Corners, m.ThrowIns, m.GoalKicks, m.LongestStillSeconds, m.LongestUntouchedSeconds, m.Stuck ? "yes" : "no",
                     m.ReplaysEqual, m.Replays, m.LengthSeconds, m.FinalHash));
