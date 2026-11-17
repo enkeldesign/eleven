@@ -36,6 +36,7 @@ namespace Eleven.Simulation.Tests
             {
                 s.Ball.Position = new Vec3(-19.5, 10, c.BallRadius);
                 s.Ball.Velocity = new Vec3(5, 0, 0);
+                if (c.ControlModel == ControlModel.Attached) s.Ball.AttachedTo = Mate;
             }
 
             return new Simulator(c, s);
@@ -63,10 +64,11 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void With_the_ball_he_carries_it_on()
         {
-            var sim = Running(withBall: true);
+            // Under ATTACHED, as Erik played: the ball is at the receiver's feet.
+            var sim = Running(C.WithControlModel(ControlModel.Attached), withBall: true);
             SwitchThen(sim, (int)(0.5 * C.TickRate), Vec2.Zero);
             Assert.True(Speed(P(sim, Mate)) > 4.5);
-            Assert.True(sim.PeekState().Ball.Position.X > -19.5 + 2, "the ball went on with him");
+            Assert.True(sim.PeekState().Ball.Position.X > -19.5 + 2, $"the ball went on with him: ball at {sim.PeekState().Ball.Position.X:F2}, he at {P(sim, Mate).Position.X:F2}, attached to {sim.PeekState().Ball.AttachedTo}");
         }
 
         [Fact]
