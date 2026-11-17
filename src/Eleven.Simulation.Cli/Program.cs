@@ -183,6 +183,26 @@ internal static class Program
                 return 0;
             }
 
+            case "gate11" when args.Length >= 2:
+            {
+                // M4's gate (#112): a round robin and a knockout cup at eleven a side, every law
+                // of M4, each cup tie replayed. Fails if a match is stuck, a replay differs, or
+                // the cup has no winner.
+                SimConfig gateConfig = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> gateSides = League.Sides();
+                List<GateMatch> gate = Gate11.Run(gateConfig, gateSides);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "gate11-matches.csv"))) Gate11.WriteMatches(csv, gateConfig, gateSides, gate);
+                Console.WriteLine($"config {gateConfig.Hash:x16}, {Gate11.KeyNumbers(gateSides, gate)} -> {args[1]}");
+                if (!Gate11.Passes(gate))
+                {
+                    Console.Error.WriteLine("The 11v11 gate failed: a match stuck, a replay differed, or the cup had no winner.");
+                    return 1;
+                }
+
+                return 0;
+            }
+
             case "fairness" when args.Length >= 2:
             {
                 // Off-screen threat fairness (#102): how often the human's CPU opponents decide on a
@@ -294,7 +314,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds]");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds] | gate11 <dir>");
                 return 2;
         }
     }
