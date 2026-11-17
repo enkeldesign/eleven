@@ -340,10 +340,12 @@ namespace Eleven.Host
                         if (e.Other > 0) OrientForSide();
                         _hud?.ShowStatus(e.Other == 0 ? $"Level at {Score(s)}: extra time." : e.Other == 1 ? "Extra time: ends changed. Attacking up." : "Extra time, second half. Attacking up.");
                         Log(FormattableString.Invariant($"ELEVEN match extratime part={e.Other} score={Score(s)} tick={s.Tick} attack={HumanAttack(s)} orientation={_orientation}"));
+                        UpdateMatchPanel();
                         break;
                     case SimEventKind.ShootoutStarted:
                         _hud?.ShowStatus($"Level at {Score(s)}: penalties.");
                         Log(FormattableString.Invariant($"ELEVEN match shootout started score={Score(s)} tick={s.Tick}"));
+                        UpdateMatchPanel();
                         break;
                     case SimEventKind.ShootoutKick:
                     {
@@ -352,6 +354,9 @@ namespace Eleven.Host
                         TeamState you = Array.Find(s.Teams, t => t.Id == OneVOne.HomeTeam), cpu = Array.Find(s.Teams, t => t.Id != OneVOne.HomeTeam);
                         _hud?.ShowStatus(FormattableString.Invariant($"{(kicker == OneVOne.HomeTeam ? "You" : "CPU")}: {(e.Other == 1 ? "scored" : "missed")}. Penalties {you.ShootoutGoals}-{cpu.ShootoutGoals}"));
                         Log(FormattableString.Invariant($"ELEVEN match shootout kick player={e.Subject} team={kicker} scored={e.Other} kicks={you.ShootoutKicks}-{cpu.ShootoutKicks} goals={you.ShootoutGoals}-{cpu.ShootoutGoals} tick={s.Tick}"));
+
+                        // The clock stands still in a shootout: the panel's penalties change by the kick.
+                        UpdateMatchPanel();
                         break;
                     }
 
@@ -401,6 +406,7 @@ namespace Eleven.Host
                         _subRequested = false;
                         _hud?.ShowSubs(false);
                         _hud?.ShowStatus($"Full time {Score(s)}");
+                        UpdateMatchPanel();
                         Log(FormattableString.Invariant($"ELEVEN match fulltime score={Score(s)} tick={s.Tick}"));
                         break;
                 }
