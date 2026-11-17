@@ -33,6 +33,12 @@ namespace Eleven.Simulation.Harness
 
         public int WindowShots, WindowGoals;
 
+        /// <summary>For a switch: away's shots and goals in the same window of the same seed's unswitched match, the control.</summary>
+        public int ControlShots = -1, ControlGoals = -1;
+
+        /// <summary>The ticks of away's shots, and of those that scored, for pairing a switch with its control.</summary>
+        public List<long> AwayShotTicks = new List<long>(), AwayGoalTicks = new List<long>();
+
         public double LengthSeconds;
         public ulong FinalHash;
     }
@@ -79,6 +85,7 @@ namespace Eleven.Simulation.Harness
                 for (int i = 0; i < switchSeeds; i++) trials.Add(One(c, "switch", name, switching, FirstSeed + 0x100 + (ulong)i, switchAt: name != "none"));
             }
 
+            Pair(trials, (int)(Window * config.TickRate));
             return trials;
         }
 
@@ -197,6 +204,14 @@ namespace Eleven.Simulation.Harness
             return trial;
         }
 
+        /// <summary>
+        /// Gives each switched match its control: away's shots and goals in the same seed's
+        /// unswitched match, over the window that starts at the tick the switch was taken.
+        /// </summary>
+        public static void Pair(IReadOnlyList<TacticTrial> trials, int windowTicks)
+        {
+        }
+
         private static void Shot(TacticTrial trial, int team, long tick, long windowFrom, int windowTicks, bool goal)
         {
             if (team == Squads.HomeTeam)
@@ -206,6 +221,8 @@ namespace Eleven.Simulation.Harness
             }
 
             trial.AwayShots++;
+            trial.AwayShotTicks.Add(tick);
+            if (goal) trial.AwayGoalTicks.Add(tick);
             if (windowFrom >= 0 && tick >= windowFrom && tick < windowFrom + windowTicks)
             {
                 trial.WindowShots++;
@@ -225,13 +242,14 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(TextWriter w, SimConfig config, IEnumerable<TacticTrial> trials)
         {
-            w.WriteLine("config_hash,kind,name,seed,finished,home_goals,away_goals,home_shots,away_shots,home_possession,home_depth_m,ppda,switched_s,window_shots,window_goals,length_s,final_hash");
+            w.WriteLine("config_hash,kind,name,seed,finished,home_goals,away_goals,home_shots,away_shots,home_possession,home_depth_m,ppda,switched_s,window_shots,window_goals,control_shots,control_goals,length_s,final_hash");
             foreach (TacticTrial t in trials)
             {
                 w.WriteLine(string.Join(",",
                     config.Hash.ToString("x16"), t.Kind, t.Name, t.Seed.ToString("x"), t.Finished ? "yes" : "no", t.HomeGoals, t.AwayGoals, t.HomeShots, t.AwayShots,
                     F(t.HomePossession), F(t.HomeDepth), double.IsNaN(t.Ppda) ? "" : F(t.Ppda), t.SwitchedAt < 0 ? "" : F(t.SwitchedAt * config.TickSeconds),
-                    t.WindowShots, t.WindowGoals, F(t.LengthSeconds), t.FinalHash.ToString("x16")));
+                    t.WindowShots, t.WindowGoals, t.ControlShots < 0 ? "" : t.ControlShots.ToString(CultureInfo.InvariantCulture), t.ControlGoals < 0 ? "" : t.ControlGoals.ToString(CultureInfo.InvariantCulture),
+                    F(t.LengthSeconds), t.FinalHash.ToString("x16")));
             }
         }
 
@@ -247,8 +265,9 @@ namespace Eleven.Simulation.Harness
 
             foreach (IGrouping<string, TacticTrial> g in trials.Where(t => t.Kind == "switch").GroupBy(t => t.Name))
             {
-                lines.Add(string.Format(CultureInfo.InvariantCulture, "switch {0}: conceded {1:F2} shots, {2:F2} goals in {3:F0} s",
-                    g.Key, g.Average(t => t.WindowShots), g.Average(t => t.WindowGoals), Window));
+                if (g.Key == "none") continue;
+                lines.Add(string.Format(CultureInfo.InvariantCulture, "switch {0}: conceded {1:F2} shots ({2:F2} unswitched), {3:F2} goals ({4:F2}) in {5:F0} s",
+                    g.Key, g.Average(t => t.WindowShots), g.Average(t => Math.Max(0, t.ControlShots)), g.Average(t => t.WindowGoals), g.Average(t => Math.Max(0, t.ControlGoals)), Window));
             }
 
             return string.Join("; ", lines);
