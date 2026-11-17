@@ -10,7 +10,14 @@ namespace Eleven.Simulation.AI
     public static class ManagerBrain
     {
         /// <summary>The substitution he asks for now: who goes off and who comes on, or (0, 0) for none.</summary>
-        public static (int Off, int On) Decide(ManagerObservation seen, SimConfig config)
+        public static ManagerDecision Decide(ManagerObservation seen, SimConfig config)
+        {
+            (int off, int on) = Substitution(seen, config);
+            return new ManagerDecision(off, on);
+        }
+
+        // The substitution of #110: the injured at once, then late on the most tired.
+        private static (int Off, int On) Substitution(ManagerObservation seen, SimConfig config)
         {
             if (!seen.MaySubstitute || seen.Bench.Count == 0) return (0, 0);
             int on = seen.Bench[0];

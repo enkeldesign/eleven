@@ -182,6 +182,11 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "planSwitchAt", "flag", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "planSettleSeconds", "s", 0, 30),
             new TunableParameter(TunableParameter.ControlGroup, "planSwitchCooldown", "s", 0, 120),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuTactics", "flag", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuChaseFrom", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuChaseMargin", "goals", 1, 5),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuProtectFrom", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuTacticSpread", "fraction", 0, 0.25),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -295,6 +300,11 @@ namespace Eleven.Simulation
             "planSwitchAt" => PlanSwitchAt,
             "planSettleSeconds" => PlanSettleSeconds,
             "planSwitchCooldown" => PlanSwitchCooldown,
+            "cpuTactics" => CpuTactics,
+            "cpuChaseFrom" => CpuChaseFrom,
+            "cpuChaseMargin" => CpuChaseMargin,
+            "cpuProtectFrom" => CpuProtectFrom,
+            "cpuTacticSpread" => CpuTacticSpread,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -359,6 +369,7 @@ namespace Eleven.Simulation
             double substitutions = Substitutions, substitutionWindows = SubstitutionWindows, cpuSubAfter = CpuSubAfter, cpuSubFatigue = CpuSubFatigue;
             double knockout = Knockout, extraTimeShare = ExtraTimeShare, shootoutKicks = ShootoutKicks, shootoutKickTime = ShootoutKickTime;
             double planSwitchAt = PlanSwitchAt, planSettleSeconds = PlanSettleSeconds, planSwitchCooldown = PlanSwitchCooldown;
+            double cpuTactics = CpuTactics, cpuChaseFrom = CpuChaseFrom, cpuChaseMargin = CpuChaseMargin, cpuProtectFrom = CpuProtectFrom, cpuTacticSpread = CpuTacticSpread;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -463,6 +474,11 @@ namespace Eleven.Simulation
                     case "planSwitchAt": planSwitchAt = o.Value; break;
                     case "planSettleSeconds": planSettleSeconds = o.Value; break;
                     case "planSwitchCooldown": planSwitchCooldown = o.Value; break;
+                    case "cpuTactics": cpuTactics = o.Value; break;
+                    case "cpuChaseFrom": cpuChaseFrom = o.Value; break;
+                    case "cpuChaseMargin": cpuChaseMargin = o.Value; break;
+                    case "cpuProtectFrom": cpuProtectFrom = o.Value; break;
+                    case "cpuTacticSpread": cpuTacticSpread = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -597,7 +613,12 @@ namespace Eleven.Simulation
                 shootoutKickTime: shootoutKickTime,
                 planSwitchAt: planSwitchAt,
                 planSettleSeconds: planSettleSeconds,
-                planSwitchCooldown: planSwitchCooldown);
+                planSwitchCooldown: planSwitchCooldown,
+                cpuTactics: cpuTactics,
+                cpuChaseFrom: cpuChaseFrom,
+                cpuChaseMargin: cpuChaseMargin,
+                cpuProtectFrom: cpuProtectFrom,
+                cpuTacticSpread: cpuTacticSpread);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -715,7 +736,12 @@ namespace Eleven.Simulation
             shootoutKickTime: ShootoutKickTime,
             planSwitchAt: PlanSwitchAt,
             planSettleSeconds: PlanSettleSeconds,
-            planSwitchCooldown: PlanSwitchCooldown);
+            planSwitchCooldown: PlanSwitchCooldown,
+            cpuTactics: CpuTactics,
+            cpuChaseFrom: CpuChaseFrom,
+            cpuChaseMargin: CpuChaseMargin,
+            cpuProtectFrom: CpuProtectFrom,
+            cpuTacticSpread: CpuTacticSpread);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.
