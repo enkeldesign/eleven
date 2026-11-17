@@ -226,6 +226,17 @@ internal static class Program
                 return plans.All(t => t.Finished) ? 0 : 1;
             }
 
+            case "managers" when args.Length >= 2:
+            {
+                // #127: the CPU managers' decision distributions under each policy preset, and the scripted seat against them.
+                SimConfig managerConfig = SpikeScenario.Config();
+                List<ManagerTrial> managers = ManagerTrials.Run(managerConfig);
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "manager-trials.csv"))) ManagerTrials.WriteCsv(csv, managerConfig, managers);
+                Console.WriteLine($"config {managerConfig.Hash:x16}, {ManagerTrials.KeyNumbers(managers)} -> {args[1]}");
+                return ManagerTrials.Passes(managers) ? 0 : 1;
+            }
+
             case "fairness" when args.Length >= 2:
             {
                 // Off-screen threat fairness (#102): how often the human's CPU opponents decide on a
@@ -337,7 +348,7 @@ internal static class Program
             case "capture" when args.Length >= 2:
                 return Capture(args[1], args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 20);
             default:
-                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds] | gate11 <dir> | formations <dir> [seeds] | plans <dir>");
+                Console.Error.WriteLine("usage: eleven-sim hashlog <dir> | bench [runs] | trace | curves <dir> [name=value ...] | movement <dir> [name=value ...] | kicks <dir> [name=value ...] | passes <dir> [name=value ...] | goal <dir> [name=value ...] | keeper <dir> [name=value ...] | dribble <dir> [name=value ...] | turns <dir> [name=value ...] | push <dir> [name=value ...] | replay <capture> | capture <file> [seconds] | candidate [name=value ...] | preset <file> [dir] | sides | cpu <dir> | challenge <dir> | restarts <dir> | matches <dir> [count] | squads <dir> [perSide] [count] [seat] | air <dir> | league <dir> | fairness <dir> [seeds] | budget <dir> [seeds] | gate11 <dir> | formations <dir> [seeds] | plans <dir> | managers <dir>");
                 return 2;
         }
     }
