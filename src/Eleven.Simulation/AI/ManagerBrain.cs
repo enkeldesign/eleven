@@ -21,6 +21,9 @@ namespace Eleven.Simulation.AI
 
         private const int Balanced = 0, Chase = 1, Protect = 2;
 
+        // A tactical substitution's least fatigue, as a share of cpuSubFatigue (#127).
+        private const double FreshShare = 0.5;
+
         // The plan he wants (#127), 1–3, or 0 for the one he has or none he may take. His plans are
         // balanced, chase and protect, by convention; his spread shifts when he reacts.
         private static byte Plan(ManagerObservation seen, SimConfig config)
@@ -36,17 +39,18 @@ namespace Eleven.Simulation.AI
         }
 
         // While chasing, his most tired forward; while protecting, his most tired midfielder (#127):
-        // from cpuSubAfter, fresh legs where the plan needs them.
+        // from cpuSubAfter, fresh legs where the plan needs them, for legs that are tiring.
         private static int Tactical(ManagerObservation seen, SimConfig config)
         {
             if (seen.MatchShare < config.CpuSubAfter) return 0;
             ManagedLine line = seen.Plan == Chase ? ManagedLine.Forward : seen.Plan == Protect ? ManagedLine.Middle : ManagedLine.None;
             if (line == ManagedLine.None) return 0;
+            // Only a footballer at least half as tired as #110's threshold: never fresh legs for fresh legs.
             int off = 0;
-            double most = -1;
+            double most = config.CpuSubFatigue * FreshShare;
             foreach (ManagedPlayer p in seen.Players)
             {
-                if (p.Keeper || p.Line != line || p.Injury != InjuryLevel.None || p.Fatigue <= most) continue;
+                if (p.Keeper || p.Line != line || p.Injury != InjuryLevel.None || p.Fatigue < most || (p.Fatigue == most && off != 0)) continue;
                 most = p.Fatigue;
                 off = p.Id;
             }
