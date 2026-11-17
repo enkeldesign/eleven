@@ -307,6 +307,13 @@ jobs:
           path: gate11/
           if-no-files-found: warn
 
+      # M5's formations (#125): home in each formation against the 4-4-2, over fixed seeds.
+      - name: Contrast the formations
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll formations formations | tee formations.txt
+          echo "::notice title=Formations::$(sed 's| -> .*||' formations.txt)"
+          diff docs/simulation/formation-reference.csv formations/formation-trials.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |
