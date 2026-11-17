@@ -82,6 +82,7 @@ The CPU side's manager runs in the host as in the harness.
 - refused in play, after full time, with five made, and in a fourth window; two in one stoppage use one window, and half-time uses none;
 - asked on half-time's last step, or on the step a restart is taken, it is still made;
 - two controllers asking in one step for the last substitution, or the same substitute: one made, one refused aloud;
+- the restart's own kick for a waiting human taker keeps the substitution he asked for;
 - only a footballer of the side goes off, and only an unused substitute of its bench comes on;
 - a footballer sent off isn't replaced; one taken off injured is, and his side is whole again;
 - the offside flags follow; the result counts; a snapshot and a recording restore.
