@@ -50,7 +50,7 @@ His plans are, by convention, **balanced** (the first), **chase** and **protect*
 | Bold | 0.6–0.9 | 1.9 | 6, 8, 1 | 0.37–0.99, mean 0.77 | 2 | 4.8 |
 
 - **About two switches a match**, most of them in the last quarter: a side behind chases, the side ahead protects.
-- **The early switches (from 0.37 of the match)** are a side down to ten protecting.
+- **The earliest switch, at 0.37 of the match,** is a side down to ten protecting. Bold's chases start from half-time (0.49–0.50); the cautious preset's from 0.67.
 - **The cooldown allows 13 a side; no side made more than 2.** There's no spam.
 - **Tactical substitutions add one or two a match.** The first run, before the fresh-legs rule, made 7.9 with the cautious preset: chasing, the manager replaced a forward however fresh, a substitute just on included.
 
