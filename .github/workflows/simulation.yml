@@ -314,6 +314,13 @@ jobs:
           echo "::notice title=Formations::$(sed 's| -> .*||' formations.txt)"
           diff docs/simulation/formation-reference.csv formations/formation-trials.csv
 
+      # M5's tactical plans (#126): the plans' contrast and the switch's cost.
+      - name: Contrast the tactical plans
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll plans plans | tee plans.txt
+          echo "::notice title=Tactical plans::$(sed 's| -> .*||' plans.txt)"
+          diff docs/simulation/tactic-reference.csv plans/tactic-trials.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |
