@@ -235,6 +235,7 @@ internal static class Program
                             KeeperControllers.Append(sim, commands);
                             CpuControllers.Append(sim, commands);
                             RestartControllers.Append(sim, commands);
+                            ManagerControllers.Append(sim, commands);
                             sim.Step(commands, events);
                             watch.Stop();
                             times.Add(watch.Elapsed.TotalMilliseconds);

@@ -127,6 +127,7 @@ namespace Eleven.Simulation.Harness
                     KeeperControllers.Append(sim, commands);
                     CpuControllers.Append(sim, commands);
                     RestartControllers.Append(sim, commands);
+                    ManagerControllers.Append(sim, commands);
                     sim.Step(commands, events);
                     recorder.Observe(config, sim.PeekState(), events);
                 }

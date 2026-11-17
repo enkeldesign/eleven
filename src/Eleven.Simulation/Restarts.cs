@@ -494,6 +494,7 @@ namespace Eleven.Simulation
             r.FromThrow = r.Kind == RestartKind.ThrowIn || r.Kind == RestartKind.IndirectFreeKick;
             r.Phase = RestartPhase.Live;
             r.PhaseTicks = r.WaitTicks = 0;
+            CloseSubstitutionWindows();
         }
 
         /// <summary>
@@ -775,8 +776,12 @@ namespace Eleven.Simulation
 
             bool kick = move.LengthSquared == 0 && r.PhaseTicks == 0 && body.WindUpTicks == 0 && body.KickCooldown == 0;
 
+            // The taker's own command gives way to this one, but a substitution he asked for in it
+            // (#110) is not about the kick, and goes with it.
+            int asked = commands.FindIndex(c => c.ControllerId == body.OwnerControllerId);
+            int subOff = asked >= 0 ? commands[asked].SubOff : 0, subOn = asked >= 0 ? commands[asked].SubOn : 0;
             commands.RemoveAll(c => c.ControllerId == body.OwnerControllerId);
-            commands.Add(new Command(body.OwnerControllerId, state.Tick, move, kick ? Take(state, config, r, body) : (KickIntent?)null));
+            commands.Add(new Command(body.OwnerControllerId, state.Tick, move, kick ? Take(state, config, r, body) : (KickIntent?)null, subOff: subOff, subOn: subOn));
         }
 
         /// <summary>

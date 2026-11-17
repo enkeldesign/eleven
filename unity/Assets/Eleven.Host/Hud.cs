@@ -63,7 +63,7 @@ namespace Eleven.Host
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
             Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
-            Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer)
+            Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer, System.Action substitute)
         {
             _ui = ui;
             _trace = trace;
@@ -125,6 +125,14 @@ namespace Eleven.Host
             }, "Switch", (n, v) => n.Switch = v, n => n.Switch);
             Switch.Element.style.display = DisplayStyle.None;
             Switch.Element.focusable = false;
+
+            // SUBS (#110): in a match with a bench, to ask for a substitution at the next stoppage.
+            Subs = Action(ActionRole.Supporting, "Substitute", () =>
+            {
+                if (!ModalOpen) substitute();
+            }, "Subs", (n, v) => n.Subs = v, n => n.Subs);
+            Subs.Element.style.display = DisplayStyle.None;
+            Subs.Element.focusable = false;
 
             _status = UiKit.MakeStatus(pitch);
             _status.Element.name = "Status";
@@ -275,8 +283,24 @@ namespace Eleven.Host
             _relayout();
         }
 
+        /// <summary>SUBS (#110): shown in a match with a bench while a substitution is left.</summary>
+        public UiKit.Action Subs { get; }
+
+        private bool _subsShown;
+
+        /// <summary>Shows or hides SUBS; the layout gives it a place only while it is shown.</summary>
+        public void ShowSubs(bool shown)
+        {
+            if (_subsShown == shown) return;
+            _subsShown = shown;
+            Needs.ShowSubs = shown;
+            Subs.Element.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
+            Subs.Element.focusable = shown && !ModalOpen;
+            _relayout();
+        }
+
         // Whether an action takes focus when nothing covers the HUD: a hidden one doesn't.
-        private bool Focusable(UiKit.Action a) => a == SaveCapture ? _saveShown : a != Switch || _switchShown;
+        private bool Focusable(UiKit.Action a) => a == SaveCapture ? _saveShown : a == Switch ? _switchShown : a != Subs || _subsShown;
 
         public UiKit.Action SaveCapture { get; }
 
@@ -305,6 +329,7 @@ namespace Eleven.Host
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
             if (layout.SwitchButton.width > 0) _ui.Place(Switch.Element, layout.SwitchButton);
+            if (layout.SubsButton.width > 0) _ui.Place(Subs.Element, layout.SubsButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
 
             // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe

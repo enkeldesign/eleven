@@ -76,6 +76,10 @@ namespace Eleven.Simulation
             _foulBy = _foulOn = -1;
             _crossedMouth = false;
             ResolveCommands(tick, commands, events);
+
+            // Substitutions (#110) first, on the state their commands were checked on: nothing
+            // later in the step, a restart taken or the end of a break, can undo what was allowed.
+            StepSubstitutions(tick, events);
             StepCpus(tick);
 
             double dt = Config.TickSeconds;
@@ -190,6 +194,12 @@ namespace Eleven.Simulation
             {
                 if (player.OwnerControllerId != c.ControllerId) continue;
                 if (c.SwitchTo != 0 && !MaySwitch(player, c.SwitchTo)) return CommandRejection.SwitchRefused;
+                if (c.SubOff != 0 || c.SubOn != 0)
+                {
+                    CommandRejection why = MaySubstitute(player.TeamId, c.SubOff, c.SubOn);
+                    if (why != CommandRejection.None) return why;
+                }
+
                 if (!c.Plan.HasValue) return CommandRejection.None;
 
                 // A plan (#83) only from a CPU outfielder's controller, and only when he may decide.
@@ -275,7 +285,7 @@ namespace Eleven.Simulation
                 plan = new CpuPlan(p.Mode, AtMostUnit(p.Move), planned, p.QuickPass);
             }
 
-            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo);
+            return new Command(c.ControllerId, c.Tick, AtMostUnit(c.Move), kick, AtMostUnit(c.Aftertouch), c.QuickPass, c.Dive, plan, c.SwitchTo, c.SubOff, c.SubOn);
         }
 
         private static Vec2 AtMostUnit(Vec2 v)
@@ -2169,6 +2179,18 @@ namespace Eleven.Simulation
                         throw new ArgumentOutOfRangeException(nameof(state), $"CPU outfielder {c.PlayerId}: a plan's stick is at most 1 long, and its kick's strength and loft within [0, 1].");
                     }
                 }
+            }
+
+            // The bench (#110): each a substitute of one of the two sides, once, in ascending id
+            // order; one who hasn't come on isn't a player on the pitch.
+            for (int i = 0; i < state.Bench.Length; i++)
+            {
+                BenchPlayer b = state.Bench[i];
+                if (b.Id <= 0 || (i > 0 && b.Id <= state.Bench[i - 1].Id)) throw new ArgumentException("Substitutes must have positive ids, in strictly ascending order.", nameof(state));
+                if (Array.FindIndex(state.Teams, t => t.Id == b.TeamId) < 0) throw new ArgumentException($"Substitute {b.Id}'s team {b.TeamId} isn't one of the state's two.", nameof(state));
+                if (!b.Used && Array.FindIndex(state.Players, p => p.Id == b.Id) >= 0) throw new ArgumentException($"Substitute {b.Id} hasn't come on, but is a player in the state.", nameof(state));
+                b.Capabilities.CheckRanges($"Substitute {b.Id}");
+                b.Skill.CheckRanges($"Substitute {b.Id}");
             }
 
             if (state.Ball.HeldBy != 0 && Array.FindIndex(state.Keepers, k => k.PlayerId == state.Ball.HeldBy) < 0)

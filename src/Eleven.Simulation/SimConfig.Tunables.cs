@@ -171,6 +171,10 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "injuryRisk", "chance a foul", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "injurySerious", "share", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "injuredSpeed", "fraction", 0.3, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "substitutions", "count", 0, 11),
+            new TunableParameter(TunableParameter.ControlGroup, "substitutionWindows", "count", 0, 11),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuSubAfter", "fraction", 0, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "cpuSubFatigue", "fraction", 0, 1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -273,6 +277,10 @@ namespace Eleven.Simulation
             "injuryRisk" => InjuryRisk,
             "injurySerious" => InjurySerious,
             "injuredSpeed" => InjuredSpeed,
+            "substitutions" => Substitutions,
+            "substitutionWindows" => SubstitutionWindows,
+            "cpuSubAfter" => CpuSubAfter,
+            "cpuSubFatigue" => CpuSubFatigue,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -334,6 +342,7 @@ namespace Eleven.Simulation
             double offsideFrom = OffsideFrom;
             double cardsFrom = CardsFrom, cautionFrom = CautionFrom, sendOffFrom = SendOffFrom, cardNoise = CardNoise, dogsoRange = DogsoRange;
             double injuriesFrom = InjuriesFrom, injuryRisk = InjuryRisk, injurySerious = InjurySerious, injuredSpeed = InjuredSpeed;
+            double substitutions = Substitutions, substitutionWindows = SubstitutionWindows, cpuSubAfter = CpuSubAfter, cpuSubFatigue = CpuSubFatigue;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -427,6 +436,10 @@ namespace Eleven.Simulation
                     case "injuryRisk": injuryRisk = o.Value; break;
                     case "injurySerious": injurySerious = o.Value; break;
                     case "injuredSpeed": injuredSpeed = o.Value; break;
+                    case "substitutions": substitutions = o.Value; break;
+                    case "substitutionWindows": substitutionWindows = o.Value; break;
+                    case "cpuSubAfter": cpuSubAfter = o.Value; break;
+                    case "cpuSubFatigue": cpuSubFatigue = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -550,7 +563,11 @@ namespace Eleven.Simulation
                 injuriesFrom: injuriesFrom,
                 injuryRisk: injuryRisk,
                 injurySerious: injurySerious,
-                injuredSpeed: injuredSpeed);
+                injuredSpeed: injuredSpeed,
+                substitutions: substitutions,
+                substitutionWindows: substitutionWindows,
+                cpuSubAfter: cpuSubAfter,
+                cpuSubFatigue: cpuSubFatigue);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -657,7 +674,11 @@ namespace Eleven.Simulation
             injuriesFrom: InjuriesFrom,
             injuryRisk: InjuryRisk,
             injurySerious: InjurySerious,
-            injuredSpeed: InjuredSpeed);
+            injuredSpeed: InjuredSpeed,
+            substitutions: Substitutions,
+            substitutionWindows: SubstitutionWindows,
+            cpuSubAfter: CpuSubAfter,
+            cpuSubFatigue: CpuSubFatigue);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

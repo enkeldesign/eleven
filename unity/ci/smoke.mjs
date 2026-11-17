@@ -789,6 +789,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
                 (steps ? `${steps} steps, ${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms the longest` : 'no budget lines'));
             notes.budget = steps ? `${mean.toFixed(3)} ms mean, ${most.toFixed(2)} ms max over ${steps} steps` : 'none';
             console.log(`::notice title=browser tick budget ${name}::${notes.budget}`);
+
+            // SUBS (#110): at eleven a side a control of at least 44 x 44 pt. A press asks for a
+            // substitution, and the simulation makes it at the next stoppage.
+            const subsBox = (lastLog(/ELEVEN layout .* subs=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
+            const subsBig = subsBox.length === 4 && subsBox[2] >= 44 * ppp - 1 && subsBox[3] >= 44 * ppp - 1;
+            check('SUBS is shown at eleven a side, at least 44 x 44 pt', subsBig, subsBox.length ? `subs=${subsBox.join(',')} px at ${ppp} px/pt` : 'no subs in the layout line');
+            const fromSubs = logs.length;
+            if (subsBig) await tap(at(subsBox[0] + subsBox[2] / 2, subsBox[1] + subsBox[3] / 2));
+            const askedSub = (await waitForLog(/ELEVEN match substitution asked tick=(\d+)/, 10_000, fromSubs))?.match ?? null;
+            const madeSub = askedSub ? (await waitForLog(/ELEVEN match substituted on=(\d+) off=(\d+) team=1 made=(\d+) tick=(\d+)/, 180_000, fromSubs))?.match ?? null : null;
+            check('a press on SUBS makes a substitution at the next stoppage', !!askedSub && !!madeSub && madeSub[3] === '1' && Number(madeSub[4]) >= Number(askedSub[1]),
+              `${askedSub ? askedSub[0].replace('ELEVEN ', '') : 'no substitution asked'}; ${madeSub ? madeSub[0].replace('ELEVEN ', '') : 'no substitution made'}`);
+            await shot('substituted');
           }
 
           const errorsV = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));

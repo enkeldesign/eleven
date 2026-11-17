@@ -299,7 +299,7 @@ namespace Eleven.Host
             // keepers' and the CPU's perception and decisions, then the simulation's step.
             _stepWatch.Restart();
             _commands.Clear();
-            _commands.Add(WithSwitch(_input.CommandFor(_simulator.Tick)));
+            _commands.Add(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick))));
 
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
@@ -369,8 +369,9 @@ namespace Eleven.Host
         private static bool Keeper(SimState state, out Vec2 at)
         {
             at = Vec2.Zero;
-            if (state.Keepers.Length == 0) return false;
-            int id = state.Keepers[0].PlayerId;
+            int keeper = ActionPoses.HomeKeeper(state);
+            if (keeper < 0) return false;
+            int id = state.Keepers[keeper].PlayerId;
             foreach (PlayerState p in state.Players)
             {
                 if (p.Id == id) at = p.Position;
@@ -382,7 +383,7 @@ namespace Eleven.Host
         // For the smoke test: where the keeper is and his phase, or none.
         private static string KeeperTrace(SimState state) =>
             Keeper(state, out Vec2 at)
-                ? FormattableString.Invariant($"{at.X:F2},{at.Y:F2},{state.Keepers[0].Phase.ToString().ToLowerInvariant()}")
+                ? FormattableString.Invariant($"{at.X:F2},{at.Y:F2},{state.Keepers[ActionPoses.HomeKeeper(state)].Phase.ToString().ToLowerInvariant()}")
                 : "none";
 
         // RESET: practice's fresh start, or in a match a new match from its kick-off (#87).
@@ -608,7 +609,7 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1);
+                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {

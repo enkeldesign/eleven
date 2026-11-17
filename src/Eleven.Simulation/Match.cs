@@ -42,6 +42,7 @@ namespace Eleven.Simulation
                     {
                         m.Phase = MatchPhase.HalfTime;
                         m.PhaseTicks = Config.HalfTimeTicks;
+                        CloseSubstitutionWindows();
 
                         // Half-time's rest (#100): a share of every footballer's fatigue goes.
                         for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].Fatigue *= 1 - Config.HalfTimeRecovery;
@@ -59,6 +60,7 @@ namespace Eleven.Simulation
                     if (--m.PhaseTicks > 0) return;
                     for (int i = 0; i < _state.Teams.Length; i++) _state.Teams[i].AttackSign = -_state.Teams[i].AttackSign;
                     m.Phase = MatchPhase.SecondHalf;
+                    CloseSubstitutionWindows();
                     m.ClockTicks = 0;
                     events.Add(new SimEvent(tick, SimEventKind.SecondHalf, 0));
                     Stop(RestartKind.KickOff, Opponents(m.FirstKickOff), Vec2.Zero, tick, events);
@@ -132,13 +134,15 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 4;
+        public const int SchemaVersion = 5;
 
         public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
             int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0,
             int homeCautions = 0, int awayCautions = 0, int homeSendingsOff = 0, int awaySendingsOff = 0,
-            int homeInjuries = 0, int awayInjuries = 0)
+            int homeInjuries = 0, int awayInjuries = 0, int homeSubstitutions = 0, int awaySubstitutions = 0)
         {
+            HomeSubstitutions = homeSubstitutions;
+            AwaySubstitutions = awaySubstitutions;
             HomeInjuries = homeInjuries;
             AwayInjuries = awayInjuries;
             HomeCautions = homeCautions;
@@ -200,14 +204,19 @@ namespace Eleven.Simulation
 
         public int AwayInjuries { get; }
 
+        /// <summary>Substitutes each side brought on (schema 5, #110).</summary>
+        public int HomeSubstitutions { get; }
+
+        public int AwaySubstitutions { get; }
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
             var text = new StringBuilder();
             text.Append("eleven-result/").Append(SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\ncautions={11}-{12}\nsendingsoff={13}-{14}\ninjuries={15}-{16}\n",
+            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\ncautions={11}-{12}\nsendingsoff={13}-{14}\ninjuries={15}-{16}\nsubstitutions={17}-{18}\n",
                 HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties,
-                HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff, HomeInjuries, AwayInjuries));
+                HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff, HomeInjuries, AwayInjuries, HomeSubstitutions, AwaySubstitutions));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
@@ -272,7 +281,8 @@ namespace Eleven.Simulation
                 {
                     TeamState home = after.Teams[0], away = after.Teams[1];
                     Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts,
-                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties, _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries);
+                        _homeFouls, _awayFouls, _homePenalties, _awayPenalties, _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries,
+                        home.Substitutions, away.Substitutions);
                 }
             }
         }

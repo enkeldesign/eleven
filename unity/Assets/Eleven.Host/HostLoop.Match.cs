@@ -39,6 +39,11 @@ namespace Eleven.Host
         private SwitchController _switcher;
         private bool _switchRequested;
 
+        // SUBS's request (#110): kept until the simulation makes the substitution, at the next
+        // stoppage. The policy that picks who: the manager's own, with no wait and no threshold.
+        private bool _subRequested;
+        private SimConfig _subPolicy;
+
         // A match's name: outfielders a side, or eleven a side counting the keeper, as football says.
         private static string SideName(int perSide) => perSide >= 10 ? "11v11" : $"{perSide}v{perSide}";
 
@@ -107,6 +112,9 @@ namespace Eleven.Host
             _switchRequested = false;
             _switches = 0;
             _hud?.ShowSwitch(_perSide > 1);
+            _subRequested = false;
+            _subPolicy = _config.With("cpuSubAfter", 0).With("cpuSubFatigue", 0);
+            _hud?.ShowSubs(SubsLeft());
             _recording = CommandRecording.StartFrom(_simulator);
             _feel.Start(_simulator);
             _poses.Clear();
@@ -134,6 +142,8 @@ namespace Eleven.Host
             _view.ShowMatch(false);
             _perSide = 1;
             _hud?.ShowSwitch(false);
+            _subRequested = false;
+            _hud?.ShowSubs(false);
             _resultLines = 0;
             _hud?.HideMatch();
             _hud?.SetMatchActions(false, false);
@@ -242,6 +252,36 @@ namespace Eleven.Host
             return new Command(c.ControllerId, c.Tick, c.Move, c.Kick, c.Aftertouch, c.QuickPass, c.Dive, c.Plan, target);
         }
 
+        // Whether the human's side has a substitute and a substitution left (#110).
+        private bool SubsLeft()
+        {
+            if (!_match) return false;
+            SimState s = _simulator.PeekState();
+            if (s.Bench.Length == 0 || s.Match.Phase == MatchPhase.FullTime) return false;
+            TeamState home = Array.Find(s.Teams, t => t.Id == OneVOne.HomeTeam);
+            return home.Substitutions < _config.Substitutions && Array.FindIndex(s.Bench, b => b.TeamId == OneVOne.HomeTeam && !b.Used) >= 0;
+        }
+
+        // SUBS (#110): ask for a substitution at the next stoppage; a second press takes it back.
+        private void AskSubstitution()
+        {
+            if (!SubsLeft()) return;
+            _subRequested = !_subRequested;
+            _hud?.ShowStatus(_subRequested ? "Substitution at the next stoppage." : "Substitution called off.");
+            Log(FormattableString.Invariant($"ELEVEN match substitution {(_subRequested ? "asked" : "called-off")} tick={_simulator.Tick}"));
+        }
+
+        // The human's command with the substitution asked for (#110), once the simulation would
+        // make it: the manager's pick, an injured footballer first, then the most tired, for the
+        // first substitute. Recorded with the command, so a replay needs no policy.
+        private Command WithSubstitution(Command c)
+        {
+            if (!_match || !_subRequested) return c;
+            SimState s = _simulator.PeekState();
+            (int off, int on) = Eleven.Simulation.AI.ManagerBrain.Decide(ManagerControllers.Observe(s, _subPolicy, OneVOne.HomeTeam), _subPolicy);
+            return off == 0 ? c : c.WithSubstitution(off, on);
+        }
+
         private void TogglePause()
         {
             if (!_match) return;
@@ -259,6 +299,9 @@ namespace Eleven.Host
             if (!_match) return;
             CpuControllers.Append(_simulator, _commands);
             RestartControllers.Append(_simulator, _commands);
+
+            // The CPU side's manager (#110); the human's side is his own to manage, with SUBS.
+            ManagerControllers.Append(_simulator, _commands);
         }
 
         // After each step: the result, the announcements, the side's end and the panel.
@@ -305,6 +348,21 @@ namespace Eleven.Host
                         break;
                     }
 
+                    case SimEventKind.Substituted:
+                    {
+                        // Substitutions (#110), announced with the side. The players' places in the
+                        // state have moved, so what was remembered of them by place starts again.
+                        int side = Array.Find(s.Players, p => p.Id == e.Subject).TeamId;
+                        bool mine = side == OneVOne.HomeTeam;
+                        if (mine) _subRequested = false;
+                        _poses.Clear();
+                        RememberPrevious();
+                        _hud?.ShowSubs(SubsLeft());
+                        _hud?.ShowStatus(mine ? "Substitution: your side." : "Substitution: CPU.");
+                        Log(FormattableString.Invariant($"ELEVEN match substituted on={e.Subject} off={e.Other} team={side} made={Array.Find(s.Teams, t => t.Id == side).Substitutions} tick={s.Tick}"));
+                        break;
+                    }
+
                     case SimEventKind.Switched:
                         // A gesture under way was for the footballer he left (#93).
                         _input.Clear();
@@ -312,6 +370,8 @@ namespace Eleven.Host
                         Log(FormattableString.Invariant($"ELEVEN match switched to={e.Subject} from={e.Other} count={_switches} tick={s.Tick}"));
                         break;
                     case SimEventKind.FullTime:
+                        _subRequested = false;
+                        _hud?.ShowSubs(false);
                         _hud?.ShowStatus($"Full time {Score(s)}");
                         Log(FormattableString.Invariant($"ELEVEN match fulltime score={Score(s)} tick={s.Tick}"));
                         break;
