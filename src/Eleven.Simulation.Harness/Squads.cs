@@ -52,12 +52,20 @@ namespace Eleven.Simulation.Harness
 
         // Home's outfielder i's place at the kick-off, in home's frame: 12 m back in rows either side,
         // or, from ShapeStartFrom, his home in the shape inside his own half.
-        private static Vec2 StartAt(int perSide, int i)
+        private static Vec2 StartAt(int perSide, int i, Formation formation)
         {
             if (perSide < ShapeStartFrom) return new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
-            Vec2 home = AI.OutfieldBrain.ShapeHome(perSide, SlotOf(perSide, i));
-            return new Vec2(Math.Min(home.X, -2), home.Y);
+            Vec2 home = AI.OutfieldBrain.ShapeHome(formation, perSide, SlotOf(perSide, i));
+            double x = Math.Min(home.X, -2);
+
+            // Clear of the kick-off's taker and, turned about, of the opponent facing him (#125): a
+            // home in the middle near the halfway line stands a little to one side.
+            double y = home.Y;
+            if (Math.Abs(y) < KickOffClear && x > -(OneVOne.OpponentDistance + KickOffClear)) y = KickOffClear;
+            return new Vec2(x, y);
         }
+
+        private const double KickOffClear = 5;
 
         // Away's place: home's turned about the centre spot for a shape; M2's rows otherwise.
         private static Vec2 Away(Vec2 home, int perSide) =>
@@ -66,10 +74,12 @@ namespace Eleven.Simulation.Harness
         /// <summary>
         /// A match's start: home kicks off, the clock at nought. <paramref name="homeSide"/> and
         /// <paramref name="awaySide"/> give a side's outfielders their capabilities (#103's league);
-        /// <paramref name="home"/> is the human's own footballer's.
+        /// <paramref name="home"/> is the human's own footballer's. Each side lines up in its
+        /// formation (#125), the 4-4-2 unless given.
         /// </summary>
         public static SimState Match(SimConfig config, ulong seed, int perSide, bool bothCpu = false, CpuSkill? awayCpu = null, CpuSkill? homeCpu = null,
-            PlayerCapabilities? home = null, PlayerCapabilities? homeSide = null, PlayerCapabilities? awaySide = null)
+            PlayerCapabilities? home = null, PlayerCapabilities? homeSide = null, PlayerCapabilities? awaySide = null,
+            Formation homeFormation = Formation.FourFourTwo, Formation awayFormation = Formation.FourFourTwo)
         {
             if (perSide < 1) throw new ArgumentOutOfRangeException(nameof(perSide), perSide, "A side has at least one outfielder.");
             double keeperX = config.GoalLineX - OneVOne.KeeperStandOff;
@@ -78,7 +88,7 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < perSide; i++)
             {
                 int id = HomeOutfielder(i);
-                Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : StartAt(perSide, i);
+                Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : StartAt(perSide, i, homeFormation);
                 players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : homeSide ?? PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i) });
                 if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id, Skill = homeCpu ?? CpuSkill.Pro });
             }
@@ -87,7 +97,7 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < perSide; i++)
             {
                 int id = AwayOutfielder(perSide, i);
-                Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : Away(StartAt(perSide, i), perSide);
+                Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : Away(StartAt(perSide, i, awayFormation), perSide);
                 players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i) });
                 cpus.Add(new CpuState { PlayerId = id, Skill = awayCpu ?? CpuSkill.Pro });
             }
@@ -103,7 +113,7 @@ namespace Eleven.Simulation.Harness
             {
                 Seed = seed,
                 Ball = new BallState { Id = OneVOne.BallId, Position = new Vec3(0, 0, config.BallRadius) },
-                Teams = new[] { new TeamState { Id = HomeTeam, AttackSign = 1 }, new TeamState { Id = AwayTeam, AttackSign = -1 } },
+                Teams = new[] { new TeamState { Id = HomeTeam, AttackSign = 1, Formation = homeFormation }, new TeamState { Id = AwayTeam, AttackSign = -1, Formation = awayFormation } },
                 Players = players.ToArray(),
                 Keepers = new[]
                 {

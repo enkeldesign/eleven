@@ -125,8 +125,9 @@ namespace Eleven.Simulation
 
         internal OutfieldObservation(long tick, Vec2 position, Vec2 velocity, double heading, double maxSpeed, bool kicking,
             Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, SeenHolder holder, bool bothGoals, SeenPlayer[] others, double reactionDelay = 0,
-            int slot = 0, int sideSize = 0, double fatigue = 0, bool injured = false)
+            int slot = 0, int sideSize = 0, double fatigue = 0, bool injured = false, Formation formation = Formation.FourFourTwo)
         {
+            Formation = formation;
             Injured = injured;
             Fatigue = fatigue;
             ReactionDelay = reactionDelay;
@@ -168,6 +169,9 @@ namespace Eleven.Simulation
 
         /// <summary>How many places his side's shape has (#96): its outfielders who have one.</summary>
         public int SideSize { get; }
+
+        /// <summary>His side's formation (#125): where each place in its shape has its home.</summary>
+        public Formation Formation { get; }
 
         /// <summary>0–1, his own fatigue (#100). Others' he reads only as the speed he sees.</summary>
         public double Fatigue { get; }
@@ -296,9 +300,20 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor)
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId))
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor);
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId));
+        }
+
+        // A side's formation (#125); the default with no sides.
+        private static Formation FormationOf(SimState state, int team)
+        {
+            foreach (TeamState t in state.Teams)
+            {
+                if (t.Id == team) return t.Formation;
+            }
+
+            return Formation.FourFourTwo;
         }
 
         /// <summary>The sign of world x a side attacks toward (#82); +1 with no sides.</summary>

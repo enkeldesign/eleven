@@ -2161,6 +2161,11 @@ namespace Eleven.Simulation
                     throw new ArgumentException("The two teams must attack opposite ways: one +1, the other −1.", nameof(state));
                 }
 
+                foreach (TeamState t in state.Teams)
+                {
+                    if (!Formations.IsDefined(t.Formation)) throw new ArgumentException($"Team {t.Id}: unknown formation {(byte)t.Formation}.", nameof(state));
+                }
+
                 foreach (PlayerState p in state.Players)
                 {
                     if (p.TeamId != first.Id && p.TeamId != second.Id) throw new ArgumentException($"Player {p.Id}'s team {p.TeamId} isn't one of the state's two.", nameof(state));
