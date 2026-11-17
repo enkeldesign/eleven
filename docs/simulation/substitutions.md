@@ -48,7 +48,7 @@ His policy, in order:
 2. then one hurt and playing on;
 3. then, from `cpuSubAfter` (0.67) of the match, the most tired outfielder, if his fatigue is at least `cpuSubFatigue` (0.2).
 
-The first unused substitute comes on. It is a simple policy, not tactics.
+The first unused substitute comes on. With `cpuTactics` on he also manages his plans and makes tactical substitutions between steps 2 and 3: see [managers.md](managers.md) (#127). He also reads the score and both sides' men on the pitch.
 
 ### Measured
 
