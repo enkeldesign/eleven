@@ -170,22 +170,19 @@ namespace Eleven.Simulation.Tests
             }
         }
 
-        [Theory]
-        [InlineData(SimEventKind.Kicked)]
-        [InlineData(SimEventKind.Headed)]
-        [InlineData(SimEventKind.Volleyed)]
-        public void The_contrasts_possession_follows_whoever_last_played_the_ball(SimEventKind kind)
+        [Fact]
+        public void The_contrasts_possession_follows_whoever_last_played_the_ball()
         {
             SimState s = Squads.Match(C, 1, 10);
             var possession = new Possession();
             int home = Squads.HomeOutfielder(3), away = Squads.AwayOutfielder(10, 3);
             s.Ball.LastPlayedBy = home;
-            possession.Observe(s, new[] { new SimEvent(1, SimEventKind.Touched, home) });
+            possession.Observe(s);
             Assert.Equal(Squads.HomeTeam, possession.Team);
 
-            // Away plays it first time, with no touch: away has it, and won it.
+            // Away plays it first time (a kick, header or volley, with no touch): away has it, and won it.
             s.Ball.LastPlayedBy = away;
-            Assert.Equal(Squads.AwayTeam, possession.Observe(s, new[] { new SimEvent(2, kind, away) }));
+            Assert.Equal(Squads.AwayTeam, possession.Observe(s));
             Assert.Equal(Squads.AwayTeam, possession.Team);
         }
 

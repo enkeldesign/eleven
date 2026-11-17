@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 
 namespace Eleven.Simulation
 {
@@ -43,11 +44,11 @@ namespace Eleven.Simulation
     public static class Formations
     {
         /// <summary>Every formation, in the order of <see cref="Formation"/>.</summary>
-        public static readonly Formation[] All =
+        public static readonly ReadOnlyCollection<Formation> All = Array.AsReadOnly(new[]
         {
             Formation.FourFourTwo, Formation.FourThreeThree, Formation.FourTwoThreeOne,
             Formation.ThreeFiveTwo, Formation.FiveThreeTwo, Formation.ThreeFourThree,
-        };
+        });
 
         /// <summary>Outfielders a formation is named for.</summary>
         public const int Outfielders = 10;

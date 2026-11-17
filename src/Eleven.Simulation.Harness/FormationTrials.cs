@@ -107,7 +107,7 @@ namespace Eleven.Simulation.Harness
 
                 }
 
-                if (possession.Observe(s, events) == Squads.HomeTeam)
+                if (possession.Observe(s) == Squads.HomeTeam)
                 {
                     wonAt += homeSign * s.Ball.Position.X;
                     won++;
@@ -198,7 +198,8 @@ namespace Eleven.Simulation.Harness
     }
 
     /// <summary>
-    /// Which side has the ball (#125's contrast): the side that last played it. Observed once a
+    /// Which side has the ball (#125's contrast): the side that last played it, by the
+    /// simulation's own record (touch, kick, header, volley, challenge or keeper). Observed once a
     /// step, after it.
     /// </summary>
     public sealed class Possession
@@ -207,15 +208,10 @@ namespace Eleven.Simulation.Harness
         public int Team { get; private set; }
 
         /// <summary>The side that won the ball from the other in this step, or 0.</summary>
-        public int Observe(SimState s, IReadOnlyList<SimEvent> events)
+        public int Observe(SimState s)
         {
-            int was = Team;
-            foreach (SimEvent e in events)
-            {
-                if (e.Kind != SimEventKind.Touched && e.Kind != SimEventKind.KeeperHeld && e.Kind != SimEventKind.ChallengeWon && e.Kind != SimEventKind.SlideWon) continue;
-                int team = FormationTrials.TeamOf(s, e.Subject);
-                if (team != 0) Team = team;
-            }
+            int was = Team, team = FormationTrials.TeamOf(s, s.Ball.LastPlayedBy);
+            if (team != 0) Team = team;
 
             return was != 0 && Team != was ? Team : 0;
         }
