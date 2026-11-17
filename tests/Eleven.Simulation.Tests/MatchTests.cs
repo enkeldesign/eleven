@@ -111,7 +111,7 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(2 * C.HalfLength, result.PlayedSeconds, 9);
             Assert.All(result.Goals, g => Assert.InRange(g.ClockSeconds, 0, C.HalfLength));
             Assert.All(result.Goals, g => Assert.InRange(g.Half, 1, 2));
-            Assert.StartsWith("eleven-result/5\n", result.ToText());
+            Assert.StartsWith("eleven-result/6\n", result.ToText());
         }
 
         [Fact]
@@ -196,7 +196,7 @@ namespace Eleven.Simulation.Tests
             foreach (PropertyInfo prop in typeof(ResultGoal).GetProperties()) Assert.Contains(prop.PropertyType, new[] { typeof(int), typeof(double) });
 
             var result = new MatchResult(1, 2, 3, 1, 180, 360, new[] { new ResultGoal(1, 1, 1, 12.5), new ResultGoal(2, 3, 2, 170) }, 9);
-            Assert.Equal("eleven-result/5\nhome=1\naway=2\nscore=3-1\nhalf=180\nplayed=360.00\nrestarts=9\nfouls=0-0\npenalties=0-0\ncautions=0-0\nsendingsoff=0-0\ninjuries=0-0\nsubstitutions=0-0\ngoal=1,1,1,12.50\ngoal=2,3,2,170.00\n", result.ToText());
+            Assert.Equal("eleven-result/6\nhome=1\naway=2\nscore=3-1\nhalf=180\nplayed=360.00\nrestarts=9\nfouls=0-0\npenalties=0-0\ncautions=0-0\nsendingsoff=0-0\ninjuries=0-0\nsubstitutions=0-0\nextratime=0\nshootout=0-0\nshootoutkicks=0-0\nwinner=1\ngoal=1,1,1,12.50\ngoal=2,3,2,170.00\n", result.ToText());
         }
 
         [Fact]

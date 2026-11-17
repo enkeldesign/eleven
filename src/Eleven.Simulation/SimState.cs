@@ -141,6 +141,8 @@ namespace Eleven.Simulation
                 w.WriteByte(team.Substitutions);
                 w.WriteByte(team.SubWindows);
                 w.WriteByte(team.SubWindowOpen ? (byte)1 : (byte)0);
+                w.WriteByte(team.ShootoutKicks);
+                w.WriteByte(team.ShootoutGoals);
             }
 
             w.WriteByte(Restart.On ? (byte)1 : (byte)0);
@@ -330,6 +332,7 @@ namespace Eleven.Simulation
                 {
                     Id = r.ReadInt32(), AttackSign = r.ReadInt32(), Goals = r.ReadInt32(),
                     Substitutions = r.ReadByte(), SubWindows = r.ReadByte(), SubWindowOpen = ReadFlag(r.ReadByte(), "Team.SubWindowOpen"),
+                    ShootoutKicks = r.ReadByte(), ShootoutGoals = r.ReadByte(),
                 };
             }
 
@@ -353,7 +356,7 @@ namespace Eleven.Simulation
 
             state.Match = new MatchState
             {
-                Phase = r.ReadByte() is byte matchPhase && matchPhase <= (byte)MatchPhase.FullTime ? (MatchPhase)matchPhase : throw new FormatException("Unknown match phase."),
+                Phase = r.ReadByte() is byte matchPhase && matchPhase <= (byte)MatchPhase.Shootout ? (MatchPhase)matchPhase : throw new FormatException("Unknown match phase."),
                 ClockTicks = r.ReadInt32(),
                 PhaseTicks = r.ReadInt32(),
                 FirstKickOff = r.ReadInt32(),
@@ -484,6 +487,11 @@ namespace Eleven.Simulation
 
         /// <summary>Whether this side has substituted in the present stoppage (#110): more changes in it use no further window.</summary>
         public bool SubWindowOpen;
+
+        /// <summary>Kicks this side has taken in the shootout (#111), and how many it scored.</summary>
+        public byte ShootoutKicks;
+
+        public byte ShootoutGoals;
     }
 
     /// <summary>
@@ -520,6 +528,19 @@ namespace Eleven.Simulation
 
         /// <summary>The match is over: the ball is dead for good.</summary>
         FullTime = 4,
+
+        /// <summary>A knockout level after two halves (#111): the break before extra time.</summary>
+        ExtraBreak = 5,
+
+        ExtraFirstHalf = 6,
+
+        /// <summary>The break between extra time's halves: the sides then change ends.</summary>
+        ExtraHalfTime = 7,
+
+        ExtraSecondHalf = 8,
+
+        /// <summary>Kicks from the penalty mark (#111): one kick at a time through the restart sequencer.</summary>
+        Shootout = 9,
     }
 
     /// <summary>A match's clock and halves (#86): plain data. docs/simulation/match.md.</summary>

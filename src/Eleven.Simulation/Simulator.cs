@@ -535,6 +535,10 @@ namespace Eleven.Simulation
             return (ball.Position.Horizontal - player.Position).LengthSquared <= DribbleReach * DribbleReach;
         }
 
+        // Whether this player may not touch the ball now (#111): in a shootout, everyone but the
+        // keeper the kick faces, once it is taken.
+        private bool PlaysNoBall(in PlayerState player) => _state.Match.Phase == MatchPhase.Shootout && HeldInShootout(player);
+
         /// <summary>
         /// The body he runs with (#96): with the ball at his feet, his top speed is the dribble share
         /// of it, from dribbleSpeedPoor at no ball control to dribbleSpeedGood at full. The movement
@@ -1147,7 +1151,7 @@ namespace Eleven.Simulation
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 PlayerState p = _state.Players[i];
-                if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
+                if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0 || PlaysNoBall(p)) continue;
                 if (p.Challenge != ChallengePhase.Ready || (controller >= 0 && _state.Players[controller].TeamId != p.TeamId)) continue;
                 Command? command = FindAccepted(p.OwnerControllerId);
                 if (!command.HasValue) continue;
@@ -1260,7 +1264,7 @@ namespace Eleven.Simulation
                 {
                     if (i == holder) continue;
                     PlayerState p = _state.Players[i];
-                    if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0) continue;
+                    if (p.WindUpTicks > 0 || p.KickCooldown > 0 || KeeperOf(p.Id) >= 0 || PlaysNoBall(p)) continue;
 
                     // An opponent of its holder takes it by a challenge, not by being nearer, and a
                     // footballer just beaten by one only after his stride (#84).
@@ -2020,7 +2024,8 @@ namespace Eleven.Simulation
                     && (ball.LastPlayedBy == 0 || ball.LastPlayedBy == _state.Restart.TakerId);
                 if (state == LineState.CrossingMouth && straightFromThrow) state = LineState.CrossingWide;
                 events.Add(new SimEvent(tick, SimEventKind.GoalLineCrossed, ball.Id));
-                if (state == LineState.CrossingMouth)
+                // In a shootout (#111) a ball in the goal is a kick scored, not a goal of the match.
+                if (state == LineState.CrossingMouth && _state.Match.Phase != MatchPhase.Shootout)
                 {
                     events.Add(new SimEvent(tick, SimEventKind.Goal, ball.Id, other: Attacking(goal)));
                     Credit(Attacking(goal));

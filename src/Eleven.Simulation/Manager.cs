@@ -67,8 +67,10 @@ namespace Eleven.Simulation
             int t = Array.FindIndex(state.Teams, x => x.Id == team);
             TeamState side = state.Teams[t];
             MatchPhase phase = state.Match.Phase;
-            bool halfTime = phase == MatchPhase.HalfTime;
-            bool stopped = halfTime || ((phase == MatchPhase.FirstHalf || phase == MatchPhase.SecondHalf) && state.Restart.On && state.Restart.Phase != RestartPhase.Live);
+            // Any break is free (#111): half-time, and extra time's two.
+            bool halfTime = phase == MatchPhase.HalfTime || phase == MatchPhase.ExtraBreak || phase == MatchPhase.ExtraHalfTime;
+            bool playing = phase == MatchPhase.FirstHalf || phase == MatchPhase.SecondHalf || phase == MatchPhase.ExtraFirstHalf || phase == MatchPhase.ExtraSecondHalf;
+            bool stopped = halfTime || (playing && state.Restart.On && state.Restart.Phase != RestartPhase.Live);
             bool may = stopped && side.Substitutions < config.Substitutions && (halfTime || side.SubWindowOpen || side.SubWindows < config.SubstitutionWindows);
 
             double share = phase switch
@@ -76,8 +78,8 @@ namespace Eleven.Simulation
                 MatchPhase.FirstHalf => 0.5 * state.Match.ClockTicks / config.HalfTicks,
                 MatchPhase.HalfTime => 0.5,
                 MatchPhase.SecondHalf => 0.5 + 0.5 * state.Match.ClockTicks / config.HalfTicks,
-                MatchPhase.FullTime => 1,
-                _ => 0,
+                MatchPhase.None => 0,
+                _ => 1,
             };
 
             var players = new List<ManagedPlayer>();

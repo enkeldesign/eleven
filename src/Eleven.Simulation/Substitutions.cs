@@ -28,8 +28,9 @@ namespace Eleven.Simulation
             if (side.Substitutions >= Config.Substitutions) return CommandRejection.SubNoneLeft;
 
             MatchPhase phase = _state.Match.Phase;
-            if (phase == MatchPhase.FullTime) return CommandRejection.SubNotStopped;
-            if (phase == MatchPhase.HalfTime) return CommandRejection.None;
+            // Not once the match is over, nor in a shootout (#111); any break is free.
+            if (phase == MatchPhase.FullTime || phase == MatchPhase.Shootout) return CommandRejection.SubNotStopped;
+            if (MatchBreak) return CommandRejection.None;
             if (!_state.Restart.On || _state.Restart.Phase == RestartPhase.Live) return CommandRejection.SubNotStopped;
             return side.SubWindowOpen || side.SubWindows < Config.SubstitutionWindows ? CommandRejection.None : CommandRejection.SubNoWindow;
         }
@@ -169,7 +170,7 @@ namespace Eleven.Simulation
             int t = Array.FindIndex(_state.Teams, x => x.Id == off.TeamId);
             ref TeamState team = ref _state.Teams[t];
             team.Substitutions++;
-            if (_state.Match.Phase != MatchPhase.HalfTime && !team.SubWindowOpen)
+            if (!MatchBreak && !team.SubWindowOpen)
             {
                 team.SubWindowOpen = true;
                 team.SubWindows++;

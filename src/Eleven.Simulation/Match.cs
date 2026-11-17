@@ -17,7 +17,10 @@ namespace Eleven.Simulation
     public sealed partial class Simulator
     {
         // Whether the match is between its halves or over: then the ball is dead.
-        private bool MatchPaused => _state.Match.Phase == MatchPhase.HalfTime || _state.Match.Phase == MatchPhase.FullTime;
+        private bool MatchPaused => MatchBreak || _state.Match.Phase == MatchPhase.FullTime;
+
+        // Whether the match is in a break between halves (#86, #111): half-time, or one of extra time's.
+        private bool MatchBreak => _state.Match.Phase == MatchPhase.HalfTime || _state.Match.Phase == MatchPhase.ExtraBreak || _state.Match.Phase == MatchPhase.ExtraHalfTime;
 
         private void StepMatch(long tick, List<SimEvent> events)
         {
@@ -26,8 +29,11 @@ namespace Eleven.Simulation
             {
                 case MatchPhase.FirstHalf:
                 case MatchPhase.SecondHalf:
+                case MatchPhase.ExtraFirstHalf:
+                case MatchPhase.ExtraSecondHalf:
                     if (_state.Restart.Phase != RestartPhase.Live) return;
-                    if (++m.ClockTicks < Config.HalfTicks) return;
+                    bool extra = m.Phase == MatchPhase.ExtraFirstHalf || m.Phase == MatchPhase.ExtraSecondHalf;
+                    if (++m.ClockTicks < (extra ? Config.ExtraTicks : Config.HalfTicks)) return;
                     _state.Ball.AttachedTo = 0;
 
                     // The whistle ends any kick under way: nothing is played until the next kick-off.
@@ -48,12 +54,50 @@ namespace Eleven.Simulation
                         for (int i = 0; i < _state.Players.Length; i++) _state.Players[i].Fatigue *= 1 - Config.HalfTimeRecovery;
                         events.Add(new SimEvent(tick, SimEventKind.HalfTime, 0));
                     }
+                    else if (m.Phase == MatchPhase.SecondHalf && Config.Knockout >= 0.5 && Level())
+                    {
+                        // A knockout level after two halves (#111): a break, then extra time.
+                        m.Phase = MatchPhase.ExtraBreak;
+                        m.PhaseTicks = Config.HalfTimeTicks;
+                        CloseSubstitutionWindows();
+                        events.Add(new SimEvent(tick, SimEventKind.ExtraTime, 0));
+                    }
+                    else if (m.Phase == MatchPhase.ExtraFirstHalf)
+                    {
+                        m.Phase = MatchPhase.ExtraHalfTime;
+                        m.PhaseTicks = Config.HalfTimeTicks;
+                        CloseSubstitutionWindows();
+                    }
+                    else if (m.Phase == MatchPhase.ExtraSecondHalf && Level())
+                    {
+                        StartShootout(tick, events);
+                    }
                     else
                     {
                         m.Phase = MatchPhase.FullTime;
                         events.Add(new SimEvent(tick, SimEventKind.FullTime, 0));
                     }
 
+                    return;
+
+                case MatchPhase.ExtraBreak:
+                case MatchPhase.ExtraHalfTime:
+                {
+                    // Extra time's halves (#111): the ends change before each, and the side that
+                    // kicked off the match kicks off the first, the other the second.
+                    if (--m.PhaseTicks > 0) return;
+                    bool first = m.Phase == MatchPhase.ExtraBreak;
+                    for (int i = 0; i < _state.Teams.Length; i++) _state.Teams[i].AttackSign = -_state.Teams[i].AttackSign;
+                    m.Phase = first ? MatchPhase.ExtraFirstHalf : MatchPhase.ExtraSecondHalf;
+                    CloseSubstitutionWindows();
+                    m.ClockTicks = 0;
+                    events.Add(new SimEvent(tick, SimEventKind.ExtraTime, 0, other: first ? 1 : 2));
+                    Stop(RestartKind.KickOff, first ? m.FirstKickOff : Opponents(m.FirstKickOff), Vec2.Zero, tick, events);
+                    return;
+                }
+
+                case MatchPhase.Shootout:
+                    StepShootout(tick, events);
                     return;
 
                 case MatchPhase.HalfTime:
@@ -81,7 +125,7 @@ namespace Eleven.Simulation
         private static void ValidateMatch(SimState state, SimConfig config)
         {
             MatchState m = state.Match;
-            if (m.Phase > MatchPhase.FullTime) throw new ArgumentException("Unknown match phase.", nameof(state));
+            if (m.Phase > MatchPhase.Shootout) throw new ArgumentException("Unknown match phase.", nameof(state));
             foreach (TeamState t in state.Teams)
             {
                 if (t.Goals < 0) throw new ArgumentOutOfRangeException(nameof(state), $"Side {t.Id} has {t.Goals} goals.");
@@ -97,7 +141,8 @@ namespace Eleven.Simulation
             if (!state.Restart.On) throw new ArgumentException("A match needs its referee: the restart sequencer on.", nameof(state));
             if (Array.FindIndex(state.Teams, t => t.Id == m.FirstKickOff) < 0) throw new ArgumentException($"The first kick-off's side {m.FirstKickOff} isn't one of the two.", nameof(state));
             if (m.ClockTicks < 0 || m.ClockTicks > config.HalfTicks) throw new ArgumentOutOfRangeException(nameof(state), $"The clock at {m.ClockTicks} steps is outside the half's [0, {config.HalfTicks}].");
-            int most = m.Phase == MatchPhase.HalfTime ? config.HalfTimeTicks : 0;
+            bool rest = m.Phase == MatchPhase.HalfTime || m.Phase == MatchPhase.ExtraBreak || m.Phase == MatchPhase.ExtraHalfTime;
+            int most = rest ? config.HalfTimeTicks : m.Phase == MatchPhase.Shootout ? config.ShootoutKickTicks : 0;
             if (m.PhaseTicks < 0 || m.PhaseTicks > most) throw new ArgumentOutOfRangeException(nameof(state), $"The break's {m.PhaseTicks} steps left are outside [0, {most}].");
         }
     }
@@ -134,13 +179,19 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 5;
+        public const int SchemaVersion = 6;
 
         public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
             int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0,
             int homeCautions = 0, int awayCautions = 0, int homeSendingsOff = 0, int awaySendingsOff = 0,
-            int homeInjuries = 0, int awayInjuries = 0, int homeSubstitutions = 0, int awaySubstitutions = 0)
+            int homeInjuries = 0, int awayInjuries = 0, int homeSubstitutions = 0, int awaySubstitutions = 0,
+            int extraTime = 0, int homeShootoutKicks = 0, int awayShootoutKicks = 0, int homeShootoutGoals = 0, int awayShootoutGoals = 0)
         {
+            ExtraTime = extraTime;
+            HomeShootoutKicks = homeShootoutKicks;
+            AwayShootoutKicks = awayShootoutKicks;
+            HomeShootoutGoals = homeShootoutGoals;
+            AwayShootoutGoals = awayShootoutGoals;
             HomeSubstitutions = homeSubstitutions;
             AwaySubstitutions = awaySubstitutions;
             HomeInjuries = homeInjuries;
@@ -209,14 +260,31 @@ namespace Eleven.Simulation
 
         public int AwaySubstitutions { get; }
 
+        /// <summary>1 when extra time was played, else 0 (schema 6, #111): then <see cref="PlayedSeconds"/> includes it, and a goal's half may be 3 or 4.</summary>
+        public int ExtraTime { get; }
+
+        /// <summary>Kicks each side took in a shootout, and scored (schema 6, #111): all 0 when there was none.</summary>
+        public int HomeShootoutKicks { get; }
+
+        public int AwayShootoutKicks { get; }
+
+        public int HomeShootoutGoals { get; }
+
+        public int AwayShootoutGoals { get; }
+
+        /// <summary>The winner's side id, or 0 for a draw: by goals, then by the shootout (schema 6, #111).</summary>
+        public int Winner => HomeGoals != AwayGoals ? (HomeGoals > AwayGoals ? HomeTeam : AwayTeam)
+            : HomeShootoutGoals != AwayShootoutGoals ? (HomeShootoutGoals > AwayShootoutGoals ? HomeTeam : AwayTeam) : 0;
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
             var text = new StringBuilder();
             text.Append("eleven-result/").Append(SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\ncautions={11}-{12}\nsendingsoff={13}-{14}\ninjuries={15}-{16}\nsubstitutions={17}-{18}\n",
+            text.Append(string.Format(CultureInfo.InvariantCulture, "home={0}\naway={1}\nscore={2}-{3}\nhalf={4:F0}\nplayed={5:F2}\nrestarts={6}\nfouls={7}-{8}\npenalties={9}-{10}\ncautions={11}-{12}\nsendingsoff={13}-{14}\ninjuries={15}-{16}\nsubstitutions={17}-{18}\nextratime={19}\nshootout={20}-{21}\nshootoutkicks={22}-{23}\nwinner={24}\n",
                 HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties,
-                HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff, HomeInjuries, AwayInjuries, HomeSubstitutions, AwaySubstitutions));
+                HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff, HomeInjuries, AwayInjuries, HomeSubstitutions, AwaySubstitutions,
+                ExtraTime, HomeShootoutGoals, AwayShootoutGoals, HomeShootoutKicks, AwayShootoutKicks, Winner));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
@@ -233,6 +301,7 @@ namespace Eleven.Simulation
         private int _restarts;
         private int _homeFouls, _awayFouls, _homePenalties, _awayPenalties;
         private int _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries;
+        private bool _extraTime;
 
         public MatchResult? Result { get; private set; }
 
@@ -242,9 +311,17 @@ namespace Eleven.Simulation
             {
                 if (e.Kind == SimEventKind.Goal)
                 {
-                    int half = after.Match.Phase == MatchPhase.SecondHalf ? 2 : 1;
+                    // The half it was scored in: 1 and 2, and 3 and 4 for extra time's (#111).
+                    int half = after.Match.Phase switch
+                    {
+                        MatchPhase.SecondHalf => 2,
+                        MatchPhase.ExtraFirstHalf => 3,
+                        MatchPhase.ExtraSecondHalf => 4,
+                        _ => 1,
+                    };
                     _goals.Add(new ResultGoal(e.Other, after.Ball.LastPlayedBy, half, after.Match.ClockTicks * config.TickSeconds));
                 }
+                else if (e.Kind == SimEventKind.ExtraTime) _extraTime = true;
                 else if (e.Kind == SimEventKind.RestartTaken) _restarts++;
                 else if (e.Kind == SimEventKind.Foul)
                 {
@@ -280,9 +357,10 @@ namespace Eleven.Simulation
                 else if (e.Kind == SimEventKind.FullTime && Result == null)
                 {
                     TeamState home = after.Teams[0], away = after.Teams[1];
-                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * config.HalfTicks * config.TickSeconds, _goals.ToArray(), _restarts,
+                    Result = new MatchResult(home.Id, away.Id, home.Goals, away.Goals, config.HalfLength, 2 * (config.HalfTicks + (_extraTime ? config.ExtraTicks : 0)) * config.TickSeconds, _goals.ToArray(), _restarts,
                         _homeFouls, _awayFouls, _homePenalties, _awayPenalties, _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries,
-                        home.Substitutions, away.Substitutions);
+                        home.Substitutions, away.Substitutions,
+                        _extraTime ? 1 : 0, home.ShootoutKicks, away.ShootoutKicks, home.ShootoutGoals, away.ShootoutGoals);
                 }
             }
         }

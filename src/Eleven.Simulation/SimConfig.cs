@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 26;
+        public const int FormatVersion = 27;
 
         public SimConfig(
             int tickRate = 60,
@@ -133,7 +133,11 @@ namespace Eleven.Simulation
             double substitutions = 5,
             double substitutionWindows = 3,
             double cpuSubAfter = 0.67,
-            double cpuSubFatigue = 0.2)
+            double cpuSubFatigue = 0.2,
+            double knockout = 0,
+            double extraTimeShare = 0.3333,
+            double shootoutKicks = 5,
+            double shootoutKickTime = 4)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -246,6 +250,10 @@ namespace Eleven.Simulation
             SubstitutionWindows = substitutionWindows;
             CpuSubAfter = cpuSubAfter;
             CpuSubFatigue = cpuSubFatigue;
+            Knockout = knockout;
+            ExtraTimeShare = extraTimeShare;
+            ShootoutKicks = shootoutKicks;
+            ShootoutKickTime = shootoutKickTime;
 
             CheckTunableRanges();
 
@@ -698,11 +706,29 @@ namespace Eleven.Simulation
         /// <summary>Fatigue from which a CPU manager replaces a footballer (#110).</summary>
         public double CpuSubFatigue { get; }
 
+        /// <summary>Whether a level match goes to extra time and then a shootout (#111): 0 a league match, where a draw stands; 1 a knockout.</summary>
+        public double Knockout { get; }
+
+        /// <summary>Each half of extra time as a share of a half (#111): 15 of 45 minutes.</summary>
+        public double ExtraTimeShare { get; }
+
+        /// <summary>Kicks each side takes in a shootout before sudden death (#111).</summary>
+        public double ShootoutKicks { get; }
+
+        /// <summary>Seconds after a shootout's kick before it is called a miss (#111).</summary>
+        public double ShootoutKickTime { get; }
+
         /// <summary>A half's length in steps of match clock (#86).</summary>
         public int HalfTicks => Math.Max(1, (int)Math.Round(HalfLength * TickRate));
 
         /// <summary>Steps of the half-time break (#86), at least one.</summary>
         public int HalfTimeTicks => Math.Max(1, (int)Math.Round(HalfTimeBreak * TickRate));
+
+        /// <summary>Steps of match clock in each half of extra time (#111): extraTimeShare of a half, at least one.</summary>
+        public int ExtraTicks => Math.Max(1, (int)Math.Round(HalfTicks * ExtraTimeShare));
+
+        /// <summary>Steps after a shootout's kick before it is called a miss (#111), at least one.</summary>
+        public int ShootoutKickTicks => Math.Max(1, (int)Math.Round(ShootoutKickTime * TickRate));
 
         /// <summary>Steps the ball is dead before a restart is set up, at least one (#85).</summary>
         public int RestartStopTicks => Math.Max(1, (int)Math.Round(RestartStop * TickRate));
@@ -855,7 +881,11 @@ namespace Eleven.Simulation
                 substitutions: r.ReadDouble(nameof(Substitutions)),
                 substitutionWindows: r.ReadDouble(nameof(SubstitutionWindows)),
                 cpuSubAfter: r.ReadDouble(nameof(CpuSubAfter)),
-                cpuSubFatigue: r.ReadDouble(nameof(CpuSubFatigue)));
+                cpuSubFatigue: r.ReadDouble(nameof(CpuSubFatigue)),
+                knockout: r.ReadDouble(nameof(Knockout)),
+                extraTimeShare: r.ReadDouble(nameof(ExtraTimeShare)),
+                shootoutKicks: r.ReadDouble(nameof(ShootoutKicks)),
+                shootoutKickTime: r.ReadDouble(nameof(ShootoutKickTime)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -973,6 +1003,10 @@ namespace Eleven.Simulation
             w.WriteDouble(SubstitutionWindows, nameof(SubstitutionWindows));
             w.WriteDouble(CpuSubAfter, nameof(CpuSubAfter));
             w.WriteDouble(CpuSubFatigue, nameof(CpuSubFatigue));
+            w.WriteDouble(Knockout, nameof(Knockout));
+            w.WriteDouble(ExtraTimeShare, nameof(ExtraTimeShare));
+            w.WriteDouble(ShootoutKicks, nameof(ShootoutKicks));
+            w.WriteDouble(ShootoutKickTime, nameof(ShootoutKickTime));
             return w.ToArray();
         }
 
