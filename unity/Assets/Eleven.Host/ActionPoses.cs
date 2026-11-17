@@ -98,7 +98,19 @@ namespace Eleven.Host
         /// </summary>
         public static int HomeKeeper(SimState state)
         {
-            return state.Keepers.Length == 0 ? -1 : 0;
+            if (state.Keepers.Length == 0) return -1;
+            if (state.Teams.Length == 0) return 0;
+            int home = state.Teams[0].Id;
+            for (int k = 0; k < state.Keepers.Length; k++)
+            {
+                int id = state.Keepers[k].PlayerId;
+                foreach (PlayerState p in state.Players)
+                {
+                    if (p.Id == id && p.TeamId == home) return k;
+                }
+            }
+
+            return -1;
         }
 
         /// <summary>
