@@ -321,6 +321,13 @@ jobs:
           echo "::notice title=Tactical plans::$(sed 's| -> .*||' plans.txt)"
           diff docs/simulation/tactic-reference.csv plans/tactic-trials.csv
 
+      # M5's manager policies (#127): decision distributions under each preset, and the scripted seat.
+      - name: Measure the managers' policies
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll managers managers | tee managers.txt
+          echo "::notice title=Managers::$(sed 's| -> .*||' managers.txt)"
+          diff docs/simulation/manager-reference.csv managers/manager-trials.csv
+
       # M2's gate (#95): fifty 2v2 matches CPU against CPU, and fifty with a human seat that switches.
       - name: Evaluate 2v2 over fifty matches
         run: |
