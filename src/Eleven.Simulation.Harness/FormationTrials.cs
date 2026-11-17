@@ -60,7 +60,8 @@ namespace Eleven.Simulation.Harness
             var commands = new List<Command>();
             var events = new List<SimEvent>();
             int limit = 3 * 2 * config.HalfTicks;
-            int lastTeam = 0, shooter = 0;
+            int shooter = 0;
+            var possession = new Possession();
             long live = 0, homeLive = 0;
             double depth = 0, above = 0, wonAt = 0;
             int samples = 0, won = 0;
@@ -104,22 +105,18 @@ namespace Eleven.Simulation.Harness
                             break;
                     }
 
-                    if ((e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon) && team != 0)
-                    {
-                        if (team == Squads.HomeTeam && lastTeam == Squads.AwayTeam)
-                        {
-                            wonAt += homeSign * s.Ball.Position.X;
-                            won++;
-                        }
+                }
 
-                        lastTeam = team;
-                    }
+                if (possession.Observe(s, events) == Squads.HomeTeam)
+                {
+                    wonAt += homeSign * s.Ball.Position.X;
+                    won++;
                 }
 
                 bool inPlay = s.Restart.Phase == RestartPhase.Live && (s.Match.Phase == MatchPhase.FirstHalf || s.Match.Phase == MatchPhase.SecondHalf);
                 if (!inPlay) continue;
                 live++;
-                if (lastTeam == Squads.HomeTeam) homeLive++;
+                if (possession.Team == Squads.HomeTeam) homeLive++;
                 if (s.Tick % config.TickRate != 0) continue;
                 double[] x = s.Players.Where(p => p.TeamId == Squads.HomeTeam && p.Slot > 0).Select(p => homeSign * p.Position.X).ToArray();
                 depth += x.Average();
@@ -159,7 +156,7 @@ namespace Eleven.Simulation.Harness
             return 0;
         }
 
-        private static int TeamOf(SimState s, int id)
+        internal static int TeamOf(SimState s, int id)
         {
             foreach (PlayerState p in s.Players)
             {
@@ -198,5 +195,29 @@ namespace Eleven.Simulation.Harness
         }
 
         private static string F(double v) => v.ToString("F2", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Which side has the ball (#125's contrast): the side that last played it. Observed once a
+    /// step, after it.
+    /// </summary>
+    public sealed class Possession
+    {
+        /// <summary>The side in possession; 0 before anyone has played the ball.</summary>
+        public int Team { get; private set; }
+
+        /// <summary>The side that won the ball from the other in this step, or 0.</summary>
+        public int Observe(SimState s, IReadOnlyList<SimEvent> events)
+        {
+            int was = Team;
+            foreach (SimEvent e in events)
+            {
+                if (e.Kind != SimEventKind.Touched && e.Kind != SimEventKind.KeeperHeld && e.Kind != SimEventKind.ChallengeWon && e.Kind != SimEventKind.SlideWon) continue;
+                int team = FormationTrials.TeamOf(s, e.Subject);
+                if (team != 0) Team = team;
+            }
+
+            return was != 0 && Team != was ? Team : 0;
+        }
     }
 }
