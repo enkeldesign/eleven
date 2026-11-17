@@ -166,5 +166,27 @@ namespace Eleven.Host.Tests
 
             Assert.Equal(before, sim.StateHash());
         }
+
+        [Fact]
+        public void The_home_keeper_is_found_by_his_side_not_by_the_keepers_order()
+        {
+            // A world without sides has its one keeper; none has none.
+            SimState s = World();
+            s.Teams = Array.Empty<TeamState>();
+            Assert.Equal(0, ActionPoses.HomeKeeper(s));
+            s.Keepers = Array.Empty<KeeperState>();
+            Assert.Equal(-1, ActionPoses.HomeKeeper(s));
+
+            // Home's keeper substituted (#110): his replacement's id sorts after the away keeper's.
+            s = World();
+            var players = new List<PlayerState>(s.Players) { new PlayerState { Id = 30, OwnerControllerId = 30, TeamId = 1, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(-40, 0) } };
+            s.Players = players.ToArray();
+            s.Keepers = new[]
+            {
+                new KeeperState { PlayerId = 3, Capabilities = KeeperCapabilities.Reference },
+                new KeeperState { PlayerId = 30, Capabilities = KeeperCapabilities.Reference },
+            };
+            Assert.Equal(1, ActionPoses.HomeKeeper(s));
+        }
     }
 }
