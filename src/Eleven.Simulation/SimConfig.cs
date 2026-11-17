@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 29;
+        public const int FormatVersion = 30;
 
         public SimConfig(
             int tickRate = 60,
@@ -145,7 +145,8 @@ namespace Eleven.Simulation
             double cpuChaseFrom = 0.67,
             double cpuChaseMargin = 1,
             double cpuProtectFrom = 0.67,
-            double cpuTacticSpread = 0.05)
+            double cpuTacticSpread = 0.05,
+            double switchCarrySeconds = 1)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -270,6 +271,7 @@ namespace Eleven.Simulation
             CpuChaseMargin = cpuChaseMargin;
             CpuProtectFrom = cpuProtectFrom;
             CpuTacticSpread = cpuTacticSpread;
+            SwitchCarrySeconds = switchCarrySeconds;
 
             CheckTunableRanges();
 
@@ -758,6 +760,12 @@ namespace Eleven.Simulation
         /// <summary>How far either way a CPU manager's own draw shifts his thresholds (#127), as a share of the match.</summary>
         public double CpuTacticSpread { get; }
 
+        /// <summary>s. After a switch, how long a neutral stick keeps the footballer taken over on his run (#138); 0 stops him, as before.</summary>
+        public double SwitchCarrySeconds { get; }
+
+        /// <summary>Steps of a switched footballer's carry (#138): switchCarrySeconds at the tick rate.</summary>
+        public int SwitchCarryTicks => (int)Math.Round(SwitchCarrySeconds * TickRate);
+
         /// <summary>Steps over which a side's plan settles (#126): planSettleSeconds at the tick rate.</summary>
         public int PlanSettleTicks => (int)Math.Round(PlanSettleSeconds * TickRate);
 
@@ -939,7 +947,8 @@ namespace Eleven.Simulation
                 cpuChaseFrom: r.ReadDouble(nameof(CpuChaseFrom)),
                 cpuChaseMargin: r.ReadDouble(nameof(CpuChaseMargin)),
                 cpuProtectFrom: r.ReadDouble(nameof(CpuProtectFrom)),
-                cpuTacticSpread: r.ReadDouble(nameof(CpuTacticSpread)));
+                cpuTacticSpread: r.ReadDouble(nameof(CpuTacticSpread)),
+                switchCarrySeconds: r.ReadDouble(nameof(SwitchCarrySeconds)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1069,6 +1078,7 @@ namespace Eleven.Simulation
             w.WriteDouble(CpuChaseMargin, nameof(CpuChaseMargin));
             w.WriteDouble(CpuProtectFrom, nameof(CpuProtectFrom));
             w.WriteDouble(CpuTacticSpread, nameof(CpuTacticSpread));
+            w.WriteDouble(SwitchCarrySeconds, nameof(SwitchCarrySeconds));
             return w.ToArray();
         }
 

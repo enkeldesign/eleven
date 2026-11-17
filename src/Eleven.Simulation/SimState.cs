@@ -123,6 +123,7 @@ namespace Eleven.Simulation
                 w.WriteByte(player.Cautions);
                 w.WriteByte(player.SentOff ? (byte)1 : (byte)0);
                 w.WriteByte((byte)player.Injury);
+                w.WriteInt32(player.CarryTicks);
             }
 
             w.WriteInt32(Keepers.Length);
@@ -323,6 +324,7 @@ namespace Eleven.Simulation
                     Cautions = r.ReadByte() is byte cautions && cautions <= 2 ? cautions : throw new FormatException("A footballer has at most two cautions."),
                     SentOff = ReadFlag(r.ReadByte(), "Player.SentOff"),
                     Injury = r.ReadByte() is byte injury && injury <= (byte)InjuryLevel.Serious ? (InjuryLevel)injury : throw new FormatException("Unknown injury."),
+                    CarryTicks = r.ReadInt32(),
                 };
             }
 
@@ -897,6 +899,12 @@ namespace Eleven.Simulation
 
         /// <summary>Hurt this match (#109): none, playing on slower, or taken off.</summary>
         public InjuryLevel Injury;
+
+        /// <summary>
+        /// Steps left of his carry (#138): just taken over by a human, a neutral stick keeps him on
+        /// his run until it moves or this runs out.
+        /// </summary>
+        public int CarryTicks;
 
         /// <summary>Out of play for the rest of the match: sent off (#108) or seriously injured (#109).</summary>
         public bool Off => SentOff || Injury == InjuryLevel.Serious;
