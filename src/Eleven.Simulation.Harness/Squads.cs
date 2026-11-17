@@ -56,8 +56,16 @@ namespace Eleven.Simulation.Harness
         {
             if (perSide < ShapeStartFrom) return new Vec2(-12, (i % 2 == 1 ? 1 : -1) * 12 * ((i + 1) / 2));
             Vec2 home = AI.OutfieldBrain.ShapeHome(formation, perSide, SlotOf(perSide, i));
-            return new Vec2(Math.Min(home.X, -2), home.Y);
+            double x = Math.Min(home.X, -2);
+
+            // Clear of the kick-off's taker and, turned about, of the opponent facing him (#125): a
+            // home in the middle near the halfway line stands a little to one side.
+            double y = home.Y;
+            if (Math.Abs(y) < KickOffClear && x > -(OneVOne.OpponentDistance + KickOffClear)) y = KickOffClear;
+            return new Vec2(x, y);
         }
+
+        private const double KickOffClear = 5;
 
         // Away's place: home's turned about the centre spot for a shape; M2's rows otherwise.
         private static Vec2 Away(Vec2 home, int perSide) =>

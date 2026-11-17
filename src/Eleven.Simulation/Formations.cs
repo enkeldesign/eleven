@@ -78,12 +78,53 @@ namespace Eleven.Simulation
         }
 
         /// <summary>Its lines from the back, for ten outfielders.</summary>
-        public static FormationLine[] Lines(Formation f) => Derived(Outfielders);
+        public static FormationLine[] Lines(Formation f) => (FormationLine[])Table(f).Clone();
 
         /// <summary>
         /// The lines of <paramref name="n"/> outfielders in formation <paramref name="f"/>, from the back.
+        /// From <see cref="ClosesUpFrom"/> to ten, the formation's, a side short of men closing up from
+        /// the front: each man missing comes out of the furthest-forward line of more than one. Below,
+        /// and above ten, the small sides' shape of #96, whatever the formation.
         /// </summary>
-        public static FormationLine[] Lines(Formation f, int n) => Derived(n);
+        public static FormationLine[] Lines(Formation f, int n)
+        {
+            if (n < ClosesUpFrom || n > Outfielders) return Derived(n);
+            FormationLine[] lines = Lines(f);
+            for (int missing = Outfielders - n; missing > 0; missing--)
+            {
+                for (int i = lines.Length - 1; i >= 0; i--)
+                {
+                    if (lines[i].Count <= 1) continue;
+                    lines[i] = new FormationLine(lines[i].Count - 1, lines[i].Depth, lines[i].HalfWidth);
+                    break;
+                }
+            }
+
+            return lines;
+        }
+
+        /// <summary>The fewest outfielders who still play a formation; fewer play the small sides' shape.</summary>
+        public const int ClosesUpFrom = 8;
+
+        // Each formation's lines for ten, from the back (m, the side's own frame, ball at the centre
+        // spot). Technical references, not tuned feel: the 4-4-2 is #106's shape exactly; the others
+        // keep its back line at −24 m and its forwards at +4 m, a back five a little deeper, a
+        // 4-2-3-1's two holding midfielders and three behind the striker between, and a front three wide.
+        private static FormationLine[] Table(Formation f) => f switch
+        {
+            Formation.FourFourTwo => new[] { L(4, BackLine, WideRow), L(4, MiddleLine, WideRow), L(2, ForwardLine, ForwardsApart) },
+            Formation.FourThreeThree => new[] { L(4, BackLine, WideRow), L(3, MiddleLine, ShapeWidth), L(3, ForwardLine, FrontThree) },
+            Formation.FourTwoThreeOne => new[] { L(4, BackLine, WideRow), L(2, -15, 8), L(3, -4, FrontThree), L(1, ForwardLine, 0) },
+            Formation.ThreeFiveTwo => new[] { L(3, BackLine, ShapeWidth), L(5, MiddleLine, WideFive), L(2, ForwardLine, ForwardsApart) },
+            Formation.FiveThreeTwo => new[] { L(5, -25, WideFive), L(3, -11, ShapeWidth), L(2, ForwardLine, ForwardsApart) },
+            Formation.ThreeFourThree => new[] { L(3, BackLine, ShapeWidth), L(4, MiddleLine, WideRow), L(3, ForwardLine, FrontThree) },
+            _ => throw new ArgumentOutOfRangeException(nameof(f), f, "Unknown formation."),
+        };
+
+        private static FormationLine L(int count, double depth, double halfWidth) => new FormationLine(count, depth, halfWidth);
+
+        // m. A front three's wide men, and a row of five's wing-backs.
+        private const double FrontThree = 20, WideFive = 24;
 
         /// <summary>
         /// The home of place <paramref name="slot"/> (1 at the back) of <paramref name="n"/> in formation
