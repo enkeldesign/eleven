@@ -319,6 +319,44 @@ namespace Eleven.Simulation.Tests
             Assert.NotEmpty(start);
         }
 
+        [Theory]
+        [InlineData(ControlModel.Free)]
+        [InlineData(ControlModel.Attached)]
+        public void After_a_shootout_kick_the_taker_cannot_play_the_ball_again(ControlModel model)
+        {
+            // A kick so soft it stays at his feet: he asks to touch it and to kick it again, at the
+            // goal, every step. Only the keeper he faces may play it now; the kick is a miss.
+            SimConfig c = Knockout.WithControlModel(model);
+            var sim = new Simulator(c, AtTheEndOf(c, MatchPhase.ExtraSecondHalf, 1, 1));
+            Step(sim);
+            var events = new List<SimEvent>();
+            int taker = 0, kicks = 0;
+            for (int t = 0; t < 30 * c.TickRate && !events.Any(x => x.Kind == SimEventKind.ShootoutKick); t++)
+            {
+                SimState s = sim.PeekState();
+                RestartState r = s.Restart;
+                if (r.Phase == RestartPhase.Ready && taker == 0) taker = r.TakerId;
+                var commands = new List<Command>();
+                if (taker != 0)
+                {
+                    PlayerState me = s.Players.Single(p => p.Id == taker);
+                    int sign = s.Teams.Single(x => x.Id == me.TeamId).AttackSign;
+                    Vec2 toGoal = new Vec2(sign * c.GoalLineX, 0) - s.Ball.Position.Horizontal;
+                    bool first = r.Phase == RestartPhase.Ready && r.PhaseTicks == 0;
+                    KickIntent? kick = first ? new KickIntent(toGoal, 0.02, 0) : r.Phase == RestartPhase.Live ? new KickIntent(toGoal, 1, 0.05) : (KickIntent?)null;
+                    commands.Add(new Command(me.OwnerControllerId, s.Tick, Vec2.Zero, kick));
+                }
+
+                int before = events.Count;
+                sim.Step(commands, events);
+                kicks += events.Skip(before).Count(x => x.Kind == SimEventKind.Kicked && x.Subject == taker);
+            }
+
+            Assert.Equal(1, kicks);
+            Assert.DoesNotContain(events, x => x.Kind == SimEventKind.Touched && x.Subject == taker);
+            Assert.Equal(0, Assert.Single(events, x => x.Kind == SimEventKind.ShootoutKick).Other);
+        }
+
         [Fact]
         public void A_whole_knockout_level_at_the_end_finds_a_winner_with_every_controller_running()
         {

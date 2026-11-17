@@ -27,7 +27,7 @@ Every break is free for substitutions (#110), as half-time is.
 - **Who kicks:** the side that kicked off the match first, then the sides in turn.
 - **The taker:** the side's next outfielder on the pitch, by id, round again when all have taken. Its keeper takes only if it has no outfielder.
 - **Where everyone stands:** the taker at the mark, the keeper he faces on his line, and everyone else in the centre circle's rows, each side in its own half.
-- **Who moves:** only the taker until his kick, and from the kick only the keeper he faces. No one follows up a rebound.
+- **Who moves and plays the ball:** only the taker until his kick, and from the kick only the keeper he faces. No one else may move, kick or touch the ball, the taker included, so no one follows up a rebound.
 - **Scored:** the ball in the goal the kicking side attacks, off the keeper or the frame included.
 - **Missed:** the ball out of play elsewhere, held by the keeper, or still in play when `shootoutKickTime` (4 s) runs out.
 - **Over:** in the first `shootoutKicks` (5) each, as soon as one side can't be caught in the kicks it has left. After those, on sudden death: when the sides have taken as many and one has scored more.
@@ -91,5 +91,6 @@ A goal in extra time has half 3 or 4.
 - it ends as soon as one side can't be caught; level after five each, sudden death;
 - a kick no one ends is a miss after `shootoutKickTime`;
 - only the taker and the keeper he faces move;
+- after his kick, the taker can't play the ball again, under FREE and ATTACHED;
 - with every controller running, a level knockout finds a winner;
 - a shootout survives a snapshot.
