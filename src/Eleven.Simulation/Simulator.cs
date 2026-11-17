@@ -80,6 +80,7 @@ namespace Eleven.Simulation
             // Substitutions (#110) first, on the state their commands were checked on: nothing
             // later in the step, a restart taken or the end of a break, can undo what was allowed.
             StepSubstitutions(tick, events);
+            StepTactics(tick, events); // a switch of plan (#126), likewise
             StepCpus(tick);
 
             double dt = Config.TickSeconds;

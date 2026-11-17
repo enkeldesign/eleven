@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Eleven.Simulation
 {
@@ -60,13 +61,79 @@ namespace Eleven.Simulation
 
 namespace Eleven.Simulation
 {
+    /// <summary>
+    /// Switching tactical plans (#126): an owned command, checked when it is accepted and again
+    /// at the start of the step, taken at the next stoppage or at once (planSwitchAt). A switch
+    /// starts the side settling from the old plan to the new over planSettleSeconds, and its
+    /// cooldown, planSwitchCooldown of the match clock.
+    /// </summary>
     public sealed partial class Simulator
     {
         // Why `team` may not switch to its plan `to` (1–3) now, or None.
         private CommandRejection MaySwitchTactic(int team, byte to)
         {
-            if (to > TeamTactics.PerSide || _state.Tactics.Length == 0) return CommandRejection.TacticRefused;
-            return CommandRejection.None;
+            int t = Array.FindIndex(_state.Teams, x => x.Id == team);
+            if (t < 0 || to < 1 || to > TeamTactics.PerSide || _state.Tactics.Length == 0) return CommandRejection.TacticRefused;
+            TeamState side = _state.Teams[t];
+            if (to - 1 == side.Tactic || to == side.TacticPending) return CommandRejection.TacticRefused;
+            return side.TacticCooldown > 0 ? CommandRejection.TacticCooldown : CommandRejection.None;
+        }
+
+        // Whether play is stopped, so that a waiting switch is taken: a break, or a restart not yet taken.
+        private bool TacticStopped => MatchBreak || (_state.Restart.On && _state.Restart.Phase != RestartPhase.Live);
+
+        private bool ClockRuns => _state.Match.Phase == MatchPhase.FirstHalf || _state.Match.Phase == MatchPhase.SecondHalf
+            || _state.Match.Phase == MatchPhase.ExtraFirstHalf || _state.Match.Phase == MatchPhase.ExtraSecondHalf;
+
+        private void StepTactics(long tick, List<SimEvent> events)
+        {
+            // The settling and the cooldown run down first, so a switch made now starts both whole.
+            bool clock = ClockRuns;
+            for (int t = 0; t < _state.Teams.Length; t++)
+            {
+                ref TeamState side = ref _state.Teams[t];
+                if (side.TacticSettle > 0) side.TacticSettle--;
+                if (side.TacticSettle == 0) side.TacticFrom = side.Tactic;
+                if (clock && side.TacticCooldown > 0) side.TacticCooldown--;
+            }
+
+            if (_state.Tactics.Length == 0) return;
+            foreach (Command c in _accepted)
+            {
+                if (c.TacticTo == 0) continue;
+                int team = 0;
+                foreach (PlayerState p in _state.Players)
+                {
+                    if (p.OwnerControllerId == c.ControllerId) team = p.TeamId;
+                }
+
+                // Checked again: another command this step may have switched, or set one waiting.
+                CommandRejection why = MaySwitchTactic(team, c.TacticTo);
+                if (why != CommandRejection.None)
+                {
+                    events.Add(new SimEvent(tick, SimEventKind.CommandRejected, c.ControllerId, why));
+                    continue;
+                }
+
+                int i = Array.FindIndex(_state.Teams, x => x.Id == team);
+                _state.Teams[i].TacticPending = c.TacticTo;
+            }
+
+            bool now = TacticStopped || Config.PlanSwitchAt >= 0.5;
+            for (int t = 0; t < _state.Teams.Length; t++)
+            {
+                ref TeamState side = ref _state.Teams[t];
+                if (side.TacticPending == 0 || !now) continue;
+                int to = side.TacticPending - 1;
+                side.TacticFrom = side.Tactic;
+                side.Tactic = (byte)to;
+                side.TacticPending = 0;
+                side.TacticSettle = side.TacticSettleOf = Config.PlanSettleTicks;
+                if (side.TacticSettle == 0) side.TacticFrom = side.Tactic;
+                side.TacticCooldown = Config.PlanCooldownTicks;
+                side.Formation = _state.Tactics[t * TeamTactics.PerSide + to].Formation;
+                events.Add(new SimEvent(tick, SimEventKind.TacticSwitched, side.Id, other: to));
+            }
         }
     }
 }
