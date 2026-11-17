@@ -325,6 +325,9 @@ namespace Eleven.Simulation
             return null;
         }
 
+        // The stick's length within which a carry (#138) holds: a thumb resting, not a choice.
+        private const double CarryDeadband = 0.2;
+
         private void StepPlayer(ref PlayerState player, Command? command, double dt, int keeper)
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
@@ -341,7 +344,24 @@ namespace Eleven.Simulation
             {
                 // Set up for a restart (#85): only its taker moves.
                 player.Velocity = Vec2.Zero;
+                player.CarryTicks = 0;
                 return;
+            }
+
+            // Just taken over (#138): a neutral stick keeps him on his run; any stick ends the carry.
+            if (player.CarryTicks > 0)
+            {
+                player.CarryTicks--;
+                if (move.LengthSquared <= CarryDeadband * CarryDeadband)
+                {
+                    double top = Body(player).MaxSpeed;
+                    move = top > 0 ? player.Velocity * (1 / top) : Vec2.Zero;
+                    if (move.LengthSquared > 1) move = move * (1 / SimMath.Sqrt(move.LengthSquared));
+                }
+                else
+                {
+                    player.CarryTicks = 0;
+                }
             }
 
             if (player.Challenge == ChallengePhase.Slide)

@@ -44,6 +44,10 @@ namespace Eleven.Simulation
                 int cpuController = taken.OwnerControllerId;
                 taken.OwnerControllerId = c.ControllerId;
                 left.OwnerControllerId = cpuController;
+
+                // The human takes him over on his run (#138): a neutral stick keeps it for a while.
+                taken.CarryTicks = Config.SwitchCarryTicks;
+                left.CarryTicks = 0;
                 CpuState moved = _state.Cpus[cpu];
                 moved.PlayerId = left.Id;
                 moved.Plan = default;
