@@ -66,18 +66,18 @@ The brief's "football metrics layer built early": one instrument for AI evaluati
 | `Shots` | `shots=` | A kick, header or volley that next reaches the goal line at the end the side attacks, the frame, or the other side's keeper. One that crosses the line or comes off the frame and then scores is that one shot, on target. A goal off a touch is a shot from where it was touched; an own goal is none. |
 | `OnTarget` | `ontarget=` | Shots that scored, or that the other keeper held or parried |
 | `Xg` | `xg=` | Expected goals: the sum of each shot's chance |
-| `Passes`, `PassesCompleted` | `passes=`, `passescompleted=` | Quick passes, and those a teammate played next |
+| `Passes`, `PassesCompleted` | `passes=`, `passescompleted=` | Quick passes, and those a teammate played next: a touch, a control, a won challenge, a save or a first-time kick, not the passer's own kick that sends it |
 | `Corners` | `corners=` | Corners awarded |
 | `Ppda` | `ppda=` | The other side's passes in its own 60 % per this side's defensive actions there: a challenge or slide won, a foul, or a touch cutting out a pass. 0 with none. |
 
-They count in the halves and extra time, not the shootout. The definitions are #125's and #126's harness measures.
+They count in the halves and extra time, the step that ends one included, not the shootout. The definitions are #125's and #126's harness measures.
 
-**The xG reference model** (`MetricsModel`) is a logistic of the shape public xG models use. It reads the shot's distance d to the goal's centre and the angle θ the goal mouth subtends from where it was struck:
+**The xG reference model** (`MetricsModel`) is a logistic of the shape public xG models use. It reads the shot's distance d to the goal's centre and the angle θ the goal mouth subtends from where it was struck: the ball's place before the step, since a kick connects before the ball moves on its step.
 
 xG = 1 / (1 + e^−(a + b·d + c·θ)), with a = −1.0, b = −0.12 per metre, c = 1.0 per radian, and a penalty's kick 0.76 whatever the geometry (its rebound is an ordinary shot).
 
 - **It is a reader's model:** its parameters are metric references, not simulation config, and change no match. Centrally, it gives about 0.35 at 6 m, 0.16 at 11 m and 0.07 at the edge of the box.
-- **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 37.9 expected goals against 58 scored. A match has 17.8 shots, 15.7 of them on target, and xG 2.11 against 3.22 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by about a third (35 %). That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
+- **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 36.6 expected goals against 58 scored. A match has 17.8 shots, 15.7 of them on target, and xG 2.04 against 3.22 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by more than a third (37 %). That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
 - **Recorded and diffed in CI:** the gate's reference carries each match's possession, shots, shots on target, xG, passes and PPDA.
 
 ## Measured
