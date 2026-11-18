@@ -172,6 +172,19 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_kick_saved_in_the_step_it_is_ruled_offside_is_no_shot()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 8, 0), new SimEvent(1, SimEventKind.Kicked, Striker));
+            s.Restart.Phase = RestartPhase.Stopped;
+            Feed(r, s, new Vec2(Hand.GoalLineX - 1, 0), new SimEvent(2, SimEventKind.KeeperHeld, Squads.AwayKeeper(5)),
+                new SimEvent(2, SimEventKind.Offside, Striker), new SimEvent(2, SimEventKind.RestartAwarded, Squads.AwayTeam, other: (int)RestartKind.IndirectFreeKick));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((0, 0, 0.0), (home.Shots, home.OnTarget, home.Xg));
+        }
+
+        [Fact]
         public void A_penalty_kick_takes_the_penalty_chance_and_the_rebound_after_it_does_not()
         {
             var r = new MatchRecorder();
