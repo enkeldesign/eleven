@@ -46,5 +46,5 @@ The quick-sim reads only its sides' data, the config's half and a seed, on its o
 
 ## Open
 
-- **The quick-sim's calibration sample** is small for its parameters (#151).
-- **The CPU tiers** (#129) aren't monotone in strength in every sample. Tuning them is M7's.
+- **The quick-sim's calibration sample** was small for its parameters. #151 grew it to 528 matches over a calibration league, and the fit now gives each parameter's standard error ([quicksim.md](quicksim.md)).
+- **The CPU tiers:** club and pro play alike (#151). Telling them apart is M7's tuning.

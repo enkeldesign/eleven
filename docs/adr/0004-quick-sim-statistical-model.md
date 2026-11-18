@@ -59,7 +59,7 @@ Its reference parameters are fitted to a sample of full-simulation matches over 
   - isolation from a played match on the same seed;
   - the reference equals the fit to the sample;
   - the distribution comparison: means within standard errors, and χ² at 1 % for win/draw/loss and goals a match.
-- **CI (`simulation.yml`, "Calibrate the quick-sim"):** it plays the sample and diffs it against `quicksim-calibration-reference.csv`, then prints the fit, the comparison and the throughput.
+- **CI (`simulation.yml`, "Calibrate the quick-sim"):** it plays the sample's first 60 fixtures and diffs them against `quicksim-calibration-reference.csv`'s first rows (#151: the whole sample is 528 matches). It then prints the fit with its standard errors, the comparison and the throughput.
 - **The analyzer:** it keeps `QuickSim` inside the simulation's banned-API policy, with no threads, clocks or `System.Math`.
 
 ## Approval
