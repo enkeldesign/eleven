@@ -180,6 +180,16 @@ namespace Eleven.Simulation.Harness
         /// <summary>Switches the seat's controller made, and how many were refused.</summary>
         public int Switches, SwitchesRefused;
 
+        /// <summary>The seat's switches by cause (#136): to a pass's receiver, to a teammate with the ball, at a turnover, asked.</summary>
+        public int SwitchesPass, SwitchesMate, SwitchesTurnover, SwitchesAsked;
+
+        /// <summary>Counts a seat's switch event; <paramref name="cause"/> is why the switcher asked for it.</summary>
+        public void Count(SimEvent e, int seatController, SwitchCause cause)
+        {
+            if (e.Kind == SimEventKind.Switched) Switches++;
+            if (e.Kind == SimEventKind.CommandRejected && e.Subject == seatController && e.Other == (int)CommandRejection.SwitchRefused) SwitchesRefused++;
+        }
+
         /// <summary>Substitutes each side brought on (#110), and each one's minute, the match scaled to 90.</summary>
         public int HomeSubstitutions, AwaySubstitutions;
 
@@ -247,7 +257,13 @@ namespace Eleven.Simulation.Harness
             while (sim.Tick < limit && recorder.Result == null)
             {
                 commands.Clear();
-                if (seat) commands.Add(Seat(sim, SeatController, switcher!.Decide(sim, events, manual: false)));
+                SwitchCause cause = SwitchCause.None;
+                if (seat)
+                {
+                    commands.Add(Seat(sim, SeatController, switcher!.Decide(sim, events, manual: false)));
+                    cause = switcher.LastCause;
+                }
+
                 events.Clear();
                 KeeperControllers.Append(sim, commands);
                 CpuControllers.Append(sim, commands);
@@ -267,8 +283,7 @@ namespace Eleven.Simulation.Harness
                         trial.SubstitutionMinutes.Add(90 * ManagerControllers.Observe(s, config, home ? Squads.HomeTeam : Squads.AwayTeam).MatchShare);
                     }
 
-                    if (e.Kind == SimEventKind.Switched) trial.Switches++;
-                    if (e.Kind == SimEventKind.CommandRejected && e.Subject == SeatController && e.Other == (int)CommandRejection.SwitchRefused) trial.SwitchesRefused++;
+                    trial.Count(e, SeatController, cause);
                     int team = TeamOf(s, e.Subject);
                     if (e.Kind == SimEventKind.QuickPassResolved)
                     {

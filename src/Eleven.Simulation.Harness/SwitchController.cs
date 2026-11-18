@@ -17,10 +17,23 @@ namespace Eleven.Simulation.Harness
         private readonly int _controllerId;
         private bool _manualHold;
 
-        public SwitchController(int controllerId)
+        public SwitchController(int controllerId, SwitchMode mode = SwitchMode.Auto)
         {
             _controllerId = controllerId;
+            Mode = mode;
         }
+
+        /// <summary>How automatic switching is (#136). It may change at any step.</summary>
+        public SwitchMode Mode { get; set; }
+
+        /// <summary>Why the last <see cref="Decide"/> switched, or None when it didn't.</summary>
+        public SwitchCause LastCause { get; private set; }
+
+        /// <summary>
+        /// The teammate SWITCH would take now, or 0 (#136): for the host's marker. It changes
+        /// nothing.
+        /// </summary>
+        public int Next(Simulator simulator) => 0;
 
         /// <summary>Whether a manual switch is holding off the automatic one.</summary>
         public bool ManualHold => _manualHold;
@@ -119,5 +132,36 @@ namespace Eleven.Simulation.Harness
 
             return best;
         }
+    }
+
+    /// <summary>How automatic switching is (#136).</summary>
+    public enum SwitchMode : byte
+    {
+        /// <summary>#93's: to a pass's receiver, to a teammate who has the ball, at a turnover, and on SWITCH.</summary>
+        Auto = 0,
+
+        /// <summary>To a pass's receiver and on SWITCH; never at a turnover.</summary>
+        OnTheBall = 1,
+
+        /// <summary>Only on SWITCH.</summary>
+        Manual = 2,
+    }
+
+    /// <summary>Why the switcher switched (#136).</summary>
+    public enum SwitchCause : byte
+    {
+        None = 0,
+
+        /// <summary>To the receiver of the human's pass.</summary>
+        Pass = 1,
+
+        /// <summary>To a teammate who touched, took or won the ball, or took his side's restart.</summary>
+        MateHasBall = 2,
+
+        /// <summary>An opponent gained the ball: to the teammate who reaches it first.</summary>
+        Turnover = 3,
+
+        /// <summary>The human pressed SWITCH.</summary>
+        Asked = 4,
     }
 }
