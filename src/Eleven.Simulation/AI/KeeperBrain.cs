@@ -33,11 +33,10 @@ namespace Eleven.Simulation.AI
 
         public static KeeperDecision Decide(in KeeperObservation seen, SimConfig config)
         {
-            // In a match he distributes a caught ball: a kick up the pitch, toward the side he is on.
+            // In a match he distributes a caught ball (#134): short to an open teammate, else long.
             if (seen.Holding && seen.InMatch && seen.HeldTicks >= config.KeeperHoldSeconds * config.TickRate)
             {
-                double side = seen.Position.Y >= 0 ? 1 : -1;
-                return new KeeperDecision(Vec2.Zero, kick: new KickIntent(new Vec2(-1, side * 0.45), 0.6, 0.35));
+                return new KeeperDecision(Vec2.Zero, kick: Distribute(seen, config));
             }
 
             if (seen.BallHeld || seen.Phase == KeeperPhase.Dive || seen.Phase == KeeperPhase.Recover) return new KeeperDecision(Vec2.Zero);
@@ -113,6 +112,77 @@ namespace Eleven.Simulation.AI
         {
             double length = SimMath.Sqrt(to.LengthSquared);
             return length > 0 ? to * (1 / length) : Vec2.Zero;
+        }
+
+        // m. A teammate nearer than this is under his feet, not a pass.
+        private const double ShortestThrow = 3;
+
+        // The long kick's strength and loft (#85's): up the pitch, in the air.
+        private const double LongStrength = 0.6, LongLoft = 0.35;
+
+        /// <summary>
+        /// His distribution (#134), in his own frame (his goal at +x): the most open teammate within
+        /// keeperThrowRange, at least keeperOpenDistance from every opponent and with no opponent
+        /// within half of it of the line to him, given the ball on the ground at the quick pass's
+        /// weight (INV-13); the most open first, the nearer on a tie. With none, a long kick toward
+        /// the furthest-forward teammate; with no teammate at all, up the pitch toward his side.
+        /// </summary>
+        private static KickIntent Distribute(in KeeperObservation seen, SimConfig config)
+        {
+            Vec2 me = seen.Position;
+            Vec2 bestTo = Vec2.Zero, forwardTo = Vec2.Zero;
+            double bestClear = -1, bestDistance = 0, forwardX = double.PositiveInfinity;
+            foreach (SeenPlayer mate in seen.Others)
+            {
+                if (!mate.Teammate || mate.Keeper) continue;
+                Vec2 to = mate.Position - me;
+                if (mate.Position.X < forwardX)
+                {
+                    forwardX = mate.Position.X;
+                    forwardTo = to;
+                }
+
+                double distance = SimMath.Sqrt(to.LengthSquared);
+                if (distance < ShortestThrow || distance > config.KeeperThrowRange) continue;
+                double clear = double.PositiveInfinity;
+                bool screened = false;
+                foreach (SeenPlayer opponent in seen.Others)
+                {
+                    if (opponent.Teammate) continue;
+                    double near = SimMath.Sqrt((opponent.Position - mate.Position).LengthSquared);
+                    if (near < clear) clear = near;
+                    if (FromLine(me, mate.Position, opponent.Position) < config.KeeperOpenDistance / 2) screened = true;
+                }
+
+                if (screened || clear < config.KeeperOpenDistance) continue;
+                if (clear > bestClear || (clear == bestClear && distance < bestDistance))
+                {
+                    bestClear = clear;
+                    bestDistance = distance;
+                    bestTo = to;
+                }
+            }
+
+            if (bestClear >= 0)
+            {
+                double speed = BallFlight.PassSpeed(config, bestDistance);
+                return new KickIntent(bestTo, seen.KickSpeed > 0 ? (speed < seen.KickSpeed ? speed / seen.KickSpeed : 1) : 1, 0);
+            }
+
+            if (forwardX < double.PositiveInfinity) return new KickIntent(forwardTo, LongStrength, LongLoft);
+            double side = seen.Position.Y >= 0 ? 1 : -1;
+            return new KickIntent(new Vec2(-1, side * 0.45), LongStrength, LongLoft);
+        }
+
+        // m. How far `point` is from the segment from `from` to `to`.
+        private static double FromLine(Vec2 from, Vec2 to, Vec2 point)
+        {
+            Vec2 line = to - from;
+            double length = line.LengthSquared;
+            double t = length > 0 ? ((point - from).X * line.X + (point - from).Y * line.Y) / length : 0;
+            t = t < 0 ? 0 : t > 1 ? 1 : t;
+            Vec2 closest = from + line * t;
+            return SimMath.Sqrt((point - closest).LengthSquared);
         }
     }
 }

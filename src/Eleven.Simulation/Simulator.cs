@@ -798,11 +798,7 @@ namespace Eleven.Simulation
         /// passArrivalSpeed plus the receiver's <paramref name="run"/> along it: the quick pass's
         /// own weighting, for an AI to use (INV-13).
         /// </summary>
-        public static double PassSpeedFor(SimConfig config, double distance, double run = 0)
-        {
-            double arrival = config.PassArrivalSpeed + run;
-            return SimMath.Sqrt(arrival * arrival + 2 * config.RollingFriction * config.Gravity * distance);
-        }
+        public static double PassSpeedFor(SimConfig config, double distance, double run = 0) => BallFlight.PassSpeed(config, distance, run);
 
         // m/s. How fast a run read as `read` goes along the pass `line` of `length`; never negative.
         private static double RunAlong(Vec2 read, Vec2 line, double length) =>
