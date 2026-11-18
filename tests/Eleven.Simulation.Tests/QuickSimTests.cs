@@ -75,6 +75,43 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(1 - 0.1, (p11 / p22) / (q11 / q22), 9);
         }
 
+        [Theory]
+        [InlineData(60)]
+        [InlineData(180)]
+        [InlineData(360)]
+        [InlineData(600)]
+        public void Over_every_supported_half_the_scorelines_are_a_distribution_with_the_rates_means(double half)
+        {
+            // Codex's findings on #149: at long halves the rates grow, τ(0,0) must stay non-negative,
+            // and the grid must hold the goals the rates give rather than cut them at a fixed count.
+            QuickSimModel m = QuickSimModel.Reference;
+            for (int h = 0; h < QuickSimModel.Tiers; h++)
+            {
+                for (int a = 0; a < QuickSimModel.Tiers; a++)
+                {
+                    (double lh, double la) = QuickSim.Rates(Side(h), Side(a), half, m);
+                    double sum = 0, meanHome = 0, meanAway = 0;
+                    for (int x = 0; x <= 60; x++)
+                    {
+                        for (int y = 0; y <= 60; y++)
+                        {
+                            double p = QuickSim.Probability(x, y, lh, la, m.Rho);
+                            Assert.True(p >= 0, $"half {half}, tiers {h}–{a}: P({x},{y}) = {p}");
+                            sum += p;
+                            meanHome += x * p;
+                            meanAway += y * p;
+                        }
+                    }
+
+                    Assert.Equal(1, sum, 9);
+
+                    // Dixon–Coles moves only the low scores: the means stay within 2 % of the rates.
+                    Assert.True(Math.Abs(meanHome - lh) <= 0.02 * lh + 0.02, $"half {half}, tiers {h}–{a}: home mean {meanHome:F3} against λ {lh:F3}");
+                    Assert.True(Math.Abs(meanAway - la) <= 0.02 * la + 0.02, $"half {half}, tiers {h}–{a}: away mean {meanAway:F3} against λ {la:F3}");
+                }
+            }
+        }
+
         [Fact]
         public void A_better_side_scores_more_and_home_has_its_advantage()
         {
