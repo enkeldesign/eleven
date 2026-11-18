@@ -70,7 +70,7 @@ The brief's "football metrics layer built early": one instrument for AI evaluati
 | `Corners` | `corners=` | Corners awarded |
 | `Ppda` | `ppda=` | The other side's passes in its own 60 % per this side's defensive actions there: a challenge or slide won, a foul, or a touch cutting out a pass. 0 with none. |
 
-They count in the halves and extra time, the step that ends one included, not the shootout. The definitions are #125's and #126's harness measures.
+They count in the halves and extra time, the step that ends one included, not the shootout. They count only with the ball live: a stoppage ends any kick, and what the dead ball does before the restart is no shot. The definitions are #125's and #126's harness measures.
 
 **The xG reference model** (`MetricsModel`) is a logistic of the shape public xG models use. It reads the shot's distance d to the goal's centre and the angle θ the goal mouth subtends from where it was struck: the ball's place before the step, since a kick connects before the ball moves on its step.
 
