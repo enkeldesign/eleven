@@ -1152,10 +1152,11 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
         // A re-touch while the hold's kick is under way shapes it, and kicks nothing more. With the
         // ball at his feet the kick meets it and its aftertouch keeps the window open: from 10 m
         // the wind-up's 0.1 s alone closes before a slow runner's re-touch arrives.
-        // #120: the re-touch waits on the simulation, not the clock. The hold is released, and the
-        // re-touch goes as soon as the host logs the hold's kick. If a slow runner delivered it after
-        // the window had closed, it was a new press: the footballer runs onto the ball again and the
-        // gesture is retried (twice at most), and the delay is noted.
+        // #120: the release and the re-touch go in one burst, so the re-touch reaches the host with
+        // the kick it shapes. Waiting for the kick's log line first was measured too late: the line
+        // reaches the smoke through the console after the window has closed (6 of 10 runs failed).
+        // If a slow frame still delivered the re-touch after the window, it was a new press: the
+        // footballer runs onto the ball again and the gesture is retried (twice at most), noted.
         const again = { x: fire.x, y: fire.y + 10 * pointPx * sy };
         let onto = null, shapedC = [], kicksC = 0;
         const lateShapes = [];
@@ -1167,17 +1168,16 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
           const fromShapeC = logs.length;
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
           await sleep(400);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-          const kicked = await waitForLog(/ELEVEN action gesture=holdkick/, 5_000, fromShapeC);
           const sentAt = Date.now();
-          await burst(['touchStart', [pt(again, 2)]], ['touchMove', [pt({ x: again.x + 40 * pointPx * sx, y: again.y }, 2)]]);
+          await burst(['touchEnd', []], ['touchStart', [pt(again, 2)]], ['touchMove', [pt({ x: again.x + 40 * pointPx * sx, y: again.y }, 2)]]);
+          const kicked = await waitForLog(/ELEVEN action gesture=holdkick/, 5_000, fromShapeC);
           await sleep(400);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
           await sleep(300);
           shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
           kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
           if (!kicked || shapedC.some((l) => /target=shaping/.test(l)) || kicksC > 2) break;
-          lateShapes.push(`${Date.now() - sentAt} ms after the kick's line`);
+          lateShapes.push(`attempt ${attempt + 1}, ${Date.now() - sentAt} ms`);
           await waitForLog(/ELEVEN event \d+ (Kicked|KickMissed)/, 5_000, fromShapeC);
         }
         if (lateShapes.length) notes.lateShapes = lateShapes.join(', ');
