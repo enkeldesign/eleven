@@ -66,7 +66,7 @@ The brief's "football metrics layer built early": one instrument for AI evaluati
 | `Shots` | `shots=` | A kick, header or volley that next reaches the goal line at the end the side attacks, the frame, or the other side's keeper. One that crosses the line or comes off the frame and then scores, or comes off the frame and is saved, is that one shot, on target. Any touch after a kick ends it, a teammate's too: a goal off a touch is a shot from where it was touched. An own goal is none. |
 | `OnTarget` | `ontarget=` | Shots that scored, or that the other keeper held or parried |
 | `Xg` | `xg=` | Expected goals: the sum of each shot's chance |
-| `Passes`, `PassesCompleted` | `passes=`, `passescompleted=` | Quick passes, and those another teammate played next: a touch, a control, a won challenge, a save, a first-time kick, or a first-time pass once its kick connects. Not the passer's own kick that sends it, nor his own recovery of it. Over the gate's matches, 46 % are completed. |
+| `Passes`, `PassesCompleted` | `passes=`, `passescompleted=` | Quick passes, and those another teammate played next: a touch, a control, a won challenge, a save, a first-time kick, or a first-time pass once its kick connects. Not the passer's own kick that sends it, nor his own recovery of it. A pass whose kick misses counts as played, as #126 counts it, and is never completed. Over the gate's matches, 38 % are completed. |
 | `Corners` | `corners=` | Corners awarded |
 | `Ppda` | `ppda=` | The other side's passes in its own 60 % per this side's defensive actions there: a challenge or slide won, a foul, or a touch cutting out a pass. 0 with none. |
 
