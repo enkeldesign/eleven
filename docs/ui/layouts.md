@@ -75,6 +75,7 @@ The bench sheet (`BenchSheet.Arrange`) has three arrangements, and takes the one
 | `?zoomOut=0.3`, `?zoomIn=1.5` | The zoom's time constants out and in, in seconds (#139); 0 follows at once. |
 | `?zoomHold=0.1` | The zoom's dead zone, as a fraction of it (#139). |
 | `?pan=0.25` | The framing centre's time constant, in seconds (#139); 0 cuts. |
+| `?switching=auto` | How automatic switching players is (#136): `auto`, `ball` (a pass's receiver and SWITCH) or `manual` (SWITCH only). |
 
 ## What the smoke test checks
 
