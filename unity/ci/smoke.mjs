@@ -2120,16 +2120,17 @@ try {
   // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
   await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
-  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 4 since
-  // #138's carry: an untouched footballer taken over now runs on, so the seeds were searched again.
-  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=4`, 'match5-phone', quick(390, 664), true);
+  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 36 since
+  // #134's keeper distribution (seed 4 after #138's carry): each changed every untouched match, so
+  // the seeds were searched again.
+  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=36`, 'match5-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
   // Eleven a side (#106): from the address on a phone, the simulation's step timed in the browser.
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match11`, 'match11-phone', quick(390, 664), true);
   // A whole 11v11 match (#112), through the bench, on a seed whose untouched match gives a caution
-  // and substitutions in .NET (90 s halves), with the recording replayed at full time. Seed 21
-  // since #138's carry (see the 5v5 pass).
-  await runPass(browser, `${base}?trace=1&match=1&match11=1&half=90&seed=21`, 'match11-whole', quick(390, 664), true);
+  // and substitutions in .NET (90 s halves), with the recording replayed at full time. Seed 11
+  // since #134's keeper distribution (see the 5v5 pass).
+  await runPass(browser, `${base}?trace=1&match=1&match11=1&half=90&seed=11`, 'match11-whole', quick(390, 664), true);
 
   // The layout matrix (#31): phone and tablet sizes in both orientations, a compact phone, a large
   // tablet, and a phone with a notch's and a home indicator's safe-area insets. At 2 px per pt at

@@ -32,7 +32,7 @@ It fails if a match is stuck (unfinished; an outfielder still, or the ball untou
 ## The host
 
 - **The play switch** has a fifth segment, 11v11, and `?mode=match11` starts one from the address: twenty-two footballers, the controlled one marked, SWITCH and SUBS (#110).
-- **The smoke** plays a whole 11v11 match through the bench on seed 21 (seed 10 before #138's carry changed every untouched-human match), the human untouched, at 90 s halves. In .NET that match gives a caution and the CPU managers' substitutions; the smoke checks both, counts offsides and the off-screen cues, and replays the recording at full time.
+- **The smoke** plays a whole 11v11 match through the bench on seed 11 (21 after #138's carry, 10 before it; each change to the CPU's play changes every untouched-human match), the human untouched, at 90 s halves. In .NET that match gives a caution and the CPU managers' substitutions; the smoke checks both, counts offsides and the off-screen cues, and replays the recording at full time.
 - **No seed** among the first 120 gives offside, a card and a substitution together in an untouched 90 s match, so offside is counted, not required, in the browser. It is required in the .NET gate and in `OffsideTests`.
 
 ## 3+3 minutes
