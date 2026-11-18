@@ -206,6 +206,24 @@ internal static class Program
                 return 0;
             }
 
+            case "quicksim" when args.Length >= 2:
+            {
+                // #129's calibration sample: the full simulation over the six sides, each ordered pair twice.
+                SimConfig quickConfig = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> quickSides = League.Sides();
+                int perPair = args.Length >= 3 && int.TryParse(args[2], out int pp) && pp > 0 ? pp : QuickSimCalibration.PerPair;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                // The matches are independent and each deterministic: played at once, written in order.
+                var fixtures = QuickSimCalibration.Fixtures(quickSides.Count, perPair);
+                var played = new GateMatch[fixtures.Count];
+                System.Threading.Tasks.Parallel.For(0, fixtures.Count, i => played[i] = QuickSimCalibration.Play(quickConfig, quickSides, fixtures[i]));
+                List<GateMatch> sample = played.ToList();
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "quicksim-calibration.csv"))) Gate11.WriteMatches(csv, quickConfig, quickSides, sample);
+                Console.WriteLine(FormattableString.Invariant($"config {quickConfig.Hash:x16}, {sample.Count} full matches in {watch.Elapsed.TotalSeconds:F0} s on {Environment.ProcessorCount} cores -> {args[1]}"));
+                return 0;
+            }
+
             case "formations" when args.Length >= 2:
             {
                 // #125's contrast: home in each formation against the 4-4-2, CPU against CPU, over fixed seeds.

@@ -35,6 +35,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>A CPU manager's own spread (#127): one draw a side a match, at tick 0.</summary>
         Manager = 10,
+
+        /// <summary>The quick-sim's result for a match nobody plays (#129): its scoreline, goal times and cards, at tick 0.</summary>
+        QuickSim = 11,
     }
 
     /// <summary>
