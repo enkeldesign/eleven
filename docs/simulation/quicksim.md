@@ -21,6 +21,7 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 - **Rates**, for a match of reference halves (180 s), scaled by the half's length:
   - home λ = exp(μ + h + r_home − r_away);
   - away λ = exp(μ − (r_home − r_away)).
+  - **Bounded:** each rate is at most `QuickSim.MaxRate`, 30 goals a match, and its exponent lies within ±40. The calibrated rates are a few goals a match. With the fitted weight, though, valid sides at the capability extremes would extrapolate to tens of thousands. The bound keeps the sampler's maths in range for any valid sides (Codex's finding on #150, `QuickSimTests`).
 - **A side's rating** r = its CPU tier's rating (apprentice 0, club, pro, elite) + w × its capability index.
   - **The capability index** is the mean, over every capability, of its outfielders' difference from the reference as a share of the capability's range. Kick error counts the other way round, since less is better.
 - **The scoreline** is one draw against the Dixon–Coles grid, normalised.
@@ -42,20 +43,20 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 
 | Parameter | Value |
 | --- | --- |
-| μ (log goals a side, sides level) | 0.185773 |
-| h (home) | 0.182322 |
-| Tier ratings: apprentice, club, pro, elite | 0, 0.378836, 0.253575, 0.951047 |
-| w (capability index) | −2.076960 |
-| ρ | 0.199 |
-| Fouls, cautions, sendings-off a side | 2.85, 0.725, 0.1 |
+| μ (log goals a side, sides level) | 0.439635 |
+| h (home) | −0.319634 |
+| Tier ratings: apprentice, club, pro, elite | 0, 0.157840, 0.341332, 1.013932 |
+| w (capability index) | 10.929432 |
+| ρ | −0.134 |
+| Fouls, cautions, sendings-off a side | 2.525, 0.608, 0.083 |
 
 **What the fit reads from the full simulation:**
-- **The tiers aren't linear:** over this sample the club sides do better than the pro ones, and the elite side is well clear of all. So each tier has its own rating rather than one slope.
-- **The capability weight is weakly identified:** only two sides differ from the reference in capabilities.
-  - Stonegate, the strong club side, did worse than its tier-mate.
-  - Northfield, the quick pro side, did better than its tier-mate, but its index is small.
-  - The fit weighs Stonegate's larger index, so w comes out negative.
-- **ρ is positive:** the full simulation draws less often than independent Poisson goals would (12 % of the sample).
+- **The tiers rise with the tier,** and the elite side is well clear of all. Each tier has its own rating rather than one slope.
+- **The sample is small for these parameters.** #129's fit, before #118, had home at +0.18, w at −2.08 and ρ at +0.199. After #118 changed the CPU's runs, the refit to a fresh sample of the same size has home at −0.32, w at 10.9 and ρ at −0.134. Some of that is the football; most of it is the noise of 60 matches.
+  - **Home's advantage:** its sign flips between two samples, so it isn't resolved.
+  - **The capability weight:** only two sides differ from the reference in capabilities, so w is barely identified.
+  - **The comparison:** each fit still matches its own sample within the stated tolerances.
+  - **What's next:** growing the sample is a follow-up for M6, which leans on the quick-sim.
 
 These are measures of the game as it is, kept as they are. Tuning the CPU tiers is M7's.
 
@@ -83,10 +84,10 @@ At the reference, against the full simulation's 60 matches:
 
 | | Full simulation | Quick-sim (3,000) |
 | --- | --- | --- |
-| Home goals | 1.60 | 1.61 |
-| Away goals | 1.33 | 1.35 |
-| Home wins | 50 % | 46 % |
-| Draws | 12 % | 17 % |
-| Cautions a match | 1.45 | 1.47 |
+| Home goals | 1.28 | 1.30 |
+| Away goals | 1.77 | 1.76 |
+| Home wins | 33 % | 31 % |
+| Draws | 22 % | 23 % |
+| Cautions a match | 1.22 | 1.23 |
 
 **The sample's limits:** 60 matches resolve means and the gross shape, not fine scoreline structure. M6, which uses it at scale, can grow the sample: CI plays it on four cores in about four minutes.

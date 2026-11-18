@@ -127,6 +127,45 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_tired_cpu_footballer_reckons_his_run_at_his_tired_speed()
+        {
+            // #118: alone on a moving ball, a spent footballer decides as a fresh one whose top speed
+            // and acceleration are already what fatigue leaves his body (INV-13). The scenario turns
+            // on the speed: a fresh footballer at full speed decides otherwise.
+            SimConfig c = SpikeScenario.Config();
+            SimState s = Squads.Match(c, 9, 5, bothCpu: true);
+            s.Restart.Phase = RestartPhase.Live;
+            s.Restart.Kind = RestartKind.None;
+            s.Restart.AwardedTeam = 0;
+            s.Restart.TakerId = 0;
+            s.Restart.PhaseTicks = 0;
+            int a = Array.FindIndex(s.Players, p => p.TeamId == Squads.HomeTeam && p.Slot == 3);
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (s.Players[i].Slot > 0) s.Players[i].Position = new Vec2(s.Players[i].TeamId == Squads.HomeTeam ? -30 : 30, 20);
+            }
+
+            s.Players[a].Position = new Vec2(-6, -12);
+            s.Ball.Position = new Vec3(-20, 0, c.BallRadius);
+            s.Ball.Velocity = new Vec3(9, 0, 0);
+            s.Ball.LastPlayedBy = 0;
+            CpuPlan Plan(double fatigue, double speedShare)
+            {
+                s.Players[a].Fatigue = fatigue;
+                s.Players[a].Capabilities = PlayerCapabilities.Reference
+                    .With("maxSpeed", PlayerCapabilities.Reference.MaxSpeed * speedShare)
+                    .With("acceleration", PlayerCapabilities.Reference.Acceleration * speedShare);
+                int cpu = Array.FindIndex(s.Cpus, x => x.PlayerId == s.Players[a].Id);
+                return AI.OutfieldBrain.Decide(Perception.OfOutfielder(s, cpu), c);
+            }
+
+            CpuPlan tired = Plan(1, 1), slow = Plan(0, c.FatigueFloor), full = Plan(0, 1);
+            Assert.True((full.Move - slow.Move).LengthSquared > 1e-6, $"the run turns on the speed: {full.Move} at full speed, {slow.Move} at the floor");
+            Assert.Equal(slow.Mode, tired.Mode);
+            Assert.True((tired.Move - slow.Move).LengthSquared < 1e-12, $"spent he runs to {tired.Move}, as a footballer of his tired speed runs to {slow.Move}");
+        }
+
+        [Fact]
         public void Half_time_gives_back_its_share()
         {
             SimConfig c = SpikeScenario.Config().With("halfLength", 60);

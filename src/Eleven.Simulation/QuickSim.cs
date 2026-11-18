@@ -49,8 +49,8 @@ namespace Eleven.Simulation
 
         /// <summary>The fit to the calibration sample (docs/simulation/quicksim.md): `eleven-sim quicksim fit` reproduces it.</summary>
         public static QuickSimModel Reference { get; } = new QuickSimModel(
-            baseRate: 0.185773, home: 0.182322, tierRatings: new[] { 0, 0.378836, 0.253575, 0.951047 }, capabilityWeight: -2.076960, rho: 0.199,
-            foulsPerSide: 2.85, cautionsPerSide: 0.725, sendingsOffPerSide: 0.1);
+            baseRate: 0.439635, home: -0.319634, tierRatings: new[] { 0, 0.157840, 0.341332, 1.013932 }, capabilityWeight: 10.929432, rho: -0.134,
+            foulsPerSide: 2.525, cautionsPerSide: 0.608333, sendingsOffPerSide: 0.083333);
 
         /// <summary>μ: the log of a side's goals in a match of reference halves, sides level.</summary>
         public double BaseRate { get; }
@@ -95,6 +95,13 @@ namespace Eleven.Simulation
 
         /// <summary>The Poisson tail a side's grid leaves out: past its limit, less than this.</summary>
         public const double Tail = 1e-12;
+
+        /// <summary>
+        /// Goals a side a match: the most a rate is taken as. The calibrated rates are a few goals a
+        /// match; this keeps the sampler's maths in range for any valid sides, however far the fit's
+        /// ratings extrapolate (Codex's finding on #150).
+        /// </summary>
+        public const double MaxRate = 30;
 
         /// <summary>The goals a side's grid holds at <paramref name="rate"/>: at least <see cref="MaxGoals"/>, and enough that the tail beyond is under <see cref="Tail"/>.</summary>
         public static int Limit(double rate)
@@ -143,12 +150,23 @@ namespace Eleven.Simulation
         /// <summary>A side's rating: its tier's rating plus the weighted capability index.</summary>
         public static double Rating(QuickSide side, QuickSimModel model) => model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities);
 
-        /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>.</summary>
+        /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>, each at most <see cref="MaxRate"/>.</summary>
         public static (double Home, double Away) Rates(QuickSide home, QuickSide away, double halfSeconds, QuickSimModel model)
         {
             double gap = Rating(home, model) - Rating(away, model);
             double scale = halfSeconds / ReferenceHalf;
-            return (scale * SimMath.Exp(model.BaseRate + model.Home + gap), scale * SimMath.Exp(model.BaseRate - gap));
+            return (Rate(model.BaseRate + model.Home + gap, scale), Rate(model.BaseRate - gap, scale));
+        }
+
+        // The log-rate's exponent is bounded before Exp, then the rate at MaxRate: past the
+        // calibrated ratings the model extrapolates, and the bound keeps its maths in range.
+        private const double LogBound = 40;
+
+        private static double Rate(double logRate, double scale)
+        {
+            double bounded = logRate < -LogBound ? -LogBound : logRate > LogBound ? LogBound : logRate;
+            double rate = scale * SimMath.Exp(bounded);
+            return rate > MaxRate ? MaxRate : rate;
         }
 
         // Dixon–Coles's τ: the low-score correction.

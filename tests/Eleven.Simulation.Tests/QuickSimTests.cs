@@ -112,6 +112,52 @@ namespace Eleven.Simulation.Tests
             }
         }
 
+        [Theory]
+        [InlineData(60)]
+        [InlineData(180)]
+        [InlineData(360)]
+        [InlineData(600)]
+        public void Sides_at_the_capability_extremes_still_give_a_distribution_and_a_result(double half)
+        {
+            // Codex's finding on #150: every capability at its best against every one at its worst is
+            // valid side data, a capability index gap of 1. With the refitted weight the rate ran to
+            // about 60,000 goals, past the portable Exp's range and the grid's limit.
+            PlayerCapabilities best = PlayerCapabilities.Reference, worst = PlayerCapabilities.Reference;
+            foreach (TunableParameter p in PlayerCapabilities.Parameters)
+            {
+                bool lessIsBetter = p.Name == "kickError";
+                best = best.With(p.Name, lessIsBetter ? p.Min : p.Max);
+                worst = worst.With(p.Name, lessIsBetter ? p.Max : p.Min);
+            }
+
+            Assert.Equal(1, QuickSim.CapabilityIndex(best) - QuickSim.CapabilityIndex(worst), 9);
+            QuickSimModel m = QuickSimModel.Reference;
+            foreach ((QuickSide home, QuickSide away) in new[] { (Side(3, best), Side(0, worst)), (Side(0, worst), Side(3, best)), (Side(1, best), Side(1, worst)) })
+            {
+                (double lh, double la) = QuickSim.Rates(home, away, half, m);
+                foreach (double rate in new[] { lh, la })
+                {
+                    Assert.True(rate > 0 && rate <= QuickSim.MaxRate, $"half {half}: rate {rate} outside (0, {QuickSim.MaxRate}]");
+                }
+
+                double sum = 0;
+                for (int x = 0; x <= 120; x++)
+                {
+                    for (int y = 0; y <= 120; y++)
+                    {
+                        double p = QuickSim.Probability(x, y, lh, la, m.Rho);
+                        Assert.True(p >= 0 && !double.IsNaN(p), $"half {half}: P({x},{y}) = {p}");
+                        sum += p;
+                    }
+                }
+
+                Assert.Equal(1, sum, 9);
+
+                MatchResult r = QuickSim.Play(C.With("halfLength", half), home, away, 7);
+                Assert.Equal(r.HomeGoals + r.AwayGoals, r.Goals.Count);
+            }
+        }
+
         [Fact]
         public void A_better_side_scores_more_and_home_has_its_advantage()
         {
@@ -125,7 +171,7 @@ namespace Eleven.Simulation.Tests
             (double h, double a) = QuickSim.Rates(Side(3), Side(0), QuickSim.ReferenceHalf, m);
             Assert.True(h > a);
             (double lh, double la) = QuickSim.Rates(Side(1), Side(1), QuickSim.ReferenceHalf, m);
-            Assert.True(lh > la, "home's advantage between level sides");
+            Assert.Equal(System.Math.Exp(m.Home), lh / la, 9); // between level sides, home's advantage alone: its sign is the fit's
             (double sh, _) = QuickSim.Rates(Side(1), Side(1), QuickSim.ReferenceHalf / 2, m);
             Assert.Equal(lh / 2, sh, 12); // rates scale with the half's length
         }

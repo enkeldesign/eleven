@@ -88,10 +88,20 @@ namespace Eleven.Simulation.Tests
             Assert.True(k.Loft > 0, "beyond his range the ball goes long");
         }
 
-        [Theory]
-        [InlineData(5)]
-        [InlineData(10)]
-        public void In_cpu_matches_most_of_his_releases_reach_his_own_side(int perSide)
+        // Three quarters pooled over five and ten a side, as #134 measured it; each size at least two
+        // thirds, above the blind kick's 65 %. Three seeds a size swing the share at five a side by
+        // several points (#118 measured 73–78 % over eight), so the size alone is no measure.
+        [Fact]
+        public void In_cpu_matches_most_of_his_releases_reach_his_own_side()
+        {
+            (int own5, int all5) = Releases(5);
+            (int own10, int all10) = Releases(10);
+            Assert.True(own5 >= 2.0 / 3 * all5, $"five a side: {own5} of {all5} releases reached his own side");
+            Assert.True(own10 >= 2.0 / 3 * all10, $"ten a side: {own10} of {all10} releases reached his own side");
+            Assert.True(own5 + own10 >= 0.75 * (all5 + all10), $"{own5 + own10} of {all5 + all10} releases reached his own side");
+        }
+
+        private static (int Own, int Releases) Releases(int perSide)
         {
             int releases = 0, own = 0;
             for (ulong seed = 0x134000; seed < 0x134000 + 3; seed++)
@@ -131,8 +141,8 @@ namespace Eleven.Simulation.Tests
                 }
             }
 
-            Assert.True(releases >= 8, $"only {releases} releases");
-            Assert.True(own >= 0.75 * releases, $"{own} of {releases} releases reached his own side");
+            Assert.True(releases >= 8, $"only {releases} releases at {perSide} a side");
+            return (own, releases);
         }
     }
 }

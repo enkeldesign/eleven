@@ -22,7 +22,7 @@ The five knobs are in the bench's Control tab (config format 22).
 ## The CPU
 
 - He reads his own fatigue, and his teammates'. A teammate's tiredness can be read; an opponent's only as the speed he sees.
-- A spent footballer counts himself 0.6 s later to the ball, so a fresher teammate presses.
+- A tired CPU footballer reckons his own runs, and his teammates', at the top speed fatigue leaves them, by the body's own formula (#118, INV-13). So a spent footballer is later to the ball than a fresher teammate, and the fresher one presses. The 0.6 s delay he once added was dropped: over the gate's 18 matches it changed nothing beyond their noise.
 - At two a side the pair agree on it.
 - In a shape of three or more, the shape's own first to the ball goes.
 

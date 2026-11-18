@@ -73,8 +73,6 @@ namespace Eleven.Simulation.AI
         // this much nearer him than the man, and beyond this many standing challenge ranges.
         private const double SlideFrom = 0.7, SlideClear = 0.4, SlideOver = 1.5;
 
-        // s. Spent, he counts himself this much later to the ball than he is, so a fresher teammate presses (#100).
-        private const double TiredDelay = 0.6;
 
         // m. Where he waits while a keeper holds the ball: his own half when it is theirs, up the pitch when it is his side's.
         private static readonly Vec2 DropOff = new Vec2(-12, 0), ShowFor = new Vec2(8, 10);
@@ -228,13 +226,11 @@ namespace Eleven.Simulation.AI
             if (shaped)
             {
                 Meet(seen, config, me, OwnSpeed(seen, config), out double myFirst);
-                myFirst += seen.Fatigue * TiredDelay; // tired, he leaves the press to a fresher teammate (#100)
                 int sooner = 0;
                 foreach (SeenPlayer other in seen.Others)
                 {
                     if (!other.Teammate || other.Keeper) continue;
-                    Meet(seen, config, other.Position, seen.MaxSpeed, out double theirFirst);
-                    theirFirst += other.Fatigue * TiredDelay;
+                    Meet(seen, config, other.Position, Tired(seen.MaxSpeed, other.Fatigue, config), out double theirFirst);
                     if (theirFirst + 0.05 < myFirst || (theirFirst <= myFirst + 0.05 && other.Position.Y > me.Y)) sooner++;
                 }
 
@@ -262,9 +258,7 @@ namespace Eleven.Simulation.AI
             if (mateSeen && !shaped)
             {
                 Meet(seen, config, me, OwnSpeed(seen, config), out double mineFirst);
-                mineFirst += seen.Fatigue * TiredDelay;
-                Meet(seen, config, mate, seen.MaxSpeed, out double mateFirst);
-                mateFirst += mateFatigue * TiredDelay;
+                Meet(seen, config, mate, Tired(seen.MaxSpeed, mateFatigue, config), out double mateFirst);
                 second = mateFirst + 0.05 < mineFirst || (mateFirst <= mineFirst + 0.05 && mate.Y > me.Y);
             }
 
@@ -429,9 +423,14 @@ namespace Eleven.Simulation.AI
             return (contact.Horizontal - there).LengthSquared <= reach * reach;
         }
 
-        // His own top speed for a run he reckons: hurt and playing on (#109), injuredSpeed of it,
-        // as his body runs (INV-13).
-        private static double OwnSpeed(OutfieldObservation seen, SimConfig config) => seen.Injured ? seen.MaxSpeed * config.InjuredSpeed : seen.MaxSpeed;
+        // His own top speed for a run he reckons, as his body runs (INV-13): tired (#100, #118),
+        // toward fatigueFloor of it; hurt and playing on (#109), injuredSpeed of that.
+        private static double OwnSpeed(OutfieldObservation seen, SimConfig config) =>
+            Tired(seen.MaxSpeed, seen.Fatigue, config) * (seen.Injured ? config.InjuredSpeed : 1);
+
+        // A top speed tired by `fatigue`: the body's own formula (Simulator.Body).
+        private static double Tired(double speed, double fatigue, SimConfig config) =>
+            speed * (config.FatigueFloor + (1 - config.FatigueFloor) * (1 - fatigue));
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the
         // ball gets there; where the ball ends up if he can't within the horizon.
