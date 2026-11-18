@@ -67,7 +67,7 @@ namespace Eleven.Simulation.Harness
         public static IReadOnlyList<BenchPreset> Suggested { get; } = new[]
         {
             // The won't-reach rule loosened for the human by 0.5 m (#135): the scripted seat's
-            // challenges started on 38 % of its presses at 0 and 64 % at 0.5, but it won fewer of them.
+            // challenges started on 36 % of its presses at 0 and 63 % at 0.5, but it won fewer of them.
             Suggest("LOOSE TACKLE", BenchCandidate.Reference.Config.With("humanChallengeLeeway", 0.5)),
         };
 

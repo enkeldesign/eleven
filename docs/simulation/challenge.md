@@ -110,14 +110,14 @@ From Erik's session: "I can't reliably tackle or get the ball back." A standing 
 
 | Size | Leeway | Attempts | Started | Won | Goals for–against |
 | --- | --- | --- | --- | --- | --- |
-| 5v5 | 0 (reference) | 546 | 206 (38 %) | 104 (50 % of starts, 19 % of attempts) | 21–0 |
-| 5v5 | 0.25 m | 569 | 246 (43 %) | 65 (26 %, 11 %) | 17–2 |
-| 5v5 | 0.5 m | 588 | 374 (64 %) | 88 (24 %, 15 %) | 15–11 |
-| 5v5 | 1.0 m | 604 | 476 (79 %) | 84 (18 %, 14 %) | 8–13 |
-| 10v10 | 0 (reference) | 699 | 179 (26 %) | 102 (57 %, 15 %) | 34–0 |
-| 10v10 | 0.25 m | 668 | 252 (38 %) | 107 (42 %, 16 %) | 33–0 |
-| 10v10 | 0.5 m | 767 | 389 (51 %) | 94 (24 %, 12 %) | 13–0 |
-| 10v10 | 1.0 m | 770 | 586 (76 %) | 84 (14 %, 11 %) | 9–9 |
+| 5v5 | 0 (reference) | 580 | 208 (36 %) | 106 (51 % of starts, 18 % of attempts) | 21–0 |
+| 5v5 | 0.25 m | 594 | 252 (42 %) | 67 (27 %, 11 %) | 17–2 |
+| 5v5 | 0.5 m | 609 | 382 (63 %) | 91 (24 %, 15 %) | 15–11 |
+| 5v5 | 1.0 m | 620 | 490 (79 %) | 87 (18 %, 14 %) | 8–13 |
+| 10v10 | 0 (reference) | 748 | 183 (24 %) | 102 (56 %, 14 %) | 34–0 |
+| 10v10 | 0.25 m | 709 | 260 (37 %) | 107 (41 %, 15 %) | 33–0 |
+| 10v10 | 0.5 m | 807 | 408 (51 %) | 99 (24 %, 12 %) | 13–0 |
+| 10v10 | 1.0 m | 797 | 607 (76 %) | 85 (14 %, 11 %) | 9–9 |
 
 - **Running straight at the ball, a challenge starts on a quarter to a third of the presses in range,** and wins about half of those. That is what "nothing happens" measures: the won't-reach rule holds him back while he chases alongside.
 - **Loosening the rule starts more challenges and wins fewer of them.** A commit that ends short misses, and the seat's side concedes more while he recovers. The rule protects him.
