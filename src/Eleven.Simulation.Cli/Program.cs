@@ -144,15 +144,18 @@ internal static class Program
 
             case "squads" when args.Length >= 2:
             {
-                // N-a-side CPU-against-CPU matches (#92): eleven-sim squads <dir> [perSide] [count] [seat].
-                // With `seat`, home's first outfielder is a human seat that switches (#95).
+                // N-a-side CPU-against-CPU matches (#92): eleven-sim squads <dir> [perSide] [count] [seat] [auto|ball|manual].
+                // With `seat`, home's first outfielder is a human seat that switches (#95), in the mode given (#136).
                 SimConfig squadConfig = SpikeScenario.Config();
                 int perSide = args.Length >= 3 && int.TryParse(args[2], out int n) && n > 0 ? n : 2;
                 int seeds = args.Length >= 4 && int.TryParse(args[3], out int k) && k > 0 ? k : SquadTrials.Seeds;
                 bool seat = args.Length >= 5 && args[4] == "seat";
-                List<SquadTrial> squads = SquadTrials.Run(squadConfig, perSide, seeds, seat);
+                string modeName = args.Length >= 6 ? args[5] : "auto";
+                SwitchMode mode = modeName == "ball" ? SwitchMode.OnTheBall : modeName == "manual" ? SwitchMode.Manual : SwitchMode.Auto;
+                List<SquadTrial> squads = SquadTrials.Run(squadConfig, perSide, seeds, seat, mode);
                 Directory.CreateDirectory(args[1]);
-                using (var csv = new StreamWriter(Path.Combine(args[1], $"squad-{perSide}v{perSide}{(seat ? "-seat" : "")}-trials.csv")))
+                string suffix = seat ? (mode == SwitchMode.Auto ? "-seat" : $"-seat-{modeName}") : "";
+                using (var csv = new StreamWriter(Path.Combine(args[1], $"squad-{perSide}v{perSide}{suffix}-trials.csv")))
                 {
                     SquadTrials.WriteCsv(csv, squadConfig, squads);
                 }

@@ -186,8 +186,13 @@ namespace Eleven.Simulation.Harness
         /// <summary>Counts a seat's switch event; <paramref name="cause"/> is why the switcher asked for it.</summary>
         public void Count(SimEvent e, int seatController, SwitchCause cause)
         {
-            if (e.Kind == SimEventKind.Switched) Switches++;
-            if (e.Kind == SimEventKind.CommandRejected && e.Subject == seatController && e.Other == (int)CommandRejection.SwitchRefused) SwitchesRefused++;
+            if (e.Kind == SimEventKind.CommandRejected && e.Subject == seatController && e.Rejection == CommandRejection.SwitchRefused) SwitchesRefused++;
+            if (e.Kind != SimEventKind.Switched) return;
+            Switches++;
+            if (cause == SwitchCause.Pass) SwitchesPass++;
+            else if (cause == SwitchCause.MateHasBall) SwitchesMate++;
+            else if (cause == SwitchCause.Turnover) SwitchesTurnover++;
+            else if (cause == SwitchCause.Asked) SwitchesAsked++;
         }
 
         /// <summary>Substitutes each side brought on (#110), and each one's minute, the match scaled to 90.</summary>
@@ -208,10 +213,10 @@ namespace Eleven.Simulation.Harness
         /// <summary>The human seat's controller: home's first outfielder's (#93).</summary>
         public const int SeatController = 1;
 
-        public static List<SquadTrial> Run(SimConfig config, int perSide, int seeds = Seeds, bool seat = false)
+        public static List<SquadTrial> Run(SimConfig config, int perSide, int seeds = Seeds, bool seat = false, SwitchMode mode = SwitchMode.Auto)
         {
             var trials = new List<SquadTrial>();
-            for (int i = 1; i <= seeds; i++) trials.Add(One(config, perSide, 0x92000000UL + (ulong)i, seat));
+            for (int i = 1; i <= seeds; i++) trials.Add(One(config, perSide, 0x92000000UL + (ulong)i, seat, mode));
             return trials;
         }
 
@@ -241,12 +246,12 @@ namespace Eleven.Simulation.Harness
             return new Command(controllerId, s.Tick, move, kick, switchTo: switchTo);
         }
 
-        public static SquadTrial One(SimConfig config, int perSide, ulong seed, bool seat = false)
+        public static SquadTrial One(SimConfig config, int perSide, ulong seed, bool seat = false, SwitchMode mode = SwitchMode.Auto)
         {
             var sim = new Simulator(config, Squads.Match(config, seed, perSide, bothCpu: !seat));
             var recorder = new MatchRecorder();
             var trial = new SquadTrial { Seed = seed, Seat = seat };
-            SwitchController? switcher = seat ? new SwitchController(SeatController) : null;
+            SwitchController? switcher = seat ? new SwitchController(SeatController, mode) : null;
             var commands = new List<Command>();
             var events = new List<SimEvent>();
             int limit = 3 * 2 * config.HalfTicks;
@@ -367,12 +372,12 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(System.IO.TextWriter w, SimConfig config, IReadOnlyList<SquadTrial> trials)
         {
-            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,length_s,final_hash");
+            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,switches_pass,switches_mate,switches_turnover,switches_asked,length_s,final_hash");
             foreach (SquadTrial t in trials)
             {
-                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13:F2},{14:x16}",
+                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13},{14},{15},{16},{17:F2},{18:x16}",
                     config.Hash, t.Seed, t.Seat ? "yes" : "no", t.Finished ? "yes" : "no", t.HomeGoals, t.AwayGoals, t.Passes, t.PassesCompleted, t.Possessions, t.MeanSpacing, t.LongestBunchedSeconds,
-                    t.Switches, t.SwitchesRefused, t.LengthSeconds, t.FinalHash));
+                    t.Switches, t.SwitchesRefused, t.SwitchesPass, t.SwitchesMate, t.SwitchesTurnover, t.SwitchesAsked, t.LengthSeconds, t.FinalHash));
             }
         }
 
@@ -394,7 +399,9 @@ namespace Eleven.Simulation.Harness
 
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{0}v{0}: {1} of {2} finished; {3} goals; {4} passes, {5} completed; {6} possessions; mean spacing {7:F1} m; longest bunched {8:F1} s; {9} switches",
-                perSide, finished, trials.Count, goals, passes, completed, possessions, spacing / Math.Max(1, trials.Count), bunched, switches);
+                perSide, finished, trials.Count, goals, passes, completed, possessions, spacing / Math.Max(1, trials.Count), bunched, switches)
+                + string.Format(System.Globalization.CultureInfo.InvariantCulture, " (pass {0}, teammate {1}, turnover {2}, asked {3}; {4} refused)",
+                    trials.Sum(t => t.SwitchesPass), trials.Sum(t => t.SwitchesMate), trials.Sum(t => t.SwitchesTurnover), trials.Sum(t => t.SwitchesAsked), trials.Sum(t => t.SwitchesRefused));
         }
     }
 }
