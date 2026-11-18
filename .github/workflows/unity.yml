@@ -134,7 +134,8 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          captures=(smoke/capture-*.elfc)
+          # #137: and COPY CAPTURE's text, which eleven-sim replay reads as it reads the file.
+          captures=(smoke/capture-*.elfc smoke/capture-*-copied.txt)
           if [ ${#captures[@]} -eq 0 ]; then echo "::error title=Felt-wrong replay::the smoke test saved no capture"; exit 1; fi
           failed=0
           for c in "${captures[@]}"; do

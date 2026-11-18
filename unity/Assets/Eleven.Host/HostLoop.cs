@@ -625,7 +625,7 @@ namespace Eleven.Host
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
                     () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution,
-                    () => (int)_switchMode, SwitchSwitching);
+                    () => (int)_switchMode, SwitchSwitching, CopyCapturePressed);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
@@ -660,11 +660,25 @@ namespace Eleven.Host
         private void TellPageWhereSaveIs()
         {
             Rect save = _layout.SaveCaptureButton;
+            Rect copy = _layout.CopyCaptureButton;
             bool active = _hud.SaveActive;
-            if (save == _saveTold && active == _saveActiveTold) return;
+            if (save == _saveTold && copy == _copyTold && active == _saveActiveTold) return;
             _saveTold = save;
+            _copyTold = copy;
             _saveActiveTold = active;
             PlaceSaveCapture(save.x, save.y, save.width, save.height, _layout.ScreenWidth, _layout.ScreenHeight, active ? 1 : 0);
+            PlaceCopyCapture(copy.x, copy.y, copy.width, copy.height, _layout.ScreenWidth, _layout.ScreenHeight, active ? 1 : 0);
+        }
+
+        private Rect _copyTold;
+
+        // COPY CAPTURE (#137) was activated in Unity: the page copies the newest capture as text,
+        // unless its own release handler already did for this press.
+        private void CopyCapturePressed()
+        {
+            CopyCapture();
+            _hud?.ShowStatus("Capture copied as text: paste it into a message.");
+            Log("ELEVEN capture copy pressed");
         }
 
         // The HUD measured an element needing another size: lay out again if anything moves.
@@ -813,6 +827,12 @@ namespace Eleven.Host
         private static extern void ElevenPlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active);
 
         [DllImport("__Internal")]
+        private static extern void ElevenCopyCapture();
+
+        [DllImport("__Internal")]
+        private static extern void ElevenPlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active);
+
+        [DllImport("__Internal")]
         private static extern float ElevenCanvasCssWidth();
 
         [DllImport("__Internal")]
@@ -863,6 +883,11 @@ namespace Eleven.Host
 
         private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
             ElevenPlaceSaveCapture(x, y, width, height, screenWidth, screenHeight, active);
+
+        private static void CopyCapture() => ElevenCopyCapture();
+
+        private static void PlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
+            ElevenPlaceCopyCapture(x, y, width, height, screenWidth, screenHeight, active);
 #else
         private static double PageSeconds() => Time.realtimeSinceStartupAsDouble;
 
@@ -896,6 +921,10 @@ namespace Eleven.Host
         }
 
         private static void SaveCapture() { }
+
+        private static void CopyCapture() { }
+
+        private static void PlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) { }
 
         private static void PlaceSaveCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) { }
 #endif

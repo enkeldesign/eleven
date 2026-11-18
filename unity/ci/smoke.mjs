@@ -33,7 +33,8 @@
 //     CAPTURE (a Unity action too) offers it. Desktop types the note and saves; the keyboard reaches
 //     THIS FELT WRONG with a visible focus ring. The capture as kept in localStorage is written to
 //     <output dir>/capture-<pass>.elfc, and on desktop SAVE CAPTURE's download to
-//     capture-<pass>-saved.elfc (byte-identical), for CI to replay with .NET
+//     capture-<pass>-saved.elfc (byte-identical), and COPY CAPTURE's text to
+//     capture-<pass>-copied.txt (#137), for CI to replay with .NET
 //   - FEEL / TEST BENCH (#45): a Unity action opens a sheet of every knob the host describes, in
 //     group tabs, with targets of at least 44 x 44 pt and nothing wider than the screen; opening and
 //     closing it leaves the run alone; no value goes past its valid range; edits make a pending
@@ -653,12 +654,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const marker = /kickMarker=(-?\d+),(-?\d+),(\d+)/.exec(line)?.slice(1, 4).map(Number) ?? null;
           return {
             screen: [0, 0, m[0], m[1]], safe: boxOf('safe', line), play: boxOf('play', line), action: boxOf('action', line), stickZone: boxOf('stickZone', line),
-            felt: boxOf('feltWrong', line), save: boxOf('save', line), bench: boxOf('bench', line),
+            felt: boxOf('feltWrong', line), save: boxOf('save', line), copy: boxOf('copy', line), bench: boxOf('bench', line),
             stick: disc(m[8], m[9], m[10]), kick: disc(m[6], m[7], kickRadius),
             pass: passDisc ? disc(...passDisc) : null, marker: marker && marker[2] > 0 ? disc(...marker) : null,
           };
         };
-        const controlsInSafe = (l) => Object.entries({ stick: l.stick, 'stick zone': l.stickZone, 'right-hand area': l.action, ACTION: l.kick, PASS: l.pass, 'felt wrong': l.felt, save: l.save, bench: l.bench })
+        const controlsInSafe = (l) => Object.entries({ stick: l.stick, 'stick zone': l.stickZone, 'right-hand area': l.action, ACTION: l.kick, PASS: l.pass, 'felt wrong': l.felt, save: l.save, copy: l.copy, bench: l.bench })
           .filter(([, b]) => !inside(b, l.safe)).map(([k, b]) => `${k} ${b?.join(',') ?? 'missing'}`);
         const L = measure(layoutLine);
 
@@ -666,12 +667,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         check('every control is inside the safe area', !!L.safe && inside(L.safe, L.screen) && outside.length === 0,
           `safe ${L.safe?.join(',') ?? '?'} of screen ${L.screen.slice(2).join('x')} px; outside: ${outside.join(' | ') || 'none'}`);
 
-        const over = Object.entries({ 'stick zone': L.stickZone, 'right-hand area': L.action, 'felt wrong': L.felt, save: L.save, bench: L.bench })
+        const over = Object.entries({ 'stick zone': L.stickZone, 'right-hand area': L.action, 'felt wrong': L.felt, save: L.save, copy: L.copy, bench: L.bench })
           .filter(([, b]) => !apart(L.play, b)).map(([k]) => k);
         check('the play area is clear of the controls and the HUD\'s actions', !!L.play && inside(L.play, L.safe) && over.length === 0 && L.play[2] / pointPx >= 150 && L.play[3] / pointPx >= 150,
           `play area ${L.play?.join(',') ?? '?'} px, ${pts(L.play)} pt; over it: ${over.join(', ') || 'nothing'}`);
 
-        const small = Object.entries({ 'felt wrong': L.felt, save: L.save, bench: L.bench, stick: L.stick, ACTION: L.kick, PASS: L.pass && disc(0, 0, L.pass[2] / 2 / Math.SQRT2), 'KICK marker': L.marker && disc(0, 0, L.marker[2] / 2 / Math.SQRT2) })
+        const small = Object.entries({ 'felt wrong': L.felt, save: L.save, copy: L.copy, bench: L.bench, stick: L.stick, ACTION: L.kick, PASS: L.pass && disc(0, 0, L.pass[2] / 2 / Math.SQRT2), 'KICK marker': L.marker && disc(0, 0, L.marker[2] / 2 / Math.SQRT2) })
           .filter(([, b]) => !b || b[2] / pointPx < 44 || b[3] / pointPx < 44).map(([k, b]) => `${k} ${pts(b)}`);
         check('bounded controls are at least 44 x 44 pt', small.length === 0 && L.action[2] / pointPx >= 88 && L.action[3] / pointPx >= 88,
           `stick ${pts(L.stick)}, ACTION ${pts(L.kick)}, PASS square ${L.pass ? (L.pass[2] / Math.SQRT2 / pointPx).toFixed(0) : '?'}, KICK marker square ${L.marker ? (L.marker[2] / Math.SQRT2 / pointPx).toFixed(0) : '?'}, felt wrong ${pts(L.felt)}, bench ${pts(L.bench)}, right-hand area ${pts(L.action)} pt; too small: ${small.join(' | ') || 'none'}`);
@@ -1678,6 +1679,19 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         detail = `${download.suggestedFilename()}, ${saved.length} bytes, ${same ? 'identical to the kept capture' : 'DIFFERS from the kept capture'}`;
       }
       check('SAVE CAPTURE downloads the kept capture, byte for byte', !!download && /\.elfc$/.test(download.suggestedFilename()) && same, detail);
+
+      // COPY CAPTURE (#137): the capture as text on the clipboard, saved for CI to replay with .NET.
+      const copyBox = (lastLog(/ELEVEN layout .* copy=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
+      const fromCopy = logs.length;
+      if (copyBox.length === 4 && copyBox[2] > 0) await tap(centre(...copyBox));
+      const copied = (await waitForLog(/ELEVEN page copy (ok|failed) via=(\w+) name=(\S+) chars=(\d+)/, 5_000, fromCopy))?.match ?? null;
+      const text = await page.evaluate(() => window.__elevenCopiedText || '').catch(() => '');
+      const body = text.split('\n').slice(1).filter((l) => l && l !== 'END').join('');
+      const decoded = body ? Buffer.from(body, 'base64') : null;
+      const whole = !!keptCapture && !!decoded && decoded.equals(keptCapture);
+      if (text) fs.writeFileSync(path.join(outDir, `capture-${name}-copied.txt`), text);
+      check('COPY CAPTURE copies the kept capture as text, byte for byte', !!copied && copied[1] === 'ok' && text.startsWith('ELEVEN CAPTURE v1 ') && whole,
+        `${copied ? copied[0].replace('ELEVEN page ', '') : `no copy line (copy=${copyBox.join(',') || 'none'})`}; ${text.length} characters, ${whole ? 'decodes to the kept capture' : 'does NOT decode to the kept capture'}`);
     } else {
       check('SAVE CAPTURE is offered', !!offered, offered ? 'shown' : 'not shown');
     }

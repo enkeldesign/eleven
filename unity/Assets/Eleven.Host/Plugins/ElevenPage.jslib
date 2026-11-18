@@ -136,7 +136,9 @@ mergeInto(LibraryManager.library, {
     var share = active && navigator.canShare && navigator.canShare({ files: [file] });
     console.log('ELEVEN page save ' + (share ? 'share' : 'download') + ' name=' + last.name + ' activation=' + (active ? 'yes' : 'no'));
     if (share) {
-      navigator.share({ files: [file], title: 'ELEVEN capture' }).catch(function (e) {
+      // No title (#137): a target that keeps the title and drops the file showed "ELEVEN capture"
+      // as if it were the capture. COPY CAPTURE is the way for such a target.
+      navigator.share({ files: [file] }).catch(function (e) {
         // A dismissed share sheet is the player's choice, not a failure.
         if (!e || e.name !== 'AbortError') download();
       });
@@ -182,5 +184,82 @@ mergeInto(LibraryManager.library, {
     console.log('ELEVEN page save activation ' + (handled ? 'already saved by the release' : 'saves now'));
     if (handled) return;
     ElevenShareCapture();
+  },
+
+  // The newest capture as text (#137): CaptureText's form, a header with its name, length and
+  // FNV-1a checksum, its bytes in base64 in lines of 76, then END. eleven-sim replay reads it.
+  $ElevenCaptureText: function (last) {
+    var bytes = last.bytes;
+    var hash = 2166136261;
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) {
+      hash = Math.imul(hash ^ bytes[i], 16777619) >>> 0;
+      binary += String.fromCharCode(bytes[i]);
+    }
+    var body = btoa(binary);
+    var text = 'ELEVEN CAPTURE v1 name=' + last.name.replace(/ /g, '_') + ' bytes=' + bytes.length + ' fnv=' + ('00000000' + hash.toString(16)).slice(-8) + '\n';
+    for (var j = 0; j < body.length; j += 76) text += body.substr(j, 76) + '\n';
+    return text + 'END\n';
+  },
+
+  // Copies the newest capture as text, in the press's own handler where a browser lets a page
+  // write the clipboard; a hidden text area and the copy command where the clipboard API refuses.
+  $ElevenCopyCaptureText__deps: ['$ElevenCaptureText'],
+  $ElevenCopyCaptureText: function () {
+    var last = window.__elevenLastCapture;
+    if (!last) return;
+    window.__elevenCopiedAt = performance.now();
+    var text = ElevenCaptureText(last);
+    window.__elevenCopiedText = text;
+    var fallback = function () {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      area.remove();
+      console.log('ELEVEN page copy ' + (ok ? 'ok' : 'failed') + ' via=command name=' + last.name + ' chars=' + text.length);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        console.log('ELEVEN page copy ok via=clipboard name=' + last.name + ' chars=' + text.length);
+      }, fallback);
+    } else {
+      fallback();
+    }
+  },
+
+  // Where COPY CAPTURE is (#137), as for SAVE CAPTURE: the copy starts in the release's handler.
+  ElevenPlaceCopyCapture__deps: ['$ElevenCopyCaptureText'],
+  ElevenPlaceCopyCapture: function (x, y, w, h, screenWidth, screenHeight, active) {
+    window.__elevenCopyRect = active ? { x: x, y: y, w: w, h: h, sw: screenWidth, sh: screenHeight } : null;
+    if (window.__elevenCopyWatching) return;
+    window.__elevenCopyWatching = true;
+    var inside = function (e) {
+      var c = window.__elevenCopyRect;
+      if (!c || !Module.canvas) return false;
+      var r = Module.canvas.getBoundingClientRect();
+      var px = (e.clientX - r.left) * c.sw / r.width;
+      var py = (e.clientY - r.top) * c.sh / r.height;
+      return px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h;
+    };
+    var pressed = false;
+    window.addEventListener('pointerdown', function (e) { pressed = inside(e); }, true);
+    window.addEventListener('pointerup', function (e) {
+      var release = pressed && inside(e);
+      pressed = false;
+      if (release) ElevenCopyCaptureText();
+    }, true);
+  },
+
+  // COPY CAPTURE was activated in Unity: copied already by the release, or now (a key).
+  ElevenCopyCapture__deps: ['$ElevenCopyCaptureText'],
+  ElevenCopyCapture: function () {
+    var handled = window.__elevenCopiedAt && performance.now() - window.__elevenCopiedAt < 1000;
+    if (!handled) ElevenCopyCaptureText();
   },
 });
