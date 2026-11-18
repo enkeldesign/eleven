@@ -338,6 +338,10 @@ namespace Eleven.Simulation
         private int _passerId;
         private bool _passSent;
 
+        // A first-time pass met the pending one: it waits for its passer's kick to connect, which
+        // plays the pending pass, before it is the pending pass itself. A miss drops it.
+        private int _queuedSide = -1, _queuedId;
+
         // The side that last touched the ball, and a shot's chance from there: a goal scored off a
         // touch, not a kick, is a shot too.
         private int _toucher = -1;
@@ -443,6 +447,7 @@ namespace Eleven.Simulation
                         }
 
                         _passer = -1;
+                        _queuedSide = -1;
                         break;
                 }
 
@@ -450,23 +455,47 @@ namespace Eleven.Simulation
                 // and the other side's defensive actions there (#126's definitions).
                 if (e.Kind == SimEventKind.QuickPassResolved && side >= 0)
                 {
-                    // A first-time pass plays the pass it meets, before it is a pass of its own: it
-                    // resolves as its passer winds up, ahead of his kick.
-                    if (_passer >= 0 && (e.Subject != _passerId || _passSent)) PlayPass(e.Subject, side);
                     _passes[side]++;
                     if (InOwnSixty(config, after, side)) _ownSixtyPasses[side]++;
-                    _passer = side;
-                    _passerId = e.Subject;
-                    _passSent = false;
+
+                    // A first-time pass resolves as its passer winds up, ahead of his kick: it waits
+                    // for the kick to connect before it plays the pass it meets.
+                    if (_passer >= 0 && (e.Subject != _passerId || _passSent))
+                    {
+                        _queuedSide = side;
+                        _queuedId = e.Subject;
+                    }
+                    else
+                    {
+                        _passer = side;
+                        _passerId = e.Subject;
+                        _passSent = false;
+                    }
+
                     continue;
                 }
+
+                if (e.Kind == SimEventKind.KickMissed && e.Subject == _queuedId) _queuedSide = -1;
 
                 if (side < 0) continue;
                 bool defends = e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon || e.Kind == SimEventKind.Foul || (e.Kind == SimEventKind.Touched && _passer == 1 - side);
                 if (defends && InOwnSixty(config, after, 1 - side)) _actions[side]++;
                 bool plays = e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon
                     || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried || e.Kind == SimEventKind.Kicked;
-                if (!plays || _passer < 0) continue;
+                if (!plays) continue;
+
+                // A queued first-time pass connects: it plays the pass it met, then is sent itself.
+                if (e.Kind == SimEventKind.Kicked && _queuedSide >= 0 && e.Subject == _queuedId)
+                {
+                    if (_passer >= 0) PlayPass(e.Subject, side);
+                    _passer = _queuedSide;
+                    _passerId = _queuedId;
+                    _passSent = true;
+                    _queuedSide = -1;
+                    continue;
+                }
+
+                if (_passer < 0) continue;
 
                 // The passer's own kick sends his pass; it doesn't play it.
                 if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId && !_passSent) _passSent = true;
