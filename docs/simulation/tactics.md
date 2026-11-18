@@ -16,6 +16,7 @@ Issue #126, M5 (#80), and the brief's hypothesis: "saved tactical setups, switch
 
 - **Every side's three plans default to the reference plan in its formation.** So a match with no switch plays exactly as before: every reference is unchanged in value.
 - **Sides below three a side store no plans:** they have no shape (#96).
+- **In the host's matches** (#128), each side stores `MatchPlans`: Balanced (the reference), High press and Low block, as #127's managers have them. Its dashboard switches between them.
 - **The CPU reads its side's plan through its observation** (`OutfieldObservation.Tactic`, INV-9). His place is his home in the plan, with its line and width, shifted with the ball and up by its step-up when his side has it.
 
 ## The switch

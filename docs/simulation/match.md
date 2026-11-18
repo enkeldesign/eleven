@@ -79,6 +79,7 @@ xG = 1 / (1 + e^−(a + b·d + c·θ)), with a = −1.0, b = −0.12 per metre, 
 - **It is a reader's model:** its parameters are metric references, not simulation config, and change no match. Centrally, it gives about 0.35 at 6 m, 0.16 at 11 m and 0.07 at the edge of the box.
 - **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 36.6 expected goals against 58 scored. A match has 17.7 shots, 15.7 of them on target, and xG 2.03 against 3.22 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by more than a third (37 %). That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
 - **Recorded and diffed in CI:** the gate's reference carries each match's possession, shots, shots on target, xG, passes and PPDA.
+- **Read while a match is played:** `MatchRecorder.Now(side)` gives the metrics so far (0 home, 1 away); at full time they are the result's. The host's dashboard reads them ([match.md](../ui/match.md#the-match-dashboard)).
 
 ## Measured
 
