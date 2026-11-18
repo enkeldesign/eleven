@@ -272,6 +272,11 @@ namespace Eleven.Simulation
 
         public int AwayShootoutGoals { get; }
 
+        /// <summary>Each side's match metrics (schema 7, #128).</summary>
+        public SideMetrics HomeMetrics { get; internal set; }
+
+        public SideMetrics AwayMetrics { get; internal set; }
+
         /// <summary>The winner's side id, or 0 for a draw: by goals, then by the shootout (schema 6, #111).</summary>
         public int Winner => HomeGoals != AwayGoals ? (HomeGoals > AwayGoals ? HomeTeam : AwayTeam)
             : HomeShootoutGoals != AwayShootoutGoals ? (HomeShootoutGoals > AwayShootoutGoals ? HomeTeam : AwayTeam) : 0;
