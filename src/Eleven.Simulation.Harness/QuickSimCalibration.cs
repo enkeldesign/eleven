@@ -19,6 +19,21 @@ namespace Eleven.Simulation.Harness
         public const int PerPair = 2;
         public const ulong FirstSeed = 0x129000000UL;
 
+        /// <summary>
+        /// #151: the capability levels of the calibration sides, on the capability index
+        /// (<see cref="QuickSim.CapabilityIndex"/>): every capability moved by this share of its range.
+        /// </summary>
+        public static readonly double[] CapabilityLevels = { -0.05, 0, 0.05 };
+
+        /// <summary>#151: the fixtures CI plays and diffs against the reference's first rows, within its budget.</summary>
+        public const int CiFixtures = 60;
+
+        /// <summary>
+        /// #151: the calibration sides. Plumbing: M3's six sides until the calibration league
+        /// (each CPU tier at each capability level) lands.
+        /// </summary>
+        public static IReadOnlyList<LeagueSide> Sides() => League.Sides();
+
         /// <summary>The sample's fixtures, in their fixed order: home, away and seed.</summary>
         public static List<(int Home, int Away, ulong Seed)> Fixtures(int sides, int perPair = PerPair)
         {
@@ -122,6 +137,13 @@ namespace Eleven.Simulation.Harness
     /// </summary>
     public static class QuickSimFit
     {
+        /// <summary>
+        /// #151: the fit with each parameter's standard error. Plumbing: the errors are 0 until the
+        /// likelihood's curvature is read.
+        /// </summary>
+        public static QuickSimFitResult FitWithErrors(IReadOnlyList<CalibrationMatch> sample, IReadOnlyList<LeagueSide> sides) =>
+            new QuickSimFitResult(Fit(sample, sides), 0, 0, new double[QuickSimModel.Tiers], 0, 0);
+
         public static QuickSimModel Fit(IReadOnlyList<CalibrationMatch> sample, IReadOnlyList<LeagueSide> sides)
         {
             // Each side's goals are a Poisson observation with log-rate β·x over the parameters
@@ -247,5 +269,35 @@ namespace Eleven.Simulation.Harness
             for (int i = 0; i < n; i++) x[i] = m[i, i] == 0 ? 0 : m[i, n] / m[i, i];
             return x;
         }
+    }
+
+    /// <summary>
+    /// #151: a fit and each parameter's standard error. μ, h, the tier ratings and w take theirs from
+    /// the Poisson likelihood's curvature at the fit (the inverse of its Hessian); ρ from its own
+    /// likelihood's curvature. The apprentice tier's rating is 0 by definition, its error 0.
+    /// </summary>
+    public sealed class QuickSimFitResult
+    {
+        public QuickSimFitResult(QuickSimModel model, double baseRateError, double homeError, double[] tierErrors, double capabilityWeightError, double rhoError)
+        {
+            Model = model;
+            BaseRateError = baseRateError;
+            HomeError = homeError;
+            TierErrors = tierErrors;
+            CapabilityWeightError = capabilityWeightError;
+            RhoError = rhoError;
+        }
+
+        public QuickSimModel Model { get; }
+
+        public double BaseRateError { get; }
+
+        public double HomeError { get; }
+
+        public IReadOnlyList<double> TierErrors { get; }
+
+        public double CapabilityWeightError { get; }
+
+        public double RhoError { get; }
     }
 }
