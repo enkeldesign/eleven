@@ -788,7 +788,15 @@ internal static class Program
         FeelCapture capture;
         try
         {
-            capture = FeelCapture.Decode(File.ReadAllBytes(path));
+            // The file as saved, or the capture as text (#137), pasted from wherever it was sent.
+            byte[]? bytes = CaptureText.Read(File.ReadAllBytes(path), out string problem);
+            if (bytes == null)
+            {
+                Console.Error.WriteLine($"{path}: {problem}");
+                return 1;
+            }
+
+            capture = FeelCapture.Decode(bytes);
         }
         catch (FormatException e)
         {

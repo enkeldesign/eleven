@@ -125,13 +125,29 @@ The "this felt wrong" capture (#44, part of #27) is evidence, not telemetry: it 
 7. The live run's tick hashes (int32 count, uint64 each): the hash at the window's start and after every step.
 8. Its events (int32 count, then tick int64, and kind, subject, rejection and other as int32 each).
 
+### As text (#137)
+
+Both captures Erik first shared arrived as a 14-byte text file saying "ELEVEN capture". The app they were shared to kept the share's title and dropped the file. So:
+
+- **COPY CAPTURE** (its label reads "Copy text", short enough to sit beside SAVE CAPTURE on a narrow phone with large text; above it only where even that doesn't fit) puts the newest capture on the clipboard as text (`CaptureText`). The HUD says it copied only once the page has; if the copy fails, it says to use SAVE CAPTURE. It is a header line, `ELEVEN CAPTURE v1 name=<name> bytes=<length> fnv=<FNV-1a, 8 hex>`, then the bytes in base64 in lines of 76, then `END`. It pastes into any chat or note.
+- **It reads back whatever a chat did to it:** text before it, indentation, changed line breaks, or one long line. A cut or changed capture is refused, saying so: it holds too few bytes, or its checksum differs.
+- **The share has no title** now, so a target that drops the file shows nothing rather than something that looks like a capture.
+- **`eleven-sim replay`** takes the saved file or a text file holding the pasted text, anywhere in it.
+
+**Sending a capture from an iPhone:**
+1. After THIS FELT WRONG and the note, press **COPY CAPTURE**. The HUD says "Capture copied as text".
+2. Paste it into a message, a mail or Notes, and send it. A long message is fine: a capture is about 70 KB of text.
+3. To replay it, save the received text to a file and run `eleven-sim replay <file>`.
+
+SAVE CAPTURE still shares the `.elfc` file, which is better where the target keeps files, such as Files, AirDrop and Mail.
+
 **Replaying** (`FeelCapture.Replay`, `eleven-sim replay <file>`):
 1. **Versions first.** The versions come before the payloads, so a capture from another build is read far enough to say, by name, which version differs ("state schema 4, this build reads 5"). It is never replayed under the wrong rules.
 2. **The config.** It is rebuilt from the payload with `SimConfig.Decode`, which checks its format, and must hash to the recorded hash. A capture made under a tuned candidate therefore replays under that candidate.
 3. **Every tick and event.** The window replays, and every tick's hash and every event is compared. A divergence names the first tick that differs. The CLI exits 1 on any mismatch.
 
 **In CI:**
-- **The WebGL build:** the smoke test presses THIS FELT WRONG in it, and CI replays each capture with the .NET CLI. These are the bytes a player keeps: those in `localStorage` and, on desktop, SAVE CAPTURE's download, which must be identical to them.
+- **The WebGL build:** the smoke test presses THIS FELT WRONG in it, and CI replays each capture with the .NET CLI. These are the bytes a player keeps: those in `localStorage`, and on desktop SAVE CAPTURE's download and COPY CAPTURE's text, which must be identical to them.
 - **Failures fail the build:** the replay step names any capture that doesn't decode or replay, and fails (#50).
 - **The fixture:** `FeelCaptureTests` also replays a committed fixture, `tests/Eleven.Simulation.Tests/Fixtures/spike-felt-wrong.elfc`, made by `eleven-sim capture <file>` from the scripted spike session.
 

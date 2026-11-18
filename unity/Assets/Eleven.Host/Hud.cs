@@ -64,7 +64,7 @@ namespace Eleven.Host
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
             Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
             Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer, System.Action substitute,
-            Func<int> benchSwitching = null, Action<int> benchSwitchSwitching = null)
+            Func<int> benchSwitching = null, Action<int> benchSwitchSwitching = null, System.Action copyCapture = null)
         {
             _ui = ui;
             _trace = trace;
@@ -118,6 +118,11 @@ namespace Eleven.Host
             SaveCapture = Action(ActionRole.Supporting, "Save capture", saveCapture, "Save\ncapture", (n, v) => n.SaveCapture = v, n => n.SaveCapture);
             SaveCapture.Element.style.visibility = Visibility.Hidden;
             SaveCapture.Element.focusable = false;
+
+            // COPY CAPTURE (#137): the capture as text on the clipboard, for an app that drops a shared file.
+            CopyCapture = Action(ActionRole.Supporting, "Copy capture", copyCapture ?? (() => { }), "Copy\ntext", (n, v) => n.CopyCapture = v, n => n.CopyCapture);
+            CopyCapture.Element.style.visibility = Visibility.Hidden;
+            CopyCapture.Element.focusable = false;
 
             // SWITCH (#95): in a 2v2 match only, to take over the teammate who reaches the ball first.
             Switch = Action(ActionRole.Supporting, "Switch", () =>
@@ -301,9 +306,11 @@ namespace Eleven.Host
         }
 
         // Whether an action takes focus when nothing covers the HUD: a hidden one doesn't.
-        private bool Focusable(UiKit.Action a) => a == SaveCapture ? _saveShown : a == Switch ? _switchShown : a != Subs || _subsShown;
+        private bool Focusable(UiKit.Action a) => a == SaveCapture || a == CopyCapture ? _saveShown : a == Switch ? _switchShown : a != Subs || _subsShown;
 
         public UiKit.Action SaveCapture { get; }
+
+        public UiKit.Action CopyCapture { get; }
 
         /// <summary>Whether the note sheet is open: play waits, as it did under the browser's prompt (#44).</summary>
         public bool SheetOpen { get; private set; }
@@ -329,6 +336,7 @@ namespace Eleven.Host
             _ui.PlaceAuto(_result.Element, layout.Result.position, row);
             _ui.Place(FeltWrong.Element, layout.FeltWrongButton);
             _ui.Place(SaveCapture.Element, layout.SaveCaptureButton);
+            _ui.Place(CopyCapture.Element, layout.CopyCaptureButton);
             if (layout.SwitchButton.width > 0) _ui.Place(Switch.Element, layout.SwitchButton);
             if (layout.SubsButton.width > 0) _ui.Place(Subs.Element, layout.SubsButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
@@ -464,6 +472,8 @@ namespace Eleven.Host
             _saveShown = true;
             SaveCapture.Element.style.visibility = Visibility.Visible;
             SaveCapture.Element.focusable = !SheetOpen;
+            CopyCapture.Element.style.visibility = Visibility.Visible;
+            CopyCapture.Element.focusable = !SheetOpen;
             Log("ELEVEN ui save visible=yes");
         }
 
