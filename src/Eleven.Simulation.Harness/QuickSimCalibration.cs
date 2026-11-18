@@ -20,6 +20,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>Rounds of the sample: every ordered pair once a round.</summary>
         public const int Rounds = 4;
 
+        /// <summary>The most rounds <see cref="Fixtures"/> gives: each pairing has 16 seeds, all distinct.</summary>
+        public const int MaxRounds = 16;
+
         public const ulong FirstSeed = 0x129000000UL;
 
         /// <summary>
