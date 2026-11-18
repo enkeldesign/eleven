@@ -62,9 +62,9 @@ namespace Eleven.Simulation.Tests
             QuickSimModel m = QuickSimModel.Reference;
             (double lh, double la) = (1.4, 1.1);
             double sum = 0;
-            for (int x = 0; x <= QuickSim.MaxGoals; x++)
+            for (int x = 0; x <= QuickSim.Limit(lh); x++)
             {
-                for (int y = 0; y <= QuickSim.MaxGoals; y++) sum += QuickSim.Probability(x, y, lh, la, m.Rho);
+                for (int y = 0; y <= QuickSim.Limit(la); y++) sum += QuickSim.Probability(x, y, lh, la, m.Rho);
             }
 
             Assert.Equal(1.0, sum, 9);

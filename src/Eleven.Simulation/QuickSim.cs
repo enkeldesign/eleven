@@ -90,8 +90,37 @@ namespace Eleven.Simulation
         /// <summary>s. The half the model's rates are for.</summary>
         public const double ReferenceHalf = 180;
 
-        /// <summary>Goals a side are drawn up to this; the tail beyond it is negligible at these rates.</summary>
+        /// <summary>Goals a side are drawn up to at least this; the grid grows with the rate (<see cref="Limit"/>).</summary>
         public const int MaxGoals = 12;
+
+        /// <summary>The Poisson tail a side's grid leaves out: past its limit, less than this.</summary>
+        public const double Tail = 1e-12;
+
+        /// <summary>The goals a side's grid holds at <paramref name="rate"/>: at least <see cref="MaxGoals"/>, and enough that the tail beyond is under <see cref="Tail"/>.</summary>
+        public static int Limit(double rate)
+        {
+            double p = SimMath.Exp(-rate), cumulative = p;
+            int k = 0;
+            while ((k < MaxGoals || 1 - cumulative >= Tail) && k < 400)
+            {
+                k++;
+                p *= rate / k;
+                cumulative += p;
+            }
+
+            return k;
+        }
+
+        /// <summary>
+        /// ρ within Dixon–Coles's bounds for these rates, so every τ is non-negative:
+        /// max(−1/λ_h, −1/λ_a) ≤ ρ ≤ min(1/(λ_h·λ_a), 1).
+        /// </summary>
+        public static double BoundedRho(double rho, double homeRate, double awayRate)
+        {
+            double low = homeRate > 0 && awayRate > 0 ? -Math.Min(1 / homeRate, 1 / awayRate) : 0;
+            double high = homeRate * awayRate > 0 ? Math.Min(1 / (homeRate * awayRate), 1) : 1;
+            return rho < low ? low : rho > high ? high : rho;
+        }
 
         /// <summary>
         /// A side's capabilities against the reference: the mean, over every capability, of its
@@ -130,27 +159,30 @@ namespace Eleven.Simulation
             : x == 1 && y == 1 ? 1 - rho
             : 1;
 
-        // Poisson's chances of 0 to MaxGoals at rate λ.
-        private static double[] Poisson(double rate)
+        // Poisson's chances of 0 to `limit` at rate λ.
+        private static double[] Poisson(double rate, int limit)
         {
-            var p = new double[MaxGoals + 1];
+            var p = new double[limit + 1];
             p[0] = SimMath.Exp(-rate);
-            for (int k = 1; k <= MaxGoals; k++) p[k] = p[k - 1] * rate / k;
+            for (int k = 1; k <= limit; k++) p[k] = p[k - 1] * rate / k;
             return p;
         }
 
-        // Every scoreline's chance over the grid, row by row (home goals), normalised.
-        private static double[] Grid(double homeRate, double awayRate, double rho)
+        // Every scoreline's chance over the grid, row by row (home goals), normalised; its row width.
+        private static double[] Grid(double homeRate, double awayRate, double rho, out int width)
         {
-            double[] ph = Poisson(homeRate), pa = Poisson(awayRate);
-            var grid = new double[(MaxGoals + 1) * (MaxGoals + 1)];
+            int nh = Limit(homeRate), na = Limit(awayRate);
+            double r = BoundedRho(rho, homeRate, awayRate);
+            double[] ph = Poisson(homeRate, nh), pa = Poisson(awayRate, na);
+            width = na + 1;
+            var grid = new double[(nh + 1) * width];
             double sum = 0;
-            for (int x = 0; x <= MaxGoals; x++)
+            for (int x = 0; x <= nh; x++)
             {
-                for (int y = 0; y <= MaxGoals; y++)
+                for (int y = 0; y <= na; y++)
                 {
-                    double v = Tau(x, y, homeRate, awayRate, rho) * ph[x] * pa[y];
-                    grid[x * (MaxGoals + 1) + y] = v;
+                    double v = Tau(x, y, homeRate, awayRate, r) * ph[x] * pa[y];
+                    grid[x * width + y] = v;
                     sum += v;
                 }
             }
@@ -159,9 +191,17 @@ namespace Eleven.Simulation
             return grid;
         }
 
-        /// <summary>The chance of the scoreline <paramref name="homeGoals"/>–<paramref name="awayGoals"/>, Dixon–Coles corrected and normalised over the drawn grid.</summary>
-        public static double Probability(int homeGoals, int awayGoals, double homeRate, double awayRate, double rho) =>
-            homeGoals < 0 || awayGoals < 0 || homeGoals > MaxGoals || awayGoals > MaxGoals ? 0 : Grid(homeRate, awayRate, rho)[homeGoals * (MaxGoals + 1) + awayGoals];
+        /// <summary>
+        /// The chance of the scoreline <paramref name="homeGoals"/>–<paramref name="awayGoals"/>: Dixon–Coles
+        /// corrected, ρ bounded for these rates, normalised over a grid that holds all but a
+        /// <see cref="Tail"/> of each side's goals.
+        /// </summary>
+        public static double Probability(int homeGoals, int awayGoals, double homeRate, double awayRate, double rho)
+        {
+            double[] grid = Grid(homeRate, awayRate, rho, out int width);
+            int rows = grid.Length / width;
+            return homeGoals < 0 || awayGoals < 0 || homeGoals >= rows || awayGoals >= width ? 0 : grid[homeGoals * width + awayGoals];
+        }
 
         // The draws' entities: what each uniform is for.
         private const int ScorelineDraw = 0, GoalTimeDraw = 1, FoulsDraw = 2, CautionsDraw = 3, SendingsOffDraw = 4;
@@ -194,7 +234,7 @@ namespace Eleven.Simulation
             (double lh, double la) = Rates(home, away, half, m);
 
             // The scoreline: one draw against the grid's cumulative chances.
-            double[] grid = Grid(lh, la, m.Rho);
+            double[] grid = Grid(lh, la, m.Rho, out int width);
             double u = Draw(seed, ScorelineDraw, 0), cumulative = 0;
             int cell = grid.Length - 1;
             for (int i = 0; i < grid.Length; i++)
@@ -207,7 +247,7 @@ namespace Eleven.Simulation
                 }
             }
 
-            int hg = cell / (MaxGoals + 1), ag = cell % (MaxGoals + 1);
+            int hg = cell / width, ag = cell % width;
 
             // Each goal at a uniform moment of the two halves, in the order they fall.
             var times = new List<(double At, int Team)>();
