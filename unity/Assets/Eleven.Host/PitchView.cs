@@ -130,6 +130,30 @@ namespace Eleven.Host
         private float _across;
         private float _pixelsPerMetre;
 
+        /// <summary>
+        /// The camera's easing (#139). Its references: out 0.3 s, in 1.5 s, a 10 % dead zone, the
+        /// centre panning at 0.25 s; <c>?zoomOut=</c>, <c>?zoomIn=</c>, <c>?zoomHold=</c> and
+        /// <c>?pan=</c> set them, and 0 follows at once, as before.
+        /// </summary>
+        public CameraEase Ease { get; } = new CameraEase { OutSeconds = 0.3, InSeconds = 1.5, Hold = 0.1, PanSeconds = 0.25 };
+
+        private float _zoomTravel, _fittedTravel, _fittedZoom;
+
+        /// <summary>
+        /// For the trace (#139): how far the zoom has moved since the last call, shown and as fitted
+        /// unsmoothed (the camera before the easing), each the sum of every frame's change in its
+        /// logarithm (0.69 is a doubling or a halving); then both start again.
+        /// </summary>
+        public (float Shown, float Fitted) TakeZoomTravel()
+        {
+            (float, float) travel = (_zoomTravel, _fittedTravel);
+            _zoomTravel = _fittedTravel = 0;
+            return travel;
+        }
+
+        // m. The least margin the eased zoom keeps round the footballer and the ball.
+        private const float KeepInView = 1f;
+
         /// <param name="minAhead">
         /// The least the play shows up-field either side of the action, in metres (#72, <c>?ahead=</c>);
         /// the camera zooms out to give it. The reference is the closest zoom's, so it changes nothing.
@@ -227,6 +251,7 @@ namespace Eleven.Host
         /// </summary>
         public void ShowMatch(bool match, int perSide = 1)
         {
+            Ease.Snap();
             _perSide = match ? perSide : 1;
             _farCrossbar.gameObject.SetActive(match);
             _farRightPost.gameObject.SetActive(match);
@@ -266,6 +291,7 @@ namespace Eleven.Host
         /// </summary>
         public void Orient(PitchOrientation orientation)
         {
+            Ease.Snap();
             _orientation = orientation;
             _camera.transform.rotation = Quaternion.Euler(0, 0, (float)orientation.CameraRoll);
         }
@@ -543,7 +569,7 @@ namespace Eleven.Host
             var attacked = new Vector3((float)_config.GoalLineX * _orientation.Up, 0, 0);
             var goal = new Vector3((float)_config.FrameAxisX, 0, 0);
             return System.FormattableString.Invariant(
-                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m ppm={_pixelsPerMetre:F2} playerPx={PlayerDiameter * _pixelsPerMetre:F1} ballPx={_ballDiameter * _pixelsPerMetre:F1} maxview={_maxHalfExtent:F1}m");
+                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m ppm={_pixelsPerMetre:F2} zoomOut={Ease.OutSeconds:F2} zoomIn={Ease.InSeconds:F2} zoomHold={Ease.Hold:F2} pan={Ease.PanSeconds:F2} playerPx={PlayerDiameter * _pixelsPerMetre:F1} ballPx={_ballDiameter * _pixelsPerMetre:F1} maxview={_maxHalfExtent:F1}m");
         }
 
         /// <summary>
@@ -560,7 +586,13 @@ namespace Eleven.Host
         private void Frame(Vector2 player, Vector2 ball, in HudLayout layout)
         {
             Rect play = layout.PlayArea;
-            Vector2 centre = Vector2.Lerp(player, ball, 0.5f);
+            float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+
+            // The framing centre pans to the midpoint of the footballer and the ball (#139), rather
+            // than cutting to it at a switch or a long pass.
+            Vector2 mid = Vector2.Lerp(player, ball, 0.5f);
+            Ease.StepCentre(mid.x, mid.y, dt);
+            var centre = new Vector2((float)Ease.CentreX, (float)Ease.CentreY);
             Vec2 span = _orientation.ToScreen(new Vec2(ball.x - player.x, ball.y - player.y));
             Vector2 halfSpan = new Vector2(Mathf.Abs((float)span.X), Mathf.Abs((float)span.Y)) * 0.5f;
 
@@ -578,6 +610,20 @@ namespace Eleven.Host
             float pixelsPerMetre = Mathf.Min(closest, framed.width * 0.5f / (halfSpan.x + FramingMargin));
             pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.height * 0.5f / (halfSpan.y + FramingMargin));
             pixelsPerMetre = Mathf.Max(pixelsPerMetre, widest);
+
+            // Eased (#139): out promptly, in slowly, never closer than keeps the footballer and the
+            // ball in view, with a small margin, about the eased centre.
+            Vec2 toP = _orientation.ToScreen(new Vec2(player.x - centre.x, player.y - centre.y));
+            Vec2 toB = _orientation.ToScreen(new Vec2(ball.x - centre.x, ball.y - centre.y));
+            float needX = Mathf.Max(Mathf.Abs((float)toP.X), Mathf.Abs((float)toB.X)) + KeepInView;
+            float needY = Mathf.Max(Mathf.Abs((float)toP.Y), Mathf.Abs((float)toB.Y)) + KeepInView;
+            float limit = Mathf.Max(widest, Mathf.Min(closest, Mathf.Min(framed.width * 0.5f / needX, framed.height * 0.5f / needY)));
+            // The zoom as fitted, unsmoothed: what the camera showed before the easing (#139), for the trace.
+            if (_fittedZoom > 0) _fittedTravel += Mathf.Abs(Mathf.Log(pixelsPerMetre / _fittedZoom));
+            _fittedZoom = pixelsPerMetre;
+            Ease.StepZoom(pixelsPerMetre, limit, dt);
+            pixelsPerMetre = Mathf.Clamp((float)Ease.Zoom, widest, closest);
+            if (_pixelsPerMetre > 0) _zoomTravel += Mathf.Abs(Mathf.Log(pixelsPerMetre / _pixelsPerMetre));
             _pixelsPerMetre = pixelsPerMetre;
 
             // At the widest view the two may not both fit: the footballer does, with the margin.
