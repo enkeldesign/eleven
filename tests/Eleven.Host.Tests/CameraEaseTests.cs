@@ -86,5 +86,70 @@ namespace Eleven.Host.Tests
             for (int i = 0; i < (int)(3 * 0.25 / Frame); i++) e.StepCentre(20, 0, Frame);
             Assert.InRange(e.CentreX, 18.5, 20);
         }
+
+        // A framed area 200 by 300 px either side of its centre; closest 20 px/m, widest 5 px/m.
+        private const double HalfW = 200, HalfH = 300, Closest = 20, Widest = 5;
+
+        private static (double X, double Y, double Zoom) Fit(CameraEase e, double px, double bx) => e.Fit(px, 0, bx, 0, HalfW, HalfH, Closest, Widest, Frame);
+
+        private static bool InView((double X, double Y, double Zoom) v, double x) => System.Math.Abs(x - v.X) * v.Zoom <= HalfW;
+
+        [Fact]
+        public void Codex_on_141_a_zoom_out_with_both_in_view_eases_rather_than_snapping()
+        {
+            // Settled close on a footballer and the ball 4 m apart; then both 9 m from the same
+            // midpoint. The fit wants 16.7 px/m; they are still in view at 20, so the zoom eases.
+            CameraEase e = Eased();
+            for (int i = 0; i < 120; i++) Fit(e, -2, 2);
+            Assert.Equal(20, e.Zoom, 6);
+            var v = Fit(e, -9, 9);
+            Assert.True(v.Zoom > 19, $"{v.Zoom:F2} px/m: it snapped toward {e.Fitted:F2}");
+            Assert.True(InView(v, -9) && InView(v, 9));
+        }
+
+        [Fact]
+        public void A_long_pass_is_followed_out_with_the_ball_never_leaving_the_view()
+        {
+            // The ball rolls away from the footballer at 15 m/s: the zoom lags its fit at times,
+            // yet ball and footballer stay in view in every frame.
+            CameraEase e = Eased();
+            for (int i = 0; i < 120; i++) Fit(e, 0, 2);
+            bool lagged = false;
+            for (int i = 0; i < 120; i++)
+            {
+                double ball = 2 + 0.25 * i;
+                var v = Fit(e, 0, ball);
+                if (v.Zoom > Widest + 1e-9)
+                {
+                    Assert.True(InView(v, ball), $"frame {i}: ball at {ball:F1} m out of view at {v.Zoom:F2} px/m about {v.X:F2}");
+                    Assert.True(InView(v, 0), $"frame {i}: footballer out of view");
+                }
+
+                lagged |= v.Zoom > e.Fitted + 1e-6;
+            }
+
+            Assert.True(lagged, "the zoom never lagged its fit: no easing out at all");
+        }
+
+        [Fact]
+        public void Below_the_widest_view_the_centre_is_the_eased_one()
+        {
+            CameraEase e = Eased();
+            for (int i = 0; i < 120; i++)
+            {
+                var v = Fit(e, 0, 0.1 * i);
+                if (v.Zoom > Widest + 1e-9) Assert.Equal((e.CentreX, e.CentreY), (v.X, v.Y));
+            }
+        }
+
+        [Fact]
+        public void At_the_widest_view_the_footballer_stays_in_view_with_the_margin()
+        {
+            CameraEase e = Eased();
+            for (int i = 0; i < 300; i++) Fit(e, 0, 200);
+            var v = Fit(e, 0, 200);
+            Assert.Equal(Widest, v.Zoom, 9);
+            Assert.True(System.Math.Abs(0 - v.X) <= HalfW / Widest - CameraEase.Margin + 1e-9);
+        }
     }
 }
