@@ -21,3 +21,4 @@ Use [template.md](template.md) for new ADRs.
 | [0001](0001-engine-and-platform.md) | Engine and platform | Accepted |
 | [0002](0002-simulation-maths-model.md) | Simulation maths model | Accepted |
 | [0003](0003-ui-in-unity.md) | The UI around the match is UI Toolkit, built from code | Accepted |
+| [0004](0004-quick-sim-statistical-model.md) | The quick-sim is a calibrated statistical model | Accepted |
