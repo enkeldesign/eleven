@@ -531,6 +531,7 @@ namespace Eleven.Host
             _presetStops.Add(_presetSave.Element);
 
             PresetRow(BenchPreset.TechnicalReference, applied, deletable: false);
+            foreach (BenchPreset suggested in BenchPreset.Suggested) PresetRow(suggested, applied, deletable: false);
             foreach (BenchPreset preset in _shelf.Presets) PresetRow(preset, applied, deletable: true);
             foreach (string problem in _shelf.Problems)
             {
@@ -672,7 +673,7 @@ namespace Eleven.Host
         {
             // A saved preset first: one may hold the reference values under another ball control
             // model or touch candidate. The technical reference is its values, FREE and Candidate A.
-            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate, controls);
+            BenchPreset saved = PresetShelf.Read(stored).Matching(candidate, controls) ?? BenchPreset.SuggestedMatching(candidate, controls);
             if (saved != null) return saved.Name;
             return IsTechnicalReference(candidate, controls) ? BenchCandidate.ReferencePreset : BenchCandidate.UnsavedPreset;
         }
@@ -734,7 +735,7 @@ namespace Eleven.Host
             BenchCandidate applied = _applied();
             int fromReference = applied.ChangesFrom(BenchCandidate.Reference);
             var controls = (ControlCandidate)_activeControls();
-            BenchPreset running = _shelf.Matching(applied, controls);
+            BenchPreset running = _shelf.Matching(applied, controls) ?? BenchPreset.SuggestedMatching(applied, controls);
             _state.text = running != null ? $"Running preset \"{running.Name}\": {fromReference} changed from the technical reference."
                 : IsTechnicalReference(applied, controls) ? "Running the technical reference values."
                 : $"Running unsaved values: {fromReference} changed from the technical reference.";

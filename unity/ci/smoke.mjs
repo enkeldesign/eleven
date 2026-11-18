@@ -1930,6 +1930,10 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 
       // TECHNICAL REFERENCE: loaded as pending changes, then applied.
       shelf = await presetsLine(fromSave);
+      // The suggested preset (#135): listed beside the technical reference, with Load and no Delete.
+      check('the suggested LOOSE TACKLE preset is listed, loadable and not deletable',
+        !!shelf.items.LOOSE_TACKLE && shelf.items.LOOSE_TACKLE.load !== 'none' && shelf.items.LOOSE_TACKLE.del === 'none',
+        `items: ${Object.keys(shelf.items).join(', ') || 'none'}`);
       let fromLoad = logs.length;
       if (shelf.items.TECHNICAL_REFERENCE) await tapPreset(shelf, 'TECHNICAL_REFERENCE', 'load');
       const loadedReference = await waitForLog(/ELEVEN bench preset loaded name=(\S+) pending=(\d+) controls=(\S+) model=\S+ config=([0-9a-f]{16})/, 5_000, fromLoad);
