@@ -251,6 +251,93 @@ namespace Eleven.Simulation.Tests
         private static readonly double[] Critical = { 0, 6.63, 9.21, 11.34, 13.28, 15.09, 16.81 };
 
         [Fact]
+        public void The_calibration_sides_are_each_cpu_tier_at_each_capability_level()
+        {
+            // #151: tier and capabilities vary independently, so the fit can tell them apart.
+            IReadOnlyList<LeagueSide> sides = QuickSimCalibration.Sides();
+            Assert.Equal(QuickSimModel.Tiers * QuickSimCalibration.CapabilityLevels.Length, sides.Count);
+            for (int t = 0; t < QuickSimModel.Tiers; t++)
+            {
+                foreach (double level in QuickSimCalibration.CapabilityLevels)
+                {
+                    int matching = sides.Count(s => QuickSides.Tier(s.Skill) == t && Math.Abs(QuickSim.CapabilityIndex(s.Capabilities) - level) <= 0.006);
+                    Assert.True(matching == 1, $"tier {t}, capability level {level}: {matching} sides");
+                }
+            }
+
+            foreach (LeagueSide s in sides)
+            {
+                foreach (TunableParameter p in PlayerCapabilities.Parameters)
+                {
+                    double v = s.Capabilities.Get(p.Name);
+                    Assert.True(v >= p.Min && v <= p.Max, $"{s.Name}'s {p.Name} {v} outside [{p.Min}, {p.Max}]");
+                }
+            }
+
+            Assert.Equal(sides.Count, sides.Select(s => s.Name).Distinct().Count());
+        }
+
+        [Fact]
+        public void The_samples_fixtures_go_round_by_round_so_cis_prefix_spreads_over_the_pairs()
+        {
+            // #151: CI plays the sample's first fixtures. Each round is every ordered pair once, so
+            // the prefix spreads across the sides rather than repeating one pairing.
+            int n = QuickSimCalibration.Sides().Count, rounds = 4;
+            var fixtures = QuickSimCalibration.Fixtures(n, rounds);
+            int pairs = n * (n - 1);
+            Assert.Equal(pairs * rounds, fixtures.Count);
+            for (int r = 0; r < rounds; r++)
+            {
+                var round = fixtures.Skip(r * pairs).Take(pairs).Select(f => (f.Home, f.Away)).ToList();
+                Assert.Equal(pairs, round.Distinct().Count());
+                Assert.DoesNotContain(round, f => f.Home == f.Away);
+            }
+
+            Assert.Equal(fixtures.Count, fixtures.Select(f => f.Seed).Distinct().Count());
+            Assert.True(QuickSimCalibration.CiFixtures <= fixtures.Count);
+        }
+
+        [Fact]
+        public void The_fits_standard_errors_cover_a_known_model_and_shrink_with_the_sample()
+        {
+            // #151: a sample drawn from a known model by the quick-sim itself. The fit must recover
+            // each parameter within four of its standard errors, and the errors must halve when the
+            // sample is four times larger.
+            IReadOnlyList<LeagueSide> sides = QuickSimCalibration.Sides();
+            QuickSimModel truth = QuickSimModel.Reference;
+            List<CalibrationMatch> Drawn(int rounds)
+            {
+                var rows = new List<CalibrationMatch>();
+                foreach ((int h, int a, ulong seed) in QuickSimCalibration.Fixtures(sides.Count, rounds))
+                {
+                    MatchResult r = QuickSim.Play(C, QuickSides.Of(sides[h]), QuickSides.Of(sides[a]), seed, model: truth);
+                    rows.Add(new CalibrationMatch { Home = h, Away = a, Seed = seed, HomeGoals = r.HomeGoals, AwayGoals = r.AwayGoals });
+                }
+
+                return rows;
+            }
+
+            QuickSimFitResult large = QuickSimFit.FitWithErrors(Drawn(64), sides);
+            QuickSimFitResult small = QuickSimFit.FitWithErrors(Drawn(16), sides);
+            QuickSimModel f = large.Model;
+            void Covers(string what, double fitted, double error, double actual)
+            {
+                Assert.True(error > 0, $"{what}: standard error {error}");
+                Assert.True(Math.Abs(fitted - actual) <= 4 * error, $"{what}: fitted {fitted:F4} ± {error:F4}, the model's {actual:F4}");
+            }
+
+            Covers("μ", f.BaseRate, large.BaseRateError, truth.BaseRate);
+            Covers("h", f.Home, large.HomeError, truth.Home);
+            for (int t = 1; t < QuickSimModel.Tiers; t++) Covers($"tier {t}", f.TierRating(t), large.TierErrors[t], truth.TierRating(t));
+            Covers("w", f.CapabilityWeight, large.CapabilityWeightError, truth.CapabilityWeight);
+            Covers("ρ", f.Rho, large.RhoError, truth.Rho);
+            Assert.Equal(0, large.TierErrors[0]);
+
+            double ratio = small.HomeError / large.HomeError;
+            Assert.True(ratio > 1.7 && ratio < 2.3, $"h's error at a quarter of the sample is {ratio:F2} times the full sample's, not about 2");
+        }
+
+        [Fact]
         public void The_reference_model_is_the_fit_to_the_full_simulations_sample()
         {
             QuickSimModel fit = QuickSimFit.Fit(Sample(), League.Sides());
