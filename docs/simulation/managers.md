@@ -45,24 +45,24 @@ His plans are, by convention, **balanced** (the first), **chase** and **protect*
 
 | Preset | Goals | Switches a match | To chase, protect, balanced (all matches) | At (share of the match) | Most by one side | Substitutions a match |
 | --- | --- | --- | --- | --- | --- | --- |
-| Off | 0.8–0.9 | 0 | — | — | 0 | 2.8 |
-| Cautious | 0.9–1.0 | 1.9 | 5, 8, 2 | 0.37–0.92, mean 0.76 | 2 | 3.8 |
-| Bold | 0.6–0.9 | 1.9 | 6, 8, 1 | 0.37–0.99, mean 0.77 | 2 | 4.8 |
+| Off | 0.3–1.1 | 0 | — | — | 0 | 1.9 |
+| Cautious | 0.4–1.4 | 2.25 | 8, 8, 2 | 0.65–0.98, mean 0.80 | 2 | 4.1 |
+| Bold | 0.3–1.6 | 2.0 | 8, 6, 2 | 0.49–0.98, mean 0.74 | 2 | 5.0 |
 
 - **About two switches a match**, most of them in the last quarter: a side behind chases, the side ahead protects.
-- **The earliest switch, at 0.37 of the match,** is a side down to ten protecting. Bold's chases start from half-time (0.49–0.50); the cautious preset's from 0.67.
+- **No switch comes before half-time.** Bold's chases start from it (0.49); the cautious preset's from 0.65. The run before #134 had a side down to ten protecting at 0.37.
 - **The cooldown allows 13 a side; no side made more than 2.** There's no spam.
-- **Tactical substitutions add one or two a match.** The first run, before the fresh-legs rule, made 7.9 with the cautious preset: chasing, the manager replaced a forward however fresh, a substitute just on included.
+- **Tactical substitutions add two or three a match.** The first run, before the fresh-legs rule, made 7.9 with the cautious preset: chasing, the manager replaced a forward however fresh, a substitute just on included.
 
 ### The scripted seat against a managed CPU side, four seeds a preset
 
-The M4 review's direct runner (finding 5): a harness seat that chases the ball and shoots. Measured with #138's carry after a switch.
+The M4 review's direct runner (finding 5): a harness seat that chases the ball and shoots. Measured with #134's keeper distribution.
 
 | Preset | The seat's goals–conceded | The CPU side's switches | When |
 | --- | --- | --- | --- |
-| Off | 2.8–0 | 0 | — |
-| Cautious | 2.8–0 | 1.25 a match: 4 to chase, 1 to protect | 0.43–0.74 |
-| Bold | 1.8–0.3 | 1.5 a match: 4 to chase, 1 to protect, 1 back to balanced | 0.43–0.74 |
+| Off | 4.0–0 | 0 | — |
+| Cautious | 4.0–0 | 1 a match, all to chase | 0.64–0.72 |
+| Bold | 4.25–0 | 1 a match, all to chase | 0.48–0.53 |
 
 - **The managed side still concedes, and scores once in eight matches at most.** Its chase plan comes after it is already behind.
 - **The direct runner's weakness is the CPU's defending,** not its manager. Four seeds are too few to say whether chasing changes the seat's goals.

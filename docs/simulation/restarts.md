@@ -54,7 +54,7 @@ He sees the pitch through `KeeperObservation.Others`, in his own frame, and deci
 2. **Long.** With nobody open, he kicks it in the air (strength 0.6, loft 0.35) toward his furthest-forward teammate.
 3. With no teammate at all, he kicks up the pitch toward the side he is on, as before.
 
-Erik's playtest found he "just passes to the opponent": the blind kick up the pitch reached his own side on 41 of 63 releases at 5 and 10 a side over four seeds. `KeeperDistributionTests` now requires three quarters, and the release chooses no randomness.
+Erik's playtest found he "just passes to the opponent": the blind kick up the pitch reached his own side on 41 of 63 releases at 5 and 10 a side over four seeds. With the distribution, 30 of 37 do (14 of 18 at 5 a side, 16 of 19 at 10). There are fewer releases because the matches play differently after his first catch. `KeeperDistributionTests` requires three quarters, and the release uses no randomness.
 
 | Knob | Range | Default |
 | --- | --- | --- |
@@ -70,13 +70,14 @@ These are technical references, not tuned feel.
 
 | | Total |
 | --- | --- |
-| Goals | 41 |
-| Kick-offs | 41, one per goal |
-| Throw-ins | 9 |
-| Goal kicks | 14 |
-| Corners | 30 |
+| Goals | 39 |
+| Kick-offs | 39, one per goal |
+| Throw-ins | 14 |
+| Goal kicks | 10 |
+| Corners | 32 |
+| Penalties | 4 |
 | Dead ball, award to taken | 1.02 s each time: the stop, the set-up's wait, and the kick's wind-up |
-| Longest stretch with the ball live and no one on it | 6.0 s |
+| Longest stretch with the ball live and no one on it | 8.8 s |
 
 No match stalled. CPU takers take at once, so every dead ball lasts the same.
 
