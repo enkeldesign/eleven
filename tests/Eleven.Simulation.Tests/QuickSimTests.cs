@@ -295,6 +295,12 @@ namespace Eleven.Simulation.Tests
 
             Assert.Equal(fixtures.Count, fixtures.Select(f => f.Seed).Distinct().Count());
             Assert.True(QuickSimCalibration.CiFixtures <= fixtures.Count);
+
+            // Codex's finding on #153: a pairing has 16 seeds, so more rounds would reuse another
+            // pairing's seeds and correlate matches the fit treats as independent.
+            var most = QuickSimCalibration.Fixtures(n, QuickSimCalibration.MaxRounds);
+            Assert.Equal(most.Count, most.Select(f => f.Seed).Distinct().Count());
+            Assert.Throws<ArgumentOutOfRangeException>(() => QuickSimCalibration.Fixtures(n, QuickSimCalibration.MaxRounds + 1));
         }
 
         [Fact]
@@ -317,8 +323,9 @@ namespace Eleven.Simulation.Tests
                 return rows;
             }
 
-            QuickSimFitResult large = QuickSimFit.FitWithErrors(Drawn(64), sides);
-            QuickSimFitResult small = QuickSimFit.FitWithErrors(Drawn(16), sides);
+            // Codex's finding on #153: both samples within the rounds whose seeds are all distinct.
+            QuickSimFitResult large = QuickSimFit.FitWithErrors(Drawn(QuickSimCalibration.MaxRounds), sides);
+            QuickSimFitResult small = QuickSimFit.FitWithErrors(Drawn(QuickSimCalibration.MaxRounds / 4), sides);
             QuickSimModel f = large.Model;
             void Covers(string what, double fitted, double error, double actual)
             {
