@@ -120,7 +120,7 @@ namespace Eleven.Host
             SaveCapture.Element.focusable = false;
 
             // COPY CAPTURE (#137): the capture as text on the clipboard, for an app that drops a shared file.
-            CopyCapture = Action(ActionRole.Supporting, "Copy capture", copyCapture ?? (() => { }), "Copy\ncapture", (n, v) => n.CopyCapture = v, n => n.CopyCapture);
+            CopyCapture = Action(ActionRole.Supporting, "Copy capture", copyCapture ?? (() => { }), "Copy\ntext", (n, v) => n.CopyCapture = v, n => n.CopyCapture);
             CopyCapture.Element.style.visibility = Visibility.Hidden;
             CopyCapture.Element.focusable = false;
 

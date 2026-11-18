@@ -192,12 +192,12 @@ namespace Eleven.Host
             float captureHeight = Mathf.Max(Mathf.Max(1.1f * Unit, needs.Target), Mathf.Max(needs.FeltWrong.y, needs.SaveCapture.y));
             float feltWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.FeltWrong.x));
             // The capture's place holds COPY CAPTURE and SAVE CAPTURE (#137), each at least a target
-            // wide with its label on one line: side by side where the row holds both, otherwise
-            // COPY above SAVE, each the place's width, and the place above THIS FELT WRONG.
+            // wide with its label's lines unbroken: side by side, each as wide as its label needs,
+            // where the row holds both; otherwise COPY above SAVE, each the place's width.
             float copyGap = Padding * 0.5f;
-            float eachSave = Mathf.Max(Mathf.Max(needs.Target, needs.SaveCapture.x), needs.CopyCapture.x);
-            bool stackCopy = 2 * eachSave + copyGap > row;
-            float saveWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, stackCopy ? eachSave : 2 * eachSave + copyGap));
+            float saveNeed = Mathf.Max(needs.Target, needs.SaveCapture.x), copyNeed = Mathf.Max(needs.Target, needs.CopyCapture.x);
+            bool stackCopy = copyNeed + copyGap + saveNeed > row;
+            float saveWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, stackCopy ? Mathf.Max(saveNeed, copyNeed) : copyNeed + copyGap + saveNeed));
             float placeHeight = stackCopy ? 2 * captureHeight + copyGap : captureHeight;
             var felt = new Rect(safe.xMax - Padding - feltWidth, KickCentre.y - KickRadius - Padding - captureHeight, feltWidth, captureHeight);
             bool fitsRow = !stackCopy && feltWidth + Padding + saveWidth <= row;
@@ -255,9 +255,11 @@ namespace Eleven.Host
             }
             else
             {
-                float half = (capturePlace.width - copyGap) * 0.5f;
-                CopyCaptureButton = new Rect(capturePlace.x, capturePlace.y, half, capturePlace.height);
-                SaveCaptureButton = new Rect(capturePlace.xMax - half, capturePlace.y, half, capturePlace.height);
+                // Each its need, and any room over shared between them.
+                float spare = Mathf.Max(0, capturePlace.width - copyGap - copyNeed - saveNeed) * 0.5f;
+                float copyWidth = copyNeed + spare;
+                CopyCaptureButton = new Rect(capturePlace.x, capturePlace.y, copyWidth, capturePlace.height);
+                SaveCaptureButton = new Rect(capturePlace.x + copyWidth + copyGap, capturePlace.y, capturePlace.width - copyWidth - copyGap, capturePlace.height);
             }
             SwitchButton = useBand ? switchBand : switchColumn;
             SubsButton = useBand ? subsBand : subsColumn;

@@ -129,7 +129,7 @@ The "this felt wrong" capture (#44, part of #27) is evidence, not telemetry: it 
 
 Both captures Erik first shared arrived as a 14-byte text file saying "ELEVEN capture". The app they were shared to kept the share's title and dropped the file. So:
 
-- **COPY CAPTURE**, beside SAVE CAPTURE (above it where the row can't hold both labels on one line), puts the newest capture on the clipboard as text (`CaptureText`). The HUD says it copied only once the page has; if the copy fails, it says to use SAVE CAPTURE. It is a header line, `ELEVEN CAPTURE v1 name=<name> bytes=<length> fnv=<FNV-1a, 8 hex>`, then the bytes in base64 in lines of 76, then `END`. It pastes into any chat or note.
+- **COPY CAPTURE** (its label reads "Copy text", short enough to sit beside SAVE CAPTURE on a narrow phone with large text; above it only where even that doesn't fit) puts the newest capture on the clipboard as text (`CaptureText`). The HUD says it copied only once the page has; if the copy fails, it says to use SAVE CAPTURE. It is a header line, `ELEVEN CAPTURE v1 name=<name> bytes=<length> fnv=<FNV-1a, 8 hex>`, then the bytes in base64 in lines of 76, then `END`. It pastes into any chat or note.
 - **It reads back whatever a chat did to it:** text before it, indentation, changed line breaks, or one long line. A cut or changed capture is refused, saying so: it holds too few bytes, or its checksum differs.
 - **The share has no title** now, so a target that drops the file shows nothing rather than something that looks like a capture.
 - **`eleven-sim replay`** takes the saved file or a text file holding the pasted text, anywhere in it.
