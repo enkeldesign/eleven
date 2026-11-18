@@ -2215,8 +2215,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
 }
 
 // The service worker, with a server of its own that can stand in for a new deploy or go away.
-async function runServiceWorkerPassOnce(browser, root) {
-  const name = 'service worker';
+async function runServiceWorkerPassOnce(browser, root, name = 'service worker') {
   const logs = [];
   const check = (what, ok, detail) => {
     results.checks.push({ name: `${name}: ${what}`, ok, detail });
@@ -2259,7 +2258,7 @@ async function runServiceWorkerPassOnce(browser, root) {
   } catch (e) {
     check('ran to completion', false, e.message);
   } finally {
-    fs.writeFileSync(path.join(outDir, 'service-worker-console.log'), logs.join('\n'));
+    fs.writeFileSync(path.join(outDir, `${name.replace(/ /g, '-')}-console.log`), logs.join('\n'));
     await context.close();
     if (server.listening) server.close();
   }
@@ -2270,13 +2269,20 @@ async function runServiceWorkerPassOnce(browser, root) {
 // Unset, every pass runs once, as in CI.
 const only = process.env.SMOKE_ONLY ? new Set(process.env.SMOKE_ONLY.split(',').map((n) => n.trim()).filter(Boolean)) : null;
 const repeat = Math.max(1, Number(process.env.SMOKE_REPEAT) || 1);
+// Every pass name offered, so a selection naming none of them fails rather than passing empty.
+const offered = new Set();
 const repeated = (once) => async (browser, url, name, ...rest) => {
+  offered.add(name);
   if (only && !only.has(name)) return;
   for (let r = 1; r <= repeat; r++) await once(browser, url, repeat > 1 ? `${name}#${r}` : name, ...rest);
 };
 const runPass = repeated(runPassOnce);
 const runSpecimenPass = repeated(runSpecimenPassOnce);
-const runServiceWorkerPass = async (browser, root) => { if (!only || only.has('service-worker')) await runServiceWorkerPassOnce(browser, root); };
+const runServiceWorkerPass = async (browser, root) => {
+  offered.add('service-worker');
+  if (only && !only.has('service-worker')) return;
+  for (let r = 1; r <= repeat; r++) await runServiceWorkerPassOnce(browser, root, repeat > 1 ? `service worker#${r}` : 'service worker');
+};
 
 const server = await serve(path.resolve(playerDir));
 const base = `http://127.0.0.1:${server.address().port}/index.html`;
@@ -2368,6 +2374,13 @@ try {
 } finally {
   await browser.close();
   server.close();
+}
+
+// #120 (Codex's finding on #154): a selection must name passes that exist, and run some checks.
+if (only) {
+  const unknown = [...only].filter((n) => !offered.has(n));
+  results.checks.push({ name: 'selection: SMOKE_ONLY names only passes that exist', ok: unknown.length === 0, detail: unknown.length ? `unknown: ${unknown.join(', ')}; offered: ${[...offered].join(', ')}` : [...only].join(', ') });
+  results.checks.push({ name: 'selection: the selected passes ran checks', ok: results.checks.length > 1, detail: `${results.checks.length - 1} checks` });
 }
 
 fs.writeFileSync(path.join(outDir, 'smoke.json'), JSON.stringify(results, null, 2));
