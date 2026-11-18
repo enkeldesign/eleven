@@ -215,12 +215,12 @@ namespace Eleven.Simulation.Tests
         // ---- Calibration against the full simulation (docs/simulation/quicksim-calibration-reference.csv) ----
 
         internal static List<CalibrationMatch> Sample() =>
-            QuickSimCalibration.Read(File.ReadAllLines(Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "quicksim-calibration-reference.csv")), League.Sides());
+            QuickSimCalibration.Read(File.ReadAllLines(Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "quicksim-calibration-reference.csv")), QuickSimCalibration.Sides());
 
         // The quick-sim over the sample's own fixtures, `draws` times each on derived seeds.
         private static List<MatchResult> QuickOver(List<CalibrationMatch> sample, int draws)
         {
-            IReadOnlyList<LeagueSide> sides = League.Sides();
+            IReadOnlyList<LeagueSide> sides = QuickSimCalibration.Sides();
             var results = new List<MatchResult>();
             foreach (CalibrationMatch p in sample)
             {
@@ -340,7 +340,7 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void The_reference_model_is_the_fit_to_the_full_simulations_sample()
         {
-            QuickSimModel fit = QuickSimFit.Fit(Sample(), League.Sides());
+            QuickSimModel fit = QuickSimFit.Fit(Sample(), QuickSimCalibration.Sides());
             QuickSimModel r = QuickSimModel.Reference;
             Assert.Equal(fit.BaseRate, r.BaseRate, 3);
             Assert.Equal(fit.Home, r.Home, 3);
@@ -395,8 +395,8 @@ namespace Eleven.Simulation.Tests
             Assert.True(totals <= Critical[6], $"goals-a-match χ² {totals:F2} against {Critical[6]}");
 
             // And each side's goal difference a match: the quick-sim's within three standard errors of
-            // the full simulation's, which plays each side 20 times.
-            IReadOnlyList<LeagueSide> sides = League.Sides();
+            // the full simulation's, which plays each side 88 times.
+            IReadOnlyList<LeagueSide> sides = QuickSimCalibration.Sides();
             int k = 0;
             for (int side = 0; side < sides.Count; side++)
             {
