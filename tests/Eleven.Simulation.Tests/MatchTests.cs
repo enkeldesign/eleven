@@ -111,7 +111,7 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(2 * C.HalfLength, result.PlayedSeconds, 9);
             Assert.All(result.Goals, g => Assert.InRange(g.ClockSeconds, 0, C.HalfLength));
             Assert.All(result.Goals, g => Assert.InRange(g.Half, 1, 2));
-            Assert.StartsWith("eleven-result/6\n", result.ToText());
+            Assert.StartsWith("eleven-result/7\n", result.ToText());
         }
 
         [Fact]
@@ -191,12 +191,15 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void The_result_is_plain_values_independent_of_the_simulations_state()
         {
-            var allowed = new[] { typeof(int), typeof(double), typeof(IReadOnlyList<ResultGoal>) };
+            var allowed = new[] { typeof(int), typeof(double), typeof(IReadOnlyList<ResultGoal>), typeof(SideMetrics) };
             foreach (PropertyInfo prop in typeof(MatchResult).GetProperties()) Assert.Contains(prop.PropertyType, allowed);
             foreach (PropertyInfo prop in typeof(ResultGoal).GetProperties()) Assert.Contains(prop.PropertyType, new[] { typeof(int), typeof(double) });
+            foreach (PropertyInfo prop in typeof(SideMetrics).GetProperties()) Assert.Contains(prop.PropertyType, new[] { typeof(int), typeof(double) });
 
             var result = new MatchResult(1, 2, 3, 1, 180, 360, new[] { new ResultGoal(1, 1, 1, 12.5), new ResultGoal(2, 3, 2, 170) }, 9);
-            Assert.Equal("eleven-result/6\nhome=1\naway=2\nscore=3-1\nhalf=180\nplayed=360.00\nrestarts=9\nfouls=0-0\npenalties=0-0\ncautions=0-0\nsendingsoff=0-0\ninjuries=0-0\nsubstitutions=0-0\nextratime=0\nshootout=0-0\nshootoutkicks=0-0\nwinner=1\ngoal=1,1,1,12.50\ngoal=2,3,2,170.00\n", result.ToText());
+            Assert.Equal("eleven-result/7\nhome=1\naway=2\nscore=3-1\nhalf=180\nplayed=360.00\nrestarts=9\nfouls=0-0\npenalties=0-0\ncautions=0-0\nsendingsoff=0-0\ninjuries=0-0\nsubstitutions=0-0\nextratime=0\nshootout=0-0\nshootoutkicks=0-0\nwinner=1\n"
+                + "possession=0.000-0.000\nshots=0-0\nontarget=0-0\nxg=0.00-0.00\npasses=0-0\npassescompleted=0-0\ncorners=0-0\nppda=0.00-0.00\n"
+                + "goal=1,1,1,12.50\ngoal=2,3,2,170.00\n", result.ToText());
         }
 
         [Fact]
