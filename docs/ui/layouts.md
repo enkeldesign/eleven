@@ -32,9 +32,10 @@ From Erik's capture `eleven-felt-wrong-227-019e240-t10330`: "The zoom is wild. I
 `CameraEase` now follows the fitted view:
 - **The zoom goes out promptly and in slowly:** first-order, with time constants of 0.3 s out and 1.5 s in.
 - **A dead zone:** a change smaller than 10 % of the zoom doesn't start a move. Once moving, it settles all the way.
-- **Never so close the footballer or the ball leaves:** the zoom is never closer than keeps both in view, with 1 m to spare, about the eased centre.
+- **Never so close the footballer or the ball leaves:** the zoom is never closer than keeps both in view, with the framing's 3 m margin, about the eased centre. The footballer's framing correction then never moves the centre at that limit.
 - **The centre pans** at 0.25 s, so a switch or a long pass reads as a pan, not a cut.
 - **A new match or a turned view snaps** to its framing.
+- **Paused, it holds:** while play is paused or waiting under a sheet, the easing doesn't move. Pause means stop.
 
 They are technical references, not approved feel. Each is in the address, and 0 follows at once, as before.
 

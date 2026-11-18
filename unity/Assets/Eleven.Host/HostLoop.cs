@@ -276,6 +276,8 @@ namespace Eleven.Host
             if (_match) RenderSides(state, me, alpha);
             DrawPoses(state, me);
 
+            // Pause means stop (#139): the camera's easing holds while play is paused or waiting.
+            _view.Frozen = _paused || waiting;
             _view.Render(
                 Vector2.Lerp(Previous(me, state), ToVector(state.Players[me].Position), alpha),
                 keeper,

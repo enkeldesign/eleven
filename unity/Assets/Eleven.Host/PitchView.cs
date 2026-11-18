@@ -151,8 +151,12 @@ namespace Eleven.Host
             return travel;
         }
 
-        // m. The least margin the eased zoom keeps round the footballer and the ball.
-        private const float KeepInView = 1f;
+        /// <summary>Whether play is paused or waiting (#139): the camera's easing holds, as the play does.</summary>
+        public bool Frozen { get; set; }
+
+        // m. The least margin the eased zoom keeps round the footballer and the ball: the framing's
+        // own, so the footballer's correction below never has to move the centre at the limit.
+        private const float KeepInView = FramingMargin;
 
         /// <param name="minAhead">
         /// The least the play shows up-field either side of the action, in metres (#72, <c>?ahead=</c>);
@@ -586,7 +590,7 @@ namespace Eleven.Host
         private void Frame(Vector2 player, Vector2 ball, in HudLayout layout)
         {
             Rect play = layout.PlayArea;
-            float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+            float dt = Frozen ? 0 : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
 
             // The framing centre pans to the midpoint of the footballer and the ball (#139), rather
             // than cutting to it at a switch or a long pass.
