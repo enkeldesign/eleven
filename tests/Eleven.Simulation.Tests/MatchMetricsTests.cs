@@ -105,6 +105,7 @@ namespace Eleven.Simulation.Tests
         {
             SimState s = Squads.Match(Hand, 3, 5);
             s.Match.Phase = MatchPhase.FirstHalf;
+            s.Restart.Phase = RestartPhase.Live; // in play, the kick-off taken
             return s;
         }
 

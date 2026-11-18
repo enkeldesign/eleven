@@ -329,7 +329,7 @@ namespace Eleven.Simulation
         // The state before this step: whether play was live in it, and where the ball was. A kick
         // connects before the ball moves on its step, so a shot is read from where it was struck;
         // and the step that ends a half still has live play's events.
-        private bool _wasInPlay;
+        private bool _wasInPlay, _wasLive = true;
         private Vec2? _ballBefore;
 
         // The pass waiting for its next player (#128): its side (_passer), its passer, and whether his
@@ -374,10 +374,16 @@ namespace Eleven.Simulation
         private void Measure(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
         {
             bool inPlay = InPlay(after), wasInPlay = _wasInPlay;
+            bool live = after.Restart.Phase == RestartPhase.Live, wasLive = _wasLive;
             Vec2 struck = _ballBefore ?? after.Ball.Position.Horizontal;
             _wasInPlay = inPlay;
+            _wasLive = live;
             _ballBefore = after.Ball.Position.Horizontal;
-            if (after.Teams.Length < 2 || !(inPlay || wasInPlay)) return;
+
+            // Live play: a step that began or ended in a half and with the ball live. A step wholly in a
+            // break, or wholly with the ball dead before a restart, has nothing to measure.
+            if (after.Teams.Length < 2 || !(inPlay || wasInPlay) || !(live || wasLive)) return;
+            bool stopped = false;
 
             // A penalty's kick is raised before the restart that says it was a penalty, in its step.
             bool penalty = false;
@@ -447,6 +453,7 @@ namespace Eleven.Simulation
                 switch (e.Kind)
                 {
                     case SimEventKind.RestartAwarded:
+                        stopped = true;
                         if (e.Other == (int)RestartKind.Corner)
                         {
                             if (e.Subject == after.Teams[0].Id) _corners[0]++;
@@ -510,6 +517,9 @@ namespace Eleven.Simulation
                 if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId && !_passSent) _passSent = true;
                 else PlayPass(e.Subject, side);
             }
+
+            // Play stopped: no kick before it is a shot now, whatever the dead ball does next.
+            if (stopped) _shooter = -1;
 
             // Possession: live play, by the side that last played the ball.
             int had = SideOf(after, after.Ball.LastPlayedBy);
