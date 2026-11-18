@@ -413,12 +413,13 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(System.IO.TextWriter w, SimConfig config, IReadOnlyList<SquadTrial> trials)
         {
-            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,switches_pass,switches_mate,switches_turnover,switches_asked,length_s,final_hash");
+            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,switches_pass,switches_mate,switches_turnover,switches_asked,seat_attempts,seat_challenges,seat_won,seat_too_far,seat_not_closing,seat_wont_reach,seat_not_ready,length_s,final_hash");
             foreach (SquadTrial t in trials)
             {
-                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13},{14},{15},{16},{17:F2},{18:x16}",
+                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24:F2},{25:x16}",
                     config.Hash, t.Seed, t.Seat ? "yes" : "no", t.Finished ? "yes" : "no", t.HomeGoals, t.AwayGoals, t.Passes, t.PassesCompleted, t.Possessions, t.MeanSpacing, t.LongestBunchedSeconds,
-                    t.Switches, t.SwitchesRefused, t.SwitchesPass, t.SwitchesMate, t.SwitchesTurnover, t.SwitchesAsked, t.LengthSeconds, t.FinalHash));
+                    t.Switches, t.SwitchesRefused, t.SwitchesPass, t.SwitchesMate, t.SwitchesTurnover, t.SwitchesAsked,
+                    t.SeatAttempts, t.SeatChallenges, t.SeatChallengesWon, t.SeatTooFar, t.SeatNotClosing, t.SeatWontReach, t.SeatNotReady, t.LengthSeconds, t.FinalHash));
             }
         }
 
@@ -442,7 +443,9 @@ namespace Eleven.Simulation.Harness
                 "{0}v{0}: {1} of {2} finished; {3} goals; {4} passes, {5} completed; {6} possessions; mean spacing {7:F1} m; longest bunched {8:F1} s; {9} switches",
                 perSide, finished, trials.Count, goals, passes, completed, possessions, spacing / Math.Max(1, trials.Count), bunched, switches)
                 + string.Format(System.Globalization.CultureInfo.InvariantCulture, " (pass {0}, teammate {1}, turnover {2}, asked {3}; {4} refused)",
-                    trials.Sum(t => t.SwitchesPass), trials.Sum(t => t.SwitchesMate), trials.Sum(t => t.SwitchesTurnover), trials.Sum(t => t.SwitchesAsked), trials.Sum(t => t.SwitchesRefused));
+                    trials.Sum(t => t.SwitchesPass), trials.Sum(t => t.SwitchesMate), trials.Sum(t => t.SwitchesTurnover), trials.Sum(t => t.SwitchesAsked), trials.Sum(t => t.SwitchesRefused))
+                + string.Format(System.Globalization.CultureInfo.InvariantCulture, "; the seat pressed {0} times, challenged {1}, won {2}; steps without a start: too far {3}, not closing {4}, won't reach {5}, not ready {6}",
+                    trials.Sum(t => t.SeatAttempts), trials.Sum(t => t.SeatChallenges), trials.Sum(t => t.SeatChallengesWon), trials.Sum(t => t.SeatTooFar), trials.Sum(t => t.SeatNotClosing), trials.Sum(t => t.SeatWontReach), trials.Sum(t => t.SeatNotReady));
         }
     }
 }
