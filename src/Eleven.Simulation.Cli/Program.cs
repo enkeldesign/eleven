@@ -206,6 +206,61 @@ internal static class Program
                 return 0;
             }
 
+            case "quicksim" when args.Length >= 3 && args[1] == "fit":
+            {
+                // #129: the quick-sim's reference refitted from a calibration sample, and its comparison.
+                IReadOnlyList<LeagueSide> fitSides = League.Sides();
+                List<CalibrationMatch> fitSample = QuickSimCalibration.Read(File.ReadAllLines(args[2]), fitSides);
+                QuickSimModel fit = QuickSimFit.Fit(fitSample, fitSides);
+                Console.WriteLine(FormattableString.Invariant(
+                    $"fit over {fitSample.Count} matches: mu {fit.BaseRate:F6}, home {fit.Home:F6}, tiers 0 {fit.TierRating(1):F6} {fit.TierRating(2):F6} {fit.TierRating(3):F6}, capabilities {fit.CapabilityWeight:F6}, rho {fit.Rho:F3}, fouls {fit.FoulsPerSide:R}, cautions {fit.CautionsPerSide:R}, sendings-off {fit.SendingsOffPerSide:R} a side"));
+                Console.WriteLine(QuickSimCalibration.Compare(SpikeScenario.Config(), fitSample, fitSides, 50, fit));
+                return 0;
+            }
+
+            case "throughput":
+            {
+                // #129: full 11v11 matches a second, headless, on one core; and quick-simmed ones.
+                SimConfig tc = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> ts = League.Sides();
+                int full = args.Length >= 2 && int.TryParse(args[1], out int tf) && tf > 0 ? tf : 3;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                long steps = 0;
+                for (int i = 0; i < full; i++)
+                {
+                    GateMatch g = Gate11.Play(tc, ts, i % ts.Count, (i + 1) % ts.Count, 0x129100000UL + (ulong)i, "throughput");
+                    steps += (long)Math.Round(g.LengthSeconds * tc.TickRate);
+                }
+
+                double fullSeconds = watch.Elapsed.TotalSeconds;
+                watch.Restart();
+                const int Quick = 100_000;
+                int goals = 0;
+                for (int i = 0; i < Quick; i++) goals += QuickSim.Play(tc, QuickSides.Of(ts[i % ts.Count]), QuickSides.Of(ts[(i + 1) % ts.Count]), (ulong)i).HomeGoals;
+                double quickSeconds = watch.Elapsed.TotalSeconds;
+                Console.WriteLine(FormattableString.Invariant(
+                    $"full simulation: {full} matches in {fullSeconds:F1} s, {full / fullSeconds:F3} matches/s, {1000 * fullSeconds / steps:F3} ms a step; quick-sim: {Quick / quickSeconds:F0} matches/s ({goals} home goals)"));
+                return 0;
+            }
+
+            case "quicksim" when args.Length >= 2:
+            {
+                // #129's calibration sample: the full simulation over the six sides, each ordered pair twice.
+                SimConfig quickConfig = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> quickSides = League.Sides();
+                int perPair = args.Length >= 3 && int.TryParse(args[2], out int pp) && pp > 0 ? pp : QuickSimCalibration.PerPair;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                // The matches are independent and each deterministic: played at once, written in order.
+                var fixtures = QuickSimCalibration.Fixtures(quickSides.Count, perPair);
+                var played = new GateMatch[fixtures.Count];
+                System.Threading.Tasks.Parallel.For(0, fixtures.Count, i => played[i] = QuickSimCalibration.Play(quickConfig, quickSides, fixtures[i]));
+                List<GateMatch> sample = played.ToList();
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "quicksim-calibration.csv"))) Gate11.WriteMatches(csv, quickConfig, quickSides, sample);
+                Console.WriteLine(FormattableString.Invariant($"config {quickConfig.Hash:x16}, {sample.Count} full matches in {watch.Elapsed.TotalSeconds:F0} s on {Environment.ProcessorCount} cores -> {args[1]}"));
+                return 0;
+            }
+
             case "formations" when args.Length >= 2:
             {
                 // #125's contrast: home in each formation against the 4-4-2, CPU against CPU, over fixed seeds.
