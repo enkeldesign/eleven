@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 31;
+        public const int FormatVersion = 32;
 
         public SimConfig(
             int tickRate = 60,
@@ -149,7 +149,8 @@ namespace Eleven.Simulation
             double switchCarrySeconds = 1,
             double keeperHoldSeconds = 1.2,
             double keeperThrowRange = 30,
-            double keeperOpenDistance = 6)
+            double keeperOpenDistance = 6,
+            double humanChallengeLeeway = 0)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -278,6 +279,7 @@ namespace Eleven.Simulation
             KeeperHoldSeconds = keeperHoldSeconds;
             KeeperThrowRange = keeperThrowRange;
             KeeperOpenDistance = keeperOpenDistance;
+            HumanChallengeLeeway = humanChallengeLeeway;
 
             CheckTunableRanges();
 
@@ -778,6 +780,9 @@ namespace Eleven.Simulation
         /// <summary>m. How clear of opponents a teammate must be, and his line from the keeper half of it, for the keeper to give him the ball short (#134).</summary>
         public double KeeperOpenDistance { get; }
 
+        /// <summary>m. Extra reach the won't-reach check allows a human's standing challenge (#135), never the CPU's; 0, the reference, holds both to the same rule.</summary>
+        public double HumanChallengeLeeway { get; }
+
         /// <summary>Steps of a switched footballer's carry (#138): switchCarrySeconds at the tick rate.</summary>
         public int SwitchCarryTicks => (int)Math.Round(SwitchCarrySeconds * TickRate);
 
@@ -966,7 +971,8 @@ namespace Eleven.Simulation
                 switchCarrySeconds: r.ReadDouble(nameof(SwitchCarrySeconds)),
                 keeperHoldSeconds: r.ReadDouble(nameof(KeeperHoldSeconds)),
                 keeperThrowRange: r.ReadDouble(nameof(KeeperThrowRange)),
-                keeperOpenDistance: r.ReadDouble(nameof(KeeperOpenDistance)));
+                keeperOpenDistance: r.ReadDouble(nameof(KeeperOpenDistance)),
+                humanChallengeLeeway: r.ReadDouble(nameof(HumanChallengeLeeway)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1100,6 +1106,7 @@ namespace Eleven.Simulation
             w.WriteDouble(KeeperHoldSeconds, nameof(KeeperHoldSeconds));
             w.WriteDouble(KeeperThrowRange, nameof(KeeperThrowRange));
             w.WriteDouble(KeeperOpenDistance, nameof(KeeperOpenDistance));
+            w.WriteDouble(HumanChallengeLeeway, nameof(HumanChallengeLeeway));
             return w.ToArray();
         }
 
