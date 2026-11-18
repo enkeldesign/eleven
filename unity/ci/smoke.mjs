@@ -826,9 +826,13 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const all = !!d.shown && rows.every((r) => new RegExp(`\\b${r}=\\S+-\\S+`).test(d.shown[1]));
           const play = (lastLog(/ELEVEN layout .* play=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
           const p = d.placed ? d.placed.slice(1, 5).map(Number) : [];
-          const inside = play.length === 4 && p.length === 4 && p[0] >= play[0] - 1 && p[1] >= play[1] - 1 && p[0] + p[2] <= play[0] + play[2] + 1 && p[1] + p[3] <= play[1] + play[3] + 1;
-          check('PAUSE shows the match dashboard: the score and each side\'s metrics, over the play area', all && inside,
-            `${d.shown ? d.shown[1] : 'no dashboard shown'}; panel ${p.join(',') || 'not placed'} in play ${play.join(',') || 'none'}`);
+          // Over the play area's columns, from its top down at most to the screen's foot (it covers
+          // the stick and action area while paused), and tall enough to read: 160 pt or more.
+          const screenH = Number((lastLog(layoutPattern) ?? layout)[2]);
+          const inside = play.length === 4 && p.length === 4 && p[0] >= play[0] - 1 && p[1] >= play[1] - 1 && p[0] + p[2] <= play[0] + play[2] + 1 && p[1] + p[3] <= screenH + 1
+            && p[3] >= Math.min(160 * pxPerPt, screenH - play[1]) - 2;
+          check('PAUSE shows the match dashboard: the score and each side\'s metrics, over the play area and tall enough to read', all && inside,
+            `${d.shown ? d.shown[1] : 'no dashboard shown'}; panel ${p.join(',') || 'not placed'} under play ${play.join(',') || 'none'} on a screen ${screenH} high`);
           const plans = d.placed ? d.placed[6] : '';
           if (size >= 5) {
             const boxes = plans.split('|').map((b) => /^(\w+):(-?\d+),(-?\d+),(\d+),(\d+)$/.exec(b)).filter(Boolean);

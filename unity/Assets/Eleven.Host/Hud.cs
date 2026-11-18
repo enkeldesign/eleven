@@ -354,9 +354,13 @@ namespace Eleven.Host
             if (layout.SwitchButton.width > 0) _ui.Place(Switch.Element, layout.SwitchButton);
             if (layout.SubsButton.width > 0) _ui.Place(Subs.Element, layout.SubsButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
-            // The dashboard under the status line's band, so what a switch did reads over neither.
+            // The dashboard under the status line's band, so what a switch did reads over neither. It
+            // shows only while play is paused, when the stick and the action area below the play
+            // area do nothing: it runs down over them to the safe area's foot, so a play area made
+            // short by the match's controls (SUBS and SWITCH at eleven a side) still holds it.
             float statusBand = layout.StatusArea.yMax - layout.PlayArea.yMin;
-            Dashboard.Place(new Rect(layout.PlayArea.x, layout.PlayArea.y + statusBand, layout.PlayArea.width, Mathf.Max(0, layout.PlayArea.height - statusBand)), layout.Padding);
+            float dashTop = layout.PlayArea.y + statusBand;
+            Dashboard.Place(new Rect(layout.PlayArea.x, dashTop, layout.PlayArea.width, Mathf.Max(0, layout.Safe.yMax - dashTop)), layout.Padding);
 
             // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe
             // edges, in points, are added to their margins.

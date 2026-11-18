@@ -67,7 +67,7 @@ Issue #95, M2's exit. Two outfielders and a keeper a side ([squads.md](../simula
 
 Issue #128, M5: the human manager's view of the match. Nothing here is approved feel, and none of it has been tried on a device.
 
-- **PAUSE opens it.** It shows over the stopped play, under the status line, and RESUME closes it. Research puts a phone's dashboard at a stoppage or a pause, not over live play, so it never covers a running match.
+- **PAUSE opens it.** It shows over the stopped play, under the status line, and RESUME closes it. It runs from the play area's top down to the safe area's foot, over the stick and the action area, which do nothing while paused. A play area made short by the match's controls (SUBS and SWITCH at eleven a side on a phone) still holds it. Research puts a phone's dashboard at a stoppage or a pause, not over live play, so it never covers a running match.
 - **It shows:**
   - the score, the clock and the half;
   - each side's plan;
@@ -81,5 +81,5 @@ Issue #128, M5: the human manager's view of the match. Nothing here is approved 
 - **The keyboard:** Tab reaches the plans' segments after the HUD's controls while the dashboard is shown.
 
 **The smoke test.**
-- Every full-match pass checks that PAUSE shows the dashboard with each side's metrics, inside the play area. From five a side up it also checks that SWITCH PLAN offers the three plans at 44 × 44 pt or more; under five a side, that no plans are shown.
+- Every full-match pass checks that PAUSE shows the dashboard with each side's metrics, over the play area's columns and at least 160 pt tall where the screen allows. From five a side up it also checks that SWITCH PLAN offers the three plans at 44 × 44 pt or more; under five a side, that no plans are shown.
 - `match11-phone` (390 × 664) pauses after its substitution and picks High press. It resumes, and checks that the switch is sent, taken at a stoppage, and that the recording so far replays to that step.
