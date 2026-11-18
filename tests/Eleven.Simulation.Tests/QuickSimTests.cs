@@ -125,7 +125,7 @@ namespace Eleven.Simulation.Tests
             (double h, double a) = QuickSim.Rates(Side(3), Side(0), QuickSim.ReferenceHalf, m);
             Assert.True(h > a);
             (double lh, double la) = QuickSim.Rates(Side(1), Side(1), QuickSim.ReferenceHalf, m);
-            Assert.True(lh > la, "home's advantage between level sides");
+            Assert.Equal(System.Math.Exp(m.Home), lh / la, 9); // between level sides, home's advantage alone: its sign is the fit's
             (double sh, _) = QuickSim.Rates(Side(1), Side(1), QuickSim.ReferenceHalf / 2, m);
             Assert.Equal(lh / 2, sh, 12); // rates scale with the half's length
         }
