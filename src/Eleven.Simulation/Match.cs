@@ -179,7 +179,7 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 6;
+        public const int SchemaVersion = 7;
 
         public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
             int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0,
@@ -290,6 +290,9 @@ namespace Eleven.Simulation
                 HomeTeam, AwayTeam, HomeGoals, AwayGoals, HalfSeconds, PlayedSeconds, Restarts, HomeFouls, AwayFouls, HomePenalties, AwayPenalties,
                 HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff, HomeInjuries, AwayInjuries, HomeSubstitutions, AwaySubstitutions,
                 ExtraTime, HomeShootoutGoals, AwayShootoutGoals, HomeShootoutKicks, AwayShootoutKicks, Winner));
+            text.Append(string.Format(CultureInfo.InvariantCulture, "possession={0:F3}-{1:F3}\nshots={2}-{3}\nontarget={4}-{5}\nxg={6:F2}-{7:F2}\npasses={8}-{9}\npassescompleted={10}-{11}\ncorners={12}-{13}\nppda={14:F2}-{15:F2}\n",
+                HomeMetrics.Possession, AwayMetrics.Possession, HomeMetrics.Shots, AwayMetrics.Shots, HomeMetrics.OnTarget, AwayMetrics.OnTarget, HomeMetrics.Xg, AwayMetrics.Xg,
+                HomeMetrics.Passes, AwayMetrics.Passes, HomeMetrics.PassesCompleted, AwayMetrics.PassesCompleted, HomeMetrics.Corners, AwayMetrics.Corners, HomeMetrics.Ppda, AwayMetrics.Ppda));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
             return text.ToString();
         }
@@ -308,10 +311,162 @@ namespace Eleven.Simulation
         private int _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries;
         private bool _extraTime;
 
+        // The metrics (#128), by side: [0] home, [1] away.
+        private readonly MetricsModel _model;
+        private readonly long[] _possessed = new long[2];
+        private readonly int[] _shots = new int[2], _onTarget = new int[2], _passes = new int[2], _completed = new int[2], _corners = new int[2];
+        private readonly int[] _ownSixtyPasses = new int[2], _actions = new int[2];
+        private readonly double[] _xg = new double[2];
+        private int _inPossession = -1;
+        private int _shooter = -1, _passer = -1;
+        private double _shotChance;
+        private bool _penalty;
+
+        // The side that last touched the ball, and a shot's chance from there: a goal scored off a
+        // touch, not a kick, is a shot too.
+        private int _toucher = -1;
+        private double _touchChance;
+
+        public MatchRecorder(MetricsModel? model = null)
+        {
+            _model = model ?? MetricsModel.Reference;
+        }
+
         public MatchResult? Result { get; private set; }
+
+        // 0 for home, 1 for away, -1 for neither: the side footballer `id` plays for.
+        private static int SideOf(SimState s, int id)
+        {
+            if (id == 0 || s.Teams.Length < 2) return -1;
+            foreach (PlayerState p in s.Players)
+            {
+                if (p.Id != id) continue;
+                return p.TeamId == s.Teams[0].Id ? 0 : p.TeamId == s.Teams[1].Id ? 1 : -1;
+            }
+
+            return -1;
+        }
+
+        private static bool InPlay(SimState s) =>
+            s.Match.Phase == MatchPhase.FirstHalf || s.Match.Phase == MatchPhase.SecondHalf || s.Match.Phase == MatchPhase.ExtraFirstHalf || s.Match.Phase == MatchPhase.ExtraSecondHalf;
+
+        // The metrics of a step (#128): read from its events and the state after it, never from inside the football.
+        private void Measure(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
+        {
+            if (after.Teams.Length < 2 || !InPlay(after)) return;
+            foreach (SimEvent e in events)
+            {
+                int side = SideOf(after, e.Subject);
+                switch (e.Kind)
+                {
+                    case SimEventKind.RestartTaken:
+                        _penalty = e.Other == (int)RestartKind.Penalty;
+                        break;
+                    case SimEventKind.Kicked:
+                    case SimEventKind.Headed:
+                    case SimEventKind.Volleyed:
+                        if (side < 0) break;
+                        _shooter = side;
+                        double goalX = after.Teams[side].AttackSign * config.GoalLineX;
+                        _shotChance = _penalty ? _model.Penalty : _model.Chance(after.Ball.Position.Horizontal, goalX, config.GoalWidth);
+                        _penalty = false;
+                        break;
+                    case SimEventKind.Goal:
+                    case SimEventKind.HitFrame:
+                    case SimEventKind.GoalLineCrossed:
+                        if (_shooter >= 0 && after.Teams[_shooter].AttackSign * after.Ball.Position.X > 0) Shot(e.Kind == SimEventKind.Goal);
+                        else if (e.Kind == SimEventKind.Goal && _toucher >= 0 && after.Teams[_toucher].Id == e.Other)
+                        {
+                            // Scored off a touch: a shot on target from where it was touched. An own goal is none.
+                            _shooter = _toucher;
+                            _shotChance = _touchChance;
+                            Shot(true);
+                        }
+
+                        _shooter = -1;
+                        break;
+                    case SimEventKind.KeeperHeld:
+                    case SimEventKind.KeeperParried:
+                        if (_shooter >= 0 && side >= 0 && side != _shooter) Shot(true);
+                        _shooter = -1;
+                        break;
+                    case SimEventKind.Touched:
+                    case SimEventKind.ChallengeWon:
+                    case SimEventKind.SlideWon:
+                        if (side >= 0 && side != _shooter) _shooter = -1;
+                        break;
+                }
+
+                if (side >= 0 && (e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon
+                    || e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Headed || e.Kind == SimEventKind.Volleyed))
+                {
+                    _toucher = side;
+                    _touchChance = _model.Chance(after.Ball.Position.Horizontal, after.Teams[side].AttackSign * config.GoalLineX, config.GoalWidth);
+                }
+
+                switch (e.Kind)
+                {
+                    case SimEventKind.RestartAwarded:
+                        if (e.Other == (int)RestartKind.Corner)
+                        {
+                            if (e.Subject == after.Teams[0].Id) _corners[0]++;
+                            else if (e.Subject == after.Teams[1].Id) _corners[1]++;
+                        }
+
+                        _passer = -1;
+                        break;
+                }
+
+                // Passes, completed when a teammate plays the ball next; PPDA's passes in the passer's own 60 %
+                // and the other side's defensive actions there (#126's definitions).
+                if (e.Kind == SimEventKind.QuickPassResolved && side >= 0)
+                {
+                    _passes[side]++;
+                    if (InOwnSixty(config, after, side)) _ownSixtyPasses[side]++;
+                    _passer = side;
+                    continue;
+                }
+
+                if (side < 0) continue;
+                bool defends = e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon || e.Kind == SimEventKind.Foul || (e.Kind == SimEventKind.Touched && _passer == 1 - side);
+                if (defends && InOwnSixty(config, after, 1 - side)) _actions[side]++;
+                bool plays = e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon
+                    || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried || e.Kind == SimEventKind.Headed || e.Kind == SimEventKind.Volleyed;
+                if (plays && _passer >= 0)
+                {
+                    if (side == _passer) _completed[side]++;
+                    _passer = -1;
+                }
+            }
+
+            // Possession: live play, by the side that last played the ball.
+            int had = SideOf(after, after.Ball.LastPlayedBy);
+            if (had >= 0) _inPossession = had;
+            if (after.Restart.Phase == RestartPhase.Live && _inPossession >= 0) _possessed[_inPossession]++;
+        }
+
+        private void Shot(bool onTarget)
+        {
+            _shots[_shooter]++;
+            _xg[_shooter] += _shotChance;
+            if (onTarget) _onTarget[_shooter]++;
+        }
+
+        // Whether the ball is in `side`'s own 60 % of the pitch, from its own goal line.
+        private static bool InOwnSixty(SimConfig config, SimState s, int side) =>
+            s.Teams[side].AttackSign * s.Ball.Position.X < -config.GoalLineX + 0.6 * 2 * config.GoalLineX;
+
+        private SideMetrics Metrics(int side)
+        {
+            long live = _possessed[0] + _possessed[1];
+            int other = 1 - side;
+            return new SideMetrics(live > 0 ? _possessed[side] / (double)live : 0, _shots[side], _onTarget[side], _xg[side], _passes[side], _completed[side], _corners[side],
+                _actions[side] > 0 ? _ownSixtyPasses[other] / (double)_actions[side] : 0);
+        }
 
         public void Observe(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
         {
+            Measure(config, after, events);
             foreach (SimEvent e in events)
             {
                 if (e.Kind == SimEventKind.Goal)
@@ -366,6 +521,8 @@ namespace Eleven.Simulation
                         _homeFouls, _awayFouls, _homePenalties, _awayPenalties, _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries,
                         home.Substitutions, away.Substitutions,
                         _extraTime ? 1 : 0, home.ShootoutKicks, away.ShootoutKicks, home.ShootoutGoals, away.ShootoutGoals);
+                    Result.HomeMetrics = Metrics(0);
+                    Result.AwayMetrics = Metrics(1);
                 }
             }
         }

@@ -74,6 +74,23 @@ namespace Eleven.Simulation
         public double Penalty { get; }
 
         /// <summary>A shot's chance from <paramref name="distance"/> m, seeing <paramref name="angle"/> rad of the goal mouth.</summary>
-        public double Chance(double distance, double angle) => 0;
+        public double Chance(double distance, double angle) => 1 / (1 + SimMath.Exp(-(Intercept + PerMetre * distance + PerRadian * angle)));
+
+        /// <summary>
+        /// A shot's chance from <paramref name="at"/>, toward the goal on the line at x =
+        /// <paramref name="goalX"/>: its distance to the goal's centre and the angle between the
+        /// lines to its posts.
+        /// </summary>
+        public double Chance(Vec2 at, double goalX, double goalWidth)
+        {
+            double dx = goalX > 0 ? goalX - at.X : at.X - goalX;
+            if (dx < 0) dx = 0;
+            double dy = at.Y;
+            double distance = SimMath.Sqrt(dx * dx + dy * dy);
+            double half = goalWidth / 2;
+            double angle = SimMath.Atan2(goalWidth * dx, dx * dx + dy * dy - half * half);
+            if (angle < 0) angle = -angle;
+            return Chance(distance, angle);
+        }
     }
 }
