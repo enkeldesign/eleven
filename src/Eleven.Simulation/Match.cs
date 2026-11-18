@@ -490,7 +490,7 @@ namespace Eleven.Simulation
                 }
 
                 // A miss drops the pass it was to send: a queued first-time pass, or the pending pass not yet sent.
-                if (e.Kind == SimEventKind.KickMissed && e.Subject == _queuedId) _queuedSide = -1;
+                if (e.Kind == SimEventKind.KickMissed && _queuedSide >= 0 && e.Subject == _queuedId) _queuedSide = -1;
                 else if (e.Kind == SimEventKind.KickMissed && _passer >= 0 && e.Subject == _passerId && !_passSent) _passer = -1;
 
                 if (side < 0) continue;
