@@ -57,7 +57,8 @@ namespace Eleven.Simulation.Harness
             uint fnv = 0;
             bool hasFnv = false;
             int k = 1;
-            for (; k < tokens.Length && tokens[k].Contains("="); k++)
+            // Header fields by name: a body joined onto one line ends in base64's `=` padding (Codex on #146).
+            for (; k < tokens.Length && IsField(tokens[k]); k++)
             {
                 string[] pair = tokens[k].Split(new[] { '=' }, 2);
                 if (pair[0] == "bytes") int.TryParse(pair[1], NumberStyles.None, CultureInfo.InvariantCulture, out length);
@@ -98,6 +99,9 @@ namespace Eleven.Simulation.Harness
 
             return bytes;
         }
+
+        private static bool IsField(string token) =>
+            token.StartsWith("name=", StringComparison.Ordinal) || token.StartsWith("bytes=", StringComparison.Ordinal) || token.StartsWith("fnv=", StringComparison.Ordinal);
 
         // FNV-1a, 32 bits: enough to tell a changed character, not a security check.
         private static uint Fnv(byte[] data)
