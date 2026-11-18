@@ -418,6 +418,13 @@ namespace Eleven.Simulation
                     case SimEventKind.KeeperHeld:
                     case SimEventKind.KeeperParried:
                         if (_shooter >= 0 && side >= 0 && side != _shooter) Shot(true);
+                        else if (_counted >= 0 && side >= 0 && side != _counted && !_countedOnTarget)
+                        {
+                            // A shot already counted off the frame, then saved: on target, not a second shot.
+                            _onTarget[_counted]++;
+                            _countedOnTarget = true;
+                        }
+
                         _shooter = -1;
                         break;
                     case SimEventKind.Touched:
