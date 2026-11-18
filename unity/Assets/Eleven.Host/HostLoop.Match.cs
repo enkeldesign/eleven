@@ -54,6 +54,7 @@ namespace Eleven.Host
         // HintHoldSeconds, at most once every HintEverySeconds.
         private ChallengeHint _challengeHint;
         private int _challengeHeld;
+        private bool _hintSaid;
         private double _hintShownAt = double.NegativeInfinity;
         private const double HintHoldSeconds = 0.3, HintEverySeconds = 2.5;
 
@@ -82,6 +83,7 @@ namespace Eleven.Host
             }
 
             _challengeHeld = hint == _challengeHint ? _challengeHeld + 1 : 0;
+            if (_challengeHeld == 0) _hintSaid = false;
             if (hint != _challengeHint)
             {
                 Log(FormattableString.Invariant($"ELEVEN match challenge hint={hint} d={distance:F2} short={shortBy:F2} tick={s.Tick}"));
@@ -93,8 +95,10 @@ namespace Eleven.Host
 
             double now = Time.realtimeSinceStartupAsDouble;
             string text = HintText(hint);
-            if (text.Length > 0 && _challengeHeld == (int)(HintHoldSeconds * _config.TickRate) && now - _hintShownAt >= HintEverySeconds)
+            // Once a reason has held, said once for that spell, as soon as the last one's gap allows (Codex on #145).
+            if (text.Length > 0 && !_hintSaid && _challengeHeld >= (int)(HintHoldSeconds * _config.TickRate) && now - _hintShownAt >= HintEverySeconds)
             {
+                _hintSaid = true;
                 _hintShownAt = now;
                 _hud?.ShowStatus(text);
             }

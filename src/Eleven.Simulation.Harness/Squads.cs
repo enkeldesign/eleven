@@ -208,7 +208,8 @@ namespace Eleven.Simulation.Harness
                 else if (r.Hint == ChallengeHint.NotClosing) SeatNotClosing++;
                 else if (r.Hint == ChallengeHint.WontReach) SeatWontReach++;
                 else if (r.Hint == ChallengeHint.NotReady) SeatNotReady++;
-                inRange |= r.Hint != ChallengeHint.TooFar;
+                // In range by the report's distance: NotReady is reported out to 3 m (Codex on #145).
+                inRange |= r.Hint != ChallengeHint.TooFar && r.Distance <= challengeRange;
             }
 
             foreach (SimEvent e in events)
@@ -317,7 +318,7 @@ namespace Eleven.Simulation.Harness
                 sim.Step(commands, events);
                 SimState s = sim.PeekState();
                 recorder.Observe(config, s, events);
-                if (seat) pressing = trial.CountPress(s, sim.ChallengeReports, events, SeatController, pressing);
+                if (seat) pressing = trial.CountPress(s, sim.ChallengeReports, events, SeatController, pressing, config.ChallengeRange);
                 foreach (SimEvent e in events)
                 {
                     if (e.Kind == SimEventKind.Substituted)
