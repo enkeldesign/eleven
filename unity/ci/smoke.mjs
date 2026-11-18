@@ -904,9 +904,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             await tap(runAtD);
             const shownD = await dashboardShown(fromD);
             dashboardChecks(shownD, side, ppp);
-            const pressD = shownD.placed ? /High_press:(-?\d+),(-?\d+),(\d+),(\d+)/.exec(shownD.placed[5]) : null;
+            const pressD = shownD.placed ? /High_press:(-?\d+),(-?\d+),(\d+),(\d+)/.exec(shownD.placed[6]) : null;
             const pressBox = pressD ? pressD.slice(1, 5).map(Number) : [];
-            const viewport = shownD.placed ? shownD.placed[4].split(',').map(Number) : [];
+            const viewport = shownD.placed ? shownD.placed[5].split(',').map(Number) : [];
             const inView = pressBox.length === 4 && viewport.length === 4 && pressBox[1] >= viewport[1] - 1 && pressBox[1] + pressBox[3] <= viewport[1] + viewport[3] + 1;
             const fromAsk = logs.length;
             if (inView) await tap(at(pressBox[0] + pressBox[2] / 2, pressBox[1] + pressBox[3] / 2));
