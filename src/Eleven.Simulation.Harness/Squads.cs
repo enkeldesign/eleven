@@ -180,8 +180,53 @@ namespace Eleven.Simulation.Harness
         /// <summary>Switches the seat's controller made, and how many were refused.</summary>
         public int Switches, SwitchesRefused;
 
+        /// <summary>
+        /// The seat's ball-winning (#135): pressing episodes within challengeRange of a ball an
+        /// opponent controls, challenges started and won, and its steps pressing without a start by
+        /// the simulation's reason.
+        /// </summary>
+        public int SeatAttempts, SeatChallenges, SeatChallengesWon;
+
+        public int SeatTooFar, SeatNotClosing, SeatWontReach, SeatNotReady;
+
         /// <summary>The seat's switches by cause (#136): to a pass's receiver, to a teammate with the ball, at a turnover, asked.</summary>
         public int SwitchesPass, SwitchesMate, SwitchesTurnover, SwitchesAsked;
+
+        /// <summary>
+        /// Counts a step of the seat's ball-winning (#135) from the simulation's reports: an attempt
+        /// is a run of steps pressing within challengeRange. Returns whether one is under way.
+        /// </summary>
+        /// <summary>
+        /// Counts a step of the seat's ball-winning (#135) from the simulation's reports, for
+        /// <paramref name="seatPlayer"/>: the footballer the seat owned during the step. Challenges
+        /// are decided before a switch at the step's end, so the owner after it is the wrong one
+        /// (Codex on #145). An attempt is a run of steps pressing with the ball within
+        /// <paramref name="challengeRange"/>. Returns whether one is under way.
+        /// </summary>
+        public bool CountPressOf(int seatPlayer, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, bool pressing, double challengeRange)
+        {
+            bool inRange = false;
+            foreach (ChallengeReport r in reports)
+            {
+                if (r.PlayerId != seatPlayer) continue;
+                if (r.Hint == ChallengeHint.TooFar) SeatTooFar++;
+                else if (r.Hint == ChallengeHint.NotClosing) SeatNotClosing++;
+                else if (r.Hint == ChallengeHint.WontReach) SeatWontReach++;
+                else if (r.Hint == ChallengeHint.NotReady) SeatNotReady++;
+                // In range by the report's distance: NotReady is reported out to 3 m (Codex on #145).
+                inRange |= r.Hint != ChallengeHint.TooFar && r.Distance <= challengeRange;
+            }
+
+            foreach (SimEvent e in events)
+            {
+                if (e.Subject != seatPlayer || seatPlayer == 0) continue;
+                if (e.Kind == SimEventKind.ChallengeStarted) SeatChallenges++;
+                else if (e.Kind == SimEventKind.ChallengeWon) SeatChallengesWon++;
+            }
+
+            if (inRange && !pressing) SeatAttempts++;
+            return inRange;
+        }
 
         /// <summary>Counts a seat's switch event; <paramref name="cause"/> is why the switcher asked for it.</summary>
         public void Count(SimEvent e, int seatController, SwitchCause cause)
@@ -252,6 +297,7 @@ namespace Eleven.Simulation.Harness
             var recorder = new MatchRecorder();
             var trial = new SquadTrial { Seed = seed, Seat = seat };
             SwitchController? switcher = seat ? new SwitchController(SeatController, mode) : null;
+            bool pressing = false;
             var commands = new List<Command>();
             var events = new List<SimEvent>();
             int limit = 3 * 2 * config.HalfTicks;
@@ -263,10 +309,14 @@ namespace Eleven.Simulation.Harness
             {
                 commands.Clear();
                 SwitchCause cause = SwitchCause.None;
+                int seatPlayer = 0;
                 if (seat)
                 {
                     commands.Add(Seat(sim, SeatController, switcher!.Decide(sim, events, manual: false)));
                     cause = switcher.LastCause;
+                    // The footballer the seat owns through this step's challenges (Codex on #145).
+                    int me = Array.FindIndex(sim.PeekState().Players, p => p.OwnerControllerId == SeatController);
+                    seatPlayer = me >= 0 ? sim.PeekState().Players[me].Id : 0;
                 }
 
                 events.Clear();
@@ -277,6 +327,7 @@ namespace Eleven.Simulation.Harness
                 sim.Step(commands, events);
                 SimState s = sim.PeekState();
                 recorder.Observe(config, s, events);
+                if (seat) pressing = trial.CountPressOf(seatPlayer, sim.ChallengeReports, events, pressing, config.ChallengeRange);
                 foreach (SimEvent e in events)
                 {
                     if (e.Kind == SimEventKind.Substituted)
@@ -372,12 +423,13 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteCsv(System.IO.TextWriter w, SimConfig config, IReadOnlyList<SquadTrial> trials)
         {
-            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,switches_pass,switches_mate,switches_turnover,switches_asked,length_s,final_hash");
+            w.WriteLine("config_hash,seed,seat,finished,home,away,passes,passes_completed,possessions,mean_spacing_m,longest_bunched_s,switches,switches_refused,switches_pass,switches_mate,switches_turnover,switches_asked,seat_attempts,seat_challenges,seat_won,seat_too_far,seat_not_closing,seat_wont_reach,seat_not_ready,length_s,final_hash");
             foreach (SquadTrial t in trials)
             {
-                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13},{14},{15},{16},{17:F2},{18:x16}",
+                w.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:x16},{1:x},{2},{3},{4},{5},{6},{7},{8},{9:F2},{10:F2},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24:F2},{25:x16}",
                     config.Hash, t.Seed, t.Seat ? "yes" : "no", t.Finished ? "yes" : "no", t.HomeGoals, t.AwayGoals, t.Passes, t.PassesCompleted, t.Possessions, t.MeanSpacing, t.LongestBunchedSeconds,
-                    t.Switches, t.SwitchesRefused, t.SwitchesPass, t.SwitchesMate, t.SwitchesTurnover, t.SwitchesAsked, t.LengthSeconds, t.FinalHash));
+                    t.Switches, t.SwitchesRefused, t.SwitchesPass, t.SwitchesMate, t.SwitchesTurnover, t.SwitchesAsked,
+                    t.SeatAttempts, t.SeatChallenges, t.SeatChallengesWon, t.SeatTooFar, t.SeatNotClosing, t.SeatWontReach, t.SeatNotReady, t.LengthSeconds, t.FinalHash));
             }
         }
 
@@ -401,7 +453,9 @@ namespace Eleven.Simulation.Harness
                 "{0}v{0}: {1} of {2} finished; {3} goals; {4} passes, {5} completed; {6} possessions; mean spacing {7:F1} m; longest bunched {8:F1} s; {9} switches",
                 perSide, finished, trials.Count, goals, passes, completed, possessions, spacing / Math.Max(1, trials.Count), bunched, switches)
                 + string.Format(System.Globalization.CultureInfo.InvariantCulture, " (pass {0}, teammate {1}, turnover {2}, asked {3}; {4} refused)",
-                    trials.Sum(t => t.SwitchesPass), trials.Sum(t => t.SwitchesMate), trials.Sum(t => t.SwitchesTurnover), trials.Sum(t => t.SwitchesAsked), trials.Sum(t => t.SwitchesRefused));
+                    trials.Sum(t => t.SwitchesPass), trials.Sum(t => t.SwitchesMate), trials.Sum(t => t.SwitchesTurnover), trials.Sum(t => t.SwitchesAsked), trials.Sum(t => t.SwitchesRefused))
+                + string.Format(System.Globalization.CultureInfo.InvariantCulture, "; the seat pressed {0} times, challenged {1}, won {2}; steps without a start: too far {3}, not closing {4}, won't reach {5}, not ready {6}",
+                    trials.Sum(t => t.SeatAttempts), trials.Sum(t => t.SeatChallenges), trials.Sum(t => t.SeatChallengesWon), trials.Sum(t => t.SeatTooFar), trials.Sum(t => t.SeatNotClosing), trials.Sum(t => t.SeatWontReach), trials.Sum(t => t.SeatNotReady));
         }
     }
 }

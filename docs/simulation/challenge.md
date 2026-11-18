@@ -79,6 +79,65 @@ Since #96 a commit must reach the ball, and the dribbler at 7 m/s runs without i
 
 The CPU trials now see challenges won by every tier: Apprentice 3, Club 4, Pro 8, Elite 10 (`cpu-trials-reference.csv`).
 
+## Why a challenge didn't start (#135)
+
+From Erik's session: "I can't reliably tackle or get the ball back." A standing challenge has no button: it starts when the rule above holds, and nothing said why it didn't.
+
+**The report.** For each human footballer pressing toward a ball an opponent controls (stick at least 0.2, the ball within 3 m), `Simulator.ChallengeReports` says what became of his challenge on the step:
+
+| Hint | When |
+| --- | --- |
+| Started | It started. |
+| TooFar | The ball is beyond `challengeRange`. |
+| NotClosing | The stick doesn't point at least half toward the ball. |
+| WontReach | The commit would end short of the ball carried on with its dribbler. `Short` says by how much. |
+| NotReady | He is committing, recovering, sliding, down, or winding up a kick. |
+
+- **It drives nothing (INV-12).** It is in no state or hash and no step reads it. A replay or a snapshot gives the same reports, so a capture can be read for them.
+- **A CPU footballer is never reported,** nor a keeper.
+
+**In the host.**
+- The controlled footballer's `challengeRange` shows, faint, in the ball's yellow, while an opponent's ball is in it.
+- The reach, and his marker where one is shown, swell when a challenge starts (not under reduced motion). In a 1v1 match, which has no marker, the reach alone shows it.
+- When a reason holds for 0.3 s, the HUD says it in words: "Tackle: run at the ball.", "Tackle: you won't reach it yet. Get ahead of the ball." or "Tackle: still recovering.". It says so at most once every 2.5 s, and never for too far, the commonest state while chasing.
+- The trace logs `ELEVEN match challenge hint=` at each change.
+
+**Erik's captures.** Both captures he shared (builds 223 and 227) replay exactly on their own builds with the report added. His footballer was within 3 m of a ball an opponent controlled for 1 and 4 steps, and too far each time. Neither 10 s clip holds a challenge that didn't start: he never got close.
+
+### The scripted seat's ball-winning
+
+`eleven-sim squads <dir> <perSide> <count> seat`: the seat (#95) runs straight at the ball, as a human holding the stick at it does. An attempt is a run of steps pressing with the ball within `challengeRange`, by the report's distance. Eight seeds a size, measured with `humanChallengeLeeway`:
+
+| Size | Leeway | Attempts | Started | Won | Goals for–against |
+| --- | --- | --- | --- | --- | --- |
+| 5v5 | 0 (reference) | 580 | 208 (36 %) | 106 (51 % of starts, 18 % of attempts) | 21–0 |
+| 5v5 | 0.25 m | 594 | 252 (42 %) | 67 (27 %, 11 %) | 17–2 |
+| 5v5 | 0.5 m | 609 | 382 (63 %) | 91 (24 %, 15 %) | 15–11 |
+| 5v5 | 1.0 m | 620 | 490 (79 %) | 87 (18 %, 14 %) | 8–13 |
+| 10v10 | 0 (reference) | 748 | 183 (24 %) | 102 (56 %, 14 %) | 34–0 |
+| 10v10 | 0.25 m | 709 | 260 (37 %) | 107 (41 %, 15 %) | 33–0 |
+| 10v10 | 0.5 m | 807 | 408 (51 %) | 99 (24 %, 12 %) | 13–0 |
+| 10v10 | 1.0 m | 797 | 607 (76 %) | 85 (14 %, 11 %) | 9–9 |
+
+- **Running straight at the ball, a challenge starts on a quarter to a third of the presses in range,** and wins about half of those. That is what "nothing happens" measures: the won't-reach rule holds him back while he chases alongside.
+- **Loosening the rule starts more challenges and wins fewer of them.** A commit that ends short misses, and the seat's side concedes more while he recovers. The rule protects him.
+- So **the readable hint is the change this issue makes**, and the loosened rule is a preset to compare it with.
+
+**`humanChallengeLeeway`** (m, 0–1.5, 0 by default) adds to a human's reach in the won't-reach check, never the CPU's. A CPU-only match is unchanged at any value. The bench's suggested preset **LOOSE TACKLE** is the technical reference with 0.5 m. Like the reference, it can be loaded but not deleted or saved over, and a capture records its name. Both are technical references, not approved feel.
+
 ## Tests
 
 `ChallengeTests`: a close challenge commits, wins, knocks the ball and recovers; too far, not closing or a teammate never challenges, and no one steals by being nearer; a loose ball is anyone's; movement avoids a challenge; better tackling reaches further and commits sooner, repeatably; the beaten footballer plays the loose ball after a stride; a kicked ball is no one's, and a recovering footballer starts no kick; under ATTACHED only a challenge frees the ball; no one moves faster than their legs, and the kick-only model has no challenge; snapshots and runs twice; a bad challenge state is refused; a 300-case fuzz; the bench matches its reference.
+
+`ChallengeHintTests` (#135):
+- a challenge that starts is reported, with its distance;
+- beyond `challengeRange` he is too far, and further than 3 m off he isn't reported;
+- with the stick not toward the ball he isn't closing, and a neutral stick isn't reported;
+- running alongside a dribbler he won't reach, by how much, until he can;
+- committing or recovering he isn't ready;
+- a CPU footballer is never reported;
+- a snapshot gives the same reports;
+- the defending seat counts its attempts, starts and wins;
+- `humanChallengeLeeway` lets a human's commit end that much short, and never changes a CPU match.
+
+`SuggestedPresetTests`: LOOSE TACKLE is the reference with a human leeway, can't be saved over, and is recognised by its values.

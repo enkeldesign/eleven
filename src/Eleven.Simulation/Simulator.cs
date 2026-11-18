@@ -63,6 +63,17 @@ namespace Eleven.Simulation
         /// <summary>Reads the live state without copying. Callers must not mutate it.</summary>
         public SimState PeekState() => _state;
 
+        // Why each human's standing challenge did or didn't start on the last step (#135): never
+        // read by a step, in no state or hash.
+        private readonly List<ChallengeReport> _challengeReports = new List<ChallengeReport>();
+
+        /// <summary>
+        /// Why each human footballer pressing toward a ball an opponent controls did or didn't
+        /// start a standing challenge on the last step (#135). For the host and captures: it
+        /// drives nothing (INV-12). A human's is a footballer no CPU controller plays, keepers aside.
+        /// </summary>
+        public IReadOnlyList<ChallengeReport> ChallengeReports => _challengeReports;
+
         /// <summary>
         /// Runs one tick: applies <paramref name="commands"/> meant for <see cref="Tick"/> and
         /// advances to <see cref="Tick"/> + 1. Emitted events are appended to <paramref name="events"/>.
@@ -996,13 +1007,48 @@ namespace Eleven.Simulation
         public static int CommitTicksFor(double tackling, SimConfig config) =>
             Math.Max(1, (int)Math.Round(config.ChallengeCommit * (1.25 - 0.45 * tackling) * config.TickRate));
 
+        // m. How near a ball an opponent controls a human pressing toward it is reported (#135).
+        private const double HintRange = 3;
+
+        // Whether footballer i is a human's pressing toward a ball an opponent controls, within
+        // HintRange (#135), and how far off it is. Read only: it decides nothing.
+        private bool Pressing(int i, out double distance)
+        {
+            distance = 0;
+            PlayerState p = _state.Players[i];
+            if (KeeperOf(p.Id) >= 0 || IsCpu(p.Id)) return false;
+            Command? command = FindAccepted(p.OwnerControllerId);
+            if (!command.HasValue || command.Value.Move.LengthSquared < 0.04) return false;
+            int controller = ControllerOfBall();
+            if (controller < 0 || controller == i || _state.Players[controller].TeamId == p.TeamId) return false;
+            distance = SimMath.Sqrt((_state.Ball.Position.Horizontal - p.Position).LengthSquared);
+            return distance <= HintRange;
+        }
+
+        // Whether a CPU controller plays footballer `id`.
+        private bool IsCpu(int id)
+        {
+            foreach (CpuState cpu in _state.Cpus) if (cpu.PlayerId == id) return true;
+            return false;
+        }
+
         private void StepChallenges(long tick, List<SimEvent> events)
         {
+            _challengeReports.Clear();
             if (!Live) return;
             for (int i = 0; i < _state.Players.Length; i++)
             {
                 ref PlayerState player = ref _state.Players[i];
                 ref BallState ball = ref _state.Ball;
+
+                // What becomes of a human's press this step (#135): reported, never acted on.
+                bool pressing = Pressing(i, out double pressDistance);
+                if (pressing && (player.Challenge != ChallengePhase.Ready || player.WindUpTicks > 0))
+                {
+                    _challengeReports.Add(new ChallengeReport(player.Id, ChallengeHint.NotReady, pressDistance));
+                    pressing = false;
+                }
+
                 if (player.Challenge == ChallengePhase.Slide)
                 {
                     StepSlide(ref player, tick, events);
@@ -1118,10 +1164,19 @@ namespace Eleven.Simulation
                 if (controller < 0 || controller == i || _state.Players[controller].TeamId == player.TeamId) continue;
                 Vec2 to = ball.Position.Horizontal - player.Position;
                 double distanceSquared = to.LengthSquared;
-                if (distanceSquared > Config.ChallengeRange * Config.ChallengeRange || distanceSquared == 0) continue;
+                if (distanceSquared > Config.ChallengeRange * Config.ChallengeRange || distanceSquared == 0)
+                {
+                    if (pressing) _challengeReports.Add(new ChallengeReport(player.Id, ChallengeHint.TooFar, pressDistance));
+                    continue;
+                }
+
                 Vec2 toward = to * (1 / SimMath.Sqrt(distanceSquared));
                 Vec2 stick = command.Value.Move;
-                if (stick.X * toward.X + stick.Y * toward.Y < Closing) continue;
+                if (stick.X * toward.X + stick.Y * toward.Y < Closing)
+                {
+                    if (pressing) _challengeReports.Add(new ChallengeReport(player.Id, ChallengeHint.NotClosing, pressDistance));
+                    continue;
+                }
 
                 // Only a commit that will reach the ball (#96): run along his line through the
                 // commit, with the simulation's own movement (INV-13), against the ball carried on
@@ -1140,8 +1195,14 @@ namespace Eleven.Simulation
                 // A controlled ball goes where its dribbler goes: his touches and the ATTACHED
                 // steering keep it ahead of him, at his pace.
                 Vec2 ballThen = ball.Position.Horizontal + _state.Players[controller].Velocity * (commit * dt);
-                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling);
-                if ((ballThen - at).LengthSquared > reachThen * reachThen) continue;
+                // A human's commit may end humanChallengeLeeway short (#135); the CPU's never.
+                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling) + (IsCpu(player.Id) ? 0 : Config.HumanChallengeLeeway);
+                double endsFrom = (ballThen - at).LengthSquared;
+                if (endsFrom > reachThen * reachThen)
+                {
+                    if (pressing) _challengeReports.Add(new ChallengeReport(player.Id, ChallengeHint.WontReach, pressDistance, SimMath.Sqrt(endsFrom) - reachThen));
+                    continue;
+                }
 
                 // He goes the way his stick asks, so he can lead the tackle into the ball's path.
                 player.Challenge = ChallengePhase.Commit;
@@ -1149,6 +1210,7 @@ namespace Eleven.Simulation
                 player.ChallengeLine = commitLine;
                 player.Turning = false;
                 events.Add(new SimEvent(tick, SimEventKind.ChallengeStarted, player.Id));
+                if (pressing) _challengeReports.Add(new ChallengeReport(player.Id, ChallengeHint.Started, pressDistance));
             }
         }
 

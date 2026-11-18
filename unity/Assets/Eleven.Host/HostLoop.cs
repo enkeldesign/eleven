@@ -322,6 +322,8 @@ namespace Eleven.Host
             if (_match) TimeStep(_stepWatch.Elapsed.TotalMilliseconds);
             _poses.Observe(_simulator.PeekState(), _events, _config);
 
+            ObserveChallenge(_simulator.PeekState());
+
             // Who SWITCH would take now (#136), for the marker: read, never written back.
             _nextId = _match && _perSide > 1 && _switcher != null ? _switcher.Next(_simulator) : 0;
             _feel.Record(_simulator, _commands, _events);

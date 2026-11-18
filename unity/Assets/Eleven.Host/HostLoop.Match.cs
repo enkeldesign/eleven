@@ -49,6 +49,61 @@ namespace Eleven.Host
         private int _nextId;
         private SwitchCause _cueCause;
 
+        // The controlled footballer's challenge this step (#135), from the simulation's report, and
+        // how long its reason has held: the HUD says why a challenge didn't start once it has held
+        // HintHoldSeconds, at most once every HintEverySeconds.
+        private ChallengeHint _challengeHint;
+        private int _challengeHeld;
+        private bool _hintSaid;
+        private double _hintShownAt = double.NegativeInfinity;
+        private const double HintHoldSeconds = 0.3, HintEverySeconds = 2.5;
+
+        private static string HintText(ChallengeHint hint) => hint switch
+        {
+            ChallengeHint.NotClosing => "Tackle: run at the ball.",
+            ChallengeHint.WontReach => "Tackle: you won't reach it yet. Get ahead of the ball.",
+            ChallengeHint.NotReady => "Tackle: still recovering.",
+            _ => "",
+        };
+
+        // After each step (#135): the controlled footballer's report, shown at him and, held, in words.
+        private void ObserveChallenge(SimState s)
+        {
+            if (!_match) return;
+            int me = Controlled(s);
+            int id = s.Players[me].Id;
+            ChallengeHint hint = ChallengeHint.None;
+            double distance = 0, shortBy = 0;
+            foreach (ChallengeReport r in _simulator.ChallengeReports)
+            {
+                if (r.PlayerId != id) continue;
+                hint = r.Hint;
+                distance = r.Distance;
+                shortBy = r.Short;
+            }
+
+            _challengeHeld = hint == _challengeHint ? _challengeHeld + 1 : 0;
+            if (_challengeHeld == 0) _hintSaid = false;
+            if (hint != _challengeHint)
+            {
+                Log(FormattableString.Invariant($"ELEVEN match challenge hint={hint} d={distance:F2} short={shortBy:F2} tick={s.Tick}"));
+            }
+
+            _challengeHint = hint;
+            bool inReach = hint == ChallengeHint.NotClosing || hint == ChallengeHint.WontReach || hint == ChallengeHint.Started || (hint == ChallengeHint.NotReady && distance <= _config.ChallengeRange);
+            _view.ShowChallenge(inReach, hint == ChallengeHint.Started);
+
+            double now = Time.realtimeSinceStartupAsDouble;
+            string text = HintText(hint);
+            // Once a reason has held, said once for that spell, as soon as the last one's gap allows (Codex on #145).
+            if (text.Length > 0 && !_hintSaid && _challengeHeld >= (int)(HintHoldSeconds * _config.TickRate) && now - _hintShownAt >= HintEverySeconds)
+            {
+                _hintSaid = true;
+                _hintShownAt = now;
+                _hud?.ShowStatus(text);
+            }
+        }
+
         private static readonly string[] SwitchModeNames = { "auto", "ball", "manual" };
 
         private static string NameOf(SwitchMode mode) => SwitchModeNames[(int)mode];

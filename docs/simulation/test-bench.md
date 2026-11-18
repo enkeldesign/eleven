@@ -187,6 +187,8 @@ Candidate C from #28 and #77, after Sensible Soccer and Kick Off: one fire contr
 
 Issue #46. A preset is a bench candidate saved under a short name: every value the bench owns, with what a later build needs to tell whether it can still read it. `BenchPreset` and `PresetShelf` (harness, engine-free) hold the format and the rules; the bench's Presets tab is the way in.
 
+**Suggested presets** (#135) are built in beside TECHNICAL REFERENCE, with Load and no Delete, and their names can't be saved over. The first is LOOSE TACKLE: the reference with `humanChallengeLeeway` 0.5 m ([challenge.md](challenge.md#why-a-challenge-didnt-start-135)).
+
 **A preset is not approved feel.** Saving one says nothing about feel, and there is no approved flag to set. Promoting a preset to an approved feel baseline is Erik's explicit act, recorded in the owning issue. Later changes to an approved baseline are separate, reasoned baseline updates under AGENTS.md.
 
 **On the Presets tab:**
@@ -223,7 +225,7 @@ A stored preset this build can't read stays stored, and the Presets tab lists it
 
 **From a preset to its curves.** `eleven-sim preset <file>` reads a preset's text, says what it is and lists what differs from the technical reference. `eleven-sim preset <file> <dir>` also runs every characterisation tool under the preset's own config and footballer: ball, movement, kicks, passes, dribble, turns, goal and keeper. The curves describe the preset; they are no baseline until Erik promotes it.
 
-**An example preset** is `tests/Eleven.Simulation.Tests/Fixtures/example-preset.txt`: `kickSpeed` 18.5, `maxSpeed` 7.5 and `fireHoldSeconds` 0.2 under Candidate C, config `70469e15e6064655`.
+**An example preset** is `tests/Eleven.Simulation.Tests/Fixtures/example-preset.txt`: `kickSpeed` 18.5, `maxSpeed` 7.5 and `fireHoldSeconds` 0.2 under Candidate C, config `11cdbfb851afa242`.
 
 **Known limit:** there is no way yet to export a preset's text from a phone. A felt-wrong capture taken under the preset carries its name and its whole config, and SAVE CAPTURE exports that.
 

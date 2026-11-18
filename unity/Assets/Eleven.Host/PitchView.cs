@@ -89,6 +89,9 @@ namespace Eleven.Host
         // Who SWITCH would take (#136), a faint halo; and the pulse of the controlled one's marker
         // when control moved on its own, from 1 down to 0 over PulseSeconds.
         private readonly Transform _nextMarker;
+
+        // The controlled footballer's challengeRange while a challenge is in reach (#135).
+        private readonly Transform _challengeRing;
         private float _pulse;
         private const float PulseSeconds = 0.5f;
         private int _perSide = 1;
@@ -214,6 +217,8 @@ namespace Eleven.Host
             _marker.gameObject.SetActive(false);
             _nextMarker = Shape(root, disc, "Next marker", HostPalette.NextMarker, 3, PlayerDiameter * MarkerScale);
             _nextMarker.gameObject.SetActive(false);
+            _challengeRing = Shape(root, disc, "Challenge reach", HostPalette.ChallengeReach, 3, 2 * (float)config.ChallengeRange);
+            _challengeRing.gameObject.SetActive(false);
             _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
             _keeper = Shape(root, disc, "Keeper", HostPalette.Keeper, 4, PlayerDiameter);
             _keeper.gameObject.SetActive(false);
@@ -270,8 +275,22 @@ namespace Eleven.Host
             for (int i = 0; i < _opponents.Count; i++) _opponents[i].gameObject.SetActive(match && i < _perSide);
             _marker.gameObject.SetActive(match && _perSide > 1);
             _nextMarker.gameObject.SetActive(false);
+            _challengeRing.gameObject.SetActive(false);
             _pulse = 0;
         }
+
+        /// <summary>
+        /// Shows the controlled footballer's challengeRange while a ball an opponent controls is in
+        /// it (#135), and swells it and his marker when a challenge starts. Observes only.
+        /// </summary>
+        public void ShowChallenge(bool inReach, bool started)
+        {
+            _challengeRing.gameObject.SetActive(inReach);
+            if (started) Pulse();
+        }
+
+        /// <summary>Whether the challenge reach is shown: for the smoke.</summary>
+        public bool ChallengeShown => _challengeRing.gameObject.activeSelf;
 
         /// <summary>
         /// Marks the teammate SWITCH would take (#136), or none. Always shown in a match with
@@ -313,6 +332,7 @@ namespace Eleven.Host
         public void Use(SimConfig config)
         {
             _config = config;
+            _challengeRing.localScale = Vector3.one * (2 * (float)config.ChallengeRange);
             PlaceGoal(config);
             _ballDiameter = (float)config.BallRadius * 2 * BallExaggeration;
             _ballShadow.localScale = Vector3.one * _ballDiameter;
@@ -345,9 +365,12 @@ namespace Eleven.Host
         {
             _player.localPosition = new Vector3(player.x, player.y, 0);
             _marker.localPosition = _player.localPosition;
+            _challengeRing.localPosition = _player.localPosition;
             float pulseDt = Frozen ? 0 : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             _pulse = Mathf.Max(0, _pulse - pulseDt / PulseSeconds);
             _marker.localScale = Vector3.one * (PlayerDiameter * MarkerScale * (1 + 0.6f * _pulse));
+            // The challenge reach swells with it (Codex on #145): in a 1v1 match there is no marker.
+            _challengeRing.localScale = Vector3.one * (2 * (float)_config.ChallengeRange * (1 + 0.4f * _pulse));
             _keeper.gameObject.SetActive(keeper.HasValue);
             if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
