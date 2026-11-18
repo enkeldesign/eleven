@@ -98,7 +98,7 @@ From Erik's session: "I can't reliably tackle or get the ball back." A standing 
 
 **In the host.**
 - The controlled footballer's `challengeRange` shows, faint, in the ball's yellow, while an opponent's ball is in it.
-- His marker swells when a challenge starts (not under reduced motion).
+- The reach, and his marker where one is shown, swell when a challenge starts (not under reduced motion). In a 1v1 match, which has no marker, the reach alone shows it.
 - When a reason holds for 0.3 s, the HUD says it in words: "Tackle: run at the ball.", "Tackle: you won't reach it yet. Get ahead of the ball." or "Tackle: still recovering.". It says so at most once every 2.5 s, and never for too far, the commonest state while chasing.
 - The trace logs `ELEVEN match challenge hint=` at each change.
 

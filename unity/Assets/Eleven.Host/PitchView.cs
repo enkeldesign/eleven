@@ -281,7 +281,7 @@ namespace Eleven.Host
 
         /// <summary>
         /// Shows the controlled footballer's challengeRange while a ball an opponent controls is in
-        /// it (#135), and swells his marker when a challenge starts. Observes only.
+        /// it (#135), and swells it and his marker when a challenge starts. Observes only.
         /// </summary>
         public void ShowChallenge(bool inReach, bool started)
         {
@@ -369,6 +369,8 @@ namespace Eleven.Host
             float pulseDt = Frozen ? 0 : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             _pulse = Mathf.Max(0, _pulse - pulseDt / PulseSeconds);
             _marker.localScale = Vector3.one * (PlayerDiameter * MarkerScale * (1 + 0.6f * _pulse));
+            // The challenge reach swells with it (Codex on #145): in a 1v1 match there is no marker.
+            _challengeRing.localScale = Vector3.one * (2 * (float)_config.ChallengeRange * (1 + 0.4f * _pulse));
             _keeper.gameObject.SetActive(keeper.HasValue);
             if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);
