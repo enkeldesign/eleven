@@ -332,8 +332,11 @@ namespace Eleven.Simulation
         private bool _wasInPlay;
         private Vec2? _ballBefore;
 
-        // The quick pass's passer, until his own kick plays it away: that kick doesn't resolve it.
+        // The pass waiting for its next player (#128): its side (_passer), its passer, and whether his
+        // own kick has sent it. That kick doesn't play it; a teammate's next play completes it; an
+        // opponent's, or the passer's own recovery, ends it uncompleted.
         private int _passerId;
+        private bool _passSent;
 
         // The side that last touched the ball, and a shot's chance from there: a goal scored off a
         // touch, not a kick, is a shot too.
@@ -438,7 +441,6 @@ namespace Eleven.Simulation
                         }
 
                         _passer = -1;
-                        _passerId = 0;
                         break;
                 }
 
@@ -446,17 +448,14 @@ namespace Eleven.Simulation
                 // and the other side's defensive actions there (#126's definitions).
                 if (e.Kind == SimEventKind.QuickPassResolved && side >= 0)
                 {
+                    // A first-time pass plays the pass it meets, before it is a pass of its own: it
+                    // resolves as its passer winds up, ahead of his kick.
+                    if (_passer >= 0 && (e.Subject != _passerId || _passSent)) PlayPass(e.Subject, side);
                     _passes[side]++;
                     if (InOwnSixty(config, after, side)) _ownSixtyPasses[side]++;
                     _passer = side;
                     _passerId = e.Subject;
-                    continue;
-                }
-
-                // The passer's own kick sends his pass; it doesn't play it.
-                if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId)
-                {
-                    _passerId = 0;
+                    _passSent = false;
                     continue;
                 }
 
@@ -465,18 +464,25 @@ namespace Eleven.Simulation
                 if (defends && InOwnSixty(config, after, 1 - side)) _actions[side]++;
                 bool plays = e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon
                     || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried || e.Kind == SimEventKind.Kicked;
-                if (plays && _passer >= 0)
-                {
-                    if (side == _passer) _completed[side]++;
-                    _passer = -1;
-                    _passerId = 0;
-                }
+                if (!plays || _passer < 0) continue;
+
+                // The passer's own kick sends his pass; it doesn't play it.
+                if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId && !_passSent) _passSent = true;
+                else PlayPass(e.Subject, side);
             }
 
             // Possession: live play, by the side that last played the ball.
             int had = SideOf(after, after.Ball.LastPlayedBy);
             if (had >= 0) _inPossession = had;
             if (inPlay && after.Restart.Phase == RestartPhase.Live && _inPossession >= 0) _possessed[_inPossession]++;
+        }
+
+        // The pending pass is played by `player` of `side`: completed by a teammate, not by an
+        // opponent nor by the passer himself.
+        private void PlayPass(int player, int side)
+        {
+            if (side == _passer && player != _passerId) _completed[side]++;
+            _passer = -1;
         }
 
         private void Shot(bool onTarget)
