@@ -15,9 +15,9 @@ A season (M6) plays many matches nobody watches: each tier's other fixtures, bet
 | --- | --- | --- |
 | .NET 10, one core of the agent sandbox (`eleven-sim throughput`) | 0.107 | 0.41 ms |
 | .NET 10, CI runner | the CI notice "Throughput" | |
-| Unity WebGL, headless Chromium on the CI runner | derived from the smoke's 11v11 step budget, recorded in #129's PR | |
+| Unity WebGL, headless Chromium on the CI runner (the smoke's 11v11 step budget, #147's run) | about 0.033 (30 s a match of about 23,000 steps) | 1.32 ms |
 
-**The budget:** with 12 sides a tier, three tiers play 17 other fixtures a round. In .NET, at full simulation, that is about 160 s a round on one core. A phone's browser takes longer, single-threaded and with its frame to keep.
+**The budget:** with 12 sides a tier, three tiers play 17 other fixtures a round. At full simulation that is about 160 s a round in .NET on one core, and about 9 minutes in the CI runner's browser. A phone's browser is slower still, single-threaded and with its frame to keep.
 
 ## Decision
 
@@ -36,7 +36,7 @@ Its reference parameters are fitted to a sample of full-simulation matches over 
 
 ## Alternatives considered
 
-- **The full simulation, headless.** It is exact by definition, but about 160 s a round in .NET and more in a browser. It fails the budget by orders of magnitude.
+- **The full simulation, headless.** It is exact by definition, but about 160 s a round in .NET and about 9 minutes in a browser. It fails the budget by orders of magnitude.
 - **A coarser simulation:** fewer footballers, a longer tick, or abstracted phases.
   - It would be a second simulation to build, keep deterministic and calibrate, with its own drift from the first as the football changes.
   - Its cost is unknown until it exists, and it would still need the same calibration as a statistical model.

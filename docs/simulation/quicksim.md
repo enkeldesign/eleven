@@ -10,8 +10,9 @@ Issue #129, M5 (#80): a calibrated result for matches nobody plays, such as a le
 | --- | --- | --- |
 | .NET 10, agent sandbox | 0.107 matches/s (0.41 ms a step) | about 277,000 matches/s |
 | .NET 10, CI runner | in the CI notice "Throughput" | in the same notice |
+| Unity WebGL, headless Chromium on the CI runner | about 0.033 matches/s (1.32 ms a step, from the smoke's 11v11 budget) | |
 
-M6's three tiers play their other fixtures between the human's matches: 17 a round with 12 sides a tier. The full simulation takes about 160 s a round in .NET, and more in a phone's browser. The quick-sim takes well under a millisecond.
+M6's three tiers play their other fixtures between the human's matches: 17 a round with 12 sides a tier. The full simulation takes about 160 s a round in .NET and about 9 minutes in the CI runner's browser. The quick-sim takes well under a millisecond.
 
 ## The model
 
