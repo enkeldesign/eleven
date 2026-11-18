@@ -197,19 +197,18 @@ namespace Eleven.Simulation.Harness
         /// is a run of steps pressing within challengeRange. Returns whether one is under way.
         /// </summary>
         /// <summary>
-        /// As <see cref="CountPress"/>, for <paramref name="seatPlayer"/>: the footballer the seat
-        /// owned during the step, before any switch at its end (Codex on #145).
+        /// Counts a step of the seat's ball-winning (#135) from the simulation's reports, for
+        /// <paramref name="seatPlayer"/>: the footballer the seat owned during the step. Challenges
+        /// are decided before a switch at the step's end, so the owner after it is the wrong one
+        /// (Codex on #145). An attempt is a run of steps pressing with the ball within
+        /// <paramref name="challengeRange"/>. Returns whether one is under way.
         /// </summary>
-        public bool CountPressOf(int seatPlayer, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, bool pressing, double challengeRange) => pressing;
-
-        public bool CountPress(SimState s, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, int seatController, bool pressing, double challengeRange = double.PositiveInfinity)
+        public bool CountPressOf(int seatPlayer, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, bool pressing, double challengeRange)
         {
-            int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == seatController);
-            int id = me >= 0 ? s.Players[me].Id : 0;
             bool inRange = false;
             foreach (ChallengeReport r in reports)
             {
-                if (r.PlayerId != id) continue;
+                if (r.PlayerId != seatPlayer) continue;
                 if (r.Hint == ChallengeHint.TooFar) SeatTooFar++;
                 else if (r.Hint == ChallengeHint.NotClosing) SeatNotClosing++;
                 else if (r.Hint == ChallengeHint.WontReach) SeatWontReach++;
@@ -220,7 +219,7 @@ namespace Eleven.Simulation.Harness
 
             foreach (SimEvent e in events)
             {
-                if (e.Subject != id || id == 0) continue;
+                if (e.Subject != seatPlayer || seatPlayer == 0) continue;
                 if (e.Kind == SimEventKind.ChallengeStarted) SeatChallenges++;
                 else if (e.Kind == SimEventKind.ChallengeWon) SeatChallengesWon++;
             }
@@ -310,10 +309,14 @@ namespace Eleven.Simulation.Harness
             {
                 commands.Clear();
                 SwitchCause cause = SwitchCause.None;
+                int seatPlayer = 0;
                 if (seat)
                 {
                     commands.Add(Seat(sim, SeatController, switcher!.Decide(sim, events, manual: false)));
                     cause = switcher.LastCause;
+                    // The footballer the seat owns through this step's challenges (Codex on #145).
+                    int me = Array.FindIndex(sim.PeekState().Players, p => p.OwnerControllerId == SeatController);
+                    seatPlayer = me >= 0 ? sim.PeekState().Players[me].Id : 0;
                 }
 
                 events.Clear();
@@ -324,7 +327,7 @@ namespace Eleven.Simulation.Harness
                 sim.Step(commands, events);
                 SimState s = sim.PeekState();
                 recorder.Observe(config, s, events);
-                if (seat) pressing = trial.CountPress(s, sim.ChallengeReports, events, SeatController, pressing, config.ChallengeRange);
+                if (seat) pressing = trial.CountPressOf(seatPlayer, sim.ChallengeReports, events, pressing, config.ChallengeRange);
                 foreach (SimEvent e in events)
                 {
                     if (e.Kind == SimEventKind.Substituted)
