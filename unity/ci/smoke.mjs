@@ -231,6 +231,9 @@ function switchingChecks(logs, check, url, fromM, side, whole) {
 }
 
 async function runPassOnce(browser, url, name, contextOptions, useTouch) {
+  // #120: a repeated pass is labelled name#n in its results and artifacts; what it does follows
+  // the pass itself (Codex's finding on #154).
+  const pass = name.replace(/#\d+$/, '');
   const logs = [];
   const check = (what, ok, detail) => {
     results.checks.push({ name: `${name}: ${what}`, ok, detail });
@@ -306,7 +309,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
     check('the pitch draws the simulation\'s goal', !!pitch && pitch.match[1] === '7.32x2.44' && pitch.match[2] === '0.12' && pitch.match[3] === '52.44,3.72',
       pitch ? pitch.match[0].replace('ELEVEN pitch ', '') : 'no pitch line');
 
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       const icons = await page.evaluate(async () => {
         const urls = [document.querySelector('link[rel="apple-touch-icon"]')?.href];
         const manifest = document.querySelector('link[rel="manifest"]')?.href;
@@ -1724,7 +1727,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
 
     // Desktop types the note and keeps it with Enter; the phone keeps the capture without one.
     const note = `smoke ${name}`;
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       await page.keyboard.type(note);
       await page.keyboard.press('Enter');
     } else if (sheet) {
@@ -1742,7 +1745,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       fs.writeFileSync(path.join(outDir, `capture-${name}.elfc`), keptCapture);
       notes.capture = `${captured.match[3]} steps, ${keptCapture.length} bytes`;
     }
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       check('the note typed in the sheet is in the capture', !!keptCapture && keptCapture.includes(Buffer.from(note, 'utf8')),
         captured ? `note of ${captured.match[6]} characters; "${note}" ${keptCapture?.includes(Buffer.from(note, 'utf8')) ? 'found' : 'NOT found'} in the kept bytes` : 'no capture');
     }
@@ -1758,7 +1761,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
     const announced = await waitForLog(/ELEVEN ui status (.*)/, 3_000, fromCapture);
     check('the capture is announced', !!announced && /Captured/.test(announced.match[1]), announced ? announced.match[1] : 'no status line');
     const offered = await waitForLog(/ELEVEN ui save visible=yes/, 3_000);
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 5_000 }).catch(() => null),
         placed ? tap(centre(...placed.slice(5, 9))) : Promise.resolve(),
@@ -1799,7 +1802,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
     // The keyboard reaches the Unity controls (#53): the player captures keys again, Tab moves focus
     // to THIS FELT WRONG with the two-colour focus ring, Enter presses it, and Escape keeps the
     // capture without a note.
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       let focus = null;
       for (let i = 0; i < 10 && !focus; i++) {
         const fromTab = logs.length;
@@ -2016,7 +2019,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       console.log(`  ${name}: preset ${item} ${key} at ${shelf.items[item]?.[key] ?? 'none'}, list ${shelf.line?.[6] ?? 'unknown'}`);
       return shelf;
     };
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       const first = await openPresets();
       let shelf = await presetsLine(first.from);
       // Save: a name the build refuses, then one it takes.
@@ -2140,7 +2143,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
     check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
 
     // A kept capture stays exportable after the page reloads: "kept on this device" has to mean it.
-    if (name === 'desktop') {
+    if (pass === 'desktop') {
       const newest = await page.evaluate(() => JSON.parse(localStorage.getItem('eleven.captures') || '[]').pop()?.name ?? '');
       const fromReload = logs.length;
       await page.reload();
