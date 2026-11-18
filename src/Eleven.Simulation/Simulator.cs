@@ -1016,14 +1016,20 @@ namespace Eleven.Simulation
         {
             distance = 0;
             PlayerState p = _state.Players[i];
-            if (KeeperOf(p.Id) >= 0) return false;
-            foreach (CpuState cpu in _state.Cpus) if (cpu.PlayerId == p.Id) return false;
+            if (KeeperOf(p.Id) >= 0 || IsCpu(p.Id)) return false;
             Command? command = FindAccepted(p.OwnerControllerId);
             if (!command.HasValue || command.Value.Move.LengthSquared < 0.04) return false;
             int controller = ControllerOfBall();
             if (controller < 0 || controller == i || _state.Players[controller].TeamId == p.TeamId) return false;
             distance = SimMath.Sqrt((_state.Ball.Position.Horizontal - p.Position).LengthSquared);
             return distance <= HintRange;
+        }
+
+        // Whether a CPU controller plays footballer `id`.
+        private bool IsCpu(int id)
+        {
+            foreach (CpuState cpu in _state.Cpus) if (cpu.PlayerId == id) return true;
+            return false;
         }
 
         private void StepChallenges(long tick, List<SimEvent> events)
@@ -1189,7 +1195,8 @@ namespace Eleven.Simulation
                 // A controlled ball goes where its dribbler goes: his touches and the ATTACHED
                 // steering keep it ahead of him, at his pace.
                 Vec2 ballThen = ball.Position.Horizontal + _state.Players[controller].Velocity * (commit * dt);
-                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling);
+                // A human's commit may end humanChallengeLeeway short (#135); the CPU's never.
+                double reachThen = Config.ChallengeReach * (0.75 + 0.25 * player.Capabilities.Tackling) + (IsCpu(player.Id) ? 0 : Config.HumanChallengeLeeway);
                 double endsFrom = (ballThen - at).LengthSquared;
                 if (endsFrom > reachThen * reachThen)
                 {
