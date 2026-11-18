@@ -311,6 +311,28 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_later_pass_whose_kick_misses_is_dropped_after_a_first_time_pass()
+        {
+            const int Mate = 2;
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 at = new Vec2(-10, 0);
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+            Feed(r, s, at, new SimEvent(3, SimEventKind.QuickPassResolved, Mate, other: Striker));
+            Feed(r, s, at, new SimEvent(4, SimEventKind.Kicked, Mate));
+            Feed(r, s, at, new SimEvent(5, SimEventKind.Touched, Striker));
+
+            // The mate's next pass misses its kick; his later kick is no sending of it.
+            Feed(r, s, at, new SimEvent(6, SimEventKind.QuickPassResolved, Mate, other: Striker));
+            Feed(r, s, at, new SimEvent(7, SimEventKind.KickMissed, Mate));
+            Feed(r, s, at, new SimEvent(8, SimEventKind.Kicked, Mate));
+            Feed(r, s, at, new SimEvent(9, SimEventKind.Touched, Striker));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((3, 2), (home.Passes, home.PassesCompleted));
+        }
+
+        [Fact]
         public void A_passer_running_onto_his_own_pass_has_not_completed_it()
         {
             var r = new MatchRecorder();
