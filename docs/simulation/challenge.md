@@ -106,18 +106,18 @@ From Erik's session: "I can't reliably tackle or get the ball back." A standing 
 
 ### The scripted seat's ball-winning
 
-`eleven-sim squads <dir> <perSide> <count> seat`: the seat (#95) runs straight at the ball, as a human holding the stick at it does. An attempt is a run of steps pressing within `challengeRange`. Eight seeds a size, measured with `humanChallengeLeeway`:
+`eleven-sim squads <dir> <perSide> <count> seat`: the seat (#95) runs straight at the ball, as a human holding the stick at it does. An attempt is a run of steps pressing with the ball within `challengeRange`, by the report's distance. Eight seeds a size, measured with `humanChallengeLeeway`:
 
 | Size | Leeway | Attempts | Started | Won | Goals for–against |
 | --- | --- | --- | --- | --- | --- |
-| 5v5 | 0 (reference) | 559 | 206 (37 %) | 104 (50 % of starts, 19 % of attempts) | 21–0 |
-| 5v5 | 0.25 m | 578 | 246 (43 %) | 65 (26 %, 11 %) | 17–2 |
-| 5v5 | 0.5 m | 614 | 374 (61 %) | 88 (24 %, 14 %) | 15–11 |
-| 5v5 | 1.0 m | 644 | 476 (74 %) | 84 (18 %, 13 %) | 8–13 |
-| 10v10 | 0 (reference) | 708 | 179 (25 %) | 102 (57 %, 14 %) | 34–0 |
-| 10v10 | 0.25 m | 675 | 252 (37 %) | 107 (42 %, 16 %) | 33–0 |
-| 10v10 | 0.5 m | 797 | 389 (49 %) | 94 (24 %, 12 %) | 13–0 |
-| 10v10 | 1.0 m | 821 | 586 (71 %) | 84 (14 %, 10 %) | 9–9 |
+| 5v5 | 0 (reference) | 546 | 206 (38 %) | 104 (50 % of starts, 19 % of attempts) | 21–0 |
+| 5v5 | 0.25 m | 569 | 246 (43 %) | 65 (26 %, 11 %) | 17–2 |
+| 5v5 | 0.5 m | 588 | 374 (64 %) | 88 (24 %, 15 %) | 15–11 |
+| 5v5 | 1.0 m | 604 | 476 (79 %) | 84 (18 %, 14 %) | 8–13 |
+| 10v10 | 0 (reference) | 699 | 179 (26 %) | 102 (57 %, 15 %) | 34–0 |
+| 10v10 | 0.25 m | 668 | 252 (38 %) | 107 (42 %, 16 %) | 33–0 |
+| 10v10 | 0.5 m | 767 | 389 (51 %) | 94 (24 %, 12 %) | 13–0 |
+| 10v10 | 1.0 m | 770 | 586 (76 %) | 84 (14 %, 11 %) | 9–9 |
 
 - **Running straight at the ball, a challenge starts on a quarter to a third of the presses in range,** and wins about half of those. That is what "nothing happens" measures: the won't-reach rule holds him back while he chases alongside.
 - **Loosening the rule starts more challenges and wins fewer of them.** A commit that ends short misses, and the seat's side concedes more while he recovers. The rule protects him.
