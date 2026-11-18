@@ -17,9 +17,27 @@ namespace Eleven.Simulation.Harness
         private readonly int _controllerId;
         private bool _manualHold;
 
-        public SwitchController(int controllerId)
+        public SwitchController(int controllerId, SwitchMode mode = SwitchMode.Auto)
         {
             _controllerId = controllerId;
+            Mode = mode;
+        }
+
+        /// <summary>How automatic switching is (#136). It may change at any step.</summary>
+        public SwitchMode Mode { get; set; }
+
+        /// <summary>Why the last <see cref="Decide"/> switched, or None when it didn't.</summary>
+        public SwitchCause LastCause { get; private set; }
+
+        /// <summary>
+        /// The teammate SWITCH would take now, or 0 (#136): for the host's marker. It changes
+        /// nothing.
+        /// </summary>
+        public int Next(Simulator simulator)
+        {
+            SimState s = simulator.PeekState();
+            int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == _controllerId);
+            return me < 0 ? 0 : FirstToBall(s, simulator.Config, s.Players[me], exceptMe: true);
         }
 
         /// <summary>Whether a manual switch is holding off the automatic one.</summary>
@@ -31,6 +49,15 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public int Decide(Simulator simulator, IReadOnlyList<SimEvent> lastEvents, bool manual)
         {
+            LastCause = SwitchCause.None;
+            int target = Choose(simulator, lastEvents, manual, out SwitchCause cause);
+            if (target != 0) LastCause = cause;
+            return target;
+        }
+
+        private int Choose(Simulator simulator, IReadOnlyList<SimEvent> lastEvents, bool manual, out SwitchCause cause)
+        {
+            cause = SwitchCause.None;
             SimState s = simulator.PeekState();
             int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == _controllerId);
             if (me < 0) return 0;
@@ -48,30 +75,42 @@ namespace Eleven.Simulation.Harness
             {
                 int target = FirstToBall(s, simulator.Config, mine, exceptMe: true);
                 _manualHold = target != 0;
+                cause = SwitchCause.Asked;
                 return target;
             }
 
             if (possession) _manualHold = false;
-            if (_manualHold) return 0;
+            if (_manualHold || Mode == SwitchMode.Manual) return 0;
 
             foreach (SimEvent e in lastEvents)
             {
                 // A pass he played: he takes over its receiver.
-                if (e.Kind == SimEventKind.QuickPassResolved && e.Subject == mine.Id && IsCpuMate(s, mine, e.Other)) return e.Other;
+                if (e.Kind == SimEventKind.QuickPassResolved && e.Subject == mine.Id && IsCpuMate(s, mine, e.Other))
+                {
+                    cause = SwitchCause.Pass;
+                    return e.Other;
+                }
+
+                // On the ball only (#136), nothing but his own pass moves him.
+                if (Mode == SwitchMode.OnTheBall) continue;
 
                 // A teammate has it, or takes his side's restart: he takes over that teammate.
                 if ((e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.RestartPlaced)
                     && IsCpuMate(s, mine, e.Subject))
                 {
+                    cause = SwitchCause.MateHasBall;
                     return e.Subject;
                 }
             }
+
+            if (Mode == SwitchMode.OnTheBall) return 0;
 
             // An opponent has it: the teammate who reaches the ball first.
             foreach (SimEvent e in lastEvents)
             {
                 bool turnover = e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.KeeperHeld;
                 if (!turnover || TeamOf(s, e.Subject) == mine.TeamId || TeamOf(s, e.Subject) == 0) continue;
+                cause = SwitchCause.Turnover;
                 return FirstToBall(s, simulator.Config, mine, exceptMe: false);
             }
 
@@ -119,5 +158,36 @@ namespace Eleven.Simulation.Harness
 
             return best;
         }
+    }
+
+    /// <summary>How automatic switching is (#136).</summary>
+    public enum SwitchMode : byte
+    {
+        /// <summary>#93's: to a pass's receiver, to a teammate who has the ball, at a turnover, and on SWITCH.</summary>
+        Auto = 0,
+
+        /// <summary>To a pass's receiver and on SWITCH; never at a turnover.</summary>
+        OnTheBall = 1,
+
+        /// <summary>Only on SWITCH.</summary>
+        Manual = 2,
+    }
+
+    /// <summary>Why the switcher switched (#136).</summary>
+    public enum SwitchCause : byte
+    {
+        None = 0,
+
+        /// <summary>To the receiver of the human's pass.</summary>
+        Pass = 1,
+
+        /// <summary>To a teammate who touched, took or won the ball, or took his side's restart.</summary>
+        MateHasBall = 2,
+
+        /// <summary>An opponent gained the ball: to the teammate who reaches it first.</summary>
+        Turnover = 3,
+
+        /// <summary>The human pressed SWITCH.</summary>
+        Asked = 4,
     }
 }

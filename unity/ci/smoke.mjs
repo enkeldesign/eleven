@@ -189,6 +189,46 @@ async function runSpecimenPass(browser, url, name, contextOptions) {
   }
 }
 
+// How automatic switching was in a pass (#136): the address's, or the bench's.
+function switchingMode(url) {
+  return /(?:switching|viabench)=(ball|manual)/.exec(url)?.[1] ?? 'auto';
+}
+
+// #136's checks over a match from `fromM`: the switches the mode allows, the marker on the
+// teammate SWITCH would take, and in auto a cue when control moves on its own. Returns a note.
+function switchingChecks(logs, check, url, fromM, side, whole) {
+  const mode = switchingMode(url);
+  // Set from the bench, the mode holds from its switching line on.
+  const setAt = logs.slice(fromM).map((l, i) => (/^ELEVEN match switching mode=/.test(l) ? i : -1)).filter((i) => i >= 0).pop();
+  const lines = logs.slice(fromM + (setAt ?? 0));
+  const causes = lines.map((l) => /^ELEVEN match switch auto cause=(\w+) mode=(\w+)/.exec(l)).filter(Boolean);
+  const by = {};
+  for (const c of causes) by[c[1]] = (by[c[1]] ?? 0) + 1;
+  const counted = Object.entries(by).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+  const allowed = mode === 'ball' ? ['Pass'] : [];
+  const wrongMode = causes.filter((c) => c[2] !== mode).length;
+  if (mode === 'auto') {
+    if (whole) check(`switching auto: control moves on its own through the ${side}v${side} match`, causes.length >= 1 && wrongMode === 0, `automatic switches: ${counted}`);
+  } else {
+    const disallowed = causes.filter((c) => !allowed.includes(c[1]));
+    check(`switching ${mode}: no automatic switch but ${mode === 'ball' ? "to the human's pass's receiver" : 'none'}`, disallowed.length === 0 && wrongMode === 0,
+      `automatic switches: ${counted}`);
+  }
+
+  const marked = lines.map((l) => /^ELEVEN trace .* switching=(\w+) next=(\d+)@(\S+)/.exec(l)).filter(Boolean);
+  const shown = marked.filter((m) => m[2] !== '0' && m[3] !== 'none').length;
+  check(`the teammate SWITCH would take is marked (${mode})`, marked.length > 0 && shown >= Math.ceil(marked.length / 2) && marked.every((m) => m[1] === mode),
+    `${shown} of ${marked.length} trace lines with the marker shown`);
+
+  if (mode === 'auto' && whole) {
+    const cues = lines.filter((l) => /^ELEVEN ui status Switched: /.test(l)).length;
+    const made = causes.length;
+    check('a switch the human did not ask for is cued', made === 0 || cues >= 1, `${cues} cue(s) for ${made} automatic switch(es)`);
+  }
+
+  return `switching ${mode}: ${counted}`;
+}
+
 async function runPass(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
@@ -730,6 +770,33 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
             started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
+
+          // ?viabench=ball|manual: the bench's switching switch (#136), at the end of the Presets tab,
+          // pressed while the bench holds the match. Scrolled into the list's view first, as a preset is.
+          const viaBench = /viabench=(ball|manual)/.exec(url)?.[1];
+          if (viaBench) {
+            const fromB = logs.length;
+            const pattern = /ELEVEN bench presets .* list=(\S+) switching=auto:(\S+);ball:(\S+);manual:(\S+)/;
+            const index = viaBench === 'ball' ? 3 : 4;
+            const nums = (v) => v.split(',').map(Number);
+            let line = lastLog(pattern);
+            for (let i = 0; i < 16 && line; i++) {
+              const [, y] = nums(line[index]);
+              const list = nums(line[1]);
+              if (y >= list[1] + 22 && y <= list[1] + list[3] - 22) break;
+              const centre = at(list[0] + list[2] / 2, list[1] + list[3] / 2);
+              await page.mouse.move(centre.x, centre.y);
+              const from = logs.length;
+              await page.mouse.wheel(0, y > list[1] + list[3] / 2 ? 120 : -120);
+              const next = (await waitForLog(pattern, 3_000, from))?.match ?? null;
+              if (!next) break;
+              line = next;
+            }
+            if (line) await press(line[index], 2);
+            const set = (await waitForLog(/ELEVEN match switching mode=(\w+)/, 10_000, fromB))?.match ?? null;
+            check(`the bench's switching switch sets ${viaBench}`, !!set && set[1] === viaBench,
+              set ? set[0].replace('ELEVEN ', '') : `no switching line (${line ? `${viaBench} at ${line[index]}, list ${line[1]}` : 'no switching places in the presets line'})`);
+          }
           await closeBench(openedM, 2);
         } else {
           check(`a ${side}v${side} match starts from the address`, !!started && started[1] === 'address' && (started[7] ?? '1') === String(side), started ? started[0].replace('ELEVEN ', '') : 'no match started');
@@ -804,6 +871,12 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             await shot('substituted');
           }
 
+          if (side > 1 && /switching=(ball|manual)/.test(url)) {
+            // A stretch of play in the mode the address set (#136): no switch it doesn't allow.
+            await sleep(20_000);
+            switchingChecks(logs, check, url, fromM, side, false);
+          }
+
           const errorsV = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
           check('no page errors or exceptions', errorsV.length === 0, errorsV.length ? errorsV.slice(0, 5).join(' | ') : 'none');
           return;
@@ -840,8 +913,9 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         notes.result = result ? result[1] : 'none';
         if (side > 1) {
           const switches = logs.slice(fromM).filter((l) => /^ELEVEN match switched /.test(l)).length;
-          check(`control switched through the ${side}v${side} match`, switches >= 2, `${switches} switch(es)`);
+          if (switchingMode(url) === 'auto') check(`control switched through the ${side}v${side} match`, switches >= 2, `${switches} switch(es)`);
           notes.result += `; ${switches} switches`;
+          notes.result += `; ${switchingChecks(logs, check, url, fromM, side, true)}`;
         }
 
         if (side === 10) {
@@ -2114,9 +2188,11 @@ try {
   await runPass(browser, `${base}?trace=1&match=1&half=60`, 'match-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-tablet-landscape', quick(1080, 810), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match`, 'match-phone-landscape', quick(750, 342), true);
-  // The 2v2 match (#95): a whole one on a phone through the bench, and SWITCH in landscape.
-  await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60`, 'match2-phone', quick(390, 664), true);
+  // The 2v2 match (#95): a whole one on a phone through the bench, switching on the ball only from
+  // the bench's switch (#136), and SWITCH in landscape; then manual switching from the address.
+  await runPass(browser, `${base}?trace=1&match=1&match2=1&half=60&viabench=ball`, 'match2-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2`, 'match2-phone-landscape', quick(750, 342), true);
+  await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2&switching=manual`, 'match2-manual', quick(750, 342), true);
   // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
   await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a

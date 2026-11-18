@@ -21,7 +21,7 @@ Each knob also has:
 
 A `BenchCandidate` is a complete set of values: one config, one player and one set of touch gesture settings.
 - **Built only through the supported surface**, `SimConfig.With`, `PlayerCapabilities.With` and `ActionSurfaceSettings.With`, so it is an ordinary immutable, validated and hashed config (INV-5). It is never a change to a running simulation.
-- **Touch values are not simulation values.** They decide which owned command a gesture becomes, never how the football behaves, so they are in no config or state hash. A capture records them as its control candidate (`action-surface/v1 name=value ...`).
+- **Touch values are not simulation values.** They decide which owned command a gesture becomes, never how the football behaves, so they are in no config or state hash. A capture records them as its control candidate (`action-surface/v1 name=value ...`), followed by the switching mode (`switching=auto`, #136).
 - **The practice start** is the spike scenario's start state with the candidate's player (`SpikeScenario.InitialState(config, capabilities)`).
 - **The same values always give the same config hash and the same practice start hash**, in any order and in any runtime. `eleven-sim candidate name=value ...` prints both.
 - **Refused whole.** A candidate with any value out of its valid range, unknown, missing, given twice or not finite is refused, with the knob and its range named. Nothing is ever partly applied.

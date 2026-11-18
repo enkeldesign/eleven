@@ -24,6 +24,8 @@ namespace Eleven.Host
         public static readonly Color OpponentKeeper = Domain.OpponentKeeper.ToColor();
         // The controlled footballer's marker in a 2v2 match (#95): a halo of the pitch lines' white under him.
         public static readonly Color Marker = Domain.PitchLine.ToColor();
+        // Who SWITCH would take (#136): the same white, faint, so it never reads as the controlled one.
+        public static readonly Color NextMarker = new Color(Marker.r, Marker.g, Marker.b, 0.35f);
         // The match controls (#28's): the ACTION label and the discs. The UI around the match takes
         // its colours from the visual system's roles (#48, #53).
         public static readonly Color HudText = Color.white;

@@ -63,7 +63,8 @@ namespace Eleven.Host
             Func<BenchCandidate> benchApplied, Action<BenchCandidate> benchApply, Action<ControlModel> benchSwitchModel,
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
             Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
-            Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer, System.Action substitute)
+            Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer, System.Action substitute,
+            Func<int> benchSwitching = null, Action<int> benchSwitchSwitching = null)
         {
             _ui = ui;
             _trace = trace;
@@ -172,7 +173,7 @@ namespace Eleven.Host
             _scrim.Add(_sheet.Element);
             ui.Root.Add(_scrim);
 
-            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, benchLoadPresets, benchStorePresets, benchBuild, BenchClosed, benchPlay, benchSwitchPlay);
+            Bench = new BenchSheet(ui, trace, benchApplied, benchApply, benchSwitchModel, benchSecondHalf, benchSwitchView, benchControls, benchSwitchControls, benchLoadPresets, benchStorePresets, benchBuild, BenchClosed, benchPlay, benchSwitchPlay, benchSwitching, benchSwitchSwitching);
 
             // Tab and Shift+Tab move focus through the HUD's controls in their order, and through the
             // sheet's alone while it is open. The HUD does this itself: it doesn't rely on the panel

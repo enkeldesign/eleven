@@ -85,6 +85,12 @@ namespace Eleven.Host
         private readonly System.Collections.Generic.List<Transform> _mates = new System.Collections.Generic.List<Transform>();
         private readonly System.Collections.Generic.List<Transform> _opponents = new System.Collections.Generic.List<Transform>();
         private readonly Transform _marker;
+
+        // Who SWITCH would take (#136), a faint halo; and the pulse of the controlled one's marker
+        // when control moved on its own, from 1 down to 0 over PulseSeconds.
+        private readonly Transform _nextMarker;
+        private float _pulse;
+        private const float PulseSeconds = 0.5f;
         private int _perSide = 1;
 
         // The off-screen cues (#102): a pointer at the play area's edge for each footballer just
@@ -206,6 +212,8 @@ namespace Eleven.Host
             _discSprite = disc;
             _marker = Shape(root, disc, "Controlled marker", HostPalette.Marker, 3, PlayerDiameter * MarkerScale);
             _marker.gameObject.SetActive(false);
+            _nextMarker = Shape(root, disc, "Next marker", HostPalette.NextMarker, 3, PlayerDiameter * MarkerScale);
+            _nextMarker.gameObject.SetActive(false);
             _player = Shape(root, disc, "Player", HostPalette.Player, 4, PlayerDiameter);
             _keeper = Shape(root, disc, "Keeper", HostPalette.Keeper, 4, PlayerDiameter);
             _keeper.gameObject.SetActive(false);
@@ -261,6 +269,33 @@ namespace Eleven.Host
             for (int i = 0; i < _mates.Count; i++) _mates[i].gameObject.SetActive(match && i < _perSide - 1);
             for (int i = 0; i < _opponents.Count; i++) _opponents[i].gameObject.SetActive(match && i < _perSide);
             _marker.gameObject.SetActive(match && _perSide > 1);
+            _nextMarker.gameObject.SetActive(false);
+            _pulse = 0;
+        }
+
+        /// <summary>
+        /// Marks the teammate SWITCH would take (#136), or none. Always shown in a match with
+        /// teammates, whatever the switching mode.
+        /// </summary>
+        public void ShowNext(Vector2? at)
+        {
+            bool shown = at.HasValue && _marker.gameObject.activeSelf;
+            _nextMarker.gameObject.SetActive(shown);
+            if (shown) _nextMarker.localPosition = new Vector3(at.Value.x, at.Value.y, 0);
+        }
+
+        /// <summary>Where the next marker is, in screen pixels from the top left, or "none": for the smoke.</summary>
+        public string NextReport(in HudLayout layout)
+        {
+            if (!_nextMarker.gameObject.activeSelf) return "none";
+            Vector3 s = _camera.WorldToScreenPoint(_nextMarker.localPosition);
+            return System.FormattableString.Invariant($"{s.x:F0},{layout.ScreenHeight - s.y:F0}");
+        }
+
+        /// <summary>Control moved on its own (#136): the controlled marker swells and settles back. Not under reduced motion.</summary>
+        public void Pulse()
+        {
+            if (!UiRoot.ReducedMotion) _pulse = 1;
         }
 
         /// <summary>Where a match's other footballers are drawn this frame (#87, #95): his teammates, the opponents' outfielders, their keeper.</summary>
@@ -310,6 +345,9 @@ namespace Eleven.Host
         {
             _player.localPosition = new Vector3(player.x, player.y, 0);
             _marker.localPosition = _player.localPosition;
+            float pulseDt = Frozen ? 0 : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+            _pulse = Mathf.Max(0, _pulse - pulseDt / PulseSeconds);
+            _marker.localScale = Vector3.one * (PlayerDiameter * MarkerScale * (1 + 0.6f * _pulse));
             _keeper.gameObject.SetActive(keeper.HasValue);
             if (keeper.HasValue) _keeper.localPosition = new Vector3(keeper.Value.x, keeper.Value.y, 0);
             _ballShadow.localPosition = new Vector3(ball.x, ball.y, 0);

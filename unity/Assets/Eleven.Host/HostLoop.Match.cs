@@ -42,6 +42,35 @@ namespace Eleven.Host
         private SwitchController _switcher;
         private bool _switchRequested;
 
+        // How automatic switching is (#136): the bench's switch or ?switching=auto|ball|manual. The
+        // teammate SWITCH would take, marked; and why the switcher last moved control on its own,
+        // cued once the switch is made.
+        private SwitchMode _switchMode = SwitchMode.Auto;
+        private int _nextId;
+        private SwitchCause _cueCause;
+
+        private static readonly string[] SwitchModeNames = { "auto", "ball", "manual" };
+
+        private static string NameOf(SwitchMode mode) => SwitchModeNames[(int)mode];
+
+        // The bench's switching switch (#136): it acts at once, and the match goes on.
+        private void SwitchSwitching(int index)
+        {
+            _switchMode = (SwitchMode)Math.Max(0, Math.Min(2, index));
+            if (_switcher != null) _switcher.Mode = _switchMode;
+            _hud?.ShowStatus(_switchMode == SwitchMode.Auto ? "Switching: auto." : _switchMode == SwitchMode.OnTheBall ? "Switching: on the ball only." : "Switching: manual, on SWITCH only.");
+            Log($"ELEVEN match switching mode={NameOf(_switchMode)}");
+        }
+
+        // The cue for a switch the human didn't ask for (#136), in words.
+        private static string CueText(SwitchCause cause) => cause switch
+        {
+            SwitchCause.Pass => "Switched: your pass's receiver.",
+            SwitchCause.MateHasBall => "Switched: your teammate on the ball.",
+            SwitchCause.Turnover => "Switched: first to the lost ball.",
+            _ => "",
+        };
+
         // SUBS's request (#110): kept until the simulation makes the substitution, at the next
         // stoppage. The policy that picks who: the manager's own, with no wait and no threshold.
         private bool _subRequested;
@@ -116,8 +145,10 @@ namespace Eleven.Host
             _simulator = new Simulator(_config, _perSide == 1
                 ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
                 : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities));
-            _switcher = new SwitchController(OneVOne.HomeController);
+            _switcher = new SwitchController(OneVOne.HomeController, _switchMode);
             _switchRequested = false;
+            _nextId = 0;
+            _cueCause = SwitchCause.None;
             _switches = 0;
             _hud?.ShowSwitch(_perSide > 1);
             _subRequested = false;
@@ -195,6 +226,7 @@ namespace Eleven.Host
             _mates.Clear();
             _opponents.Clear();
             Vector2 theirKeeper = Vector2.zero;
+            Vector2? next = null;
             for (int i = 0; i < s.Players.Length; i++)
             {
                 if (i == me) continue;
@@ -202,6 +234,7 @@ namespace Eleven.Host
                 bool keeper = Array.FindIndex(s.Keepers, k => k.PlayerId == p.Id) >= 0;
                 // Off the pitch (#108, #109): drawn far beyond it, out of the view and the cues' reach.
                 Vector2 at = p.Off ? new Vector2(0, 1000) : Vector2.Lerp(Previous(i, s), ToVector(p.Position), alpha);
+                if (p.Id == _nextId && !p.Off) next = at;
                 if (p.TeamId == OneVOne.HomeTeam)
                 {
                     if (!keeper) _mates.Add(at);
@@ -211,6 +244,7 @@ namespace Eleven.Host
             }
 
             _view.RenderSides(_mates, _opponents, theirKeeper);
+            _view.ShowNext(_perSide > 1 ? next : null);
         }
 
         // Each footballer's action this frame (#101), chosen from the state and never written back.
@@ -257,6 +291,8 @@ namespace Eleven.Host
             int target = _switcher.Decide(_simulator, _events, manual);
             if (manual) Log(FormattableString.Invariant($"ELEVEN match switch asked tick={_simulator.Tick} to={target}"));
             if (target == 0) return c;
+            _cueCause = manual ? SwitchCause.None : _switcher.LastCause;
+            if (!manual) Log(FormattableString.Invariant($"ELEVEN match switch auto cause={_switcher.LastCause} mode={NameOf(_switchMode)} tick={_simulator.Tick} to={target}"));
             return new Command(c.ControllerId, c.Tick, c.Move, c.Kick, c.Aftertouch, c.QuickPass, c.Dive, c.Plan, target);
         }
 
@@ -401,6 +437,15 @@ namespace Eleven.Host
                         _input.Clear();
                         _switches++;
                         Log(FormattableString.Invariant($"ELEVEN match switched to={e.Subject} from={e.Other} count={_switches} tick={s.Tick}"));
+
+                        // Control moved on its own (#136): the marker swells, and the HUD says why.
+                        if (_cueCause != SwitchCause.None)
+                        {
+                            _view.Pulse();
+                            _hud?.ShowStatus(CueText(_cueCause));
+                        }
+
+                        _cueCause = SwitchCause.None;
                         break;
                     case SimEventKind.FullTime:
                         _subRequested = false;
