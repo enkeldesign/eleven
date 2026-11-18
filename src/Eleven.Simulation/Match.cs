@@ -503,7 +503,7 @@ namespace Eleven.Simulation
                 // A queued first-time pass connects: it plays the pass it met, then is sent itself.
                 if (e.Kind == SimEventKind.Kicked && _queuedSide >= 0 && e.Subject == _queuedId)
                 {
-                    if (_passer >= 0) PlayPass(e.Subject, side);
+                    if (_passer >= 0 && _passSent) PlayPass(e.Subject, side);
                     _passer = _queuedSide;
                     _passerId = _queuedId;
                     _passSent = true;
@@ -513,9 +513,9 @@ namespace Eleven.Simulation
 
                 if (_passer < 0) continue;
 
-                // The passer's own kick sends his pass; it doesn't play it.
+                // The passer's own kick sends his pass; it doesn't play it. Until it is sent, nothing does.
                 if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId && !_passSent) _passSent = true;
-                else PlayPass(e.Subject, side);
+                else if (_passSent) PlayPass(e.Subject, side);
             }
 
             // Play stopped: no kick before it is a shot now, whatever the dead ball does next.
