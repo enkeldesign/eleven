@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # #120: a manual run can repeat chosen smoke passes, as evidence that a check holds on a slow runner.
+  workflow_dispatch:
+    inputs:
+      only:
+        description: Smoke passes to run, comma-separated (empty runs every pass)
+        required: false
+        default: ''
+      repeat:
+        description: Times to run each pass
+        required: false
+        default: '1'
 
 permissions:
   contents: read
@@ -121,6 +132,9 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Run the smoke test
+        env:
+          SMOKE_ONLY: ${{ inputs.only }}
+          SMOKE_REPEAT: ${{ inputs.repeat }}
         run: |
           player=$(dirname "$(find web-player -name index.html | head -1)")
           node unity/ci/smoke.mjs "$player" dotnet-hashlogs smoke
@@ -130,6 +144,8 @@ jobs:
       # capture that fails to decode or replay fails the step and is named (#50). The explicit
       # bash shell adds pipefail; the default shell has none.
       - name: Replay the build's felt-wrong captures with .NET
+        # A manual run of chosen passes (#120) may press no FELT WRONG.
+        if: ${{ !inputs.only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -163,6 +179,8 @@ jobs:
   deploy:
     name: Deploy playable link
     needs: build
+    # A manual run (#120) repeats smoke passes; it publishes nothing.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

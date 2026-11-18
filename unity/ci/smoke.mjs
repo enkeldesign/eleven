@@ -156,7 +156,7 @@ function medianFps(lines) {
 // The visual system's specimen (#48): built from the production components, it must keep every
 // interactive target at 44 x 44 pt or more and nothing wider than the page, and it is screenshotted
 // whole (tall viewports, so no scrolling) for review.
-async function runSpecimenPass(browser, url, name, contextOptions) {
+async function runSpecimenPassOnce(browser, url, name, contextOptions) {
   const logs = [];
   const check = (what, ok, detail) => {
     results.checks.push({ name: `${name}: ${what}`, ok, detail });
@@ -230,7 +230,7 @@ function switchingChecks(logs, check, url, fromM, side, whole) {
   return `switching ${mode}: ${counted}`;
 }
 
-async function runPass(browser, url, name, contextOptions, useTouch) {
+async function runPassOnce(browser, url, name, contextOptions, useTouch) {
   const logs = [];
   const check = (what, ok, detail) => {
     results.checks.push({ name: `${name}: ${what}`, ok, detail });
@@ -242,6 +242,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
     const data = await page.evaluate((n) => (JSON.parse(localStorage.getItem('eleven.captures') || '[]').find((c) => c.name === n) || {}).data || null, captureName).catch(() => null);
     return data ? Buffer.from(data, 'base64') : null;
   };
+  // #120: how long the host held the first press released after `from`, in ms (0 if none). A
+  // gesture sent at once but held past its threshold by a slow frame is retried, and noted here.
+  const releasedAfter = (from) => Number(/held=(\d+)ms/.exec(logs.slice(from).find((l) => /^ELEVEN release /.test(l)) ?? '')?.[1] ?? 0);
+  const slowFlicks = [];
+  const noteSlowFlicks = () => { if (slowFlicks.length) notes.slowFlicks = slowFlicks.join(', '); };
   const lastLog = (pattern) => {
     for (let i = logs.length - 1; i >= 0; i--) {
       const m = pattern.exec(logs[i]);
@@ -436,19 +441,30 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       };
 
       const flickUp = async (degrees) => {
-        await sleep(1_500);
-        const from = logs.length;
         const to = { x: actionAt.x, y: actionAt.y - 60 * pointPx * sy };
         const along = (f) => ({ x: actionAt.x, y: actionAt.y + (to.y - actionAt.y) * f });
-        if (useTouch) {
-          await burst(['touchStart', [{ ...actionAt, id: 1 }]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [{ ...along(f), id: 1 }]]), ['touchEnd', []]);
-        } else {
-          await page.mouse.move(actionAt.x, actionAt.y);
-          await page.mouse.down();
-          for (const f of [0.34, 0.67, 1]) await page.mouse.move(along(f).x, along(f).y);
-          await page.mouse.up();
+        // #120: the flick's events are sent together, but a slow runner's frames can hold the press
+        // past the hold threshold before the host reads the travel. Held that long, the host saw a
+        // hold-flick, so it is sent again (twice at most), and the delay is noted.
+        let from = logs.length;
+        let flicked = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await sleep(1_500);
+          from = logs.length;
+          if (useTouch) {
+            await burst(['touchStart', [{ ...actionAt, id: 1 }]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [{ ...along(f), id: 1 }]]), ['touchEnd', []]);
+          } else {
+            await page.mouse.move(actionAt.x, actionAt.y);
+            await page.mouse.down();
+            for (const f of [0.34, 0.67, 1]) await page.mouse.move(along(f).x, along(f).y);
+            await page.mouse.up();
+          }
+          flicked = (await waitForLog(actionPattern, 5_000, from))?.match ?? null;
+          const heldMs = releasedAfter(from);
+          if (!flicked || flicked[1] !== 'holdflick' || heldMs < 120) break;
+          slowFlicks.push(`${heldMs} ms`);
         }
-        const flicked = (await waitForLog(actionPattern, 5_000, from))?.match ?? null;
+        noteSlowFlicks();
         const x = Number(flicked?.[3]), y = Number(flicked?.[4]);
         check(`at ${degrees}°: a flick up the screen kicks up-field`, !!flicked && flicked[1] === 'flick' && x * up(degrees) > 0 && Math.abs(y) < Math.abs(x) * 0.3,
           flicked ? flicked[0].replace('ELEVEN action ', '') : `no action line after the flick; since: ${since(from)}`);
@@ -1133,21 +1149,35 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         // A re-touch while the hold's kick is under way shapes it, and kicks nothing more. With the
         // ball at his feet the kick meets it and its aftertouch keeps the window open: from 10 m
         // the wind-up's 0.1 s alone closes before a slow runner's re-touch arrives.
-        await settle();
-        const fromOnto = logs.length;
-        const onto = await runOntoBall(fromOnto);
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-        await settle();
-        const fromShapeC = logs.length;
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
-        await sleep(400);
+        // #120: the re-touch waits on the simulation, not the clock. The hold is released, and the
+        // re-touch goes as soon as the host logs the hold's kick. If a slow runner delivered it after
+        // the window had closed, it was a new press: the footballer runs onto the ball again and the
+        // gesture is retried (twice at most), and the delay is noted.
         const again = { x: fire.x, y: fire.y + 10 * pointPx * sy };
-        await burst(['touchEnd', []], ['touchStart', [pt(again, 2)]], ['touchMove', [pt({ x: again.x + 40 * pointPx * sx, y: again.y }, 2)]]);
-        await sleep(400);
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-        await sleep(300);
-        const shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
-        const kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
+        let onto = null, shapedC = [], kicksC = 0;
+        const lateShapes = [];
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await settle();
+          onto = await runOntoBall(logs.length);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await settle();
+          const fromShapeC = logs.length;
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(fire, 1)] });
+          await sleep(400);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          const kicked = await waitForLog(/ELEVEN action gesture=holdkick/, 5_000, fromShapeC);
+          const sentAt = Date.now();
+          await burst(['touchStart', [pt(again, 2)]], ['touchMove', [pt({ x: again.x + 40 * pointPx * sx, y: again.y }, 2)]]);
+          await sleep(400);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await sleep(300);
+          shapedC = logs.slice(fromShapeC).filter((l) => l.startsWith('ELEVEN press')).map((l) => l.trim().replace('ELEVEN press ', ''));
+          kicksC = logs.slice(fromShapeC).filter((l) => /ELEVEN action gesture=holdkick/.test(l)).length;
+          if (!kicked || shapedC.some((l) => /target=shaping/.test(l)) || kicksC > 2) break;
+          lateShapes.push(`${Date.now() - sentAt} ms after the kick's line`);
+          await waitForLog(/ELEVEN event \d+ (Kicked|KickMissed)/, 5_000, fromShapeC);
+        }
+        if (lateShapes.length) notes.lateShapes = lateShapes.join(', ');
         check('a re-touch on FIRE during a kick shapes it and kicks nothing more', shapedC.some((l) => /target=shaping/.test(l)) && kicksC === 1,
           `${onto.hasBall ? 'from the ball at his feet' : 'he never reached the ball'}; ${shapedC.join(' | ') || 'no presses'}; ${kicksC} kick(s)`);
 
@@ -1251,10 +1281,20 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           await burst(['touchStart', [...held, pt(start, id)]], ...[0.34, 0.67, 1].map((f) => ['touchMove', [...held, pt(along(f), id)]]), ['touchEnd', [pt(end, id)]]);
         }
       };
-      await settle();
-      const fromFlick = logs.length;
-      await flickFrom(kick, 30, 60);
-      const flicked = (await waitForLog(actionPattern, 20_000, fromFlick))?.match ?? null;
+      // #120: retried as the view pass's flick is, when a slow frame held the press past the threshold.
+      let fromFlick = logs.length;
+      let flicked = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await settle();
+        fromFlick = logs.length;
+        await flickFrom(kick, 30, 60);
+        flicked = (await waitForLog(actionPattern, 20_000, fromFlick))?.match ?? null;
+        const heldMs = releasedAfter(fromFlick);
+        if (!flicked || flicked[1] !== 'holdflick' || heldMs < 120) break;
+        slowFlicks.push(`${heldMs} ms`);
+        await waitForLog(/ELEVEN event \d+ (Kicked|KickMissed)/, 5_000, fromFlick);
+      }
+      noteSlowFlicks();
       const flickWorld = toWorld({ x: 30, y: 60 }, 0);
       const flickPress = logs.slice(fromFlick).find((l) => l.startsWith('ELEVEN press'));
       check('an immediate flick on KICK is a manual kick along the gesture',
@@ -2172,7 +2212,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
 }
 
 // The service worker, with a server of its own that can stand in for a new deploy or go away.
-async function runServiceWorkerPass(browser, root) {
+async function runServiceWorkerPassOnce(browser, root) {
   const name = 'service worker';
   const logs = [];
   const check = (what, ok, detail) => {
@@ -2221,6 +2261,19 @@ async function runServiceWorkerPass(browser, root) {
     if (server.listening) server.close();
   }
 }
+
+// #120: SMOKE_ONLY (pass names, comma-separated) runs only those passes, each SMOKE_REPEAT times,
+// named name#1, name#2…: a manual run's evidence that a check holds on a slow runner run after run.
+// Unset, every pass runs once, as in CI.
+const only = process.env.SMOKE_ONLY ? new Set(process.env.SMOKE_ONLY.split(',').map((n) => n.trim()).filter(Boolean)) : null;
+const repeat = Math.max(1, Number(process.env.SMOKE_REPEAT) || 1);
+const repeated = (once) => async (browser, url, name, ...rest) => {
+  if (only && !only.has(name)) return;
+  for (let r = 1; r <= repeat; r++) await once(browser, url, repeat > 1 ? `${name}#${r}` : name, ...rest);
+};
+const runPass = repeated(runPassOnce);
+const runSpecimenPass = repeated(runSpecimenPassOnce);
+const runServiceWorkerPass = async (browser, root) => { if (!only || only.has('service-worker')) await runServiceWorkerPassOnce(browser, root); };
 
 const server = await serve(path.resolve(playerDir));
 const base = `http://127.0.0.1:${server.address().port}/index.html`;
