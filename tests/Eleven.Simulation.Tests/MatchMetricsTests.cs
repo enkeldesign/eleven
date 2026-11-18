@@ -92,6 +92,75 @@ namespace Eleven.Simulation.Tests
             Assert.Contains($"shots={home.Shots}-{away.Shots}\n", text);
         }
 
+        // The recorder fed one step's events by hand (#128, Codex's findings on #147), the ball at `ball`.
+        private static readonly SimConfig Hand = SpikeScenario.Config();
+
+        private static void Feed(MatchRecorder r, SimState s, Vec2 ball, params SimEvent[] events)
+        {
+            s.Ball.Position = new Vec3(ball.X, ball.Y, Hand.BallRadius);
+            r.Observe(Hand, s, events);
+        }
+
+        private static SimState HandState()
+        {
+            SimState s = Squads.Match(Hand, 3, 5);
+            s.Match.Phase = MatchPhase.FirstHalf;
+            return s;
+        }
+
+        private const int Striker = 1; // home's first outfielder: home attacks +x in the first half
+
+        // Full time, and home's metrics in the result.
+        private static SideMetrics Home(MatchRecorder r, SimState s)
+        {
+            r.Observe(Hand, s, new[] { new SimEvent(9, SimEventKind.FullTime, 0) });
+            Assert.NotNull(r.Result);
+            return r.Result!.HomeMetrics;
+        }
+
+        [Fact]
+        public void A_goal_from_a_kick_is_one_shot_on_target_though_it_crosses_the_line_and_scores_in_one_step()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 11, 0), new SimEvent(1, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(2, SimEventKind.GoalLineCrossed, OneVOne.BallId), new SimEvent(2, SimEventKind.Goal, OneVOne.BallId, other: Squads.HomeTeam));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 1), (home.Shots, home.OnTarget));
+            Assert.Equal(MetricsModel.Reference.Chance(new Vec2(Hand.GoalLineX - 11, 0), Hand.GoalLineX, Hand.GoalWidth), home.Xg, 12);
+        }
+
+        [Fact]
+        public void A_kick_off_the_frame_and_in_is_one_shot_on_target()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 16, 3), new SimEvent(1, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX, Hand.GoalWidth / 2), new SimEvent(2, SimEventKind.HitFrame, OneVOne.BallId));
+            Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(3, SimEventKind.GoalLineCrossed, OneVOne.BallId), new SimEvent(3, SimEventKind.Goal, OneVOne.BallId, other: Squads.HomeTeam));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 1), (home.Shots, home.OnTarget));
+        }
+
+        [Fact]
+        public void A_penalty_kick_takes_the_penalty_chance_and_the_rebound_after_it_does_not()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 spot = new Vec2(Hand.GoalLineX - 11, 0);
+
+            // The penalty's kick is raised before the restart is taken, in the same step.
+            Feed(r, s, spot, new SimEvent(1, SimEventKind.Kicked, Striker), new SimEvent(1, SimEventKind.RestartTaken, Striker, other: (int)RestartKind.Penalty));
+            Feed(r, s, new Vec2(Hand.GoalLineX - 0.5, 0), new SimEvent(2, SimEventKind.KeeperParried, Squads.AwayKeeper(5)));
+
+            Vec2 rebound = new Vec2(Hand.GoalLineX - 6, 4);
+            Feed(r, s, rebound, new SimEvent(3, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(4, SimEventKind.GoalLineCrossed, OneVOne.BallId), new SimEvent(4, SimEventKind.Goal, OneVOne.BallId, other: Squads.HomeTeam));
+            SideMetrics home = Home(r, s);
+            Assert.Equal(MetricsModel.Reference.Penalty + MetricsModel.Reference.Chance(rebound, Hand.GoalLineX, Hand.GoalWidth), home.Xg, 12);
+            Assert.Equal((2, 2), (home.Shots, home.OnTarget));
+        }
+
         [Fact]
         public void The_same_match_gives_the_same_metrics()
         {
