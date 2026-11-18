@@ -417,9 +417,11 @@ namespace Eleven.Simulation
                         _shooter = -1;
                         break;
                     case SimEventKind.Touched:
+                    case SimEventKind.Attached:
                     case SimEventKind.ChallengeWon:
                     case SimEventKind.SlideWon:
-                        if (side >= 0 && side != _shooter) _shooter = -1;
+                        // Anyone's touch ends the kick, a teammate's too: a goal after it is his touch's shot.
+                        if (side >= 0) _shooter = -1;
                         break;
                 }
 
