@@ -2120,10 +2120,10 @@ try {
   // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
   await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
-  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 36 since
+  // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 3 since
   // #134's keeper distribution (seed 4 after #138's carry): each changed every untouched match, so
   // the seeds were searched again.
-  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=36`, 'match5-phone', quick(390, 664), true);
+  await runPass(browser, `${base}?trace=1&match=1&match5=1&half=90&seed=3`, 'match5-phone', quick(390, 664), true);
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match5`, 'match5-phone-landscape', quick(750, 342), true);
   // Eleven a side (#106): from the address on a phone, the simulation's step timed in the browser.
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match11`, 'match11-phone', quick(390, 664), true);
