@@ -144,6 +144,52 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(sim.StateHash(), restored.StateHash());
         }
 
+        // The alongside world of #96, the defender B chasing the dribbler A.
+        private static (ChallengeReport? First, Simulator Sim) Alongside(SimConfig c)
+        {
+            SimState s = World(0, dribblerVelocity: new Vec2(6.4, 0));
+            s.Players[1].Position = new Vec2(-0.3, 0.6);
+            s.Players[1].Velocity = new Vec2(7, 0);
+            s.Players[1].Heading = 0;
+            var sim = new Simulator(c, s);
+            Vec2 to = s.Ball.Position.Horizontal - s.Players[1].Position;
+            return (Step(sim, new Vec2(1, 0), to * (1 / Math.Sqrt(to.LengthSquared))), sim);
+        }
+
+        [Fact]
+        public void HumanChallengeLeeway_lets_a_human_commit_that_would_end_that_much_short()
+        {
+            ChallengeReport? strict = Alongside(Free).First;
+            Assert.Equal(ChallengeHint.WontReach, strict?.Hint);
+            double shortBy = strict!.Value.Short;
+            Assert.True(shortBy > 0);
+            Assert.Equal(ChallengeHint.WontReach, Alongside(Free.With("humanChallengeLeeway", shortBy * 0.5)).First?.Hint);
+            Assert.Equal(ChallengeHint.Started, Alongside(Free.With("humanChallengeLeeway", shortBy * 1.5)).First?.Hint);
+        }
+
+        [Fact]
+        public void HumanChallengeLeeway_never_changes_a_cpu_match()
+        {
+            SimConfig c = SpikeScenario.Config();
+            ulong Run(SimConfig config)
+            {
+                var sim = new Simulator(config, Squads.Match(config, 3, perSide: 5, bothCpu: true));
+                var commands = new List<Command>();
+                for (int i = 0; i < 40 * config.TickRate; i++)
+                {
+                    commands.Clear();
+                    KeeperControllers.Append(sim, commands);
+                    CpuControllers.Append(sim, commands);
+                    RestartControllers.Append(sim, commands);
+                    sim.Step(commands, new List<SimEvent>());
+                }
+
+                return sim.StateHash();
+            }
+
+            Assert.Equal(Run(c), Run(c.With("humanChallengeLeeway", 1.5)));
+        }
+
         [Fact]
         public void A_defending_seat_counts_its_attempts_starts_and_wins_over_a_match()
         {
