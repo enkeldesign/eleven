@@ -150,12 +150,23 @@ namespace Eleven.Simulation
         /// <summary>A side's rating: its tier's rating plus the weighted capability index.</summary>
         public static double Rating(QuickSide side, QuickSimModel model) => model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities);
 
-        /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>.</summary>
+        /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>, each at most <see cref="MaxRate"/>.</summary>
         public static (double Home, double Away) Rates(QuickSide home, QuickSide away, double halfSeconds, QuickSimModel model)
         {
             double gap = Rating(home, model) - Rating(away, model);
             double scale = halfSeconds / ReferenceHalf;
-            return (scale * SimMath.Exp(model.BaseRate + model.Home + gap), scale * SimMath.Exp(model.BaseRate - gap));
+            return (Rate(model.BaseRate + model.Home + gap, scale), Rate(model.BaseRate - gap, scale));
+        }
+
+        // The log-rate's exponent is bounded before Exp, then the rate at MaxRate: past the
+        // calibrated ratings the model extrapolates, and the bound keeps its maths in range.
+        private const double LogBound = 40;
+
+        private static double Rate(double logRate, double scale)
+        {
+            double bounded = logRate < -LogBound ? -LogBound : logRate > LogBound ? LogBound : logRate;
+            double rate = scale * SimMath.Exp(bounded);
+            return rate > MaxRate ? MaxRate : rate;
         }
 
         // Dixon–Coles's τ: the low-score correction.
