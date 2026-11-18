@@ -265,6 +265,20 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_pass_whose_kick_misses_is_never_completed()
+        {
+            const int Mate = 2;
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 at = new Vec2(-10, 0);
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.KickMissed, Striker));
+            Feed(r, s, at + new Vec2(1, 0), new SimEvent(3, SimEventKind.Touched, Mate));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 0), (home.Passes, home.PassesCompleted));
+        }
+
+        [Fact]
         public void A_passer_running_onto_his_own_pass_has_not_completed_it()
         {
             var r = new MatchRecorder();
