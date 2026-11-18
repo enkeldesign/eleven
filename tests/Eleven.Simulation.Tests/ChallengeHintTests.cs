@@ -191,6 +191,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_seat_recovering_beyond_challenge_range_is_not_pressing_in_range()
+        {
+            // Codex on #145: NotReady is reported out to 3 m; only within challengeRange is it an attempt.
+            SimState s = World(0.6);
+            var trial = new SquadTrial();
+            var none = new SimEvent[0];
+            double range = Free.ChallengeRange;
+            bool pressing = trial.CountPress(s, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range + 0.5) }, none, B, false, range);
+            Assert.False(pressing);
+            Assert.Equal(0, trial.SeatAttempts);
+            pressing = trial.CountPress(s, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range - 0.1) }, none, B, pressing, range);
+            Assert.True(pressing);
+            Assert.Equal(1, trial.SeatAttempts);
+        }
+
+        [Fact]
         public void A_defending_seat_counts_its_attempts_starts_and_wins_over_a_match()
         {
             SquadTrial t = SquadTrials.One(SpikeScenario.Config(), 5, 0x135000, seat: true);
