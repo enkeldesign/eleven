@@ -33,6 +33,12 @@ namespace Eleven.Host
         private readonly Func<int> _play;
         private readonly Action<int> _switchPlay;
         private UiKit.Segmented _plays;
+
+        // How automatic switching is (#136), in SwitchMode's order.
+        private static readonly string[] Switchings = { "Auto", "On the ball", "Manual" };
+        private UiKit.Segmented _switchings;
+        private readonly Func<int> _switching;
+        private readonly Action<int> _switchSwitching;
         private VisualElement _playBlock;
 
         private static readonly string[] Groups =
@@ -97,10 +103,12 @@ namespace Eleven.Host
         public BenchSheet(UiRoot ui, bool trace, Func<BenchCandidate> applied, Action<BenchCandidate> apply, Action<ControlModel> switchModel,
             Func<bool> secondHalf, Action<bool> switchView, Func<int> activeControls, Action<int> switchControls,
             Func<string> loadPresets, Func<string, bool> storePresets, Func<string> build, System.Action closed,
-            Func<int> play = null, Action<int> switchPlay = null)
+            Func<int> play = null, Action<int> switchPlay = null, Func<int> switching = null, Action<int> switchSwitching = null)
         {
             _play = play ?? (() => 0);
             _switchPlay = switchPlay ?? (_ => { });
+            _switching = switching ?? (() => 0);
+            _switchSwitching = switchSwitching ?? (_ => { });
             _loadPresets = loadPresets;
             _storePresets = storePresets;
             _build = build;
@@ -189,6 +197,17 @@ namespace Eleven.Host
             _plays.Element.style.flexShrink = 0;
             _playBlock.Add(_plays.Element);
             _plays.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
+
+            // Switching players (#136): how automatic it is. It acts at once and the match goes on.
+            Label switchingLabel = UiKit.Text(_theme, TypeScale.Body,
+                "Switching players. Auto: to your pass's receiver, a teammate on the ball, and the first to it when it's lost. On the ball: your pass's receiver only. Manual: only on SWITCH.", Role.Text);
+            switchingLabel.style.marginBottom = Spacing.Xs;
+            _playBlock.Add(switchingLabel);
+            _switchings = UiKit.MakeSegmented(ui, _theme, Switchings, 0, index => _switchSwitching(index));
+            _switchings.Element.style.marginBottom = Spacing.M;
+            _switchings.Element.style.flexShrink = 0;
+            _playBlock.Add(_switchings.Element);
+            _switchings.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
 
             Label controlsLabel = UiKit.Text(_theme, TypeScale.Body, "Touch controls. Switches now; the run goes on.", Role.Text);
             controlsLabel.style.marginBottom = Spacing.Xs;
@@ -396,6 +415,7 @@ namespace Eleven.Host
             UiKit.Select(_theme, _views, _secondHalf() ? 1 : 0);
             UiKit.Select(_theme, _controls, _activeControls());
             UiKit.Select(_theme, _plays, _play());
+            UiKit.Select(_theme, _switchings, _switching());
             _presetStatus.text = "";
             ShowGroup(_group);
             _reportOpen = true;
@@ -477,7 +497,7 @@ namespace Eleven.Host
             if (!_trace || !Open || !PresetsShown) return;
             float s = _ui.PixelsPerPoint;
             string P(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
-            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)} match11={P(_plays.Segments[4].Element)}");
+            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)} match11={P(_plays.Segments[4].Element)} auto={P(_switchings.Segments[0].Element)} ball={P(_switchings.Segments[1].Element)} manual={P(_switchings.Segments[2].Element)}");
         }
 
         // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with
@@ -485,6 +505,7 @@ namespace Eleven.Host
         private void ShowPresets(BenchCandidate applied)
         {
             UiKit.Select(_theme, _plays, _play());
+            UiKit.Select(_theme, _switchings, _switching());
             _list.Add(_playBlock);
             _presetStops.Clear();
             _presetPlaces.Clear();

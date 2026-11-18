@@ -116,6 +116,9 @@ namespace Eleven.Host
             _view.Ease.InSeconds = UrlNumber(url, "zoomIn=", _view.Ease.InSeconds, 0, 10);
             _view.Ease.Hold = UrlNumber(url, "zoomHold=", _view.Ease.Hold, 0, 0.5);
             _view.Ease.PanSeconds = UrlNumber(url, "pan=", _view.Ease.PanSeconds, 0, 5);
+            // ?switching=auto|ball|manual: how automatic switching players is (#136).
+            if (url.Contains("switching=ball")) _switchMode = SwitchMode.OnTheBall;
+            else if (url.Contains("switching=manual")) _switchMode = SwitchMode.Manual;
             // ?cues=15: how far outside the view, in metres, a footballer is cued at the edge; 0 for none (#102).
             int cuesAt = url.IndexOf("cues=", StringComparison.Ordinal);
             if (cuesAt >= 0 && float.TryParse(url.Substring(cuesAt + 5).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float cues))
@@ -318,6 +321,9 @@ namespace Eleven.Host
             _stepWatch.Stop();
             if (_match) TimeStep(_stepWatch.Elapsed.TotalMilliseconds);
             _poses.Observe(_simulator.PeekState(), _events, _config);
+
+            // Who SWITCH would take now (#136), for the marker: read, never written back.
+            _nextId = _match && _perSide > 1 && _switcher != null ? _switcher.Next(_simulator) : 0;
             _feel.Record(_simulator, _commands, _events);
             ObserveMatch();
 
@@ -332,7 +338,7 @@ namespace Eleven.Host
                 _lastTraceTime = now;
                 SimState s = _simulator.PeekState();
                 PlayerState traced = s.Players[Controlled(s)];
-                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={traced.Position.X:F2},{traced.Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)}"));
+                Log(FormattableString.Invariant($"ELEVEN trace tick={s.Tick} player={traced.Position.X:F2},{traced.Position.Y:F2} ball={s.Ball.Position.X:F2},{s.Ball.Position.Y:F2},{s.Ball.Position.Z:F2} fps={fps:F1} hash={_simulator.StateHash():x16} view={_view.Visibility(_layout)} dropped={_pacing.Dropped} frames={_pacing.Frames} interval={_pacing.IntervalSeconds * 1000:F1} hud={_hud?.BuildSize ?? "none"} model={ModelName(_config.ControlModel)} keeper={KeeperTrace(s)} switching={NameOf(_switchMode)} next={_nextId}@{_view.NextReport(_layout)}"));
                 Log($"ELEVEN view tick={s.Tick} {_view.Report(_layout)}");
             }
 
@@ -424,7 +430,7 @@ namespace Eleven.Host
         private void FeltWrongPressed()
         {
             if (_pending != null) return;
-            _pending = _feel.Capture(_simulator, _buildId, ActivePreset(), _input.Describe(), "");
+            _pending = _feel.Capture(_simulator, _buildId, ActivePreset(), $"{_input.Describe()} switching={NameOf(_switchMode)}", "");
             _input.Clear();
             Log($"ELEVEN capture pressed tick={_simulator.Tick}");
             _hud.OpenNote();
@@ -616,7 +622,8 @@ namespace Eleven.Host
                 _hud = new Hud(_ui, _trace, Relayout, ResetMatch, RunScenario, FeltWrongPressed, SaveCapture, KeepFeltWrong, VisibleRange, () => _bench, ApplyBench, SwitchModel,
                     () => _orientation != PitchOrientation.Practice, SwitchView, () => (int)_input.Active, index => SwitchControls((ControlCandidate)index),
                     () => ReadStored(PresetsKey), text => WriteStored(PresetsKey, text), () => _buildId,
-                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution);
+                    () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution,
+                    () => (int)_switchMode, SwitchSwitching);
                 _input.OverUi = _ui.IsOverUi;
                 if (_trace)
                 {
