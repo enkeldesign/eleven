@@ -429,9 +429,14 @@ namespace Eleven.Simulation.AI
             return (contact.Horizontal - there).LengthSquared <= reach * reach;
         }
 
-        // His own top speed for a run he reckons: hurt and playing on (#109), injuredSpeed of it,
-        // as his body runs (INV-13).
-        private static double OwnSpeed(OutfieldObservation seen, SimConfig config) => seen.Injured ? seen.MaxSpeed * config.InjuredSpeed : seen.MaxSpeed;
+        // His own top speed for a run he reckons, as his body runs (INV-13): tired (#100, #118),
+        // toward fatigueFloor of it; hurt and playing on (#109), injuredSpeed of that.
+        private static double OwnSpeed(OutfieldObservation seen, SimConfig config) =>
+            Tired(seen.MaxSpeed, seen.Fatigue, config) * (seen.Injured ? config.InjuredSpeed : 1);
+
+        // A top speed tired by `fatigue`: the body's own formula (Simulator.Body).
+        private static double Tired(double speed, double fatigue, SimConfig config) =>
+            speed * (config.FatigueFloor + (1 - config.FatigueFloor) * (1 - fatigue));
 
         // The first point on the ball's read path a runner from `from` at `speed` can be at as the
         // ball gets there; where the ball ends up if he can't within the horizon.
