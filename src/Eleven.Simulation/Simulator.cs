@@ -81,6 +81,7 @@ namespace Eleven.Simulation
             // later in the step, a restart taken or the end of a break, can undo what was allowed.
             StepSubstitutions(tick, events);
             StepTactics(tick, events); // a switch of plan (#126), likewise
+            ApplyCarries(); // before anything reads a stick (#138)
             StepCpus(tick);
 
             double dt = Config.TickSeconds;
@@ -328,6 +329,33 @@ namespace Eleven.Simulation
         // The stick's length within which a carry (#138) holds: a thumb resting, not a choice.
         private const double CarryDeadband = 0.2;
 
+        // Just taken over (#138): a stick inside the deadband asks for his own velocity, so he runs
+        // on; any stick beyond it ends the carry. Resolved once a step, on the accepted command,
+        // before movement, ball control or touch prediction reads it; the recorded command is the raw stick.
+        private void ApplyCarries()
+        {
+            for (int i = 0; i < _state.Players.Length; i++)
+            {
+                ref PlayerState player = ref _state.Players[i];
+                if (player.CarryTicks <= 0) continue;
+                player.CarryTicks--;
+                int owner = player.OwnerControllerId;
+                int at = _accepted.FindIndex(c => c.ControllerId == owner);
+                if (at < 0) continue;
+                Command c = _accepted[at];
+                if (c.Move.LengthSquared > CarryDeadband * CarryDeadband)
+                {
+                    player.CarryTicks = 0;
+                    continue;
+                }
+
+                double top = Body(player).MaxSpeed;
+                Vec2 carried = top > 0 ? player.Velocity * (1 / top) : Vec2.Zero;
+                if (carried.LengthSquared > 1) carried = carried * (1 / SimMath.Sqrt(carried.LengthSquared));
+                _accepted[at] = c.WithMove(carried);
+            }
+        }
+
         private void StepPlayer(ref PlayerState player, Command? command, double dt, int keeper)
         {
             if (player.KickCooldown > 0) player.KickCooldown--;
@@ -346,22 +374,6 @@ namespace Eleven.Simulation
                 player.Velocity = Vec2.Zero;
                 player.CarryTicks = 0;
                 return;
-            }
-
-            // Just taken over (#138): a neutral stick keeps him on his run; any stick ends the carry.
-            if (player.CarryTicks > 0)
-            {
-                player.CarryTicks--;
-                if (move.LengthSquared <= CarryDeadband * CarryDeadband)
-                {
-                    double top = Body(player).MaxSpeed;
-                    move = top > 0 ? player.Velocity * (1 / top) : Vec2.Zero;
-                    if (move.LengthSquared > 1) move = move * (1 / SimMath.Sqrt(move.LengthSquared));
-                }
-                else
-                {
-                    player.CarryTicks = 0;
-                }
             }
 
             if (player.Challenge == ChallengePhase.Slide)

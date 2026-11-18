@@ -106,6 +106,9 @@ namespace Eleven.Simulation
         /// <summary>This command with a substitution (#110) added: everything else as it is.</summary>
         public Command WithSubstitution(int off, int on) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, off, on, TacticTo);
 
+        /// <summary>This command with another stick (#138's carry, inside the simulation): everything else as it is.</summary>
+        public Command WithMove(Vec2 move) => new Command(ControllerId, Tick, move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, SubOff, SubOn, TacticTo);
+
         /// <summary>This command with a switch of tactical plan (#126) added: everything else as it is.</summary>
         public Command WithTactic(byte to) => new Command(ControllerId, Tick, Move, Kick, Aftertouch, QuickPass, Dive, Plan, SwitchTo, SubOff, SubOn, to);
     }
