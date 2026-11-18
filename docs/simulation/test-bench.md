@@ -187,6 +187,8 @@ Candidate C from #28 and #77, after Sensible Soccer and Kick Off: one fire contr
 
 Issue #46. A preset is a bench candidate saved under a short name: every value the bench owns, with what a later build needs to tell whether it can still read it. `BenchPreset` and `PresetShelf` (harness, engine-free) hold the format and the rules; the bench's Presets tab is the way in.
 
+**Suggested presets** (#135) are built in beside TECHNICAL REFERENCE, with Load and no Delete, and their names can't be saved over. The first is LOOSE TACKLE: the reference with `humanChallengeLeeway` 0.5 m ([challenge.md](challenge.md#why-a-challenge-didnt-start-135)).
+
 **A preset is not approved feel.** Saving one says nothing about feel, and there is no approved flag to set. Promoting a preset to an approved feel baseline is Erik's explicit act, recorded in the owning issue. Later changes to an approved baseline are separate, reasoned baseline updates under AGENTS.md.
 
 **On the Presets tab:**
