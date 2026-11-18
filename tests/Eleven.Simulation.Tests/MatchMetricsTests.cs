@@ -155,6 +155,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_shot_play_stops_on_and_the_dead_ball_after_it_are_no_shot()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 14, 0), new SimEvent(1, SimEventKind.Kicked, Striker));
+
+            // Offside: an indirect free kick to away; the ball rolls on, dead, into the frame and the net.
+            s.Restart.Phase = RestartPhase.Stopped;
+            Feed(r, s, new Vec2(Hand.GoalLineX - 12, 0), new SimEvent(2, SimEventKind.RestartAwarded, Squads.AwayTeam, other: (int)RestartKind.IndirectFreeKick));
+            Feed(r, s, new Vec2(Hand.GoalLineX, Hand.GoalWidth / 2), new SimEvent(3, SimEventKind.HitFrame, OneVOne.BallId));
+            Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(4, SimEventKind.GoalLineCrossed, OneVOne.BallId));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((0, 0.0), (home.Shots, home.Xg));
+        }
+
+        [Fact]
         public void A_penalty_kick_takes_the_penalty_chance_and_the_rebound_after_it_does_not()
         {
             var r = new MatchRecorder();
