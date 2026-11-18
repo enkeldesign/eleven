@@ -63,6 +63,17 @@ namespace Eleven.Simulation
         /// <summary>Reads the live state without copying. Callers must not mutate it.</summary>
         public SimState PeekState() => _state;
 
+        // Why each human's standing challenge did or didn't start on the last step (#135): never
+        // read by a step, in no state or hash.
+        private readonly List<ChallengeReport> _challengeReports = new List<ChallengeReport>();
+
+        /// <summary>
+        /// Why each human footballer pressing toward a ball an opponent controls did or didn't
+        /// start a standing challenge on the last step (#135). For the host and captures: it
+        /// drives nothing (INV-12). A human's is a footballer no CPU controller plays, keepers aside.
+        /// </summary>
+        public IReadOnlyList<ChallengeReport> ChallengeReports => _challengeReports;
+
         /// <summary>
         /// Runs one tick: applies <paramref name="commands"/> meant for <see cref="Tick"/> and
         /// advances to <see cref="Tick"/> + 1. Emitted events are appended to <paramref name="events"/>.
