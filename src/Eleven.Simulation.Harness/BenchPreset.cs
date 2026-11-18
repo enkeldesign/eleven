@@ -64,10 +64,29 @@ namespace Eleven.Simulation.Harness
         /// Built-in presets to compare against the technical reference (#135), each listed on the
         /// Presets tab with Load and no Delete. Technical references too, never approved feel.
         /// </summary>
-        public static IReadOnlyList<BenchPreset> Suggested { get; } = new BenchPreset[0];
+        public static IReadOnlyList<BenchPreset> Suggested { get; } = new[]
+        {
+            // The won't-reach rule loosened for the human by 0.5 m (#135): the scripted seat's
+            // challenges started on 37 % of its presses at 0 and 61 % at 0.5, but it won fewer of them.
+            Suggest("LOOSE TACKLE", BenchCandidate.Reference.Config.With("humanChallengeLeeway", 0.5)),
+        };
+
+        private static BenchPreset Suggest(string name, SimConfig config)
+        {
+            BenchCandidate r = BenchCandidate.Reference;
+            return new BenchPreset(name, BenchCandidate.From(config, r.Capabilities, r.ActionSurface, r.Keeper, r.Split, r.Fire), ControlCandidate.ActionSurface, "");
+        }
 
         /// <summary>The suggested preset these values and this touch candidate are, or null.</summary>
-        public static BenchPreset? SuggestedMatching(BenchCandidate candidate, ControlCandidate controls) => null;
+        public static BenchPreset? SuggestedMatching(BenchCandidate candidate, ControlCandidate controls)
+        {
+            foreach (BenchPreset p in Suggested)
+            {
+                if (controls == p.Controls && candidate.Config.ControlModel == p.Model && candidate.ChangesFrom(p.Candidate) == 0) return p;
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// A preset of these values under this name. Refused, with the reason, for a name that is
@@ -92,6 +111,10 @@ namespace Eleven.Simulation.Harness
             if (name.Length == 0) return "A preset needs a name.";
             if (name.Length > MaxNameLength) return $"A preset's name is at most {MaxNameLength} characters.";
             if (string.Equals(name, TechnicalReferenceName, StringComparison.OrdinalIgnoreCase)) return $"{TechnicalReferenceName} is the built-in preset's name.";
+            foreach (BenchPreset p in Suggested)
+            {
+                if (string.Equals(name, p.Name, StringComparison.OrdinalIgnoreCase)) return $"{p.Name} is a built-in preset's name.";
+            }
             foreach (char c in name)
             {
                 if (!(char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_')) return "A preset's name has letters, digits, spaces, hyphens and underscores only.";
