@@ -307,6 +307,19 @@ jobs:
           path: gate11/
           if-no-files-found: warn
 
+      # M5's quick-sim (#129): its calibration sample of full matches, diffed against the
+      # reference; its fit and comparison; and the throughput that chose it.
+      - name: Calibrate the quick-sim
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll quicksim quicksim | tee quicksim.txt
+          echo "::notice title=Quick-sim sample::$(sed 's| -> .*||' quicksim.txt)"
+          diff docs/simulation/quicksim-calibration-reference.csv quicksim/quicksim-calibration.csv
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll quicksim fit docs/simulation/quicksim-calibration-reference.csv | tee quicksim-fit.txt
+          echo "::notice title=Quick-sim fit::$(head -1 quicksim-fit.txt)"
+          echo "::notice title=Quick-sim comparison::$(tail -1 quicksim-fit.txt)"
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll throughput 3 | tee throughput.txt
+          echo "::notice title=Throughput::$(cat throughput.txt)"
+
       # M5's formations (#125): home in each formation against the 4-4-2, over fixed seeds.
       - name: Contrast the formations
         run: |

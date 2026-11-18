@@ -206,6 +206,43 @@ internal static class Program
                 return 0;
             }
 
+            case "quicksim" when args.Length >= 3 && args[1] == "fit":
+            {
+                // #129: the quick-sim's reference refitted from a calibration sample, and its comparison.
+                IReadOnlyList<LeagueSide> fitSides = League.Sides();
+                List<CalibrationMatch> fitSample = QuickSimCalibration.Read(File.ReadAllLines(args[2]), fitSides);
+                QuickSimModel fit = QuickSimFit.Fit(fitSample, fitSides);
+                Console.WriteLine(FormattableString.Invariant(
+                    $"fit over {fitSample.Count} matches: mu {fit.BaseRate:F6}, home {fit.Home:F6}, tiers 0 {fit.TierRating(1):F6} {fit.TierRating(2):F6} {fit.TierRating(3):F6}, capabilities {fit.CapabilityWeight:F6}, rho {fit.Rho:F3}, fouls {fit.FoulsPerSide:R}, cautions {fit.CautionsPerSide:R}, sendings-off {fit.SendingsOffPerSide:R} a side"));
+                Console.WriteLine(QuickSimCalibration.Compare(SpikeScenario.Config(), fitSample, fitSides, 50));
+                return 0;
+            }
+
+            case "throughput":
+            {
+                // #129: full 11v11 matches a second, headless, on one core; and quick-simmed ones.
+                SimConfig tc = SpikeScenario.Config();
+                IReadOnlyList<LeagueSide> ts = League.Sides();
+                int full = args.Length >= 2 && int.TryParse(args[1], out int tf) && tf > 0 ? tf : 3;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                long steps = 0;
+                for (int i = 0; i < full; i++)
+                {
+                    GateMatch g = Gate11.Play(tc, ts, i % ts.Count, (i + 1) % ts.Count, 0x129100000UL + (ulong)i, "throughput");
+                    steps += (long)Math.Round(g.LengthSeconds * tc.TickRate);
+                }
+
+                double fullSeconds = watch.Elapsed.TotalSeconds;
+                watch.Restart();
+                const int Quick = 100_000;
+                int goals = 0;
+                for (int i = 0; i < Quick; i++) goals += QuickSim.Play(tc, QuickSides.Of(ts[i % ts.Count]), QuickSides.Of(ts[(i + 1) % ts.Count]), (ulong)i).HomeGoals;
+                double quickSeconds = watch.Elapsed.TotalSeconds;
+                Console.WriteLine(FormattableString.Invariant(
+                    $"full simulation: {full} matches in {fullSeconds:F1} s, {full / fullSeconds:F3} matches/s, {1000 * fullSeconds / steps:F3} ms a step; quick-sim: {Quick / quickSeconds:F0} matches/s ({goals} home goals)"));
+                return 0;
+            }
+
             case "quicksim" when args.Length >= 2:
             {
                 // #129's calibration sample: the full simulation over the six sides, each ordered pair twice.

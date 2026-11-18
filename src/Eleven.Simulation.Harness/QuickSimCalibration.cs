@@ -60,6 +60,37 @@ namespace Eleven.Simulation.Harness
             return rows;
         }
 
+        /// <summary>
+        /// The comparison's key numbers: the sample against the quick-sim drawn <paramref name="draws"/>
+        /// times over the same fixtures (goals a side, win/draw/loss, cautions and goals a match).
+        /// </summary>
+        public static string Compare(SimConfig config, IReadOnlyList<CalibrationMatch> sample, IReadOnlyList<LeagueSide> sides, int draws, QuickSimModel? model = null)
+        {
+            double fh = 0, fa = 0, fc = 0, qh = 0, qa = 0, qc = 0;
+            int fw = 0, fd = 0, qw = 0, qd = 0, n = 0;
+            foreach (CalibrationMatch m in sample)
+            {
+                fh += m.HomeGoals;
+                fa += m.AwayGoals;
+                fc += m.Cautions;
+                if (m.HomeGoals > m.AwayGoals) fw++;
+                else if (m.HomeGoals == m.AwayGoals) fd++;
+                for (int d = 0; d < draws; d++, n++)
+                {
+                    MatchResult r = QuickSim.Play(config, QuickSides.Of(sides[m.Home]), QuickSides.Of(sides[m.Away]), m.Seed * 1000 + (ulong)d, model: model);
+                    qh += r.HomeGoals;
+                    qa += r.AwayGoals;
+                    qc += r.HomeCautions + r.AwayCautions;
+                    if (r.HomeGoals > r.AwayGoals) qw++;
+                    else if (r.HomeGoals == r.AwayGoals) qd++;
+                }
+            }
+
+            int c = sample.Count;
+            return FormattableString.Invariant(
+                $"full {c} / quick {n}: home goals {fh / c:F2} / {qh / n:F2}, away {fa / c:F2} / {qa / n:F2}, home wins {100.0 * fw / c:F0} % / {100.0 * qw / n:F0} %, draws {100.0 * fd / c:F0} % / {100.0 * qd / n:F0} %, cautions {fc / c:F2} / {qc / n:F2}");
+        }
+
         /// <summary>One fixture of the sample, played in full.</summary>
         public static GateMatch Play(SimConfig config, IReadOnlyList<LeagueSide> sides, (int Home, int Away, ulong Seed) fixture) =>
             Gate11.Play(config, sides, fixture.Home, fixture.Away, fixture.Seed, "calibration");
