@@ -386,8 +386,16 @@ namespace Eleven.Simulation
             bool stopped = false;
 
             // A penalty's kick is raised before the restart that says it was a penalty, in its step.
-            bool penalty = false;
-            foreach (SimEvent e in events) penalty |= e.Kind == SimEventKind.RestartTaken && e.Other == (int)RestartKind.Penalty;
+            // And offside is given after the ball has moved in its step: a save or a crossing before
+            // it in the step is of the disallowed play, no shot.
+            bool penalty = false, offside = false;
+            foreach (SimEvent e in events)
+            {
+                penalty |= e.Kind == SimEventKind.RestartTaken && e.Other == (int)RestartKind.Penalty;
+                offside |= e.Kind == SimEventKind.Offside;
+            }
+
+            if (offside) _shooter = -1;
             foreach (SimEvent e in events)
             {
                 int side = SideOf(after, e.Subject);
