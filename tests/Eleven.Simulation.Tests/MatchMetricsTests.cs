@@ -235,6 +235,24 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_first_time_pass_that_misses_the_ball_has_not_received_the_pass_it_met()
+        {
+            const int Mate = 2, Opponent = 7;
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 at = new Vec2(-10, 0);
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+
+            // The mate winds up to pass first time, misses, and an opponent takes the ball.
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(3, SimEventKind.QuickPassResolved, Mate, other: Striker));
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(4, SimEventKind.KickMissed, Mate));
+            Feed(r, s, at + new Vec2(11, 0), new SimEvent(5, SimEventKind.Touched, Opponent));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((2, 0), (home.Passes, home.PassesCompleted));
+        }
+
+        [Fact]
         public void A_passer_running_onto_his_own_pass_has_not_completed_it()
         {
             var r = new MatchRecorder();
