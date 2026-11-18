@@ -214,7 +214,7 @@ internal static class Program
                 QuickSimModel fit = QuickSimFit.Fit(fitSample, fitSides);
                 Console.WriteLine(FormattableString.Invariant(
                     $"fit over {fitSample.Count} matches: mu {fit.BaseRate:F6}, home {fit.Home:F6}, tiers 0 {fit.TierRating(1):F6} {fit.TierRating(2):F6} {fit.TierRating(3):F6}, capabilities {fit.CapabilityWeight:F6}, rho {fit.Rho:F3}, fouls {fit.FoulsPerSide:R}, cautions {fit.CautionsPerSide:R}, sendings-off {fit.SendingsOffPerSide:R} a side"));
-                Console.WriteLine(QuickSimCalibration.Compare(SpikeScenario.Config(), fitSample, fitSides, 50));
+                Console.WriteLine(QuickSimCalibration.Compare(SpikeScenario.Config(), fitSample, fitSides, 50, fit));
                 return 0;
             }
 
