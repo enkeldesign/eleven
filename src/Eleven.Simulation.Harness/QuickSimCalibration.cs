@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Eleven.Simulation;
+using Eleven.Simulation.Maths;
 
 namespace Eleven.Simulation.Harness
 {
@@ -84,13 +85,136 @@ namespace Eleven.Simulation.Harness
     }
 
     /// <summary>
-    /// The quick-sim's reference, fitted to the calibration sample (#129): μ, h, k and the capability
-    /// weight by Poisson maximum likelihood, ρ by Dixon–Coles's likelihood over those rates, and the
+    /// The quick-sim's reference, fitted to the calibration sample (#129): μ, h, the tiers' ratings
+    /// and the capability weight by Poisson maximum likelihood, ρ by Dixon–Coles's likelihood over those rates, and the
     /// foul and card means a side. Deterministic: a fixed search, no randomness.
     /// </summary>
     public static class QuickSimFit
     {
-        public static QuickSimModel Fit(IReadOnlyList<CalibrationMatch> sample, IReadOnlyList<LeagueSide> sides) =>
-            new QuickSimModel(0, 0, 0, 0, 0, 0, 0, 0);
+        public static QuickSimModel Fit(IReadOnlyList<CalibrationMatch> sample, IReadOnlyList<LeagueSide> sides)
+        {
+            // Each side's goals are a Poisson observation with log-rate β·x over the parameters
+            // β = (μ, h, r_club, r_pro, r_elite, w): x holds 1, home's 1, the tiers' indicator
+            // differences (the scorer's minus the other's) and the capability index's difference.
+            // A concave likelihood: Newton's method.
+            const int P = 2 + QuickSimModel.Tiers - 1 + 1;
+            var rows = new List<(double[] X, int Goals)>();
+            foreach (CalibrationMatch m in sample)
+            {
+                QuickSide h = QuickSides.Of(sides[m.Home]), a = QuickSides.Of(sides[m.Away]);
+                double dc = QuickSim.CapabilityIndex(h.Capabilities) - QuickSim.CapabilityIndex(a.Capabilities);
+                var xh = new double[P];
+                var xa = new double[P];
+                xh[0] = xa[0] = 1;
+                xh[1] = 1;
+                for (int t = 1; t < QuickSimModel.Tiers; t++)
+                {
+                    double d = (h.Tier == t ? 1 : 0) - (a.Tier == t ? 1 : 0);
+                    xh[1 + t] = d;
+                    xa[1 + t] = -d;
+                }
+
+                xh[P - 1] = dc;
+                xa[P - 1] = -dc;
+                rows.Add((xh, m.HomeGoals));
+                rows.Add((xa, m.AwayGoals));
+            }
+
+            var beta = new double[P];
+            for (int iteration = 0; iteration < 100; iteration++)
+            {
+                var gradient = new double[P];
+                var hessian = new double[P, P];
+                foreach ((double[] x, int y) in rows)
+                {
+                    double eta = 0;
+                    for (int i = 0; i < P; i++) eta += beta[i] * x[i];
+                    double rate = SimMath.Exp(eta);
+                    for (int i = 0; i < P; i++)
+                    {
+                        gradient[i] += (y - rate) * x[i];
+                        for (int j = 0; j < P; j++) hessian[i, j] += rate * x[i] * x[j];
+                    }
+                }
+
+                double[] step = Solve(hessian, gradient);
+                double size = 0;
+                for (int i = 0; i < P; i++)
+                {
+                    beta[i] += step[i];
+                    size += step[i] * step[i];
+                }
+
+                if (size < 1e-24) break;
+            }
+
+            var tiers = new double[QuickSimModel.Tiers];
+            for (int t = 1; t < QuickSimModel.Tiers; t++) tiers[t] = beta[1 + t];
+            var rated = new QuickSimModel(beta[0], beta[1], tiers, beta[P - 1], 0, 0, 0, 0);
+
+            // ρ: the Dixon–Coles correction's likelihood over those rates, on a grid of 0.001 in ±0.3.
+            double bestRho = 0, best = double.NegativeInfinity;
+            for (int step = -300; step <= 300; step++)
+            {
+                double rho = step / 1000.0, product = 1;
+                bool valid = true;
+                foreach (CalibrationMatch m in sample)
+                {
+                    (double lh, double la) = QuickSim.Rates(QuickSides.Of(sides[m.Home]), QuickSides.Of(sides[m.Away]), QuickSim.ReferenceHalf, rated);
+                    double p = QuickSim.Probability(m.HomeGoals, m.AwayGoals, lh, la, rho) / QuickSim.Probability(m.HomeGoals, m.AwayGoals, lh, la, 0);
+                    if (!(p > 0))
+                    {
+                        valid = false;
+                        break;
+                    }
+
+                    product *= p;
+                }
+
+                if (valid && product > best)
+                {
+                    best = product;
+                    bestRho = rho;
+                }
+            }
+
+            double n = 2.0 * sample.Count;
+            return new QuickSimModel(beta[0], beta[1], tiers, beta[P - 1], bestRho,
+                sample.Sum(m => m.Fouls) / n, sample.Sum(m => m.Cautions) / n, sample.Sum(m => m.SendingsOff) / n);
+        }
+
+        // A small linear system by Gaussian elimination with partial pivoting.
+        private static double[] Solve(double[,] a, double[] b)
+        {
+            int n = b.Length;
+            var m = new double[n, n + 1];
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++) m[i, j] = a[i, j];
+                m[i, n] = b[i];
+            }
+
+            for (int c = 0; c < n; c++)
+            {
+                int pivot = c;
+                for (int r = c + 1; r < n; r++)
+                {
+                    if ((m[r, c] < 0 ? -m[r, c] : m[r, c]) > (m[pivot, c] < 0 ? -m[pivot, c] : m[pivot, c])) pivot = r;
+                }
+
+                for (int j = 0; j <= n; j++) (m[c, j], m[pivot, j]) = (m[pivot, j], m[c, j]);
+                if (m[c, c] == 0) continue;
+                for (int r = 0; r < n; r++)
+                {
+                    if (r == c) continue;
+                    double f = m[r, c] / m[c, c];
+                    for (int j = c; j <= n; j++) m[r, j] -= f * m[c, j];
+                }
+            }
+
+            var x = new double[n];
+            for (int i = 0; i < n; i++) x[i] = m[i, i] == 0 ? 0 : m[i, n] / m[i, i];
+            return x;
+        }
     }
 }

@@ -174,7 +174,7 @@ namespace Eleven.Simulation.Tests
             QuickSimModel r = QuickSimModel.Reference;
             Assert.Equal(fit.BaseRate, r.BaseRate, 3);
             Assert.Equal(fit.Home, r.Home, 3);
-            Assert.Equal(fit.Strength, r.Strength, 3);
+            for (int t = 0; t < QuickSimModel.Tiers; t++) Assert.Equal(fit.TierRating(t), r.TierRating(t), 3);
             Assert.Equal(fit.CapabilityWeight, r.CapabilityWeight, 2);
             Assert.Equal(fit.Rho, r.Rho, 3);
             Assert.Equal(fit.FoulsPerSide, r.FoulsPerSide, 3);
@@ -224,43 +224,37 @@ namespace Eleven.Simulation.Tests
             double totals = ChiSquared(Totals(sample, p => p.HomeGoals + p.AwayGoals), Totals(quick, r => r.HomeGoals + r.AwayGoals));
             Assert.True(totals <= Critical[6], $"goals-a-match χ² {totals:F2} against {Critical[6]}");
 
-            // And the sides keep their order: each side's goal difference a match, full against quick, rank-correlated.
+            // And each side's goal difference a match: the quick-sim's within three standard errors of
+            // the full simulation's, which plays each side 20 times.
             IReadOnlyList<LeagueSide> sides = League.Sides();
-            double[] Diff(IEnumerable<(int Home, int Away, int Hg, int Ag)> rows)
+            int k = 0;
+            for (int side = 0; side < sides.Count; side++)
             {
-                var d = new double[sides.Count];
-                var n = new double[sides.Count];
-                foreach ((int h, int a, int hg, int ag) in rows)
+                var full = new List<double>();
+                foreach (CalibrationMatch p in sample)
                 {
-                    d[h] += hg - ag;
-                    d[a] += ag - hg;
-                    n[h]++;
-                    n[a]++;
+                    if (p.Home == side) full.Add(p.HomeGoals - p.AwayGoals);
+                    else if (p.Away == side) full.Add(p.AwayGoals - p.HomeGoals);
                 }
 
-                return d.Select((x, i) => x / Math.Max(1, n[i])).ToArray();
+                double mean = full.Average(), se = Math.Sqrt(full.Select(x => (x - mean) * (x - mean)).Sum() / (full.Count - 1) / full.Count);
+                double sum = 0;
+                int n = 0;
+                k = 0;
+                foreach (CalibrationMatch p in sample)
+                {
+                    for (int d = 0; d < Draws; d++, k++)
+                    {
+                        if (p.Home == side) sum += quick[k].HomeGoals - quick[k].AwayGoals;
+                        else if (p.Away == side) sum += quick[k].AwayGoals - quick[k].HomeGoals;
+                        else continue;
+                        n++;
+                    }
+                }
+
+                double q = sum / n;
+                Assert.True(Math.Abs(q - mean) <= 3 * se, $"{sides[side].Name}'s goal difference: quick-sim {q:F2} against the full simulation's {mean:F2} ± {se:F2}");
             }
-
-            double[] fullDiff = Diff(sample.Select(p => (p.Home, p.Away, p.HomeGoals, p.AwayGoals)));
-            int k = 0;
-            var quickRows = new List<(int, int, int, int)>();
-            foreach (CalibrationMatch p in sample)
-            {
-                for (int d = 0; d < Draws; d++, k++) quickRows.Add((p.Home, p.Away, quick[k].HomeGoals, quick[k].AwayGoals));
-            }
-
-            double[] quickDiff = Diff(quickRows);
-            double rho = Spearman(fullDiff, quickDiff);
-            Assert.True(rho >= 0.8, $"the sides' order: Spearman {rho:F2} ({string.Join(" ", fullDiff.Select(x => x.ToString("F2", CultureInfo.InvariantCulture)))} against {string.Join(" ", quickDiff.Select(x => x.ToString("F2", CultureInfo.InvariantCulture)))})");
-        }
-
-        private static double Spearman(double[] a, double[] b)
-        {
-            double[] Rank(double[] x) => x.Select((v, i) => (v, i)).OrderBy(t => t.v).Select((t, r) => (t.i, r)).OrderBy(t => t.i).Select(t => (double)t.r).ToArray();
-            double[] ra = Rank(a), rb = Rank(b);
-            int n = a.Length;
-            double d2 = ra.Zip(rb, (x, y) => (x - y) * (x - y)).Sum();
-            return 1 - 6 * d2 / (n * (n * n - 1.0));
         }
     }
 }
