@@ -64,7 +64,8 @@ namespace Eleven.Host
             Func<bool> benchSecondHalf, Action<bool> benchSwitchView, Func<int> benchControls, Action<int> benchSwitchControls,
             Func<string> benchLoadPresets, Func<string, bool> benchStorePresets, Func<string> benchBuild,
             Func<int> benchPlay, Action<int> benchSwitchPlay, System.Action switchPlayer, System.Action substitute,
-            Func<int> benchSwitching = null, Action<int> benchSwitchSwitching = null, System.Action copyCapture = null)
+            Func<int> benchSwitching = null, Action<int> benchSwitchSwitching = null, System.Action copyCapture = null,
+            Action<int> switchPlan = null)
         {
             _ui = ui;
             _trace = trace;
@@ -139,6 +140,16 @@ namespace Eleven.Host
             }, "Subs", (n, v) => n.Subs = v, n => n.Subs);
             Subs.Element.style.display = DisplayStyle.None;
             Subs.Element.focusable = false;
+
+            // The match dashboard (#128): shown while a match is paused, over the stopped play and
+            // under the status line, which says what a plan's switch did.
+            Dashboard = new MatchDashboard(ui, plan =>
+            {
+                if (!ModalOpen) switchPlan?.Invoke(plan);
+            }, places =>
+            {
+                if (_trace) Log($"ELEVEN match dashboard placed {places}");
+            });
 
             _status = UiKit.MakeStatus(pitch);
             _status.Element.name = "Status";
@@ -273,6 +284,9 @@ namespace Eleven.Host
 
         public UiKit.Action FeltWrong { get; }
 
+        /// <summary>The match dashboard (#128), shown while a match is paused.</summary>
+        public MatchDashboard Dashboard { get; }
+
         /// <summary>SWITCH (#95): shown in a 2v2 match.</summary>
         public UiKit.Action Switch { get; }
 
@@ -340,6 +354,13 @@ namespace Eleven.Host
             if (layout.SwitchButton.width > 0) _ui.Place(Switch.Element, layout.SwitchButton);
             if (layout.SubsButton.width > 0) _ui.Place(Subs.Element, layout.SubsButton);
             _ui.PlaceAuto(_status.Element, layout.StatusArea.position, layout.PlayArea.width - 2 * layout.Padding);
+            // The dashboard under the status line's band, so what a switch did reads over neither. It
+            // shows only while play is paused, when the stick and the action area below the play
+            // area do nothing: it runs down over them to the safe area's foot, so a play area made
+            // short by the match's controls (SUBS and SWITCH at eleven a side) still holds it.
+            float statusBand = layout.StatusArea.yMax - layout.PlayArea.yMin;
+            float dashTop = layout.PlayArea.y + statusBand;
+            Dashboard.Place(new Rect(layout.PlayArea.x, dashTop, layout.PlayArea.width, Mathf.Max(0, layout.Safe.yMax - dashTop)), layout.Padding);
 
             // The sheets keep clear of a notch and a home indicator too (#31): the screen's unsafe
             // edges, in points, are added to their margins.
@@ -566,6 +587,9 @@ namespace Eleven.Host
                 {
                     if (a.Element.focusable && a.Element.resolvedStyle.visibility == Visibility.Visible) order.Add(a.Element);
                 }
+
+                // The dashboard's plans follow the HUD's controls while it is shown (#128).
+                order.AddRange(Dashboard.FocusOrder());
             }
 
             if (order.Count == 0) return;

@@ -815,6 +815,34 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         // none in a 1v1 match. A press asks for the teammate who reaches the ball first.
         const switchBox = (lastLog(/ELEVEN layout .* switch=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
         const ppp = Number(lastLog(/ELEVEN ui ready font=(\S+) pixelsPerPoint=([\d.]+)/)?.[2] ?? 1);
+
+        // The match dashboard (#128), once PAUSE has shown it: what it shows, and where.
+        const dashboardShown = async (from) => ({
+          shown: (await waitForLog(/ELEVEN match dashboard shown (.*)/, 10_000, from))?.match ?? null,
+          placed: (await waitForLog(/ELEVEN match dashboard placed panel=(-?\d+),(-?\d+),(\d+),(\d+) viewport=(\S+) plans=(\S+)/, 10_000, from))?.match ?? null,
+        });
+        const dashboardChecks = (d, size, pxPerPt) => {
+          const rows = ['possession', 'shots', 'on_target', 'xg', 'passes', 'corners', 'ppda'];
+          const all = !!d.shown && rows.every((r) => new RegExp(`\\b${r}=\\S+-\\S+`).test(d.shown[1]));
+          const play = (lastLog(/ELEVEN layout .* play=(-?\d+),(-?\d+),(\d+),(\d+)/) ?? []).slice(1, 5).map(Number);
+          const p = d.placed ? d.placed.slice(1, 5).map(Number) : [];
+          // Over the play area's columns, from its top down at most to the screen's foot (it covers
+          // the stick and action area while paused), and tall enough to read: 160 pt or more.
+          const screenH = Number((lastLog(layoutPattern) ?? layout)[2]);
+          const inside = play.length === 4 && p.length === 4 && p[0] >= play[0] - 1 && p[1] >= play[1] - 1 && p[0] + p[2] <= play[0] + play[2] + 1 && p[1] + p[3] <= screenH + 1
+            && p[3] >= Math.min(160 * pxPerPt, screenH - play[1]) - 2;
+          check('PAUSE shows the match dashboard: the score and each side\'s metrics, over the play area and tall enough to read', all && inside,
+            `${d.shown ? d.shown[1] : 'no dashboard shown'}; panel ${p.join(',') || 'not placed'} under play ${play.join(',') || 'none'} on a screen ${screenH} high`);
+          const plans = d.placed ? d.placed[6] : '';
+          if (size >= 5) {
+            const boxes = plans.split('|').map((b) => /^(\w+):(-?\d+),(-?\d+),(\d+),(\d+)$/.exec(b)).filter(Boolean);
+            const big = boxes.length === 3 && boxes.every((b) => Number(b[4]) >= 44 * pxPerPt - 1 && Number(b[5]) >= 44 * pxPerPt - 1);
+            check(`the ${size === 10 ? '11v11' : `${size}v${size}`} dashboard offers SWITCH PLAN between three plans, each at least 44 x 44 pt`, big && /plans=Balanced\|High_press\|Low_block yours=1/.test(d.shown?.[1] ?? ''),
+              `${plans || 'no plans placed'} at ${pxPerPt} px/pt; ${(/plans=\S+ .*/.exec(d.shown?.[1] ?? '') ?? ['no plans shown'])[0]}`);
+          } else {
+            check('a match under five a side shows no plans on its dashboard', plans === 'none' && /plans=none/.test(d.shown?.[1] ?? ''), `${plans || 'not placed'}`);
+          }
+        };
         if (side === 1) {
           check('a 1v1 match shows no SWITCH', switchBox.length === 4 && switchBox[2] === 0, switchBox.length ? `switch=${switchBox.join(',')}` : 'no switch in the layout line');
         } else {
@@ -870,6 +898,32 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
             check('a press on SUBS makes a substitution at the next stoppage', !!askedSub && !!madeSub && madeSub[3] === '1' && Number(madeSub[4]) >= Number(askedSub[1]),
               `${askedSub ? askedSub[0].replace('ELEVEN ', '') : 'no substitution asked'}; ${madeSub ? madeSub[0].replace('ELEVEN ', '') : 'no substitution made'}`);
             await shot('substituted');
+
+            // The dashboard (#128): PAUSE opens it; SWITCH PLAN asks for the high press, which the
+            // human's next command carries once play resumes; the simulation takes it at the next
+            // stoppage, and the recording so far replays to that step.
+            const runNow = (lastLog(layoutPattern) ?? layout).slice(1).map(Number);
+            const runAtD = at(runNow[2], runNow[3]);
+            const fromD = logs.length;
+            await tap(runAtD);
+            const shownD = await dashboardShown(fromD);
+            dashboardChecks(shownD, side, ppp);
+            const pressD = shownD.placed ? /High_press:(-?\d+),(-?\d+),(\d+),(\d+)/.exec(shownD.placed[6]) : null;
+            const pressBox = pressD ? pressD.slice(1, 5).map(Number) : [];
+            const viewport = shownD.placed ? shownD.placed[5].split(',').map(Number) : [];
+            const inView = pressBox.length === 4 && viewport.length === 4 && pressBox[1] >= viewport[1] - 1 && pressBox[1] + pressBox[3] <= viewport[1] + viewport[3] + 1;
+            const fromAsk = logs.length;
+            if (inView) await tap(at(pressBox[0] + pressBox[2] / 2, pressBox[1] + pressBox[3] / 2));
+            const askedPlan = (await waitForLog(/ELEVEN match plan asked plan=(\d+) tick=(\d+)/, 10_000, fromAsk))?.match ?? null;
+            await shot('dashboard');
+            await tap(runAtD);
+            const sentPlan = askedPlan ? (await waitForLog(/ELEVEN match plan sent plan=(\d+) tick=(\d+)/, 10_000, fromAsk))?.match ?? null : null;
+            const switchedPlan = sentPlan ? (await waitForLog(/ELEVEN match plan switched team=1 plan=(\d+) tick=(\d+)(?: replay=(\w+))?/, 180_000, fromAsk))?.match ?? null : null;
+            check('SWITCH PLAN on the dashboard asks for the high press, taken at a stoppage once play resumes, and the recording so far replays',
+              inView && askedPlan?.[1] === '2' && sentPlan?.[1] === '2' && switchedPlan?.[1] === '2' && Number(switchedPlan[2]) >= Number(sentPlan[2]) && switchedPlan[3] === 'match',
+              `${inView ? `high press at ${pressBox.join(',')} px` : `high press not in view (${pressD ? pressBox.join(',') : 'not placed'}; viewport ${viewport.join(',') || 'none'})`}; ` +
+                `${askedPlan ? askedPlan[0].replace('ELEVEN ', '') : 'no plan asked'}; ${sentPlan ? sentPlan[0].replace('ELEVEN ', '') : 'none sent'}; ${switchedPlan ? switchedPlan[0].replace('ELEVEN ', '') : 'no switch taken'}`);
+            notes.plan = switchedPlan ? switchedPlan[0].replace('ELEVEN ', '') : 'none';
           }
 
           if (side > 1 && /switching=(ball|manual)/.test(url)) {
@@ -888,6 +942,7 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
         const fromP = logs.length;
         await tap(runAt);
         const paused = (await waitForLog(/ELEVEN match paused tick=(\d+) clock=(\d+)/, 10_000, fromP))?.match ?? null;
+        dashboardChecks(await dashboardShown(fromP), side, ppp);
         await sleep(3000);
         const stepsWhilePaused = logs.slice(fromP).filter((l) => /^ELEVEN trace tick=/.test(l)).length;
         const fromR = logs.length;

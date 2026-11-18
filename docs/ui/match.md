@@ -62,3 +62,24 @@ Issue #95, M2's exit. Two outfielders and a keeper a side ([squads.md](../simula
 - `match-phone` checks a 1v1 match shows no SWITCH.
 
 **The gate.** CI plays 50 2v2 matches CPU against CPU, and 50 with a human seat. The seat is a harness driver that runs at the ball and shoots, its switches decided as the host's are. See [squads.md](../simulation/squads.md).
+
+## The match dashboard
+
+Issue #128, M5: the human manager's view of the match. Nothing here is approved feel, and none of it has been tried on a device.
+
+- **PAUSE opens it.** It shows over the stopped play, under the status line, and RESUME closes it. It runs from the play area's top down to the safe area's foot, over the stick and the action area, which do nothing while paused. A play area made short by the match's controls (SUBS and SWITCH at eleven a side on a phone) still holds it. Research puts a phone's dashboard at a stoppage or a pause, not over live play, so it never covers a running match.
+- **It shows:**
+  - the score, the clock and the half;
+  - each side's plan;
+  - SWITCH PLAN, for the human's side;
+  - the metrics (possession, shots, shots on target, xG, passes completed of played, corners, PPDA), the two sides in two columns, read from the match so far by the recorder (`MatchRecorder.Now`, [match.md](../simulation/match.md)).
+
+  It is one panel at most 480 pt wide, in the ordinary theme, and it scrolls where it doesn't fit, as in landscape on a phone. The plans come first, above the metrics, because they are the decision.
+- **SWITCH PLAN** is a segmented choice of the side's three stored plans: Balanced (the reference), High press and Low block (#126's measured plans, as #127's managers have them). Each segment is at least 44 × 44 pt. The side's plan is marked. While a switch waits for a stoppage, or the cooldown runs, the segments are unavailable and the panel says why.
+- **A plan chosen there** goes on the human's next command once play resumes, recorded with it (INV-10). The simulation takes it at the next stoppage, or at once if play is stopped; then it settles and the cooldown runs ([tactics.md](../simulation/tactics.md)). The status line says when it is taken, or why it was refused.
+- **Both sides store the three plans from five a side up.** Each starts on Balanced, so a match that never switches plays exactly as before: the same events and result for the smoke's seeds. A 1v1 or 2v2 match has no plans, and its dashboard says so.
+- **The keyboard:** Tab reaches the plans' segments after the HUD's controls while the dashboard is shown.
+
+**The smoke test.**
+- Every full-match pass checks that PAUSE shows the dashboard with each side's metrics, over the play area's columns and at least 160 pt tall where the screen allows. From five a side up it also checks that SWITCH PLAN offers the three plans at 44 × 44 pt or more; under five a side, that no plans are shown.
+- `match11-phone` (390 × 664) pauses after its substitution and picks High press. It resumes, and checks that the switch is sent, taken at a stoppage, and that the recording so far replays to that step.

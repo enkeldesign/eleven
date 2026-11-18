@@ -204,6 +204,56 @@ namespace Eleven.Simulation.Tests
             Assert.Equal((2, 2), (home.Shots, home.OnTarget));
         }
 
+        private static string Of(SideMetrics m) => FormattableString.Invariant($"{m.Possession:R} {m.Shots} {m.OnTarget} {m.Xg:R} {m.Passes} {m.PassesCompleted} {m.Corners} {m.Ppda:R}");
+
+        [Fact]
+        public void The_metrics_so_far_grow_through_the_match_and_at_full_time_are_the_results()
+        {
+            SimConfig c = SpikeScenario.Config().With("halfLength", 90);
+            var sim = new Simulator(c, Squads.Match(c, 3, 5, bothCpu: true));
+            var recorder = new MatchRecorder();
+            var commands = new List<Command>();
+            var step = new List<SimEvent>();
+            SideMetrics atHalf = default;
+            while (recorder.Result == null && sim.Tick < 6 * c.HalfTicks)
+            {
+                commands.Clear();
+                step.Clear();
+                KeeperControllers.Append(sim, commands);
+                CpuControllers.Append(sim, commands);
+                RestartControllers.Append(sim, commands);
+                ManagerControllers.Append(sim, commands);
+                sim.Step(commands, step);
+                recorder.Observe(c, sim.PeekState(), step);
+                if (step.Any(e => e.Kind == SimEventKind.HalfTime)) atHalf = recorder.Now(0);
+            }
+
+            Assert.NotNull(recorder.Result);
+            Assert.True(atHalf.Passes > 0 && atHalf.Possession > 0, "the first half's metrics, read at half-time");
+            SideMetrics end = recorder.Now(0);
+            Assert.InRange(atHalf.Passes, 0, end.Passes);
+            Assert.InRange(atHalf.Shots, 0, end.Shots);
+            Assert.Equal(Of(recorder.Result!.HomeMetrics), Of(end));
+            Assert.Equal(Of(recorder.Result.AwayMetrics), Of(recorder.Now(1)));
+        }
+
+        [Fact]
+        public void The_host_stores_three_named_plans_starting_on_the_reference()
+        {
+            TeamTactic[] plans = MatchPlans.Plans;
+            Assert.Equal(TeamTactics.PerSide, plans.Length);
+            Assert.Equal(new[] { "Balanced", "High press", "Low block" }, MatchPlans.Names);
+            TeamTactic reference = TeamTactic.Reference(0);
+            Assert.Equal((reference.Formation, reference.StepUp, reference.Line, reference.Width, reference.Press), (plans[0].Formation, plans[0].StepUp, plans[0].Line, plans[0].Width, plans[0].Press));
+            Assert.True(plans[1].Line > 0 && plans[2].Line < 0, "the high press stands higher and the low block deeper");
+
+            // A match with them starts on the first, and may switch to the others.
+            SimConfig c = SpikeScenario.Config();
+            SimState s = Squads.Match(c, 3, 5, homeTactics: plans, awayTactics: plans);
+            Assert.Equal(2 * TeamTactics.PerSide, s.Tactics.Length);
+            Assert.All(s.Teams, t => Assert.Equal(0, t.Tactic));
+        }
+
         [Fact]
         public void A_shot_is_read_from_where_it_was_struck_not_where_the_ball_is_after_the_step()
         {

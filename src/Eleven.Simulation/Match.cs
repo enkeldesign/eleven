@@ -354,6 +354,12 @@ namespace Eleven.Simulation
 
         public MatchResult? Result { get; private set; }
 
+        /// <summary>
+        /// The metrics so far (#128): <paramref name="side"/> 0 for home, 1 for away. A match's
+        /// dashboard reads them while it is played; at full time they are the result's.
+        /// </summary>
+        public SideMetrics Now(int side) => Metrics(side);
+
         // 0 for home, 1 for away, -1 for neither: the side footballer `id` plays for.
         private static int SideOf(SimState s, int id)
         {
