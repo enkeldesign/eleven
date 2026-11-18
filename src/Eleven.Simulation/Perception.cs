@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Eleven.Simulation
 {
@@ -15,8 +16,10 @@ namespace Eleven.Simulation
     {
         public KeeperObservation(long tick, Vec2 position, Vec2 velocity, double heading, KeeperPhase phase, int phaseTicks,
             KeeperCapabilities capabilities, double runSpeed, Vec3 ballPosition, Vec3 ballVelocity, Vec3 ballSpin, bool ballHeld, bool holding,
-            int heldTicks = 0, bool inMatch = false)
+            int heldTicks = 0, bool inMatch = false, SeenPlayer[]? others = null, double kickSpeed = 0)
         {
+            _others = others ?? Array.Empty<SeenPlayer>();
+            KickSpeed = kickSpeed;
             Tick = tick;
             Position = position;
             Velocity = velocity;
@@ -72,6 +75,17 @@ namespace Eleven.Simulation
 
         /// <summary>Whether this is a match, with a referee (#85): then a held ball is his to distribute.</summary>
         public bool InMatch { get; }
+
+        private readonly SeenPlayer[] _others;
+
+        /// <summary>
+        /// The other footballers on the pitch, his teammates and opponents (#134), in his frame:
+        /// where his distribution can go. He sees them exactly, as he sees the ball.
+        /// </summary>
+        public IReadOnlyList<SeenPlayer> Others => _others ?? Array.Empty<SeenPlayer>();
+
+        /// <summary>m/s. His hardest kick's speed (#134), for weighting a ball he gives short.</summary>
+        public double KickSpeed { get; }
     }
 
     /// <summary>Another footballer as a CPU outfielder sees him (#83).</summary>
@@ -247,22 +261,33 @@ namespace Eleven.Simulation
     public static class Perception
     {
         /// <summary>What the keeper at <paramref name="keeper"/> in <see cref="SimState.Keepers"/> perceives in <paramref name="state"/>.</summary>
-        public static KeeperObservation OfKeeper(SimState state, int keeper)
+        public static KeeperObservation OfKeeper(SimState state, int keeper, SimConfig config)
         {
             KeeperState k = state.Keepers[keeper];
             PlayerState body = Array.Find(state.Players, p => p.Id == k.PlayerId);
             BallState ball = state.Ball;
             int held = k.HoldTicks;
-            if (GuardedEnd(state, keeper) > 0)
+            bool turned = GuardedEnd(state, keeper) < 0;
+            var others = new List<SeenPlayer>();
+            foreach (PlayerState p in state.Players)
+            {
+                if (p.Id == body.Id || p.Off) continue;
+                bool isKeeper = Array.FindIndex(state.Keepers, x => x.PlayerId == p.Id) >= 0;
+                others.Add(new SeenPlayer(turned ? Turn(p.Position) : p.Position, turned ? Turn(p.Velocity) : p.Velocity, p.TeamId == body.TeamId, isKeeper));
+            }
+
+            double kickSpeed = body.Capabilities.KickPower * config.KickSpeed;
+            if (!turned)
             {
                 return new KeeperObservation(state.Tick, body.Position, body.Velocity, body.Heading, k.Phase, k.PhaseTicks, k.Capabilities,
-                    body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On);
+                    body.Capabilities.MaxSpeed, ball.Position, ball.Velocity, ball.Spin, ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On,
+                    others.ToArray(), kickSpeed);
             }
 
             // The −x goal's keeper: the world turned half a turn about the centre spot.
             return new KeeperObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
                 k.Phase, k.PhaseTicks, k.Capabilities, body.Capabilities.MaxSpeed, Turn(ball.Position), Turn(ball.Velocity), Turn(ball.Spin),
-                ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On);
+                ball.HeldBy != 0, ball.HeldBy == k.PlayerId, held, state.Restart.On, others.ToArray(), kickSpeed);
         }
 
         /// <summary>
@@ -400,7 +425,7 @@ namespace Eleven.Simulation
             SimState state = simulator.PeekState();
             for (int i = 0; i < state.Keepers.Length; i++)
             {
-                KeeperObservation seen = Perception.OfKeeper(state, i);
+                KeeperObservation seen = Perception.OfKeeper(state, i, simulator.Config);
                 KeeperDecision decision = Perception.InWorld(AI.KeeperBrain.Decide(seen, simulator.Config), Perception.GuardedEnd(state, i));
                 int controller = Array.Find(state.Players, p => p.Id == state.Keepers[i].PlayerId).OwnerControllerId;
                 commands.Add(new Command(controller, state.Tick, decision.Move, decision.Kick, dive: decision.Dive));

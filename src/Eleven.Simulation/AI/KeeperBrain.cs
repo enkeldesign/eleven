@@ -31,13 +31,10 @@ namespace Eleven.Simulation.AI
         // s. How early he may leave his dive.
         private const double Margin = 0.05;
 
-        // s. In a match, how long he holds a caught ball before he kicks it out (#85).
-        private const double HoldBeforeRelease = 1.2;
-
         public static KeeperDecision Decide(in KeeperObservation seen, SimConfig config)
         {
             // In a match he distributes a caught ball: a kick up the pitch, toward the side he is on.
-            if (seen.Holding && seen.InMatch && seen.HeldTicks >= HoldBeforeRelease * config.TickRate)
+            if (seen.Holding && seen.InMatch && seen.HeldTicks >= config.KeeperHoldSeconds * config.TickRate)
             {
                 double side = seen.Position.Y >= 0 ? 1 : -1;
                 return new KeeperDecision(Vec2.Zero, kick: new KickIntent(new Vec2(-1, side * 0.45), 0.6, 0.35));
