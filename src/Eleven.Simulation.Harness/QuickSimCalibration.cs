@@ -74,10 +74,11 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>
         /// The sample's fixtures, in their fixed order: round by round, each round every ordered
-        /// pair once, so any prefix spreads over the pairs. Home, away and seed; at most 16 rounds.
+        /// pair once, so any prefix spreads over the pairs. Home, away and seed; at most <see cref="MaxRounds"/> rounds, every seed distinct.
         /// </summary>
         public static List<(int Home, int Away, ulong Seed)> Fixtures(int sides, int rounds = Rounds)
         {
+            if (rounds < 0 || rounds > MaxRounds) throw new ArgumentOutOfRangeException(nameof(rounds), rounds, $"At most {MaxRounds} rounds: each pairing has {MaxRounds} seeds.");
             var fixtures = new List<(int Home, int Away, ulong Seed)>();
             for (int r = 0; r < rounds; r++)
             {
