@@ -61,6 +61,15 @@ namespace Eleven.Simulation.Harness
             new BenchPreset(TechnicalReferenceName, BenchCandidate.Reference, ControlCandidate.ActionSurface, "");
 
         /// <summary>
+        /// Built-in presets to compare against the technical reference (#135), each listed on the
+        /// Presets tab with Load and no Delete. Technical references too, never approved feel.
+        /// </summary>
+        public static IReadOnlyList<BenchPreset> Suggested { get; } = new BenchPreset[0];
+
+        /// <summary>The suggested preset these values and this touch candidate are, or null.</summary>
+        public static BenchPreset? SuggestedMatching(BenchCandidate candidate, ControlCandidate controls) => null;
+
+        /// <summary>
         /// A preset of these values under this name. Refused, with the reason, for a name that is
         /// empty, too long, the built-in preset's, or has characters other than letters, digits,
         /// spaces, hyphens and underscores.
