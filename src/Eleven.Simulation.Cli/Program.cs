@@ -218,6 +218,26 @@ internal static class Program
                 return 0;
             }
 
+            case "predictions":
+            {
+                // M5's gate (#130), INV-13: the CPU's flight predictions against the simulation's own ball,
+                // through 5v5 and 11v11 CPU matches of the reference halves. Fails on any difference.
+                SimConfig pc = SpikeScenario.Config();
+                long checkedAll = 0, differed = 0;
+                int predictions = 0;
+                foreach ((int side, ulong seed) in new[] { (5, 0x130000001UL), (5, 0x130000002UL), (10, 0x130000003UL), (10, 0x130000004UL) })
+                {
+                    PredictionTrial pt = PredictionTrials.One(pc, side, seed, 2 * pc.HalfLength);
+                    checkedAll += pt.Checked;
+                    differed += pt.Differed;
+                    predictions += pt.Predictions;
+                    if (pt.Differed > 0) Console.Error.WriteLine($"{side} a side, seed {seed:x}: {pt.Differed} differed; the first: {pt.FirstDifference}");
+                }
+
+                Console.WriteLine(FormattableString.Invariant($"{predictions} predictions over 4 matches, {checkedAll} predicted positions checked against the simulation's ball, {differed} differed"));
+                return differed == 0 ? 0 : 1;
+            }
+
             case "throughput":
             {
                 // #129: full 11v11 matches a second, headless, on one core; and quick-simmed ones.

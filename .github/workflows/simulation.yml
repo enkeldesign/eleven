@@ -320,6 +320,12 @@ jobs:
           dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll throughput 3 | tee throughput.txt
           echo "::notice title=Throughput::$(cat throughput.txt)"
 
+      # M5's gate (#130), INV-13: the CPU's flight predictions are the simulation's own ball.
+      - name: Check the CPU's predictions against the simulation
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll predictions | tee predictions.txt
+          echo "::notice title=Same-sim prediction::$(cat predictions.txt)"
+
       # M5's formations (#125): home in each formation against the 4-4-2, over fixed seeds.
       - name: Contrast the formations
         run: |
