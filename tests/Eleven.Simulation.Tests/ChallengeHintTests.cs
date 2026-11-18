@@ -194,16 +194,29 @@ namespace Eleven.Simulation.Tests
         public void A_seat_recovering_beyond_challenge_range_is_not_pressing_in_range()
         {
             // Codex on #145: NotReady is reported out to 3 m; only within challengeRange is it an attempt.
-            SimState s = World(0.6);
             var trial = new SquadTrial();
             var none = new SimEvent[0];
             double range = Free.ChallengeRange;
-            bool pressing = trial.CountPress(s, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range + 0.5) }, none, B, false, range);
+            bool pressing = trial.CountPressOf(B, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range + 0.5) }, none, false, range);
             Assert.False(pressing);
             Assert.Equal(0, trial.SeatAttempts);
-            pressing = trial.CountPress(s, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range - 0.1) }, none, B, pressing, range);
+            pressing = trial.CountPressOf(B, new[] { new ChallengeReport(B, ChallengeHint.NotReady, range - 0.1) }, none, pressing, range);
             Assert.True(pressing);
             Assert.Equal(1, trial.SeatAttempts);
+        }
+
+        [Fact]
+        public void On_a_switch_step_the_seat_is_the_footballer_it_had_during_the_step()
+        {
+            // Codex on #145: challenges are decided before a switch at the step's end. The seat had
+            // B; A, the CPU's until then, is the seat's only after it. A's challenge isn't the seat's.
+            double range = Free.ChallengeRange;
+            var trial = new SquadTrial();
+            var reports = new[] { new ChallengeReport(B, ChallengeHint.NotClosing, range - 0.2) };
+            var events = new[] { new SimEvent(0, SimEventKind.ChallengeStarted, A), new SimEvent(0, SimEventKind.Switched, A, other: B) };
+            bool pressing = trial.CountPressOf(B, reports, events, false, range);
+            Assert.True(pressing);
+            Assert.Equal((1, 1, 0), (trial.SeatAttempts, trial.SeatNotClosing, trial.SeatChallenges));
         }
 
         [Fact]
