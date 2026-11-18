@@ -81,7 +81,7 @@ keeperHoldSpeed × (0.5 + 0.5 · handling) × (1 − stretch)
 
 Stretch is how far out toward his reach the ball's line passes his body: 0 at the body, 1 at the fingertips. At the references, a shot up to 18.7 m/s is held at the body, half that at half stretch, and nothing at the fingertips.
 
-A held ball stays where he caught it and moves with him (`BallState.HeldBy`). No kick or touch reaches it. Distribution is out of scope, so in practice RESET starts again.
+A held ball stays where he caught it and moves with him (`BallState.HeldBy`). No kick or touch reaches it. In practice RESET starts again; in a match he distributes it ([restarts.md](restarts.md#keepers-distribute), #134).
 
 **Parried.** Anything faster he parries:
 - the velocity's component along the contact normal, relative to him, reverses, scaled by `keeperParryRestitution`;
@@ -227,7 +227,7 @@ No playtest yet suggests a deliberate departure from the real scale: that is Eri
 
 As #30:
 - outfield opponents and team AI;
-- distribution, sweeping, set pieces and tactics;
+- sweeping, set pieces and tactics;
 - the final keeper attribute taxonomy;
 - animation;
 - final feel values.
