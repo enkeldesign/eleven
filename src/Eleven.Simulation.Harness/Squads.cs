@@ -180,6 +180,15 @@ namespace Eleven.Simulation.Harness
         /// <summary>Switches the seat's controller made, and how many were refused.</summary>
         public int Switches, SwitchesRefused;
 
+        /// <summary>
+        /// The seat's ball-winning (#135): pressing episodes within challengeRange of a ball an
+        /// opponent controls, challenges started and won, and its steps pressing without a start by
+        /// the simulation's reason.
+        /// </summary>
+        public int SeatAttempts, SeatChallenges, SeatChallengesWon;
+
+        public int SeatTooFar, SeatNotClosing, SeatWontReach, SeatNotReady;
+
         /// <summary>The seat's switches by cause (#136): to a pass's receiver, to a teammate with the ball, at a turnover, asked.</summary>
         public int SwitchesPass, SwitchesMate, SwitchesTurnover, SwitchesAsked;
 
