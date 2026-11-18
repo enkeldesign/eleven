@@ -217,6 +217,37 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_first_time_pass_back_completes_the_pass_it_meets()
+        {
+            const int Mate = 2;
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 at = new Vec2(-10, 0);
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+
+            // The mate passes it back first time: his pass resolves as he winds up, before his kick.
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(3, SimEventKind.QuickPassResolved, Mate, other: Striker));
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(4, SimEventKind.Kicked, Mate));
+            Feed(r, s, at, new SimEvent(5, SimEventKind.Touched, Striker));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((2, 2), (home.Passes, home.PassesCompleted));
+        }
+
+        [Fact]
+        public void A_passer_running_onto_his_own_pass_has_not_completed_it()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 at = new Vec2(-10, 0);
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+            Feed(r, s, at + new Vec2(12, 0), new SimEvent(3, SimEventKind.Touched, Striker));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 0), (home.Passes, home.PassesCompleted));
+        }
+
+        [Fact]
         public void The_same_match_gives_the_same_metrics()
         {
             Assert.Equal(Play(5, 3).Result.ToText(), Play(5, 3).Result.ToText());
