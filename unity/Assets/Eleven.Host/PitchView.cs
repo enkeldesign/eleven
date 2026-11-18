@@ -154,10 +154,6 @@ namespace Eleven.Host
         /// <summary>Whether play is paused or waiting (#139): the camera's easing holds, as the play does.</summary>
         public bool Frozen { get; set; }
 
-        // m. The least margin the eased zoom keeps round the footballer and the ball: the framing's
-        // own, so the footballer's correction below never has to move the centre at the limit.
-        private const float KeepInView = FramingMargin;
-
         /// <param name="minAhead">
         /// The least the play shows up-field either side of the action, in metres (#72, <c>?ahead=</c>);
         /// the camera zooms out to give it. The reference is the closest zoom's, so it changes nothing.
@@ -592,51 +588,29 @@ namespace Eleven.Host
             Rect play = layout.PlayArea;
             float dt = Frozen ? 0 : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
 
-            // The framing centre pans to the midpoint of the footballer and the ball (#139), rather
-            // than cutting to it at a switch or a long pass.
-            Vector2 mid = Vector2.Lerp(player, ball, 0.5f);
-            Ease.StepCentre(mid.x, mid.y, dt);
-            var centre = new Vector2((float)Ease.CentreX, (float)Ease.CentreY);
-            Vec2 span = _orientation.ToScreen(new Vec2(ball.x - player.x, ball.y - player.y));
-            Vector2 halfSpan = new Vector2(Mathf.Abs((float)span.X), Mathf.Abs((float)span.Y)) * 0.5f;
-
             // The status line sits over the top of the play area (#53). On the vertical pitch that
             // is where the play runs up-field, so the action is framed in the part below it: a
             // message never covers the ball, and the pitch under it is more to see ahead (#72).
             float band = Mathf.Clamp(layout.StatusArea.yMax - play.yMin, 0, play.height * 0.5f);
             var framed = new Rect(play.x, play.y + band, play.width, play.height - band);
 
-            // Pixels per metre: the closest zoom allowed, reduced until both fit, but never past
-            // the widest view (#31).
+            // Pixels per metre: the closest zoom allowed, never past the widest view (#31).
             float closest = Mathf.Min(play.width, play.height) * 0.5f / MinHalfExtent;
             closest = Mathf.Min(closest, play.height * 0.5f / _minAhead);
             float widest = Mathf.Min(closest, Mathf.Min(play.width, play.height) * 0.5f / _maxHalfExtent);
-            float pixelsPerMetre = Mathf.Min(closest, framed.width * 0.5f / (halfSpan.x + FramingMargin));
-            pixelsPerMetre = Mathf.Min(pixelsPerMetre, framed.height * 0.5f / (halfSpan.y + FramingMargin));
-            pixelsPerMetre = Mathf.Max(pixelsPerMetre, widest);
 
-            // Eased (#139): out promptly, in slowly, never closer than keeps the footballer and the
-            // ball in view, with a small margin, about the eased centre.
-            Vec2 toP = _orientation.ToScreen(new Vec2(player.x - centre.x, player.y - centre.y));
-            Vec2 toB = _orientation.ToScreen(new Vec2(ball.x - centre.x, ball.y - centre.y));
-            float needX = Mathf.Max(Mathf.Abs((float)toP.X), Mathf.Abs((float)toB.X)) + KeepInView;
-            float needY = Mathf.Max(Mathf.Abs((float)toP.Y), Mathf.Abs((float)toB.Y)) + KeepInView;
-            float limit = Mathf.Max(widest, Mathf.Min(closest, Mathf.Min(framed.width * 0.5f / needX, framed.height * 0.5f / needY)));
+            // Fitted and eased (#139) in CameraEase, on axes aligned with the screen.
+            Vec2 p = _orientation.ToScreen(new Vec2(player.x, player.y)), b = _orientation.ToScreen(new Vec2(ball.x, ball.y));
+            (double cx, double cy, double zoom) = Ease.Fit(p.X, p.Y, b.X, b.Y, framed.width * 0.5f, framed.height * 0.5f,
+                closest, widest, dt);
+            Vector2 centre = World(new Vec2(cx, cy));
+            float pixelsPerMetre = (float)zoom;
+
             // The zoom as fitted, unsmoothed: what the camera showed before the easing (#139), for the trace.
-            if (_fittedZoom > 0) _fittedTravel += Mathf.Abs(Mathf.Log(pixelsPerMetre / _fittedZoom));
-            _fittedZoom = pixelsPerMetre;
-            Ease.StepZoom(pixelsPerMetre, limit, dt);
-            pixelsPerMetre = Mathf.Clamp((float)Ease.Zoom, widest, closest);
+            if (_fittedZoom > 0) _fittedTravel += Mathf.Abs(Mathf.Log((float)(Ease.Fitted / _fittedZoom)));
+            _fittedZoom = (float)Ease.Fitted;
             if (_pixelsPerMetre > 0) _zoomTravel += Mathf.Abs(Mathf.Log(pixelsPerMetre / _pixelsPerMetre));
             _pixelsPerMetre = pixelsPerMetre;
-
-            // At the widest view the two may not both fit: the footballer does, with the margin.
-            Vec2 toPlayer = _orientation.ToScreen(new Vec2(player.x - centre.x, player.y - centre.y));
-            float reachX = Mathf.Max(0, framed.width * 0.5f / pixelsPerMetre - FramingMargin);
-            float reachY = Mathf.Max(0, framed.height * 0.5f / pixelsPerMetre - FramingMargin);
-            float overX = Mathf.Abs((float)toPlayer.X) - reachX, overY = Mathf.Abs((float)toPlayer.Y) - reachY;
-            if (overX > 0) centre += World(new Vec2(Mathf.Sign((float)toPlayer.X) * overX, 0));
-            if (overY > 0) centre += World(new Vec2(0, Mathf.Sign((float)toPlayer.Y) * overY));
 
             _camera.orthographicSize = layout.ScreenHeight * 0.5f / pixelsPerMetre;
             _ahead = (framed.height * 0.5f + band) / pixelsPerMetre;

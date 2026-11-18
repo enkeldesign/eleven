@@ -28,6 +28,9 @@ namespace Eleven.Host
 
         public double CentreY { get; private set; }
 
+        /// <summary>The last frame's fitted zoom, unsmoothed: what the camera showed before the easing, for the trace.</summary>
+        public double Fitted { get; private set; }
+
         private bool _zoomSet, _centreSet, _zooming;
 
         // A move of the zoom ends within this fraction of its target.
@@ -80,6 +83,47 @@ namespace Eleven.Host
 
             if (Zoom > limit) Zoom = limit;
         }
+
+        /// <summary>
+        /// The view of one frame (#139): the footballer at (<paramref name="px"/>, <paramref name="py"/>)
+        /// and the ball at (<paramref name="bx"/>, <paramref name="by"/>), in metres on axes aligned
+        /// with the screen, framed in an area <paramref name="halfWidth"/> by <paramref name="halfHeight"/>
+        /// pixels either side of its centre, between the <paramref name="closest"/> and
+        /// <paramref name="widest"/> zooms (pixels per metre). Steps the easing and gives the centre
+        /// and the zoom to show.
+        /// </summary>
+        public (double X, double Y, double Zoom) Fit(double px, double py, double bx, double by, double halfWidth, double halfHeight,
+            double closest, double widest, double dt)
+        {
+            const double margin = Margin, keep = Keep;
+            StepCentre((px + bx) / 2, (py + by) / 2, dt);
+            double cx = CentreX, cy = CentreY;
+
+            // The fitted zoom: both with the margin round them, about their midpoint.
+            double target = Math.Min(closest, Math.Min(halfWidth / (Math.Abs(bx - px) / 2 + margin), halfHeight / (Math.Abs(by - py) / 2 + margin)));
+            target = Math.Max(target, widest);
+            Fitted = target;
+
+            // Never closer than keeps both in view, `keep` to spare, about the eased centre.
+            double needX = Math.Max(Math.Abs(px - cx), Math.Abs(bx - cx)) + keep;
+            double needY = Math.Max(Math.Abs(py - cy), Math.Abs(by - cy)) + keep;
+            double limit = Math.Max(widest, Math.Min(closest, Math.Min(halfWidth / needX, halfHeight / needY)));
+            StepZoom(target, limit, dt);
+            double zoom = Math.Max(widest, Math.Min(closest, Zoom));
+
+            // The footballer stays in view with the margin.
+            double reachX = Math.Max(0, halfWidth / zoom - margin), reachY = Math.Max(0, halfHeight / zoom - margin);
+            double overX = Math.Abs(px - cx) - reachX, overY = Math.Abs(py - cy) - reachY;
+            if (overX > 0) cx += Math.Sign(px - cx) * overX;
+            if (overY > 0) cy += Math.Sign(py - cy) * overY;
+            return (cx, cy, zoom);
+        }
+
+        /// <summary>m. The framing's margin round the footballer and the ball (#31).</summary>
+        public const double Margin = 3;
+
+        /// <summary>m. The least room the eased zoom keeps round both, about the eased centre.</summary>
+        public const double Keep = Margin;
 
         // The share of the way a first-order follower covers in dt at the time constant.
         private static double Approach(double dt, double seconds) => 1 - Math.Exp(-dt / seconds);
