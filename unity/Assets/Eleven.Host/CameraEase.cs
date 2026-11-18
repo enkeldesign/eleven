@@ -111,19 +111,28 @@ namespace Eleven.Host
             StepZoom(target, limit, dt);
             double zoom = Math.Max(widest, Math.Min(closest, Zoom));
 
-            // The footballer stays in view with the margin.
-            double reachX = Math.Max(0, halfWidth / zoom - margin), reachY = Math.Max(0, halfHeight / zoom - margin);
-            double overX = Math.Abs(px - cx) - reachX, overY = Math.Abs(py - cy) - reachY;
-            if (overX > 0) cx += Math.Sign(px - cx) * overX;
-            if (overY > 0) cy += Math.Sign(py - cy) * overY;
+            // At the widest view the two may not both fit: the footballer does, with the margin.
+            // Closer in, the limit already keeps both in view, so the centre stays the eased one.
+            if (zoom <= widest)
+            {
+                double reachX = Math.Max(0, halfWidth / zoom - margin), reachY = Math.Max(0, halfHeight / zoom - margin);
+                double overX = Math.Abs(px - cx) - reachX, overY = Math.Abs(py - cy) - reachY;
+                if (overX > 0) cx += Math.Sign(px - cx) * overX;
+                if (overY > 0) cy += Math.Sign(py - cy) * overY;
+            }
+
             return (cx, cy, zoom);
         }
 
         /// <summary>m. The framing's margin round the footballer and the ball (#31).</summary>
         public const double Margin = 3;
 
-        /// <summary>m. The least room the eased zoom keeps round both, about the eased centre.</summary>
-        public const double Keep = Margin;
+        /// <summary>
+        /// m. The least room the eased zoom keeps round both, about the eased centre: smaller than
+        /// the fit's margin, so a zoom out eases between the two, and is hurried only as the ball
+        /// nears the edge.
+        /// </summary>
+        public const double Keep = 0.5;
 
         // The share of the way a first-order follower covers in dt at the time constant.
         private static double Approach(double dt, double seconds) => 1 - Math.Exp(-dt / seconds);

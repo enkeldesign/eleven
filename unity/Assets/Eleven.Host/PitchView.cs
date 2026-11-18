@@ -50,7 +50,6 @@ namespace Eleven.Host
         /// as Sensible Soccer shows. A technical reference; <c>?maxview=</c> tries others.
         /// </summary>
         public const float MaxHalfExtent = 17.5f;
-        private const float FramingMargin = 3f;
         private const float PitchHalfWidth = 34f;
         private const float LineWidth = 0.12f;
         private const float PlayerDiameter = 1.8f;
