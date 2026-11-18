@@ -77,6 +77,29 @@ namespace Eleven.Simulation.Maths
             return BitConverter.DoubleToInt64Bits(y) < 0 ? -angle : angle;
         }
 
+        // ln 2 split in two (fdlibm's ln2_hi, ln2_lo): k × Ln2Hi is exact for |k| < 2^11.
+        private const double Ln2Hi = 6.93147180369123816490e-01;
+        private const double Ln2Lo = 1.90821492927058770002e-10;
+        private const double InvLn2 = 1.44269504088896338700e+00;
+
+        /// <summary>
+        /// e^x for |x| ≤ 700 (#128): x = k ln 2 + r with |r| ≤ ln 2 / 2, e^r by its Taylor series to
+        /// the 14th term (truncation below 1e-17 there), then scaled by 2^k through the exponent bits.
+        /// </summary>
+        public static double Exp(double x)
+        {
+            double k = Math.Round(x * InvLn2);
+            double r = (x - k * Ln2Hi) - k * Ln2Lo;
+            double term = 1, sum = 1;
+            for (int n = 1; n <= 14; n++)
+            {
+                term = term * r / n;
+                sum += term;
+            }
+
+            return sum * BitConverter.Int64BitsToDouble((long)(k + 1023) << 52);
+        }
+
         public static double Sqrt(double x)
         {
             // Bring subnormal and tiny inputs into the normal range, where the bit-level guess works.

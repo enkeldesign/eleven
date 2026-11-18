@@ -159,7 +159,7 @@ Like recordings, captures are version-specific (INV-7). A schema or format chang
 
 ## Maths boundary
 
-`sin`, `cos`, `atan2` and `sqrt` go through `SimMath`, the only entry point, backed by `PortableMath`. Simulation code never calls `System.Math` or `MathF` for anything but exact helpers (`Abs`, `Min`, `Max`, `Floor`, `Ceiling`, `Round`, `Truncate`, `Sign`, `Clamp`, `CopySign` and the constants).
+`sin`, `cos`, `atan2`, `exp` (#128) and `sqrt` go through `SimMath`, the only entry point, backed by `PortableMath`. Simulation code never calls `System.Math` or `MathF` for anything but exact helpers (`Abs`, `Min`, `Max`, `Floor`, `Ceiling`, `Round`, `Truncate`, `Sign`, `Clamp`, `CopySign` and the constants).
 
 `SimMath` checks domains in front of the implementation. An out-of-domain argument throws, because a NaN would enter state silently.
 
@@ -167,6 +167,7 @@ Like recordings, captures are version-specific (INV-7). A schema or format chang
 | --- | --- | --- | --- | --- |
 | sin, cos | finite, abs(x) ≤ 1e5 | Cody–Waite reduction by π/2 in three parts (fdlibm constants; exact for abs(n) < 2²⁰), then Taylor series to x¹⁵ / x¹⁶ on abs(r) ≤ π/4 | 9e-16 absolute (4 ulp of 1) | 2.2e-16 |
 | atan2 | finite; (0, 0) → 0 | Octant reduction to t in [0, 1], shift by π/4 above tan(π/8), one half-angle step to abs(v) ≤ 0.199, alternating series to v²³ | 1.8e-15 absolute (4 ulp of π) | 4.4e-16 |
+| exp | finite, abs(x) ≤ 700 | Reduction by ln 2 in two parts (fdlibm's ln2_hi and ln2_lo), Taylor series to r¹⁴ on abs(r) ≤ ln 2 / 2, then 2ᵏ through the exponent bits (#128: the xG model's logistic) | 2e-15 relative, asserted from −60 to 60 | — |
 | sqrt | finite, x ≥ 0 | Exponent-halving bit guess (within about 6 %), six Newton steps; tiny inputs pre-scaled by 2¹⁰⁰⁰ | 4.5e-16 relative (2 ulp) | 1 ulp |
 
 The truncation errors of the series are below 5e-17 for sin, 3e-18 for cos and 1e-19 for atan, so the measured errors are rounding in the evaluation. The bounds leave a factor of 2 to 4 over the measured worst case. Measurements: 4 million arguments per function on .NET 10, x64.

@@ -3,8 +3,8 @@ using System;
 namespace Eleven.Simulation.Maths
 {
     /// <summary>
-    /// The simulation's only maths entry point for <c>sin</c>, <c>cos</c>, <c>atan2</c> and
-    /// <c>sqrt</c>, backed by <see cref="PortableMath"/> (ADR-0002). Simulation code never calls
+    /// The simulation's only maths entry point for <c>sin</c>, <c>cos</c>, <c>atan2</c>,
+    /// <c>exp</c> and <c>sqrt</c>, backed by <see cref="PortableMath"/> (ADR-0002). Simulation code never calls
     /// <c>System.Math</c> or <c>MathF</c> for these; the banned-API analyzer enforces that.
     ///
     /// Domain checks live here, in front of the implementation. A failure is an exception, which
@@ -36,6 +36,17 @@ namespace Eleven.Simulation.Maths
             }
 
             return y == 0 && x == 0 ? 0 : PortableMath.Atan2(y, x);
+        }
+
+        /// <summary>e^x for |x| ≤ 700 (#128).</summary>
+        public static double Exp(double x)
+        {
+            if (!IsFinite(x) || x > 700 || x < -700)
+            {
+                throw new ArgumentOutOfRangeException(nameof(x), x, "Exp needs |x| ≤ 700.");
+            }
+
+            return PortableMath.Exp(x);
         }
 
         /// <summary>Square root of a finite, non-negative value.</summary>

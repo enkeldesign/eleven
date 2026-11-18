@@ -45,6 +45,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>The match's result in its text form (INV-14), or empty when unfinished.</summary>
         public string ResultText = "";
 
+        /// <summary>Each side's metrics from the result (#128).</summary>
+        public SideMetrics HomeMetrics, AwayMetrics;
+
         /// <summary>How many replays of the recorded commands were run, and how many gave the same events and ended on the same state.</summary>
         public int Replays, ReplaysEqual;
 
@@ -211,6 +214,8 @@ namespace Eleven.Simulation.Harness
                 m.AwayShootout = result.AwayShootoutGoals;
                 m.Winner = result.Winner == Squads.HomeTeam ? home : result.Winner == Squads.AwayTeam ? away : -1;
                 m.ResultText = result.ToText();
+                m.HomeMetrics = result.HomeMetrics;
+                m.AwayMetrics = result.AwayMetrics;
             }
 
             m.LongestStillSeconds = longestStill * config.TickSeconds;
@@ -248,15 +253,17 @@ namespace Eleven.Simulation.Harness
 
         public static void WriteMatches(TextWriter w, SimConfig config, IReadOnlyList<LeagueSide> sides, IReadOnlyList<GateMatch> matches)
         {
-            w.WriteLine("config_hash,stage,seed,home,away,finished,home_goals,away_goals,extra_time,shootout,winner,fouls,offsides,cautions,sendings_off,injuries,substitutions,penalties,free_kicks,indirect_free_kicks,corners,throw_ins,goal_kicks,longest_still_s,longest_untouched_s,stuck,replays_equal,length_s,final_hash");
+            w.WriteLine("config_hash,stage,seed,home,away,finished,home_goals,away_goals,extra_time,shootout,winner,fouls,offsides,cautions,sendings_off,injuries,substitutions,penalties,free_kicks,indirect_free_kicks,corners,throw_ins,goal_kicks,longest_still_s,longest_untouched_s,stuck,replays_equal,home_possession,shots,on_target,xg,passes,passes_completed,ppda,length_s,final_hash");
             foreach (GateMatch m in matches)
             {
                 w.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                    "{0:x16},{1},{2:x},{3},{4},{5},{6},{7},{8},{9}-{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24:F2},{25:F2},{26},{27}/{28},{29:F2},{30:x16}",
+                    "{0:x16},{1},{2:x},{3},{4},{5},{6},{7},{8},{9}-{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24:F2},{25:F2},{26},{27}/{28},{31:F3},{32}-{33},{34}-{35},{36:F2}-{37:F2},{38}-{39},{40}-{41},{42:F2}-{43:F2},{29:F2},{30:x16}",
                     m.ConfigHash, m.Stage, m.Seed, sides[m.Home].Name, sides[m.Away].Name, m.Finished ? "yes" : "no", m.HomeGoals, m.AwayGoals, m.ExtraTime ? "yes" : "no",
                     m.HomeShootout, m.AwayShootout, m.Winner >= 0 ? sides[m.Winner].Name : "none", m.Fouls, m.Offsides, m.Cautions, m.SendingsOff, m.Injuries, m.Substitutions,
                     m.Penalties, m.FreeKicks, m.IndirectFreeKicks, m.Corners, m.ThrowIns, m.GoalKicks, m.LongestStillSeconds, m.LongestUntouchedSeconds, m.Stuck ? "yes" : "no",
-                    m.ReplaysEqual, m.Replays, m.LengthSeconds, m.FinalHash));
+                    m.ReplaysEqual, m.Replays, m.LengthSeconds, m.FinalHash,
+                    m.HomeMetrics.Possession, m.HomeMetrics.Shots, m.AwayMetrics.Shots, m.HomeMetrics.OnTarget, m.AwayMetrics.OnTarget, m.HomeMetrics.Xg, m.AwayMetrics.Xg,
+                    m.HomeMetrics.Passes, m.AwayMetrics.Passes, m.HomeMetrics.PassesCompleted, m.AwayMetrics.PassesCompleted, m.HomeMetrics.Ppda, m.AwayMetrics.Ppda));
             }
         }
 
@@ -279,7 +286,12 @@ namespace Eleven.Simulation.Harness
                 matches.Sum(m => m.SendingsOff) / n, matches.Sum(m => m.Injuries) / n, matches.Sum(m => m.Substitutions) / n, matches.Sum(m => m.Corners) / n,
                 matches.Max(m => m.LongestStillSeconds), matches.Max(m => m.LongestUntouchedSeconds),
                 league.Length, league.Count(m => m.Finished && m.HomeGoals == m.AwayGoals), cup.Length, cup.Count(m => m.ExtraTime), cup.Count(m => m.HomeShootout + m.AwayShootout > 0),
-                matches.Sum(m => m.ReplaysEqual), matches.Sum(m => m.Replays), final != null && final.Winner >= 0 ? sides[final.Winner].Name : "none");
+                matches.Sum(m => m.ReplaysEqual), matches.Sum(m => m.Replays), final != null && final.Winner >= 0 ? sides[final.Winner].Name : "none")
+                + string.Format(CultureInfo.InvariantCulture, "; metrics a match: {0:F1} shots, {1:F1} on target, xG {2:F2} against {3:F2} goals, {4:F0} passes ({5:P0} completed)",
+                    matches.Sum(m => m.HomeMetrics.Shots + m.AwayMetrics.Shots) / n, matches.Sum(m => m.HomeMetrics.OnTarget + m.AwayMetrics.OnTarget) / n,
+                    matches.Sum(m => m.HomeMetrics.Xg + m.AwayMetrics.Xg) / n, matches.Sum(m => m.HomeGoals + m.AwayGoals) / n,
+                    matches.Sum(m => m.HomeMetrics.Passes + m.AwayMetrics.Passes) / n,
+                    matches.Sum(m => m.HomeMetrics.PassesCompleted + m.AwayMetrics.PassesCompleted) / Math.Max(1.0, matches.Sum(m => m.HomeMetrics.Passes + m.AwayMetrics.Passes)));
         }
     }
 }
