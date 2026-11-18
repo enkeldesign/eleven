@@ -28,16 +28,28 @@ namespace Eleven.Host
 
         public double CentreY { get; private set; }
 
+        private bool _zoomSet, _centreSet, _zooming;
+
+        // A move of the zoom ends within this fraction of its target.
+        private const double Settled = 0.005;
+
         /// <summary>The next frame takes its targets as they are: a new match, a turned view.</summary>
-        public void Snap()
-        {
-        }
+        public void Snap() => _zoomSet = _centreSet = _zooming = false;
 
         /// <summary>Moves the framing centre toward <paramref name="x"/>, <paramref name="y"/> over <paramref name="dt"/> seconds.</summary>
         public void StepCentre(double x, double y, double dt)
         {
-            CentreX = x;
-            CentreY = y;
+            if (!_centreSet || PanSeconds <= 0)
+            {
+                CentreX = x;
+                CentreY = y;
+                _centreSet = true;
+                return;
+            }
+
+            double a = Approach(dt, PanSeconds);
+            CentreX += (x - CentreX) * a;
+            CentreY += (y - CentreY) * a;
         }
 
         /// <summary>
@@ -47,7 +59,29 @@ namespace Eleven.Host
         /// </summary>
         public void StepZoom(double target, double limit, double dt)
         {
-            Zoom = Math.Min(target, limit);
+            if (!_zoomSet || Zoom <= 0)
+            {
+                Zoom = Math.Min(target, limit);
+                _zoomSet = true;
+                return;
+            }
+
+            // The dead zone decides whether a move starts; once moving it settles all the way, so
+            // the zoom neither jitters on small changes nor stops short of where it was going.
+            double change = target - Zoom;
+            if (Math.Abs(change) > Hold * Zoom) _zooming = true;
+            else if (Math.Abs(change) <= Settled * Zoom) _zooming = false;
+            if (_zooming)
+            {
+                // Out (smaller) promptly, in slowly; either at zero snaps.
+                double seconds = change < 0 ? OutSeconds : InSeconds;
+                Zoom += seconds > 0 ? change * Approach(dt, seconds) : change;
+            }
+
+            if (Zoom > limit) Zoom = limit;
         }
+
+        // The share of the way a first-order follower covers in dt at the time constant.
+        private static double Approach(double dt, double seconds) => 1 - Math.Exp(-dt / seconds);
     }
 }
