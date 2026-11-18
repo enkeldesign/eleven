@@ -444,7 +444,12 @@ namespace Eleven.Host
             foreach (UiKit.Raised view in _views.Segments) order.Add(view.Element);
             foreach (UiKit.Raised tab in _tabs.Segments) order.Add(tab.Element);
             if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
-            if (PresetsShown) order.AddRange(_presetStops);
+            if (PresetsShown)
+            {
+                // The switching mode (#136), above the presets, so a keyboard reaches it too.
+                foreach (UiKit.Raised switching in _switchings.Segments) order.Add(switching.Element);
+                order.AddRange(_presetStops);
+            }
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
             {
                 if (!_shown.TryGetValue(knob.Name, out UiKit.Value v)) continue;
