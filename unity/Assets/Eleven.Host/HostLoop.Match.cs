@@ -256,7 +256,12 @@ namespace Eleven.Host
         {
             if (index == 0)
             {
-                if (_match) EndMatch();
+                if (_match)
+                {
+                    EndMatch();
+                    Log("ELEVEN play practice via=bench");
+                }
+
                 return;
             }
 
