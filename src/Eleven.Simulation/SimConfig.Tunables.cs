@@ -192,6 +192,9 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "keeperThrowRange", "m", 5, 60),
             new TunableParameter(TunableParameter.ControlGroup, "keeperOpenDistance", "m", 1, 20),
             new TunableParameter(TunableParameter.ControlGroup, "humanChallengeLeeway", "m", 0, 1.5),
+            new TunableParameter(TunableParameter.ControlGroup, "penaltyInside", "m", 0.1, 3.5),
+            new TunableParameter(TunableParameter.ControlGroup, "penaltyPower", "fraction", 0.4, 1),
+            new TunableParameter(TunableParameter.ControlGroup, "penaltyLoft", "fraction", 0, 0.5),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -315,6 +318,9 @@ namespace Eleven.Simulation
             "keeperThrowRange" => KeeperThrowRange,
             "keeperOpenDistance" => KeeperOpenDistance,
             "humanChallengeLeeway" => HumanChallengeLeeway,
+            "penaltyInside" => PenaltyInside,
+            "penaltyPower" => PenaltyPower,
+            "penaltyLoft" => PenaltyLoft,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -383,6 +389,7 @@ namespace Eleven.Simulation
             double switchCarrySeconds = SwitchCarrySeconds;
             double keeperHoldSeconds = KeeperHoldSeconds, keeperThrowRange = KeeperThrowRange, keeperOpenDistance = KeeperOpenDistance;
             double humanChallengeLeeway = HumanChallengeLeeway;
+            double penaltyInside = PenaltyInside, penaltyPower = PenaltyPower, penaltyLoft = PenaltyLoft;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -497,6 +504,9 @@ namespace Eleven.Simulation
                     case "keeperThrowRange": keeperThrowRange = o.Value; break;
                     case "keeperOpenDistance": keeperOpenDistance = o.Value; break;
                     case "humanChallengeLeeway": humanChallengeLeeway = o.Value; break;
+                    case "penaltyInside": penaltyInside = o.Value; break;
+                    case "penaltyPower": penaltyPower = o.Value; break;
+                    case "penaltyLoft": penaltyLoft = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -641,7 +651,10 @@ namespace Eleven.Simulation
                 keeperHoldSeconds: keeperHoldSeconds,
                 keeperThrowRange: keeperThrowRange,
                 keeperOpenDistance: keeperOpenDistance,
-                humanChallengeLeeway: humanChallengeLeeway);
+                humanChallengeLeeway: humanChallengeLeeway,
+                penaltyInside: penaltyInside,
+                penaltyPower: penaltyPower,
+                penaltyLoft: penaltyLoft);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -769,7 +782,10 @@ namespace Eleven.Simulation
             keeperHoldSeconds: KeeperHoldSeconds,
             keeperThrowRange: KeeperThrowRange,
             keeperOpenDistance: KeeperOpenDistance,
-            humanChallengeLeeway: HumanChallengeLeeway);
+            humanChallengeLeeway: HumanChallengeLeeway,
+            penaltyInside: PenaltyInside,
+            penaltyPower: PenaltyPower,
+            penaltyLoft: PenaltyLoft);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

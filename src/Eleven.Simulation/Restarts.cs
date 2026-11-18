@@ -806,9 +806,10 @@ namespace Eleven.Simulation
                 case RestartKind.Corner: return new KickIntent(new Vec2((r.Point.X < 0 ? -1 : 1) * (config.GoalLineX - 11), 0) - r.Point, 0.6, 0.5);
                 case RestartKind.Penalty:
                 {
-                    // Low and hard into a corner; the side the seed's taker favours by his id.
-                    double corner = (taker.Id % 2 == 0 ? 1 : -1) * (config.GoalWidth / 2 - 0.6);
-                    return new KickIntent(new Vec2(sign * config.GoalLineX, corner) - r.Point, 0.9, 0.04);
+                    // Into a corner, penaltyInside inside the post, at penaltyPower and penaltyLoft (#122);
+                    // the side the seed's taker favours by his id.
+                    double corner = (taker.Id % 2 == 0 ? 1 : -1) * (config.GoalWidth / 2 - config.PenaltyInside);
+                    return new KickIntent(new Vec2(sign * config.GoalLineX, corner) - r.Point, config.PenaltyPower, config.PenaltyLoft);
                 }
 
                 case RestartKind.IndirectFreeKick:
