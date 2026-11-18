@@ -46,7 +46,23 @@ Judged after the ball's step and the goal line, only while the ball is live:
 
 ## Keepers distribute
 
-In a match, a keeper who holds the ball kicks it out after 1.2 s: an ordinary kick from his hands, up the pitch toward the side he is on. Without this a caught ball stopped a match. In practice he holds it, as before (#69).
+In a match, a keeper who holds the ball for `keeperHoldSeconds` (1.2 s) gives it away (#134). Without this a caught ball stopped a match. In practice he holds it, as before (#69).
+
+He sees the pitch through `KeeperObservation.Others`, in his own frame, and decides:
+
+1. **Short.** He looks at each teammate (keepers aside) from 3 m to `keeperThrowRange` (30 m) away. A teammate is open when no opponent is within `keeperOpenDistance` (6 m) of him, and none is within half of that of the line from the keeper to him. He rolls it to the most open (the nearer on a tie) on the ground, at the quick pass's own weight: `BallFlight.PassSpeed`, the formula the simulation weights its passes with (INV-13).
+2. **Long.** With nobody open, he kicks it in the air (strength 0.6, loft 0.35) toward his furthest-forward teammate.
+3. With no teammate at all, he kicks up the pitch toward the side he is on, as before.
+
+Erik's playtest found he "just passes to the opponent": the blind kick up the pitch reached his own side on 41 of 63 releases at 5 and 10 a side over four seeds. With the distribution, 30 of 37 do (14 of 18 at 5 a side, 16 of 19 at 10). There are fewer releases because the matches play differently after his first catch. `KeeperDistributionTests` requires three quarters, and the release uses no randomness.
+
+| Knob | Range | Default |
+| --- | --- | --- |
+| `keeperHoldSeconds` | 0.2–6 s | 1.2 s |
+| `keeperThrowRange` | 5–60 m | 30 m |
+| `keeperOpenDistance` | 1–20 m | 6 m |
+
+These are technical references, not tuned feel.
 
 ## Measured
 
@@ -54,13 +70,14 @@ In a match, a keeper who holds the ball kicks it out after 1.2 s: an ordinary ki
 
 | | Total |
 | --- | --- |
-| Goals | 41 |
-| Kick-offs | 41, one per goal |
-| Throw-ins | 9 |
-| Goal kicks | 14 |
-| Corners | 30 |
+| Goals | 39 |
+| Kick-offs | 39, one per goal |
+| Throw-ins | 14 |
+| Goal kicks | 10 |
+| Corners | 32 |
+| Penalties | 4 |
 | Dead ball, award to taken | 1.02 s each time: the stop, the set-up's wait, and the kick's wind-up |
-| Longest stretch with the ball live and no one on it | 6.0 s |
+| Longest stretch with the ball live and no one on it | 8.8 s |
 
 No match stalled. CPU takers take at once, so every dead ball lasts the same.
 

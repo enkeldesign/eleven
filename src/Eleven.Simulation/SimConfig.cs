@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 30;
+        public const int FormatVersion = 31;
 
         public SimConfig(
             int tickRate = 60,
@@ -146,7 +146,10 @@ namespace Eleven.Simulation
             double cpuChaseMargin = 1,
             double cpuProtectFrom = 0.67,
             double cpuTacticSpread = 0.05,
-            double switchCarrySeconds = 1)
+            double switchCarrySeconds = 1,
+            double keeperHoldSeconds = 1.2,
+            double keeperThrowRange = 30,
+            double keeperOpenDistance = 6)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -272,6 +275,9 @@ namespace Eleven.Simulation
             CpuProtectFrom = cpuProtectFrom;
             CpuTacticSpread = cpuTacticSpread;
             SwitchCarrySeconds = switchCarrySeconds;
+            KeeperHoldSeconds = keeperHoldSeconds;
+            KeeperThrowRange = keeperThrowRange;
+            KeeperOpenDistance = keeperOpenDistance;
 
             CheckTunableRanges();
 
@@ -763,6 +769,15 @@ namespace Eleven.Simulation
         /// <summary>s. After a switch, how long a neutral stick keeps the footballer taken over on his run (#138); 0 stops him, as before.</summary>
         public double SwitchCarrySeconds { get; }
 
+        /// <summary>s. How long a keeper holds a caught ball in a match before he distributes it (#85, #134).</summary>
+        public double KeeperHoldSeconds { get; }
+
+        /// <summary>m. How far a keeper looks for a teammate to roll or throw the ball to (#134).</summary>
+        public double KeeperThrowRange { get; }
+
+        /// <summary>m. How clear of opponents a teammate must be, and his line from the keeper half of it, for the keeper to give him the ball short (#134).</summary>
+        public double KeeperOpenDistance { get; }
+
         /// <summary>Steps of a switched footballer's carry (#138): switchCarrySeconds at the tick rate.</summary>
         public int SwitchCarryTicks => (int)Math.Round(SwitchCarrySeconds * TickRate);
 
@@ -948,7 +963,10 @@ namespace Eleven.Simulation
                 cpuChaseMargin: r.ReadDouble(nameof(CpuChaseMargin)),
                 cpuProtectFrom: r.ReadDouble(nameof(CpuProtectFrom)),
                 cpuTacticSpread: r.ReadDouble(nameof(CpuTacticSpread)),
-                switchCarrySeconds: r.ReadDouble(nameof(SwitchCarrySeconds)));
+                switchCarrySeconds: r.ReadDouble(nameof(SwitchCarrySeconds)),
+                keeperHoldSeconds: r.ReadDouble(nameof(KeeperHoldSeconds)),
+                keeperThrowRange: r.ReadDouble(nameof(KeeperThrowRange)),
+                keeperOpenDistance: r.ReadDouble(nameof(KeeperOpenDistance)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1079,6 +1097,9 @@ namespace Eleven.Simulation
             w.WriteDouble(CpuProtectFrom, nameof(CpuProtectFrom));
             w.WriteDouble(CpuTacticSpread, nameof(CpuTacticSpread));
             w.WriteDouble(SwitchCarrySeconds, nameof(SwitchCarrySeconds));
+            w.WriteDouble(KeeperHoldSeconds, nameof(KeeperHoldSeconds));
+            w.WriteDouble(KeeperThrowRange, nameof(KeeperThrowRange));
+            w.WriteDouble(KeeperOpenDistance, nameof(KeeperOpenDistance));
             return w.ToArray();
         }
 

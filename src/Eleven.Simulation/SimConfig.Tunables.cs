@@ -188,6 +188,9 @@ namespace Eleven.Simulation
             new TunableParameter(TunableParameter.ControlGroup, "cpuProtectFrom", "fraction", 0, 1),
             new TunableParameter(TunableParameter.ControlGroup, "cpuTacticSpread", "fraction", 0, 0.25),
             new TunableParameter(TunableParameter.ControlGroup, "switchCarrySeconds", "s", 0, 3),
+            new TunableParameter(TunableParameter.ControlGroup, "keeperHoldSeconds", "s", 0.2, 6),
+            new TunableParameter(TunableParameter.ControlGroup, "keeperThrowRange", "m", 5, 60),
+            new TunableParameter(TunableParameter.ControlGroup, "keeperOpenDistance", "m", 1, 20),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadSlow", "m", 0.2, 1.5, 0.4, 0.7),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedLeadFast", "m", 0.3, 2, 0.7, 1.1),
             new TunableParameter(TunableParameter.AttachedGroup, "attachedAcceleration", "m/s²", 1, 60, 8, 30),
@@ -307,6 +310,9 @@ namespace Eleven.Simulation
             "cpuProtectFrom" => CpuProtectFrom,
             "cpuTacticSpread" => CpuTacticSpread,
             "switchCarrySeconds" => SwitchCarrySeconds,
+            "keeperHoldSeconds" => KeeperHoldSeconds,
+            "keeperThrowRange" => KeeperThrowRange,
+            "keeperOpenDistance" => KeeperOpenDistance,
             "attachedLeadSlow" => AttachedLeadSlow,
             "attachedLeadFast" => AttachedLeadFast,
             "attachedAcceleration" => AttachedAcceleration,
@@ -373,6 +379,7 @@ namespace Eleven.Simulation
             double planSwitchAt = PlanSwitchAt, planSettleSeconds = PlanSettleSeconds, planSwitchCooldown = PlanSwitchCooldown;
             double cpuTactics = CpuTactics, cpuChaseFrom = CpuChaseFrom, cpuChaseMargin = CpuChaseMargin, cpuProtectFrom = CpuProtectFrom, cpuTacticSpread = CpuTacticSpread;
             double switchCarrySeconds = SwitchCarrySeconds;
+            double keeperHoldSeconds = KeeperHoldSeconds, keeperThrowRange = KeeperThrowRange, keeperOpenDistance = KeeperOpenDistance;
             double attachedLeadSlow = AttachedLeadSlow, attachedLeadFast = AttachedLeadFast;
             double attachedAcceleration = AttachedAcceleration, attachedSpeedCap = AttachedSpeedCap;
             double attachedDeadband = AttachedDeadband, attachedReleaseReach = AttachedReleaseReach;
@@ -483,6 +490,9 @@ namespace Eleven.Simulation
                     case "cpuProtectFrom": cpuProtectFrom = o.Value; break;
                     case "cpuTacticSpread": cpuTacticSpread = o.Value; break;
                     case "switchCarrySeconds": switchCarrySeconds = o.Value; break;
+                    case "keeperHoldSeconds": keeperHoldSeconds = o.Value; break;
+                    case "keeperThrowRange": keeperThrowRange = o.Value; break;
+                    case "keeperOpenDistance": keeperOpenDistance = o.Value; break;
                     case "attachedLeadSlow": attachedLeadSlow = o.Value; break;
                     case "attachedLeadFast": attachedLeadFast = o.Value; break;
                     case "attachedAcceleration": attachedAcceleration = o.Value; break;
@@ -623,7 +633,10 @@ namespace Eleven.Simulation
                 cpuChaseMargin: cpuChaseMargin,
                 cpuProtectFrom: cpuProtectFrom,
                 cpuTacticSpread: cpuTacticSpread,
-                switchCarrySeconds: switchCarrySeconds);
+                switchCarrySeconds: switchCarrySeconds,
+                keeperHoldSeconds: keeperHoldSeconds,
+                keeperThrowRange: keeperThrowRange,
+                keeperOpenDistance: keeperOpenDistance);
         }
 
         /// <summary>This config under another ball control model (#59, #60), every other value kept.</summary>
@@ -747,7 +760,10 @@ namespace Eleven.Simulation
             cpuChaseMargin: CpuChaseMargin,
             cpuProtectFrom: CpuProtectFrom,
             cpuTacticSpread: CpuTacticSpread,
-            switchCarrySeconds: SwitchCarrySeconds);
+            switchCarrySeconds: SwitchCarrySeconds,
+            keeperHoldSeconds: KeeperHoldSeconds,
+            keeperThrowRange: KeeperThrowRange,
+            keeperOpenDistance: KeeperOpenDistance);
 
         // NaN passes these comparisons on purpose: the encoding refuses non-finite values with its
         // own error, as it always has.

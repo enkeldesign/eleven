@@ -334,18 +334,18 @@ namespace Eleven.Simulation.Tests
 
             // Away's keeper, at +x, sees the world as it is. Home's, at −x, sees it turned: his
             // own goal at +x, as every keeper's is to him.
-            KeeperObservation away = Perception.OfKeeper(s, 1);
+            KeeperObservation away = Perception.OfKeeper(s, 1, C);
             Assert.Equal(s.Ball.Position, away.BallPosition);
             Assert.Equal(s.Players[3].Position, away.Position);
 
-            KeeperObservation home = Perception.OfKeeper(s, 0);
+            KeeperObservation home = Perception.OfKeeper(s, 0, C);
             Assert.Equal(new Vec3(30, -4, 1.2), home.BallPosition);
             Assert.Equal(new Vec3(18, -1, 2), home.BallVelocity);
             Assert.Equal(new Vec3(-1, -2, 3), home.BallSpin);
             Assert.Equal(new Vec2(C.GoalLineX - OneVOne.KeeperStandOff, 0), home.Position);
 
             // The same observation as the +x keeper's of the turned world.
-            KeeperObservation turned = Perception.OfKeeper(Turned(s), 0);
+            KeeperObservation turned = Perception.OfKeeper(Turned(s), 0, C);
             Assert.Equal(turned.BallPosition, home.BallPosition);
             Assert.Equal(turned.Position, home.Position);
         }

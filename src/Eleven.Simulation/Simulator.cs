@@ -791,11 +791,14 @@ namespace Eleven.Simulation
         /// run along the pass by passArrivalSpeed, so a runner can take it in stride and a standing
         /// receiver gets passArrivalSpeed.
         /// </summary>
-        private double PassSpeed(double distance, double run)
-        {
-            double arrival = Config.PassArrivalSpeed + run;
-            return SimMath.Sqrt(arrival * arrival + 2 * Config.RollingFriction * Config.Gravity * distance);
-        }
+        private double PassSpeed(double distance, double run) => PassSpeedFor(Config, distance, run);
+
+        /// <summary>
+        /// m/s. The speed a ground pass leaves the foot at to reach <paramref name="distance"/> at
+        /// passArrivalSpeed plus the receiver's <paramref name="run"/> along it: the quick pass's
+        /// own weighting, for an AI to use (INV-13).
+        /// </summary>
+        public static double PassSpeedFor(SimConfig config, double distance, double run = 0) => BallFlight.PassSpeed(config, distance, run);
 
         // m/s. How fast a run read as `read` goes along the pass `line` of `length`; never negative.
         private static double RunAlong(Vec2 read, Vec2 line, double length) =>

@@ -9,6 +9,17 @@ namespace Eleven.Simulation
     /// </summary>
     public static class BallFlight
     {
+        /// <summary>
+        /// m/s. The ground pass's weight over <paramref name="distance"/>: the launch speed that rolls
+        /// it there at passArrivalSpeed plus <paramref name="run"/>, under the simulation's rolling
+        /// friction. The simulation weights its passes with it, and the keeper his (#134).
+        /// </summary>
+        public static double PassSpeed(SimConfig config, double distance, double run = 0)
+        {
+            double arrival = config.PassArrivalSpeed + run;
+            return Maths.SimMath.Sqrt(arrival * arrival + 2 * config.RollingFriction * config.Gravity * distance);
+        }
+
         /// <summary>One step of a ball no player touches. Returns whether it bounced, and the parts of the frame it hit.</summary>
         internal static bool Advance(ref BallState ball, SimConfig config, out FramePart first, out FramePart second, bool bothGoals = false)
         {

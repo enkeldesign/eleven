@@ -78,5 +78,5 @@ Under the bench's config (`SpikeScenario.Config()`), reference keeper. Every goa
 
 ## Known limits
 
-- **A quick pass may pick the side's own keeper,** who is a teammate. He catches it and holds it. Keeper distribution comes with the restart sequencer.
+- **A quick pass may pick the side's own keeper,** who is a teammate. He catches it and holds it. In a match he then distributes it ([restarts.md](restarts.md#keepers-distribute)).
 - **The view, the host and the CPU outfielder** are later steps of M1.

@@ -31,7 +31,9 @@ namespace Eleven.Simulation.Tests
         [Fact]
         public void His_observation_carries_no_command_and_no_state()
         {
-            var allowed = new[] { typeof(long), typeof(int), typeof(double), typeof(bool), typeof(Vec2), typeof(Vec3), typeof(KeeperPhase), typeof(KeeperCapabilities) };
+            // The other footballers (#134) are SeenPlayer, the outfield observation's own, which CpuTests holds to the same rule.
+            var allowed = new[] { typeof(long), typeof(int), typeof(double), typeof(bool), typeof(Vec2), typeof(Vec3), typeof(KeeperPhase), typeof(KeeperCapabilities),
+                typeof(System.Collections.Generic.IReadOnlyList<SeenPlayer>) };
             foreach (var property in typeof(KeeperObservation).GetProperties())
             {
                 Assert.Contains(property.PropertyType, allowed);
