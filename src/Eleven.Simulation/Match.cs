@@ -320,7 +320,11 @@ namespace Eleven.Simulation
         private int _inPossession = -1;
         private int _shooter = -1, _passer = -1;
         private double _shotChance;
-        private bool _penalty;
+
+        // The side whose shot from the last touch is already counted, and whether on target: a ball
+        // that crosses the line or comes off the frame and then scores is that one shot, on target.
+        private int _counted = -1;
+        private bool _countedOnTarget;
 
         // The side that last touched the ball, and a shot's chance from there: a goal scored off a
         // touch, not a kick, is a shot too.
@@ -354,28 +358,34 @@ namespace Eleven.Simulation
         private void Measure(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
         {
             if (after.Teams.Length < 2 || !InPlay(after)) return;
+
+            // A penalty's kick is raised before the restart that says it was a penalty, in its step.
+            bool penalty = false;
+            foreach (SimEvent e in events) penalty |= e.Kind == SimEventKind.RestartTaken && e.Other == (int)RestartKind.Penalty;
             foreach (SimEvent e in events)
             {
                 int side = SideOf(after, e.Subject);
                 switch (e.Kind)
                 {
-                    case SimEventKind.RestartTaken:
-                        _penalty = e.Other == (int)RestartKind.Penalty;
-                        break;
                     case SimEventKind.Kicked:
                     case SimEventKind.Headed:
                     case SimEventKind.Volleyed:
                         if (side < 0) break;
                         _shooter = side;
                         double goalX = after.Teams[side].AttackSign * config.GoalLineX;
-                        _shotChance = _penalty ? _model.Penalty : _model.Chance(after.Ball.Position.Horizontal, goalX, config.GoalWidth);
-                        _penalty = false;
+                        _shotChance = penalty && e.Kind == SimEventKind.Kicked ? _model.Penalty : _model.Chance(after.Ball.Position.Horizontal, goalX, config.GoalWidth);
                         break;
                     case SimEventKind.Goal:
                     case SimEventKind.HitFrame:
                     case SimEventKind.GoalLineCrossed:
                         if (_shooter >= 0 && after.Teams[_shooter].AttackSign * after.Ball.Position.X > 0) Shot(e.Kind == SimEventKind.Goal);
-                        else if (e.Kind == SimEventKind.Goal && _toucher >= 0 && after.Teams[_toucher].Id == e.Other)
+                        else if (e.Kind == SimEventKind.Goal && _counted >= 0 && after.Teams[_counted].Id == e.Other)
+                        {
+                            // The shot already counted from this touch went in: on target, not a second shot.
+                            if (!_countedOnTarget) _onTarget[_counted]++;
+                            _countedOnTarget = true;
+                        }
+                        else if (e.Kind == SimEventKind.Goal && _counted < 0 && _toucher >= 0 && after.Teams[_toucher].Id == e.Other)
                         {
                             // Scored off a touch: a shot on target from where it was touched. An own goal is none.
                             _shooter = _toucher;
@@ -402,6 +412,7 @@ namespace Eleven.Simulation
                 {
                     _toucher = side;
                     _touchChance = _model.Chance(after.Ball.Position.Horizontal, after.Teams[side].AttackSign * config.GoalLineX, config.GoalWidth);
+                    _counted = -1;
                 }
 
                 switch (e.Kind)
@@ -450,6 +461,8 @@ namespace Eleven.Simulation
             _shots[_shooter]++;
             _xg[_shooter] += _shotChance;
             if (onTarget) _onTarget[_shooter]++;
+            _counted = _shooter;
+            _countedOnTarget = onTarget;
         }
 
         // Whether the ball is in `side`'s own 60 % of the pitch, from its own goal line.
