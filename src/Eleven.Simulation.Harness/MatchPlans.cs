@@ -10,9 +10,9 @@ namespace Eleven.Simulation.Harness
     public static class MatchPlans
     {
         /// <summary>The plans, in their stored order: 1, 2 and 3 in a switch.</summary>
-        public static TeamTactic[] Plans => new TeamTactic[0];
+        public static TeamTactic[] Plans => new[] { TeamTactic.Reference(0), TacticTrials.HighPress, TacticTrials.LowBlock };
 
         /// <summary>Each plan's name, in the same order.</summary>
-        public static string[] Names => new string[0];
+        public static string[] Names => new[] { "Balanced", "High press", "Low block" };
     }
 }
