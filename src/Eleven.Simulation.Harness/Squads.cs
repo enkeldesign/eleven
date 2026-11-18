@@ -196,6 +196,12 @@ namespace Eleven.Simulation.Harness
         /// Counts a step of the seat's ball-winning (#135) from the simulation's reports: an attempt
         /// is a run of steps pressing within challengeRange. Returns whether one is under way.
         /// </summary>
+        /// <summary>
+        /// As <see cref="CountPress"/>, for <paramref name="seatPlayer"/>: the footballer the seat
+        /// owned during the step, before any switch at its end (Codex on #145).
+        /// </summary>
+        public bool CountPressOf(int seatPlayer, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, bool pressing, double challengeRange) => pressing;
+
         public bool CountPress(SimState s, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, int seatController, bool pressing, double challengeRange = double.PositiveInfinity)
         {
             int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == seatController);
