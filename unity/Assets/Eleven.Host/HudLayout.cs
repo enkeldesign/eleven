@@ -191,14 +191,18 @@ namespace Eleven.Host
             // side where allowed and the row holds both, otherwise SAVE CAPTURE above THIS FELT WRONG.
             float captureHeight = Mathf.Max(Mathf.Max(1.1f * Unit, needs.Target), Mathf.Max(needs.FeltWrong.y, needs.SaveCapture.y));
             float feltWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, needs.FeltWrong.x));
-            // The capture's place holds COPY CAPTURE and SAVE CAPTURE side by side (#137), each at least a target wide.
+            // The capture's place holds COPY CAPTURE and SAVE CAPTURE (#137), each at least a target
+            // wide with its label on one line: side by side where the row holds both, otherwise
+            // COPY above SAVE, each the place's width, and the place above THIS FELT WRONG.
             float copyGap = Padding * 0.5f;
             float eachSave = Mathf.Max(Mathf.Max(needs.Target, needs.SaveCapture.x), needs.CopyCapture.x);
-            float saveWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, 2 * eachSave + copyGap));
+            bool stackCopy = 2 * eachSave + copyGap > row;
+            float saveWidth = Mathf.Min(row, Mathf.Max(2.6f * Unit, stackCopy ? eachSave : 2 * eachSave + copyGap));
+            float placeHeight = stackCopy ? 2 * captureHeight + copyGap : captureHeight;
             var felt = new Rect(safe.xMax - Padding - feltWidth, KickCentre.y - KickRadius - Padding - captureHeight, feltWidth, captureHeight);
-            bool fitsRow = feltWidth + Padding + saveWidth <= row;
+            bool fitsRow = !stackCopy && feltWidth + Padding + saveWidth <= row;
             Rect saveBeside = new Rect(felt.x - Padding - saveWidth, felt.y, saveWidth, captureHeight);
-            Rect saveAbove = new Rect(safe.xMax - Padding - saveWidth, felt.y - Padding * 0.5f - captureHeight, saveWidth, captureHeight);
+            Rect saveAbove = new Rect(safe.xMax - Padding - saveWidth, felt.y - Padding * 0.5f - placeHeight, saveWidth, placeHeight);
 
             // Two candidates for the uncovered play area: the full-width band between the top HUD
             // and the controls (suits portrait), or the column between the stick and the kick
@@ -244,9 +248,17 @@ namespace Eleven.Host
             if (PlayArea.width <= 0 || PlayArea.height <= 0) PlayArea = safe;
             FeltWrongButton = felt;
             Rect capturePlace = useBand ? bandSave : saveAbove;
-            float half = (capturePlace.width - copyGap) * 0.5f;
-            CopyCaptureButton = new Rect(capturePlace.x, capturePlace.y, half, capturePlace.height);
-            SaveCaptureButton = new Rect(capturePlace.xMax - half, capturePlace.y, half, capturePlace.height);
+            if (stackCopy)
+            {
+                CopyCaptureButton = new Rect(capturePlace.x, capturePlace.y, capturePlace.width, captureHeight);
+                SaveCaptureButton = new Rect(capturePlace.x, capturePlace.yMax - captureHeight, capturePlace.width, captureHeight);
+            }
+            else
+            {
+                float half = (capturePlace.width - copyGap) * 0.5f;
+                CopyCaptureButton = new Rect(capturePlace.x, capturePlace.y, half, capturePlace.height);
+                SaveCaptureButton = new Rect(capturePlace.xMax - half, capturePlace.y, half, capturePlace.height);
+            }
             SwitchButton = useBand ? switchBand : switchColumn;
             SubsButton = useBand ? subsBand : subsColumn;
 
@@ -259,6 +271,7 @@ namespace Eleven.Host
                 float zoneRight = safe.xMin + safe.width * 0.5f;
                 if (FeltWrongButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, FeltWrongButton.yMax + Padding * 0.5f);
                 if (SaveCaptureButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SaveCaptureButton.yMax + Padding * 0.5f);
+                if (CopyCaptureButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, CopyCaptureButton.yMax + Padding * 0.5f);
                 if (SwitchButton.width > 0 && SwitchButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SwitchButton.yMax + Padding * 0.5f);
                 if (SubsButton.width > 0 && SubsButton.xMin < zoneRight) zoneTop = Mathf.Max(zoneTop, SubsButton.yMax + Padding * 0.5f);
                 StickZone = new Rect(safe.xMin, zoneTop, safe.width * 0.5f, safe.yMax - zoneTop);
@@ -291,7 +304,7 @@ namespace Eleven.Host
                     Vector2 c = PassCentre + offset;
                     var box = new Rect(c.x - markerRadius, c.y - markerRadius, 2 * markerRadius, 2 * markerRadius);
                     bool inside = box.xMin >= ActionZone.xMin && box.xMax <= ActionZone.xMax && box.yMin >= ActionZone.yMin && box.yMax <= ActionZone.yMax;
-                    if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton) || (SwitchButton.width > 0 && box.Overlaps(SwitchButton)) || (SubsButton.width > 0 && box.Overlaps(SubsButton))) continue;
+                    if (!inside || box.Overlaps(FeltWrongButton) || box.Overlaps(SaveCaptureButton) || box.Overlaps(CopyCaptureButton) || (SwitchButton.width > 0 && box.Overlaps(SwitchButton)) || (SubsButton.width > 0 && box.Overlaps(SubsButton))) continue;
                     KickMarker = c;
                     KickMarkerRadius = markerRadius;
                     break;
