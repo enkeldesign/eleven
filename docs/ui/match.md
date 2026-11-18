@@ -28,6 +28,8 @@ Nothing here is approved feel, and none of it has been tried on a device.
 - **The human's restarts:** he takes them with a tap or a kick. If he doesn't, his restart is taken for him after a second (#85), so a match never waits for him.
 - **Everything else is as in practice:** the touch candidates, the ball control model, the bench and THIS FELT WRONG. The whole match is one recording, replayed in .NET's simulation at full time.
 
+**The keyboard** (#144): in the bench's Presets tab, Tab reaches the play switch's five segments (Practice, 1v1, 2v2, 5v5, 11v11) before the presets, as on screen. Enter on a segment starts that match, and Enter on Practice ends one. The desktop smoke pass checks the order, tabs through every segment, and starts and ends a 1v1 match from the keyboard.
+
 ## What the smoke test checks
 
 `match-phone` (390 × 664 pt at 1 px per pt, one-minute halves) plays a whole match with no input from the human:
