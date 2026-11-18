@@ -143,6 +143,18 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_kick_off_the_frame_and_saved_is_one_shot_on_target()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 16, 3), new SimEvent(1, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX, Hand.GoalWidth / 2), new SimEvent(2, SimEventKind.HitFrame, OneVOne.BallId));
+            Feed(r, s, new Vec2(Hand.GoalLineX - 1, 1), new SimEvent(3, SimEventKind.KeeperHeld, Squads.AwayKeeper(5)));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 1), (home.Shots, home.OnTarget));
+        }
+
+        [Fact]
         public void A_penalty_kick_takes_the_penalty_chance_and_the_rebound_after_it_does_not()
         {
             var r = new MatchRecorder();
