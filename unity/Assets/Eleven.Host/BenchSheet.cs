@@ -37,6 +37,7 @@ namespace Eleven.Host
         // How automatic switching is (#136), in SwitchMode's order.
         private static readonly string[] Switchings = { "Auto", "On the ball", "Manual" };
         private UiKit.Segmented _switchings;
+        private readonly VisualElement _switchingBlock = new VisualElement { name = "Switching" };
         private readonly Func<int> _switching;
         private readonly Action<int> _switchSwitching;
         private VisualElement _playBlock;
@@ -199,15 +200,16 @@ namespace Eleven.Host
             _plays.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
 
             // Switching players (#136): how automatic it is. It acts at once and the match goes on.
-            Label switchingLabel = UiKit.Text(_theme, TypeScale.Body,
-                "Switching players. Auto: to your pass's receiver, a teammate on the ball, and the first to it when it's lost. On the ball: your pass's receiver only. Manual: only on SWITCH.", Role.Text);
+            // At the end of the Presets tab, so nothing above the presets moves.
+            Label switchingLabel = UiKit.Text(_theme, TypeScale.Body, "Switching players. Switches now. On the ball: only to your pass's receiver, and on SWITCH. Manual: only on SWITCH.", Role.Text);
+            switchingLabel.style.marginTop = Spacing.M;
             switchingLabel.style.marginBottom = Spacing.Xs;
-            _playBlock.Add(switchingLabel);
+            _switchingBlock.Add(switchingLabel);
             _switchings = UiKit.MakeSegmented(ui, _theme, Switchings, 0, index => _switchSwitching(index));
             _switchings.Element.style.marginBottom = Spacing.M;
             _switchings.Element.style.flexShrink = 0;
-            _playBlock.Add(_switchings.Element);
-            _switchings.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
+            _switchingBlock.Add(_switchings.Element);
+            _switchings.Element.RegisterCallback<GeometryChangedEvent>(_ => Report());
 
             Label controlsLabel = UiKit.Text(_theme, TypeScale.Body, "Touch controls. Switches now; the run goes on.", Role.Text);
             controlsLabel.style.marginBottom = Spacing.Xs;
@@ -446,9 +448,9 @@ namespace Eleven.Host
             if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
             if (PresetsShown)
             {
-                // The switching mode (#136), above the presets, so a keyboard reaches it too.
-                foreach (UiKit.Raised switching in _switchings.Segments) order.Add(switching.Element);
+                // The presets, then the switching mode (#136) after them, as on screen.
                 order.AddRange(_presetStops);
+                foreach (UiKit.Raised switching in _switchings.Segments) order.Add(switching.Element);
             }
             foreach (BenchKnob knob in BenchCandidate.Knobs.Where(k => InGroup(k, _group)))
             {
@@ -502,7 +504,7 @@ namespace Eleven.Host
             if (!_trace || !Open || !PresetsShown) return;
             float s = _ui.PixelsPerPoint;
             string P(VisualElement e) => FormattableString.Invariant($"{e.worldBound.center.x * s:F0},{e.worldBound.center.y * s:F0}");
-            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)} match11={P(_plays.Segments[4].Element)} auto={P(_switchings.Segments[0].Element)} ball={P(_switchings.Segments[1].Element)} manual={P(_switchings.Segments[2].Element)}");
+            Log($"ELEVEN bench play practice={P(_plays.Segments[0].Element)} match={P(_plays.Segments[1].Element)} match2={P(_plays.Segments[2].Element)} match5={P(_plays.Segments[3].Element)} match11={P(_plays.Segments[4].Element)}");
         }
 
         // The Presets tab (#46): a name and Save, TECHNICAL REFERENCE, then each saved preset with
@@ -536,6 +538,8 @@ namespace Eleven.Host
                 unread.style.marginTop = Spacing.S;
                 _list.Add(unread);
             }
+
+            _list.Add(_switchingBlock);
         }
 
         // Whether a preset is what is running: its values, its ball control model and its touch candidate.
@@ -835,7 +839,7 @@ namespace Eleven.Host
                 if (PresetsShown)
                 {
                     Log(FormattableString.Invariant(
-                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces.Select(i => $"{i.Name}:{P(i.Load)}:{(i.Delete != null ? P(i.Delete) : "none")}"))} list={Box(_list.contentViewport)}"));
+                        $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces.Select(i => $"{i.Name}:{P(i.Load)}:{(i.Delete != null ? P(i.Delete) : "none")}"))} list={Box(_list.contentViewport)} switching=auto:{P(_switchings.Segments[0].Element)};ball:{P(_switchings.Segments[1].Element)};manual:{P(_switchings.Segments[2].Element)}"));
                 }
 
                 if (TouchShown)

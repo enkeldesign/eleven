@@ -198,7 +198,9 @@ function switchingMode(url) {
 // teammate SWITCH would take, and in auto a cue when control moves on its own. Returns a note.
 function switchingChecks(logs, check, url, fromM, side, whole) {
   const mode = switchingMode(url);
-  const lines = logs.slice(fromM);
+  // Set from the bench, the mode holds from its switching line on.
+  const setAt = logs.slice(fromM).map((l, i) => (/^ELEVEN match switching mode=/.test(l) ? i : -1)).filter((i) => i >= 0).pop();
+  const lines = logs.slice(fromM + (setAt ?? 0));
   const causes = lines.map((l) => /^ELEVEN match switch auto cause=(\w+) mode=(\w+)/.exec(l)).filter(Boolean);
   const by = {};
   for (const c of causes) by[c[1]] = (by[c[1]] ?? 0) + 1;
@@ -763,20 +765,38 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           const openLine = lastLog(/ELEVEN bench open .* tabs=(\S+) apply=/);
           if (openLine) await press(segments(openLine[1]).Presets, 2);
           const play = (await waitForLog(/ELEVEN bench play practice=(\S+) match=(\S+)(?: match2=(\S+))?(?: match5=(\S+))?(?: match11=(\S+))?/, 10_000, fromM))?.match ?? null;
-          // ?viabench=ball|manual: the bench's switching switch (#136) is pressed before the match starts.
-          const viaBench = /viabench=(ball|manual)/.exec(url)?.[1];
-          if (viaBench) {
-            const fromB = logs.length;
-            const where = lastLog(new RegExp(`ELEVEN bench play .* ${viaBench}=(\\S+)`));
-            if (where) await press(where[1], 2);
-            const set = (await waitForLog(/ELEVEN match switching mode=(\w+)/, 10_000, fromB))?.match ?? null;
-            check(`the bench's switching switch sets ${viaBench}`, !!set && set[1] === viaBench, set ? set[0].replace('ELEVEN ', '') : `no switching line${where ? '' : ' (no segment in the bench line)'}`);
-          }
           const segment = play ? play[side === 1 ? 2 : side === 2 ? 3 : side === 5 ? 4 : 5] : null;
           if (segment) await press(segment, 2);
           started = (await waitForLog(startedPattern, 10_000, fromM))?.match ?? null;
           check(`a ${side}v${side} match starts through the bench's play switch`, !!started && started[1] === 'bench' && (started[7] ?? '1') === String(side),
             started ? started[0].replace('ELEVEN ', '') : `no match started${openedM ? '' : ' (the bench did not open)'}; since: ${since(fromM)}`);
+
+          // ?viabench=ball|manual: the bench's switching switch (#136), at the end of the Presets tab,
+          // pressed while the bench holds the match. Scrolled into the list's view first, as a preset is.
+          const viaBench = /viabench=(ball|manual)/.exec(url)?.[1];
+          if (viaBench) {
+            const fromB = logs.length;
+            const pattern = /ELEVEN bench presets .* list=(\S+) switching=auto:(\S+);ball:(\S+);manual:(\S+)/;
+            const index = viaBench === 'ball' ? 3 : 4;
+            const nums = (v) => v.split(',').map(Number);
+            let line = lastLog(pattern);
+            for (let i = 0; i < 16 && line; i++) {
+              const [, y] = nums(line[index]);
+              const list = nums(line[1]);
+              if (y >= list[1] + 22 && y <= list[1] + list[3] - 22) break;
+              const centre = at(list[0] + list[2] / 2, list[1] + list[3] / 2);
+              await page.mouse.move(centre.x, centre.y);
+              const from = logs.length;
+              await page.mouse.wheel(0, y > list[1] + list[3] / 2 ? 120 : -120);
+              const next = (await waitForLog(pattern, 3_000, from))?.match ?? null;
+              if (!next) break;
+              line = next;
+            }
+            if (line) await press(line[index], 2);
+            const set = (await waitForLog(/ELEVEN match switching mode=(\w+)/, 10_000, fromB))?.match ?? null;
+            check(`the bench's switching switch sets ${viaBench}`, !!set && set[1] === viaBench,
+              set ? set[0].replace('ELEVEN ', '') : `no switching line (${line ? `${viaBench} at ${line[index]}, list ${line[1]}` : 'no switching places in the presets line'})`);
+          }
           await closeBench(openedM, 2);
         } else {
           check(`a ${side}v${side} match starts from the address`, !!started && started[1] === 'address' && (started[7] ?? '1') === String(side), started ? started[0].replace('ELEVEN ', '') : 'no match started');

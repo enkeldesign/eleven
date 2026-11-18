@@ -46,7 +46,7 @@ From Erik's session: "I don't understand the switch system." The rules above are
 | **On the ball** | The receiver of his own pass, and SWITCH's choice |
 | **Manual** | SWITCH's choice only |
 
-- **The bench's Presets tab** has the switch, under Play, and `?switching=auto|ball|manual` sets it from the address. It acts at once and the match goes on.
+- **The bench's Presets tab** has the switch, at its end, after the presets, and `?switching=auto|ball|manual` sets it from the address. It acts at once and the match goes on.
 - **Every mode is recorded commands,** as before (INV-10): the switcher still decides only the target in the human's command, so a replay needs no switcher, whatever the mode was.
 - **Each switch has a cause** (`SwitchController.LastCause`): pass, a teammate on the ball, a turnover, or asked.
 - **A faint marker** under a teammate shows who SWITCH would take now (`SwitchController.Next`), in every mode. It reads the state and changes nothing.
@@ -67,7 +67,7 @@ In auto, more than three quarters of the switches are turnovers, about 34 a matc
 
 ### The smoke
 
-- **On the ball:** the 2v2 match on a phone is started through the bench with its switching switch pressed. Over the whole match, no automatic switch other than to the human's pass's receiver is made.
+- **On the ball:** the 2v2 match on a phone is started through the bench, and its switching switch is pressed (scrolled to) while the bench holds the match. Over the whole match, no automatic switch other than to the human's pass's receiver is made.
 - **Manual:** `?mode=match2&switching=manual` plays 20 s with no automatic switch.
 - **Auto:** the whole 5v5 and 11v11 matches. Control moves on its own, and each automatic switch is cued.
 - **In every mode,** the trace's `switching=` gives the mode, and `next=id@x,y` the teammate SWITCH would take and his marker on screen. At least half of the match's trace lines show the marker.
