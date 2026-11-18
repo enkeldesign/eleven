@@ -154,11 +154,66 @@ namespace Eleven.Simulation.Tests
             Feed(r, s, new Vec2(Hand.GoalLineX - 0.5, 0), new SimEvent(2, SimEventKind.KeeperParried, Squads.AwayKeeper(5)));
 
             Vec2 rebound = new Vec2(Hand.GoalLineX - 6, 4);
-            Feed(r, s, rebound, new SimEvent(3, SimEventKind.Kicked, Striker));
+            Feed(r, s, rebound);
+            Feed(r, s, rebound + new Vec2(0.4, 0), new SimEvent(3, SimEventKind.Kicked, Striker));
             Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(4, SimEventKind.GoalLineCrossed, OneVOne.BallId), new SimEvent(4, SimEventKind.Goal, OneVOne.BallId, other: Squads.HomeTeam));
             SideMetrics home = Home(r, s);
             Assert.Equal(MetricsModel.Reference.Penalty + MetricsModel.Reference.Chance(rebound, Hand.GoalLineX, Hand.GoalWidth), home.Xg, 12);
             Assert.Equal((2, 2), (home.Shots, home.OnTarget));
+        }
+
+        [Fact]
+        public void A_shot_is_read_from_where_it_was_struck_not_where_the_ball_is_after_the_step()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Vec2 struck = new Vec2(Hand.GoalLineX - 20, 6);
+            Feed(r, s, struck);
+            Feed(r, s, struck + new Vec2(0.45, -0.1), new SimEvent(2, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX - 0.5, 0), new SimEvent(3, SimEventKind.KeeperHeld, Squads.AwayKeeper(5)));
+            Assert.Equal(MetricsModel.Reference.Chance(struck, Hand.GoalLineX, Hand.GoalWidth), Home(r, s).Xg, 12);
+        }
+
+        [Fact]
+        public void A_save_on_the_step_that_ends_the_half_is_counted()
+        {
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(Hand.GoalLineX - 12, 0), new SimEvent(1, SimEventKind.Kicked, Striker));
+            s.Match.Phase = MatchPhase.HalfTime;
+            Feed(r, s, new Vec2(Hand.GoalLineX - 0.5, 0), new SimEvent(2, SimEventKind.KeeperParried, Squads.AwayKeeper(5)), new SimEvent(2, SimEventKind.HalfTime, 0));
+
+            // And nothing in the break is.
+            Feed(r, s, new Vec2(0, 0), new SimEvent(3, SimEventKind.Kicked, Striker));
+            Feed(r, s, new Vec2(Hand.GoalLineX - 0.5, 0), new SimEvent(4, SimEventKind.KeeperParried, Squads.AwayKeeper(5)));
+            Assert.Equal((1, 1), (Home(r, s).Shots, r.Result!.HomeMetrics.OnTarget));
+        }
+
+        [Fact]
+        public void A_pass_met_by_a_teammates_first_time_kick_is_completed_and_one_met_by_an_opponents_is_not()
+        {
+            const int Mate = 2, Opponent = 7; // home's second outfielder; away's first at five a side
+            Vec2 at = new Vec2(-10, 0);
+
+            // The passer's own kick follows his pass's resolution; the teammate's first-time kick plays it.
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(3, SimEventKind.Kicked, Mate));
+            Feed(r, s, at + new Vec2(30, 0), new SimEvent(4, SimEventKind.RestartAwarded, Squads.AwayTeam, other: (int)RestartKind.ThrowIn));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 1), (home.Passes, home.PassesCompleted));
+
+            // Cleared first time by an opponent, then picked up by a teammate: not completed.
+            r = new MatchRecorder();
+            s = HandState();
+            Feed(r, s, at, new SimEvent(1, SimEventKind.QuickPassResolved, Striker, other: Mate));
+            Feed(r, s, at, new SimEvent(2, SimEventKind.Kicked, Striker));
+            Feed(r, s, at + new Vec2(10, 0), new SimEvent(3, SimEventKind.Kicked, Opponent));
+            Feed(r, s, at + new Vec2(15, 0), new SimEvent(4, SimEventKind.Touched, Mate));
+            home = Home(r, s);
+            Assert.Equal((1, 0), (home.Passes, home.PassesCompleted));
         }
 
         [Fact]
