@@ -21,6 +21,7 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 - **Rates**, for a match of reference halves (180 s), scaled by the half's length:
   - home λ = exp(μ + h + r_home − r_away);
   - away λ = exp(μ − (r_home − r_away)).
+  - **Bounded:** each rate is at most `QuickSim.MaxRate`, 30 goals a match, and its exponent lies within ±40. The calibrated rates are a few goals a match. With the fitted weight, though, valid sides at the capability extremes would extrapolate to tens of thousands. The bound keeps the sampler's maths in range for any valid sides (Codex's finding on #150, `QuickSimTests`).
 - **A side's rating** r = its CPU tier's rating (apprentice 0, club, pro, elite) + w × its capability index.
   - **The capability index** is the mean, over every capability, of its outfielders' difference from the reference as a share of the capability's range. Kick error counts the other way round, since less is better.
 - **The scoreline** is one draw against the Dixon–Coles grid, normalised.
