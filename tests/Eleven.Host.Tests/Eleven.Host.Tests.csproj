@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="../../unity/Assets/Eleven.Host/FramePacing.cs" Link="Host/FramePacing.cs" />
     <Compile Include="../../unity/Assets/Eleven.Host/ActionPoses.cs" Link="Host/ActionPoses.cs" />
+    <Compile Include="../../unity/Assets/Eleven.Host/CameraEase.cs" Link="Host/CameraEase.cs" />
   </ItemGroup>
 
   <!-- ActionPoses (#101) reads the simulation's state and names the presentation's poses. -->
