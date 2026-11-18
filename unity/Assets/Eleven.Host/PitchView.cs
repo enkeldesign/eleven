@@ -568,7 +568,7 @@ namespace Eleven.Host
             var attacked = new Vector3((float)_config.GoalLineX * _orientation.Up, 0, 0);
             var goal = new Vector3((float)_config.FrameAxisX, 0, 0);
             return System.FormattableString.Invariant(
-                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m ppm={_pixelsPerMetre:F2} zoomOut={Ease.OutSeconds:F2} zoomIn={Ease.InSeconds:F2} zoomHold={Ease.Hold:F2} pan={Ease.PanSeconds:F2} playerPx={PlayerDiameter * _pixelsPerMetre:F1} ballPx={_ballDiameter * _pixelsPerMetre:F1} maxview={_maxHalfExtent:F1}m");
+                $"orientation={_orientation} up={(_orientation.Up > 0 ? "+x" : "-x")} player={At(_player.localPosition)} attacked={At(attacked)} goal={At(goal)} posts={At(_leftPost.localPosition)};{At(_rightPost.localPosition)} ahead={_ahead:F1}m across={_across:F1}m ppm={_pixelsPerMetre:F2} playerPx={PlayerDiameter * _pixelsPerMetre:F1} ballPx={_ballDiameter * _pixelsPerMetre:F1} maxview={_maxHalfExtent:F1}m zoomOut={Ease.OutSeconds:F2} zoomIn={Ease.InSeconds:F2} zoomHold={Ease.Hold:F2} pan={Ease.PanSeconds:F2}");
         }
 
         /// <summary>

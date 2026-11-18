@@ -23,7 +23,7 @@ Issue #31. ELEVEN is laid out for a phone and a tablet in both orientations. Nei
 
 - **The widest view is a technical reference,** not approved feel: a 35 m view, about a third of the pitch's length, as Sensible Soccer shows.
 - **A ball further off than the widest view leaves the frame.** The footballer stays in it, with the margin, toward the edge the ball left by. Before #31 the view zoomed out without limit.
-- **The view line** (`ELEVEN view`, with `?trace`) gives the bounds in use: `ahead=`, `across=`, `ppm=` (pixels per metre), the easing's `zoomOut=`, `zoomIn=`, `zoomHold=` and `pan=`, `playerPx=`, `ballPx=` and `maxview=`.
+- **The view line** (`ELEVEN view`, with `?trace`) gives the bounds in use: `ahead=`, `across=`, `ppm=` (pixels per metre), `playerPx=`, `ballPx=` and `maxview=`, then the easing's `zoomOut=`, `zoomIn=`, `zoomHold=` and `pan=`. The smoke test reads the first ones in that order.
 
 ### The easing (#139)
 
