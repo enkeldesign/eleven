@@ -39,37 +39,57 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 
 ### The reference
 
-`QuickSimModel.Reference`, the fit to the calibration sample:
+`QuickSimModel.Reference`, the fit to the calibration sample, with each parameter's standard error:
 
-| Parameter | Value |
-| --- | --- |
-| μ (log goals a side, sides level) | 0.439635 |
-| h (home) | −0.319634 |
-| Tier ratings: apprentice, club, pro, elite | 0, 0.157840, 0.341332, 1.013932 |
-| w (capability index) | 10.929432 |
-| ρ | −0.134 |
-| Fouls, cautions, sendings-off a side | 2.525, 0.608, 0.083 |
+| Parameter | Value | Standard error |
+| --- | --- | --- |
+| μ (log goals a side, sides level) | 0.129508 | 0.041 |
+| h (home) | 0.025385 | 0.052 |
+| Tier ratings: apprentice, club, pro, elite | 0, 0.234696, 0.260399, 0.724482 | 0, 0.050, 0.050, 0.051 |
+| w (capability index) | 9.042838 | 0.478 |
+| ρ | −0.031 | 0.065 |
+| Fouls, cautions, sendings-off a side | 1.846, 0.440, 0.077 | |
 
 **What the fit reads from the full simulation:**
-- **The tiers rise with the tier,** and the elite side is well clear of all. Each tier has its own rating rather than one slope.
-- **The sample is small for these parameters.** #129's fit, before #118, had home at +0.18, w at −2.08 and ρ at +0.199. After #118 changed the CPU's runs, the refit to a fresh sample of the same size has home at −0.32, w at 10.9 and ρ at −0.134. Some of that is the football; most of it is the noise of 60 matches.
-  - **Home's advantage:** its sign flips between two samples, so it isn't resolved.
-  - **The capability weight:** only two sides differ from the reference in capabilities, so w is barely identified.
-  - **The comparison:** each fit still matches its own sample within the stated tolerances.
-  - **What's next:** growing the sample is a follow-up for M6, which leans on the quick-sim.
+- **No home advantage:**
+  - h is within one standard error of 0.
+  - That is what a simulation that treats both sides alike implies: home only kicks off first.
+  - The two 60-match fits before #151 had h at +0.18 ± 0.15 and −0.32 ± 0.15: noise.
+- **The tiers:**
+  - The apprentice tier is clearly below the rest, and the elite tier clearly above.
+  - Club (0.235 ± 0.050) and pro (0.260 ± 0.050) play alike: their ratings overlap.
+  - The order of those two isn't resolved, and a bigger sample won't separate tiers that play the same. Telling them apart is M7's tuning of the CPU tiers.
+- **Capabilities matter:**
+  - A side at +0.05 on the capability index rates 0.45 higher: about 1.6 times the goals against a level side.
+  - w is resolved to ± 5 %, now that tier and capabilities vary independently.
+  - Before #151 it rested on two sides (−2.1 ± 3.7, then 10.9 ± 3.7).
+- **ρ is within one standard error of 0:** the full simulation's low scores are about as independent Poisson goals give.
 
 These are measures of the game as it is, kept as they are. Tuning the CPU tiers is M7's.
 
 ## Calibration
 
-**The sample:** `eleven-sim quicksim <dir>` plays the full simulation over M3's six sides, each ordered pair twice on fixed seeds: 60 matches, in parallel. They are written in the gate's CSV form. `quicksim-calibration-reference.csv` is the record, diffed in CI.
+**The calibration league** (#151): twelve invented sides, each CPU tier at three capability levels, −0.05, 0 and +0.05 on the capability index.
+- **How a level is set:** every capability is moved by that share of its range (kick error the other way) and held within the range. For example, ±0.7 m/s of top speed and ±0.05 on each fraction; kick power is already at its maximum.
+- **Why:** tier and capabilities vary independently, so the fit can tell them apart.
+
+**The sample:** `eleven-sim quicksim <dir> [rounds] [first]` plays the full simulation over the league, in parallel.
+- **Rounds:** each round is every ordered pair once, on fixed seeds. Four rounds make 528 matches, about 28 minutes on four cores.
+- **The record:** the matches are written in the gate's CSV form, and `quicksim-calibration-reference.csv` is the record.
+- **CI's budget:** CI plays the first 60 fixtures (`quicksim quicksim 4 60`, about three minutes) and diffs them against the reference's first 60 rows.
+  - The fixtures go round by round, so the prefix spreads over the pairs.
+  - A change to the football moves every match, so the prefix shows any drift.
+  - The whole sample is regenerated, and the reference refitted, with the baselines.
 
 **The fit:** `eleven-sim quicksim fit <csv>` refits the reference:
 - μ, h, the tier ratings and w by Poisson maximum likelihood, with Newton's method on a concave likelihood;
 - ρ by the Dixon–Coles likelihood over those rates, on a grid of 0.001;
 - the foul and card means.
 
-It also prints the comparison. `QuickSimTests` checks that the reference equals the fit.
+It prints each parameter with its standard error and the comparison.
+- **μ, h, the tier ratings and w:** the standard errors come from the inverse of the Poisson likelihood's Hessian at the fit.
+- **ρ:** its standard error comes from its log-likelihood's curvature.
+- **The checks:** `QuickSimTests` checks that the reference equals the fit. It also checks that the errors cover a model the quick-sim draws from, and halve at four times the sample.
 
 **The comparison** (`QuickSimTests`): the quick-sim is drawn 50 times over each of the sample's fixtures.
 
@@ -78,16 +98,18 @@ It also prints the comparison. `QuickSimTests` checks that the reference equals 
 | Home goals, away goals, cautions and fouls a match | Mean against the sample's | Within 2 standard errors of the sample's mean |
 | Win/draw/loss | Two-sample χ² | At 1 % (9.21, 2 df) |
 | Goals a match, in bins 0 to 6+ | Two-sample χ² | At 1 % (16.81, 6 df) |
-| Each side's goal difference a match | Mean against the sample's | Within 3 standard errors of the sample's, 20 matches a side |
+| Each side's goal difference a match | Mean against the sample's | Within 3 standard errors of the sample's, 88 matches a side |
 
-At the reference, against the full simulation's 60 matches:
+At the reference, against the full simulation's 528 matches:
 
-| | Full simulation | Quick-sim (3,000) |
+| | Full simulation | Quick-sim (26,400) |
 | --- | --- | --- |
-| Home goals | 1.28 | 1.30 |
-| Away goals | 1.77 | 1.76 |
-| Home wins | 33 % | 31 % |
-| Draws | 22 % | 23 % |
-| Cautions a match | 1.22 | 1.23 |
+| Home goals | 1.44 | 1.44 |
+| Away goals | 1.40 | 1.41 |
+| Home wins | 41 % | 41 % |
+| Draws | 20 % | 20 % |
+| Cautions a match | 0.88 | 0.88 |
 
-**The sample's limits:** 60 matches resolve means and the gross shape, not fine scoreline structure. M6, which uses it at scale, can grow the sample: CI plays it on four cores in about four minutes.
+**The sample's limits:**
+- 528 matches resolve h, w and the tiers' ratings to about ± 0.05 on the log scale. They don't resolve scorers, minutes or fine scoreline structure, which the model doesn't have (ADR 0004).
+- A league of different sides would rate differently. M6's sides should fall inside the calibration league's tiers and capability levels, where the fit has data.

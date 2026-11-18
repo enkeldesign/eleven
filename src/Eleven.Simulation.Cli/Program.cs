@@ -208,12 +208,14 @@ internal static class Program
 
             case "quicksim" when args.Length >= 3 && args[1] == "fit":
             {
-                // #129: the quick-sim's reference refitted from a calibration sample, and its comparison.
-                IReadOnlyList<LeagueSide> fitSides = League.Sides();
+                // #129: the quick-sim's reference refitted from a calibration sample, and its comparison;
+                // #151: each parameter with its standard error.
+                IReadOnlyList<LeagueSide> fitSides = QuickSimCalibration.Sides();
                 List<CalibrationMatch> fitSample = QuickSimCalibration.Read(File.ReadAllLines(args[2]), fitSides);
-                QuickSimModel fit = QuickSimFit.Fit(fitSample, fitSides);
+                QuickSimFitResult fitted = QuickSimFit.FitWithErrors(fitSample, fitSides);
+                QuickSimModel fit = fitted.Model;
                 Console.WriteLine(FormattableString.Invariant(
-                    $"fit over {fitSample.Count} matches: mu {fit.BaseRate:F6}, home {fit.Home:F6}, tiers 0 {fit.TierRating(1):F6} {fit.TierRating(2):F6} {fit.TierRating(3):F6}, capabilities {fit.CapabilityWeight:F6}, rho {fit.Rho:F3}, fouls {fit.FoulsPerSide:R}, cautions {fit.CautionsPerSide:R}, sendings-off {fit.SendingsOffPerSide:R} a side"));
+                    $"fit over {fitSample.Count} matches: mu {fit.BaseRate:F6} ± {fitted.BaseRateError:F3}, home {fit.Home:F6} ± {fitted.HomeError:F3}, tiers 0 {fit.TierRating(1):F6} ± {fitted.TierErrors[1]:F3} {fit.TierRating(2):F6} ± {fitted.TierErrors[2]:F3} {fit.TierRating(3):F6} ± {fitted.TierErrors[3]:F3}, capabilities {fit.CapabilityWeight:F6} ± {fitted.CapabilityWeightError:F3}, rho {fit.Rho:F3} ± {fitted.RhoError:F3}, fouls {fit.FoulsPerSide:R}, cautions {fit.CautionsPerSide:R}, sendings-off {fit.SendingsOffPerSide:R} a side"));
                 Console.WriteLine(QuickSimCalibration.Compare(SpikeScenario.Config(), fitSample, fitSides, 50, fit));
                 return 0;
             }
@@ -265,13 +267,16 @@ internal static class Program
 
             case "quicksim" when args.Length >= 2:
             {
-                // #129's calibration sample: the full simulation over the six sides, each ordered pair twice.
+                // The quick-sim's calibration sample (#129, #151): the full simulation over the calibration
+                // league, every ordered pair once a round. `quicksim <dir> [rounds] [first]` plays the
+                // first `first` fixtures only: CI's prefix, diffed against the reference's first rows.
                 SimConfig quickConfig = SpikeScenario.Config();
-                IReadOnlyList<LeagueSide> quickSides = League.Sides();
-                int perPair = args.Length >= 3 && int.TryParse(args[2], out int pp) && pp > 0 ? pp : QuickSimCalibration.PerPair;
+                IReadOnlyList<LeagueSide> quickSides = QuickSimCalibration.Sides();
+                int rounds = args.Length >= 3 && int.TryParse(args[2], out int qr) && qr > 0 ? qr : QuickSimCalibration.Rounds;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 // The matches are independent and each deterministic: played at once, written in order.
-                var fixtures = QuickSimCalibration.Fixtures(quickSides.Count, perPair);
+                var fixtures = QuickSimCalibration.Fixtures(quickSides.Count, rounds);
+                if (args.Length >= 4 && int.TryParse(args[3], out int first) && first > 0 && first < fixtures.Count) fixtures = fixtures.Take(first).ToList();
                 var played = new GateMatch[fixtures.Count];
                 System.Threading.Tasks.Parallel.For(0, fixtures.Count, i => played[i] = QuickSimCalibration.Play(quickConfig, quickSides, fixtures[i]));
                 List<GateMatch> sample = played.ToList();
