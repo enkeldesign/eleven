@@ -326,6 +326,15 @@ namespace Eleven.Simulation
         private int _counted = -1;
         private bool _countedOnTarget;
 
+        // The state before this step: whether play was live in it, and where the ball was. A kick
+        // connects before the ball moves on its step, so a shot is read from where it was struck;
+        // and the step that ends a half still has live play's events.
+        private bool _wasInPlay;
+        private Vec2? _ballBefore;
+
+        // The quick pass's passer, until his own kick plays it away: that kick doesn't resolve it.
+        private int _passerId;
+
         // The side that last touched the ball, and a shot's chance from there: a goal scored off a
         // touch, not a kick, is a shot too.
         private int _toucher = -1;
@@ -357,7 +366,11 @@ namespace Eleven.Simulation
         // The metrics of a step (#128): read from its events and the state after it, never from inside the football.
         private void Measure(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
         {
-            if (after.Teams.Length < 2 || !InPlay(after)) return;
+            bool inPlay = InPlay(after), wasInPlay = _wasInPlay;
+            Vec2 struck = _ballBefore ?? after.Ball.Position.Horizontal;
+            _wasInPlay = inPlay;
+            _ballBefore = after.Ball.Position.Horizontal;
+            if (after.Teams.Length < 2 || !(inPlay || wasInPlay)) return;
 
             // A penalty's kick is raised before the restart that says it was a penalty, in its step.
             bool penalty = false;
@@ -373,7 +386,7 @@ namespace Eleven.Simulation
                         if (side < 0) break;
                         _shooter = side;
                         double goalX = after.Teams[side].AttackSign * config.GoalLineX;
-                        _shotChance = penalty && e.Kind == SimEventKind.Kicked ? _model.Penalty : _model.Chance(after.Ball.Position.Horizontal, goalX, config.GoalWidth);
+                        _shotChance = penalty && e.Kind == SimEventKind.Kicked ? _model.Penalty : _model.Chance(struck, goalX, config.GoalWidth);
                         break;
                     case SimEventKind.Goal:
                     case SimEventKind.HitFrame:
@@ -411,7 +424,7 @@ namespace Eleven.Simulation
                     || e.Kind == SimEventKind.Kicked || e.Kind == SimEventKind.Headed || e.Kind == SimEventKind.Volleyed))
                 {
                     _toucher = side;
-                    _touchChance = _model.Chance(after.Ball.Position.Horizontal, after.Teams[side].AttackSign * config.GoalLineX, config.GoalWidth);
+                    _touchChance = _model.Chance(struck, after.Teams[side].AttackSign * config.GoalLineX, config.GoalWidth);
                     _counted = -1;
                 }
 
@@ -425,6 +438,7 @@ namespace Eleven.Simulation
                         }
 
                         _passer = -1;
+                        _passerId = 0;
                         break;
                 }
 
@@ -435,6 +449,14 @@ namespace Eleven.Simulation
                     _passes[side]++;
                     if (InOwnSixty(config, after, side)) _ownSixtyPasses[side]++;
                     _passer = side;
+                    _passerId = e.Subject;
+                    continue;
+                }
+
+                // The passer's own kick sends his pass; it doesn't play it.
+                if (e.Kind == SimEventKind.Kicked && e.Subject == _passerId)
+                {
+                    _passerId = 0;
                     continue;
                 }
 
@@ -442,18 +464,19 @@ namespace Eleven.Simulation
                 bool defends = e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon || e.Kind == SimEventKind.Foul || (e.Kind == SimEventKind.Touched && _passer == 1 - side);
                 if (defends && InOwnSixty(config, after, 1 - side)) _actions[side]++;
                 bool plays = e.Kind == SimEventKind.Touched || e.Kind == SimEventKind.Attached || e.Kind == SimEventKind.ChallengeWon || e.Kind == SimEventKind.SlideWon
-                    || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried || e.Kind == SimEventKind.Headed || e.Kind == SimEventKind.Volleyed;
+                    || e.Kind == SimEventKind.KeeperHeld || e.Kind == SimEventKind.KeeperParried || e.Kind == SimEventKind.Kicked;
                 if (plays && _passer >= 0)
                 {
                     if (side == _passer) _completed[side]++;
                     _passer = -1;
+                    _passerId = 0;
                 }
             }
 
             // Possession: live play, by the side that last played the ball.
             int had = SideOf(after, after.Ball.LastPlayedBy);
             if (had >= 0) _inPossession = had;
-            if (after.Restart.Phase == RestartPhase.Live && _inPossession >= 0) _possessed[_inPossession]++;
+            if (inPlay && after.Restart.Phase == RestartPhase.Live && _inPossession >= 0) _possessed[_inPossession]++;
         }
 
         private void Shot(bool onTarget)
