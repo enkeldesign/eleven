@@ -23,7 +23,9 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
   - away λ = exp(μ − (r_home − r_away)).
 - **A side's rating** r = its CPU tier's rating (apprentice 0, club, pro, elite) + w × its capability index.
   - **The capability index** is the mean, over every capability, of its outfielders' difference from the reference as a share of the capability's range. Kick error counts the other way round, since less is better.
-- **The scoreline** is one draw against the Dixon–Coles grid of 0 to 12 goals a side, normalised. τ(0,0) = 1 − λ_h·λ_a·ρ, τ(0,1) = 1 + λ_h·ρ, τ(1,0) = 1 + λ_a·ρ and τ(1,1) = 1 − ρ.
+- **The scoreline** is one draw against the Dixon–Coles grid, normalised.
+  - **The grid's size:** each side's grid holds at least 12 goals, and grows with its rate until the Poisson tail beyond is under 10⁻¹². At 600 s halves an elite side's rate is about 12.5, and the grid holds its goals.
+  - **ρ's bounds:** ρ is bounded for the match's rates, max(−1/λ_h, −1/λ_a) ≤ ρ ≤ min(1/(λ_h·λ_a), 1), so no scoreline's chance is negative at long halves. At the reference half the fitted ρ is inside them for every pair of tiers. τ(0,0) = 1 − λ_h·λ_a·ρ, τ(0,1) = 1 + λ_h·ρ, τ(1,0) = 1 + λ_a·ρ and τ(1,1) = 1 − ρ.
 - **Each goal** falls at a uniform moment of the two halves, in order. Its scorer is 0: no footballer plays.
 - **Fouls, cautions and sendings-off** are Poisson a side at the fitted means.
 - **The result's other fields are 0.** That covers penalties, injuries, substitutions, restarts, extra time, the shootout and the match metrics. A quick-simmed knockout tie that ends level stays level; its competition (M6) resolves it.
