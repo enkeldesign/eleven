@@ -56,6 +56,30 @@ A goal is credited to the side attacking the end it went into (#82), once: the g
 - **`ToText()`** writes a stable text form: `eleven-result/2`, then one `name=value` line each and a `goal=` line per goal. Schema 2 (#99) adds `fouls=` and `penalties=`, home–away.
 - **`MatchRecorder`** builds it as the match is played, from each step's events and state, and gives it at full time. It reads the match and is no part of it, so replaying the same commands builds the same result.
 
+### Match metrics (schema 7, #128)
+
+The brief's "football metrics layer built early": one instrument for AI evaluation, balance, exploit detection and later quick-sim calibration. `MatchRecorder` reads them from the match's events and state, never from inside the football (INV-1), and the result carries a pair (home, away) of each: `HomeMetrics`, `AwayMetrics`.
+
+| Field | Text | Definition |
+| --- | --- | --- |
+| `Possession` | `possession=` | Share of live play in which the side last played the ball (`Ball.LastPlayedBy`) |
+| `Shots` | `shots=` | A kick, header or volley that next reaches the goal line at the end the side attacks, the frame, or the other side's keeper. A goal off a touch is a shot from where it was touched; an own goal is none. |
+| `OnTarget` | `ontarget=` | Shots that scored, or that the other keeper held or parried |
+| `Xg` | `xg=` | Expected goals: the sum of each shot's chance |
+| `Passes`, `PassesCompleted` | `passes=`, `passescompleted=` | Quick passes, and those a teammate played next |
+| `Corners` | `corners=` | Corners awarded |
+| `Ppda` | `ppda=` | The other side's passes in its own 60 % per this side's defensive actions there: a challenge or slide won, a foul, or a touch cutting out a pass. 0 with none. |
+
+They count in the halves and extra time, not the shootout. The definitions are #125's and #126's harness measures.
+
+**The xG reference model** (`MetricsModel`) is a logistic of the shape public xG models use. It reads the shot's distance d to the goal's centre and the angle θ the goal mouth subtends from where it was struck:
+
+xG = 1 / (1 + e^−(a + b·d + c·θ)), with a = −1.0, b = −0.12 per metre, c = 1.0 per radian, and a penalty 0.76 whatever the geometry.
+
+- **It is a reader's model:** its parameters are metric references, not simulation config, and change no match. Centrally, it gives about 0.35 at 6 m, 0.16 at 11 m and 0.07 at the edge of the box.
+- **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 40.6 expected goals against 58 scored. A match has 21.1 shots, 16.3 of them on target, and xG 2.26 against 3.22 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by about 30 %. That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
+- **Recorded and diffed in CI:** the gate's reference carries each match's possession, shots, shots on target, xG, passes and PPDA.
+
 ## Measured
 
 `eleven-sim matches <dir>` plays 12 CPU-against-CPU matches under the reference halves, from the kick-off to full time, every brain running. `docs/simulation/match-trials-reference.csv` is the record, and `first-result.txt` the first match's result text.
