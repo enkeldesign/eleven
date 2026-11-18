@@ -52,15 +52,15 @@ At every tier, the opponents may depend on the human's hidden footballers in at 
 
 ## Measured
 
-At config `806d80eae53da2e8`:
+At config `3502e6f11faefd96`, with #138's carry after a switch:
 
 | Tier | Opponents' decisions | On the human's hidden footballers | Not shown by a cue | The human's teammates on hidden opponents |
 | --- | --- | --- | --- | --- |
-| apprentice | 18,135 | 0.43 % | 0.06 % | 0.97 % |
-| club | 25,075 | 0.14 % | 0 | 0.68 % |
-| pro | 36,210 | 0.11 % | 0 | 0.55 % |
-| elite | 54,313 | 0.17 % | 0 | 0.56 % |
+| apprentice | 18,126 | 0.53 % | 0.05 % | 1.01 % |
+| club | 25,071 | 0.12 % | 0 | 0.79 % |
+| pro | 36,211 | 0.24 % | 0 | 0.54 % |
+| elite | 54,310 | 0.16 % | 0 | 0.58 % |
 
-- **Rare, and nearly always cued.** The CPU's decisions depend on a hidden footballer of the human's side about once in 250 to 900. Within the cues' reach, at club tier and above none is left unshown.
-- **The CPU side knows less off the screen than the human's side does.** The human's teammates depend on hidden opponents three to five times as often.
+- **Rare, and nearly always cued.** The CPU's decisions depend on a hidden footballer of the human's side about once in 190 to 830. Within the cues' reach, at club tier and above none is left unshown.
+- **The CPU side knows less off the screen than the human's side does.** The human's teammates depend on hidden opponents two to seven times as often.
 - **Coordination dominates.** About 29 % to 39 % of the opponents' decisions depend on their own teammates off the human's screen, such as who presses and who covers (#96). This is a side playing as a side, not knowledge of the human's threat.
