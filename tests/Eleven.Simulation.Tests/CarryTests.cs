@@ -72,6 +72,18 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void Ball_control_reads_the_carried_stick_too()
+        {
+            // Codex on #140: under ATTACHED a small stick against the run, inside the carry's
+            // deadband, must not turn or trap the ball while the runner carries on.
+            var sim = Running(C.WithControlModel(ControlModel.Attached), withBall: true);
+            SwitchThen(sim, (int)(0.5 * C.TickRate), new Vec2(-0.1, 0));
+            Assert.True(Speed(P(sim, Mate)) > 4.5);
+            Assert.Equal(Mate, sim.PeekState().Ball.AttachedTo);
+            Assert.True(sim.PeekState().Ball.Position.X > -19.5 + 2, $"the ball went on with him: at {sim.PeekState().Ball.Position.X:F2}");
+        }
+
+        [Fact]
         public void Any_stick_ends_the_carry_at_once()
         {
             var sim = Running();
