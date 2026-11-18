@@ -41,6 +41,18 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_body_joined_onto_one_line_reads_back_padding_and_all()
+        {
+            // Codex on #146: a chat that unwraps the body leaves one token ending in base64's `=`
+            // padding (the fixture's length isn't a multiple of 3), which isn't a header field.
+            byte[] capture = Fixture;
+            Assert.NotEqual(0, capture.Length % 3);
+            string[] lines = CaptureText.Encode(capture, "c").Split('\n');
+            string joined = lines[0] + "\n" + string.Concat(lines.Skip(1).Where(l => l.Length > 0 && l != "END")) + "\nEND\n";
+            Assert.Equal(capture, Read(joined));
+        }
+
+        [Fact]
         public void A_binary_capture_reads_as_it_is()
         {
             Assert.Equal(Fixture, CaptureText.Read(Fixture, out _));
