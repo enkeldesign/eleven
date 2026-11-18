@@ -890,6 +890,16 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
           check('footballers just off the screen are cued at its edge, inside the play area', cueLines.length > 0 && cues > 0 && outside === 0,
             `${cues} cue(s) over ${cueLines.length} s, ${perSecond.toFixed(2)} a second; ${outside} outside the play area`);
           notes.result += `; ${perSecond.toFixed(2)} cues a second`;
+
+          // The camera's zoom (#139): how far it travels each second of the match clock, in
+          // logarithm (0.69 is a doubling or halving), shown and as fitted unsmoothed (the camera
+          // before the easing). A measure for Erik's "the zoom is wild": the easing must travel less.
+          const zooms = logs.slice(fromM).map((l) => /^ELEVEN zoom second=(\d+) travel=([\d.]+) fitted=([\d.]+)/.exec(l)).filter(Boolean);
+          const sum = (i) => zooms.reduce((a, z) => a + Number(z[i]), 0);
+          const zoomMean = zooms.length ? sum(2) / zooms.length : NaN, fittedMean = zooms.length ? sum(3) / zooms.length : NaN;
+          check('the eased zoom travels less than the fitted zoom it follows', zooms.length > 0 && zoomMean < fittedMean,
+            `${zooms.length} s; travel ${zoomMean.toFixed(3)} a second eased, ${fittedMean.toFixed(3)} fitted`);
+          notes.result += `; zoom travel ${zoomMean.toFixed(3)}/s eased, ${fittedMean.toFixed(3)}/s fitted`;
         }
         console.log(`::notice title=match ${name}::${notes.result}`);
         await sleep(1500);

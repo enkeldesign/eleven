@@ -23,7 +23,24 @@ Issue #31. ELEVEN is laid out for a phone and a tablet in both orientations. Nei
 
 - **The widest view is a technical reference,** not approved feel: a 35 m view, about a third of the pitch's length, as Sensible Soccer shows.
 - **A ball further off than the widest view leaves the frame.** The footballer stays in it, with the margin, toward the edge the ball left by. Before #31 the view zoomed out without limit.
-- **The view line** (`ELEVEN view`, with `?trace`) gives the bounds in use: `ahead=`, `across=`, `ppm=` (pixels per metre), `playerPx=`, `ballPx=` and `maxview=`.
+- **The view line** (`ELEVEN view`, with `?trace`) gives the bounds in use: `ahead=`, `across=`, `ppm=` (pixels per metre), `playerPx=`, `ballPx=` and `maxview=`, then the easing's `zoomOut=`, `zoomIn=`, `zoomHold=` and `pan=`. The smoke test reads the first ones in that order.
+
+### The easing (#139)
+
+From Erik's capture `eleven-felt-wrong-227-019e240-t10330`: "The zoom is wild. In/out all the time." The view fitted itself to the footballer and the ball every frame, with no easing. Over the capture's 10 s their distance went from 0 to 39 m, so the zoom changed up to about fivefold, and it jumped at every switch and kick.
+
+`CameraEase` now follows the fitted view:
+- **The zoom goes out promptly and in slowly:** first-order, with time constants of 0.3 s out and 1.5 s in.
+- **A dead zone:** a change smaller than 10 % of the zoom doesn't start a move. Once moving, it settles all the way.
+- **Never so close the footballer or the ball leaves:** the zoom is never closer than keeps both in view with 0.5 m to spare, about the eased centre. The fit has a 3 m margin, so a zoom out eases between the two and is hurried only as the ball nears the edge.
+- **Only at the widest view** does the centre move off the eased one, to keep the footballer in view with the margin when both can't fit.
+- **The centre pans** at 0.25 s, so a switch or a long pass reads as a pan, not a cut.
+- **A new match or a turned view snaps** to its framing.
+- **Paused, it holds:** while play is paused or waiting under a sheet, the easing doesn't move. Pause means stop.
+
+They are technical references, not approved feel. Each is in the address, and 0 follows at once, as before.
+
+The trace's `ELEVEN zoom` line gives, each second of a match, how far the zoom moved: `travel=` as shown, and `fitted=` as the unsmoothed fit, which is what the camera showed before. Each is the sum of each frame's change in its logarithm; 0.69 is a doubling or a halving. The whole-match smoke passes check the eased zoom travels less.
 
 ## When the screen turns
 
@@ -55,6 +72,9 @@ The bench sheet (`BenchSheet.Arrange`) has three arrangements, and takes the one
 | `?safe=47,0,34,0` | Safe-area insets to try, in points: top, right, bottom, left. A desktop browser has none, so this stands in for a notch and a home indicator. |
 | `?maxview=25` | The widest view, in metres either side of the play area's centre. |
 | `?ahead=10` | The least look-ahead, in metres. |
+| `?zoomOut=0.3`, `?zoomIn=1.5` | The zoom's time constants out and in, in seconds (#139); 0 follows at once. |
+| `?zoomHold=0.1` | The zoom's dead zone, as a fraction of it (#139). |
+| `?pan=0.25` | The framing centre's time constant, in seconds (#139); 0 cuts. |
 
 ## What the smoke test checks
 

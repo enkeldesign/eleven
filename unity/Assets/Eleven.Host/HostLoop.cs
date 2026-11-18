@@ -111,6 +111,11 @@ namespace Eleven.Host
             int maxViewAt = url.IndexOf("maxview=", StringComparison.Ordinal);
             if (maxViewAt >= 0) float.TryParse(url.Substring(maxViewAt + 8).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out maxView);
             _view = new PitchView(_config, transform, mowing, Mathf.Clamp(ahead, 0, 40), Mathf.Clamp(maxView, 7, 60));
+            // ?zoomOut=0.3&zoomIn=1.5&zoomHold=0.1&pan=0.25: the camera's easing (#139); 0 follows at once.
+            _view.Ease.OutSeconds = UrlNumber(url, "zoomOut=", _view.Ease.OutSeconds, 0, 5);
+            _view.Ease.InSeconds = UrlNumber(url, "zoomIn=", _view.Ease.InSeconds, 0, 10);
+            _view.Ease.Hold = UrlNumber(url, "zoomHold=", _view.Ease.Hold, 0, 0.5);
+            _view.Ease.PanSeconds = UrlNumber(url, "pan=", _view.Ease.PanSeconds, 0, 5);
             // ?cues=15: how far outside the view, in metres, a footballer is cued at the edge; 0 for none (#102).
             int cuesAt = url.IndexOf("cues=", StringComparison.Ordinal);
             if (cuesAt >= 0 && float.TryParse(url.Substring(cuesAt + 5).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float cues))
@@ -271,6 +276,8 @@ namespace Eleven.Host
             if (_match) RenderSides(state, me, alpha);
             DrawPoses(state, me);
 
+            // Pause means stop (#139): the camera's easing holds while play is paused or waiting.
+            _view.Frozen = _paused || waiting;
             _view.Render(
                 Vector2.Lerp(Previous(me, state), ToVector(state.Players[me].Position), alpha),
                 keeper,
@@ -889,5 +896,14 @@ namespace Eleven.Host
         private static Vector3 ToVector(Vec3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
 
         private static void Log(string message) => Debug.Log(message);
+
+        // A number from the address after `key` (e.g. "pan="), clamped, or the fallback.
+        private static double UrlNumber(string url, string key, double fallback, double min, double max)
+        {
+            int at = url.IndexOf(key, StringComparison.Ordinal);
+            if (at < 0 || (at > 0 && url[at - 1] != '?' && url[at - 1] != '&')) return fallback;
+            if (!double.TryParse(url.Substring(at + key.Length).Split('&')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value)) return fallback;
+            return Math.Max(min, Math.Min(max, value));
+        }
     }
 }

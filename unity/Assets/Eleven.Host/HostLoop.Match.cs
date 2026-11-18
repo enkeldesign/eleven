@@ -432,6 +432,8 @@ namespace Eleven.Host
                 if (_trace)
                 {
                     Log(FormattableString.Invariant($"ELEVEN cues second={second} shown={_view.CuesShown} {_view.CueReport()}"));
+                    (float shown, float fitted) = _view.TakeZoomTravel();
+                    Log(FormattableString.Invariant($"ELEVEN zoom second={second} travel={shown:F3} fitted={fitted:F3}"));
                 }
             }
         }
