@@ -56,15 +56,15 @@ His plans are, by convention, **balanced** (the first), **chase** and **protect*
 
 ### The scripted seat against a managed CPU side, four seeds a preset
 
-The M4 review's direct runner (finding 5): a harness seat that chases the ball and shoots.
+The M4 review's direct runner (finding 5): a harness seat that chases the ball and shoots. Measured with #138's carry after a switch.
 
 | Preset | The seat's goals–conceded | The CPU side's switches | When |
 | --- | --- | --- | --- |
 | Off | 2.8–0 | 0 | — |
-| Cautious | 2.0–0 | 1 a match, all to chase | 0.65–0.73 |
-| Bold | 1.8–0 | 1 a match, all to chase | 0.47–0.65 |
+| Cautious | 2.8–0 | 1.25 a match: 4 to chase, 1 to protect | 0.43–0.74 |
+| Bold | 1.8–0.3 | 1.5 a match: 4 to chase, 1 to protect, 1 back to balanced | 0.43–0.74 |
 
-- **The managed side still concedes and doesn't score.** Its chase plan comes after it is already behind.
+- **The managed side still concedes, and scores once in eight matches at most.** Its chase plan comes after it is already behind.
 - **The direct runner's weakness is the CPU's defending,** not its manager. Four seeds are too few to say whether chasing changes the seat's goals.
 
 ## Tests
