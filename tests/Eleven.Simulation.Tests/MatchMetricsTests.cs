@@ -248,6 +248,22 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_pass_a_teammate_takes_and_scores_from_is_a_shot_from_his_touch()
+        {
+            const int Mate = 2;
+            var r = new MatchRecorder();
+            SimState s = HandState();
+            Feed(r, s, new Vec2(-10, 0), new SimEvent(1, SimEventKind.Kicked, Striker));
+            Vec2 touch = new Vec2(Hand.GoalLineX - 8, 2);
+            Feed(r, s, touch);
+            Feed(r, s, touch, new SimEvent(3, SimEventKind.Touched, Mate));
+            Feed(r, s, new Vec2(Hand.GoalLineX + 0.5, 0), new SimEvent(4, SimEventKind.GoalLineCrossed, OneVOne.BallId), new SimEvent(4, SimEventKind.Goal, OneVOne.BallId, other: Squads.HomeTeam));
+            SideMetrics home = Home(r, s);
+            Assert.Equal((1, 1), (home.Shots, home.OnTarget));
+            Assert.Equal(MetricsModel.Reference.Chance(touch, Hand.GoalLineX, Hand.GoalWidth), home.Xg, 12);
+        }
+
+        [Fact]
         public void The_same_match_gives_the_same_metrics()
         {
             Assert.Equal(Play(5, 3).Result.ToText(), Play(5, 3).Result.ToText());
