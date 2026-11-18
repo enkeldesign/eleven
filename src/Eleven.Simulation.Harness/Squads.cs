@@ -192,6 +192,36 @@ namespace Eleven.Simulation.Harness
         /// <summary>The seat's switches by cause (#136): to a pass's receiver, to a teammate with the ball, at a turnover, asked.</summary>
         public int SwitchesPass, SwitchesMate, SwitchesTurnover, SwitchesAsked;
 
+        /// <summary>
+        /// Counts a step of the seat's ball-winning (#135) from the simulation's reports: an attempt
+        /// is a run of steps pressing within challengeRange. Returns whether one is under way.
+        /// </summary>
+        public bool CountPress(SimState s, IReadOnlyList<ChallengeReport> reports, IReadOnlyList<SimEvent> events, int seatController, bool pressing)
+        {
+            int me = Array.FindIndex(s.Players, p => p.OwnerControllerId == seatController);
+            int id = me >= 0 ? s.Players[me].Id : 0;
+            bool inRange = false;
+            foreach (ChallengeReport r in reports)
+            {
+                if (r.PlayerId != id) continue;
+                if (r.Hint == ChallengeHint.TooFar) SeatTooFar++;
+                else if (r.Hint == ChallengeHint.NotClosing) SeatNotClosing++;
+                else if (r.Hint == ChallengeHint.WontReach) SeatWontReach++;
+                else if (r.Hint == ChallengeHint.NotReady) SeatNotReady++;
+                inRange |= r.Hint != ChallengeHint.TooFar;
+            }
+
+            foreach (SimEvent e in events)
+            {
+                if (e.Subject != id || id == 0) continue;
+                if (e.Kind == SimEventKind.ChallengeStarted) SeatChallenges++;
+                else if (e.Kind == SimEventKind.ChallengeWon) SeatChallengesWon++;
+            }
+
+            if (inRange && !pressing) SeatAttempts++;
+            return inRange;
+        }
+
         /// <summary>Counts a seat's switch event; <paramref name="cause"/> is why the switcher asked for it.</summary>
         public void Count(SimEvent e, int seatController, SwitchCause cause)
         {
@@ -261,6 +291,7 @@ namespace Eleven.Simulation.Harness
             var recorder = new MatchRecorder();
             var trial = new SquadTrial { Seed = seed, Seat = seat };
             SwitchController? switcher = seat ? new SwitchController(SeatController, mode) : null;
+            bool pressing = false;
             var commands = new List<Command>();
             var events = new List<SimEvent>();
             int limit = 3 * 2 * config.HalfTicks;
@@ -286,6 +317,7 @@ namespace Eleven.Simulation.Harness
                 sim.Step(commands, events);
                 SimState s = sim.PeekState();
                 recorder.Observe(config, s, events);
+                if (seat) pressing = trial.CountPress(s, sim.ChallengeReports, events, SeatController, pressing);
                 foreach (SimEvent e in events)
                 {
                     if (e.Kind == SimEventKind.Substituted)
