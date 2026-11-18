@@ -17,17 +17,20 @@ It fails if a match is stuck (unfinished; an outfielder still, or the ball untou
 | | |
 | --- | --- |
 | Matches | 18: 15 in the league, 3 in the cup. All finished, none stuck. |
-| Goals a match | 3.2 |
-| Laws a match | 4.7 fouls, 0.22 offsides, 1.3 cautions, 0.17 sendings-off, 0.06 injuries, 5.0 substitutions |
-| Longest still, untouched | 3.9 s, 5.4 s |
-| League | No draws in 15. Kestrel, the elite side, unbeaten. |
-| Cup | One semi-final to extra time, Stonegate winning it 2-1; Kestrel winning the final 5-1. |
+| Goals a match | 3.3 |
+| Laws a match | 5.6 fouls, 0.06 offsides, 1.1 cautions, 0.06 sendings-off, no injuries, 4.1 substitutions |
+| Longest still, untouched | 4.2 s, 5.2 s |
+| League | One draw in 15, Millbrook–Northfield 0–0. Kestrel, the elite side, won all five. |
+| Cup | No tie to extra time; Kestrel winning the final 2–1 against Riverside. |
 | Replays | 6 of 6 equal. |
 
+This is the reference after #118, which reckons tired CPU runs at their tired speed and changed every CPU match.
+
 **What it shows:**
-- every law of M4 but the shootout is reached at eleven a side: fouls, offside, cautions, sendings-off, an injury, substitutions and extra time. Since #134's keeper distribution no tie in this reference goes to penalties; `KnockoutTests` cover the shootout;
-- offside is rare in CPU play (4 times in 18 matches): the CPU's forwards seldom run beyond the second-last defender before a pass;
-- the result contract (schema 6) is stable across replays.
+- **Laws reached at eleven a side:** fouls, offside, cautions, a sending-off and substitutions.
+  - In this reference no foul injures and no tie goes to extra time or penalties. `InjuryTests` and `KnockoutTests` cover those, and earlier references reached them.
+  - Offside is rare in CPU play (once in 18 matches): the CPU's forwards seldom run beyond the second-last defender before a pass.
+- **The result contract** (schema 7, with the match metrics) is stable across replays.
 
 ## The host
 
