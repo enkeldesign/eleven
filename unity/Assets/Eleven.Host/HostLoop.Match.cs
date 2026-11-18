@@ -199,7 +199,7 @@ namespace Eleven.Host
             _view.ShowMatch(true, _perSide);
             _simulator = new Simulator(_config, _perSide == 1
                 ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
-                : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities));
+                : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans));
             _switcher = new SwitchController(OneVOne.HomeController, _switchMode);
             _switchRequested = false;
             _nextId = 0;
@@ -207,6 +207,8 @@ namespace Eleven.Host
             _switches = 0;
             _hud?.ShowSwitch(_perSide > 1);
             _subRequested = false;
+            _planAsked = 0;
+            _hud?.Dashboard.Show(false);
             _subPolicy = _config.With("cpuSubAfter", 0).With("cpuSubFatigue", 0);
             _hud?.ShowSubs(SubsLeft());
             _recording = CommandRecording.StartFrom(_simulator);
@@ -237,6 +239,8 @@ namespace Eleven.Host
             _perSide = 1;
             _hud?.ShowSwitch(false);
             _subRequested = false;
+            _planAsked = 0;
+            _hud?.Dashboard.Show(false);
             _hud?.ShowSubs(false);
             _resultLines = 0;
             _hud?.HideMatch();
@@ -390,6 +394,89 @@ namespace Eleven.Host
             _hud?.SetMatchActions(true, _matchPaused);
             _hud?.ShowStatus(_matchPaused ? "Paused. The clock has stopped." : "Play on.");
             Log(FormattableString.Invariant($"ELEVEN match {(_matchPaused ? "paused" : "resumed")} tick={_simulator.Tick} clock={_simulator.PeekState().Match.ClockTicks}"));
+
+            // The dashboard (#128) is the paused match's view.
+            if (_matchPaused) UpdateDashboard();
+            _hud?.Dashboard.Show(_matchPaused);
+            if (_matchPaused && _hud != null) Log($"ELEVEN match dashboard shown {_hud.Dashboard.Report(DashboardView())} {PlanReport()}");
+        }
+
+        // SWITCH PLAN's request (#128): a stored plan, 1 to 3, sent on the human's next command and
+        // recorded with it (INV-10). The simulation takes it at the next stoppage, or refuses it.
+        private int _planAsked;
+
+        private static string PlanName(int index) => index >= 0 && index < MatchPlans.Names.Length ? MatchPlans.Names[index] : "";
+
+        // Whether the human's side stores plans: a match of five a side or more.
+        private bool HasPlans => _match && _simulator.PeekState().Tactics.Length > 0;
+
+        private void AskPlan(int plan)
+        {
+            if (!HasPlans || plan < 1 || plan > MatchPlans.Names.Length) return;
+            TeamState you = Array.Find(_simulator.PeekState().Teams, t => t.Id == OneVOne.HomeTeam);
+            if (plan - 1 == you.Tactic && _planAsked == 0) return;
+            _planAsked = plan;
+            _hud?.ShowStatus($"{PlanName(plan - 1)}: asked. Taken {TakenWhen()} once play resumes.");
+            Log(FormattableString.Invariant($"ELEVEN match plan asked plan={plan} tick={_simulator.Tick}"));
+            UpdateDashboard();
+        }
+
+        private Command WithPlan(Command c)
+        {
+            if (!_match || _planAsked == 0) return c;
+            int plan = _planAsked;
+            _planAsked = 0;
+            Log(FormattableString.Invariant($"ELEVEN match plan sent plan={plan} tick={_simulator.Tick}"));
+            return c.WithTactic((byte)plan);
+        }
+
+        // When a switch would be taken now: at once in a stoppage or a break, or with planSwitchAt 1.
+        private string TakenWhen()
+        {
+            SimState s = _simulator.PeekState();
+            bool stopped = s.Match.Phase != MatchPhase.FirstHalf && s.Match.Phase != MatchPhase.SecondHalf
+                && s.Match.Phase != MatchPhase.ExtraFirstHalf && s.Match.Phase != MatchPhase.ExtraSecondHalf
+                || (s.Restart.On && s.Restart.Phase != RestartPhase.Live);
+            return stopped || _config.PlanSwitchAt >= 1 ? "at once" : "at the next stoppage";
+        }
+
+        private MatchDashboard.View DashboardView()
+        {
+            SimState s = _simulator.PeekState();
+            int clock = (int)(s.Match.ClockTicks * _config.TickSeconds);
+            TeamState you = Array.Find(s.Teams, t => t.Id == OneVOne.HomeTeam), cpu = Array.Find(s.Teams, t => t.Id != OneVOne.HomeTeam);
+            int yours = s.Teams[0].Id == OneVOne.HomeTeam ? 0 : 1;
+            return new MatchDashboard.View
+            {
+                Score = $"You {you.Goals} – {cpu.Goals} CPU",
+                Clock = FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"),
+                Half = HalfName(s),
+                You = _recorder.Now(yours),
+                Cpu = _recorder.Now(1 - yours),
+                Plans = s.Tactics.Length > 0 ? MatchPlans.Names : null,
+                YourPlan = you.Tactic,
+                YourPending = you.TacticPending,
+                CpuPlan = cpu.Tactic,
+                Asked = _planAsked,
+                CooldownSeconds = (int)Math.Ceiling(you.TacticCooldown * _config.TickSeconds),
+                Settling = you.TacticSettle > 0,
+                Over = s.Match.Phase == MatchPhase.FullTime,
+                TakenWhen = TakenWhen(),
+            };
+        }
+
+        private void UpdateDashboard()
+        {
+            if (!_match || _hud == null) return;
+            _hud.Dashboard.Update(DashboardView());
+        }
+
+        private string PlanReport()
+        {
+            if (!HasPlans) return "plans=none";
+            SimState s = _simulator.PeekState();
+            TeamState you = Array.Find(s.Teams, t => t.Id == OneVOne.HomeTeam), cpu = Array.Find(s.Teams, t => t.Id != OneVOne.HomeTeam);
+            return FormattableString.Invariant($"plans={string.Join("|", MatchPlans.Names).Replace(' ', '_')} yours={you.Tactic + 1} pending={you.TacticPending} cpu={cpu.Tactic + 1} cooldown={you.TacticCooldown}");
         }
 
         // The match's AI controllers, after the human's command (#83, #85): recorded with it.
@@ -487,6 +574,23 @@ namespace Eleven.Host
                         break;
                     }
 
+                    case SimEventKind.TacticSwitched:
+                    {
+                        // A side's plan (#126, #128), announced with the side. The human's own is checked
+                        // under trace: the recording so far replays to this step (INV-10).
+                        bool mine = e.Subject == OneVOne.HomeTeam;
+                        _hud?.ShowStatus(mine ? $"Plan: {PlanName(e.Other)}." : $"CPU plan: {PlanName(e.Other)}.");
+                        string replay = mine && _trace ? (_recording.Replay(_config).StateHash() == _simulator.StateHash() ? " replay=match" : " replay=MISMATCH") : "";
+                        Log(FormattableString.Invariant($"ELEVEN match plan switched team={e.Subject} plan={e.Other + 1} tick={s.Tick}{replay}"));
+                        break;
+                    }
+
+                    case SimEventKind.CommandRejected when e.Subject == OneVOne.HomeController
+                        && (e.Rejection == CommandRejection.TacticCooldown || e.Rejection == CommandRejection.TacticRefused):
+                        _hud?.ShowStatus(e.Rejection == CommandRejection.TacticCooldown ? "Plan not changed: too soon after the last change." : "Plan not changed.");
+                        Log(FormattableString.Invariant($"ELEVEN match plan refused why={e.Rejection} tick={s.Tick}"));
+                        break;
+
                     case SimEventKind.Switched:
                         // A gesture under way was for the footballer he left (#93).
                         _input.Clear();
@@ -556,7 +660,11 @@ namespace Eleven.Host
             if (!_match || _hud == null) return;
             SimState s = _simulator.PeekState();
             int clock = (int)(s.Match.ClockTicks * _config.TickSeconds);
-            string half = s.Match.Phase switch
+            _hud.ShowMatch($"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), HalfName(s));
+        }
+
+        private static string HalfName(SimState s) =>
+            s.Match.Phase switch
             {
                 MatchPhase.FirstHalf => "1st half",
                 MatchPhase.HalfTime => "Half-time",
@@ -572,8 +680,6 @@ namespace Eleven.Host
                     : Hud.FullTime(s.Teams[0].ShootoutGoals, s.Teams[1].ShootoutGoals),
                 _ => "",
             };
-            _hud.ShowMatch($"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), half);
-        }
 
         private static string TierName(CpuSkill skill) =>
             skill.DecisionInterval == CpuSkill.Elite.DecisionInterval ? "elite"
