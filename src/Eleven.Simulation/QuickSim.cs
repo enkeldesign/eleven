@@ -96,6 +96,13 @@ namespace Eleven.Simulation
         /// <summary>The Poisson tail a side's grid leaves out: past its limit, less than this.</summary>
         public const double Tail = 1e-12;
 
+        /// <summary>
+        /// Goals a side a match: the most a rate is taken as. The calibrated rates are a few goals a
+        /// match; this keeps the sampler's maths in range for any valid sides, however far the fit's
+        /// ratings extrapolate (Codex's finding on #150).
+        /// </summary>
+        public const double MaxRate = 30;
+
         /// <summary>The goals a side's grid holds at <paramref name="rate"/>: at least <see cref="MaxGoals"/>, and enough that the tail beyond is under <see cref="Tail"/>.</summary>
         public static int Limit(double rate)
         {
