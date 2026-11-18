@@ -270,6 +270,7 @@ namespace Eleven.Host
             {
                 _hud.Tick(_buildId, _loadSeconds, _pacing.Dropped, _pacing.CoveredSeconds);
                 TellPageWhereSaveIs();
+                PollCopy();
             }
 
             float alpha = (float)(_accumulator / tick);
@@ -673,12 +674,28 @@ namespace Eleven.Host
         private Rect _copyTold;
 
         // COPY CAPTURE (#137) was activated in Unity: the page copies the newest capture as text,
-        // unless its own release handler already did for this press.
+        // unless its own release handler already did for this press. The HUD says how it went
+        // once the page knows (Codex on #146): a clipboard write can fail or take a moment.
         private void CopyCapturePressed()
         {
             CopyCapture();
-            _hud?.ShowStatus("Capture copied as text: paste it into a message.");
+            _copyWaitingSince = Time.realtimeSinceStartupAsDouble;
             Log("ELEVEN capture copy pressed");
+        }
+
+        private double _copyWaitingSince = -1;
+
+        // While a copy is under way: its outcome, said once. Given 5 s, a copy not done has failed.
+        private void PollCopy()
+        {
+            if (_copyWaitingSince < 0) return;
+            int state = CopyState();
+            bool late = Time.realtimeSinceStartupAsDouble - _copyWaitingSince > 5;
+            if (state == 0 && !late) return;
+            _copyWaitingSince = -1;
+            bool copied = state == 1;
+            _hud?.ShowStatus(copied ? "Capture copied as text: paste it into a message." : "Couldn't copy the capture. Use SAVE CAPTURE instead.");
+            Log($"ELEVEN capture copy {(copied ? "copied" : "failed")} state={state}");
         }
 
         // The HUD measured an element needing another size: lay out again if anything moves.
@@ -830,6 +847,9 @@ namespace Eleven.Host
         private static extern void ElevenCopyCapture();
 
         [DllImport("__Internal")]
+        private static extern int ElevenCopyState();
+
+        [DllImport("__Internal")]
         private static extern void ElevenPlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active);
 
         [DllImport("__Internal")]
@@ -886,6 +906,8 @@ namespace Eleven.Host
 
         private static void CopyCapture() => ElevenCopyCapture();
 
+        private static int CopyState() => ElevenCopyState();
+
         private static void PlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) =>
             ElevenPlaceCopyCapture(x, y, width, height, screenWidth, screenHeight, active);
 #else
@@ -923,6 +945,9 @@ namespace Eleven.Host
         private static void SaveCapture() { }
 
         private static void CopyCapture() { }
+
+        // Outside the web build there is no page to copy to.
+        private static int CopyState() => 2;
 
         private static void PlaceCopyCapture(float x, float y, float width, float height, int screenWidth, int screenHeight, int active) { }
 

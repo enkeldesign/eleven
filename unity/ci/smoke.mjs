@@ -1690,6 +1690,11 @@ async function runPass(browser, url, name, contextOptions, useTouch) {
       const decoded = body ? Buffer.from(body, 'base64') : null;
       const whole = !!keptCapture && !!decoded && decoded.equals(keptCapture);
       if (text) fs.writeFileSync(path.join(outDir, `capture-${name}-copied.txt`), text);
+      // The HUD says how the copy went only once the page knows (Codex on #146).
+      const said = (await waitForLog(/ELEVEN capture copy (copied|failed) state=(\d+)/, 8_000, fromCopy))?.match ?? null;
+      check('the HUD reports the copy as the page did',
+        !!said && !!copied && (said[1] === 'copied') === (copied[1] === 'ok'),
+        `${said ? said[0].replace('ELEVEN ', '') : 'no copy outcome line'}; page ${copied ? copied[1] : 'none'}`);
       check('COPY CAPTURE copies the kept capture as text, byte for byte', !!copied && copied[1] === 'ok' && text.startsWith('ELEVEN CAPTURE v1 ') && whole,
         `${copied ? copied[0].replace('ELEVEN page ', '') : `no copy line (copy=${copyBox.join(',') || 'none'})`}; ${text.length} characters, ${whole ? 'decodes to the kept capture' : 'does NOT decode to the kept capture'}`);
     } else {

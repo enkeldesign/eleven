@@ -209,6 +209,8 @@ mergeInto(LibraryManager.library, {
     var last = window.__elevenLastCapture;
     if (!last) return;
     window.__elevenCopiedAt = performance.now();
+    // The copy's outcome, which the host polls (Codex on #146): 0 under way, 1 copied, 2 failed.
+    window.__elevenCopyState = 0;
     var text = ElevenCaptureText(last);
     window.__elevenCopiedText = text;
     var fallback = function () {
@@ -222,10 +224,12 @@ mergeInto(LibraryManager.library, {
       var ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
       area.remove();
+      window.__elevenCopyState = ok ? 1 : 2;
       console.log('ELEVEN page copy ' + (ok ? 'ok' : 'failed') + ' via=command name=' + last.name + ' chars=' + text.length);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
+        window.__elevenCopyState = 1;
         console.log('ELEVEN page copy ok via=clipboard name=' + last.name + ' chars=' + text.length);
       }, fallback);
     } else {
@@ -254,6 +258,11 @@ mergeInto(LibraryManager.library, {
       pressed = false;
       if (release) ElevenCopyCaptureText();
     }, true);
+  },
+
+  // The last copy's outcome for the host: -1 none, 0 under way, 1 copied, 2 failed.
+  ElevenCopyState: function () {
+    return typeof window.__elevenCopyState === 'number' ? window.__elevenCopyState : -1;
   },
 
   // COPY CAPTURE was activated in Unity: copied already by the release, or now (a key).
