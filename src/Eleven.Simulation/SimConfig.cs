@@ -151,9 +151,9 @@ namespace Eleven.Simulation
             double keeperThrowRange = 30,
             double keeperOpenDistance = 6,
             double humanChallengeLeeway = 0,
-            double penaltyInside = 0.6,
+            double penaltyInside = 0.5,
             double penaltyPower = 0.9,
-            double penaltyLoft = 0.04)
+            double penaltyLoft = 0.135)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
