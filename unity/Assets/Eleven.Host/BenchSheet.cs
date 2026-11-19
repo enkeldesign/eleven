@@ -198,6 +198,14 @@ namespace Eleven.Host
             _plays.Element.style.flexShrink = 0;
             _playBlock.Add(_plays.Element);
             _plays.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlay());
+            if (_trace)
+            {
+                // Where keyboard focus goes inside the sheet (#144), as the HUD reports its own (#53).
+                _sheet.Element.RegisterCallback<FocusInEvent>(e =>
+                {
+                    if (e.target is VisualElement v && FocusOrder().Contains(v)) Log($"ELEVEN bench focus name={(v.name ?? "").Replace(' ', '_')}");
+                });
+            }
 
             // Switching players (#136): how automatic it is. It acts at once and the match goes on.
             // At the end of the Presets tab, so nothing above the presets moves.
@@ -448,7 +456,8 @@ namespace Eleven.Host
             if (TouchShown) foreach (UiKit.Raised control in _controls.Segments) order.Add(control.Element);
             if (PresetsShown)
             {
-                // The presets, then the switching mode (#136) after them, as on screen.
+                // The play switch (#144), the presets, then the switching mode (#136), as on screen.
+                foreach (UiKit.Raised play in _plays.Segments) order.Add(play.Element);
                 order.AddRange(_presetStops);
                 foreach (UiKit.Raised switching in _switchings.Segments) order.Add(switching.Element);
             }
@@ -839,6 +848,9 @@ namespace Eleven.Host
                 _reportControls = false;
                 if (PresetsShown)
                 {
+                    // The Presets tab's own focus order (#144): the play switch, the presets, the switching mode.
+                    List<VisualElement> presetsOrder = FocusOrder();
+                    Log($"ELEVEN bench focus order={string.Join(",", presetsOrder.Select(v => (v.name ?? "").Replace(' ', '_')))} count={presetsOrder.Count} hidden={presetsOrder.Count(Hidden)}");
                     Log(FormattableString.Invariant(
                         $"ELEVEN bench presets count={_shelf.Presets.Count} unread={_shelf.Problems.Count()} name={P(_presetName.Element)} save={P(_presetSave.Element)} items={string.Join(";", _presetPlaces.Select(i => $"{i.Name}:{P(i.Load)}:{(i.Delete != null ? P(i.Delete) : "none")}"))} list={Box(_list.contentViewport)} switching=auto:{P(_switchings.Segments[0].Element)};ball:{P(_switchings.Segments[1].Element)};manual:{P(_switchings.Segments[2].Element)}"));
                 }

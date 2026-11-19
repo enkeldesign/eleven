@@ -2074,6 +2074,48 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
           && appliedPreset.match[2] === 'Smoke_1' && appliedPreset.match[3] === expected?.[1] && appliedPreset.match[4] === expected?.[2],
         `${loadedPreset ? loadedPreset.match[0].replace('ELEVEN bench ', '') : 'no loaded line'}; ${appliedPreset ? appliedPreset.match[0].replace('ELEVEN bench ', '') : 'no applied line'}; .NET config ${expected?.[1]} start ${expected?.[2]}`);
       await waitForLog(/ELEVEN bench closed/, 3_000, fromLoad);
+
+      // #144: the play switch is in the Presets tab's focus order, before the presets, as on
+      // screen, and a keyboard starts a match from it. Tab walks to 11v11 through every segment,
+      // Shift+Tab comes back to 1v1, and Enter starts the 1v1 match. Then Tab to Practice and Enter
+      // end it, so the checks that follow run in practice as before.
+      const plays = ['Practice', '1v1', '2v2', '5v5', '11v11'];
+      const keyPlay = async (walk, back, done) => {
+        const { from } = await openPresets();
+        await presetsLine(from);
+        await sleep(500);
+        const order = logs.slice(from).map((l) => /ELEVEN bench focus order=(\S*) count=(\d+) hidden=(\d+)/.exec(l)).filter(Boolean).pop() ?? null;
+        const reached = [];
+        const step = async (key) => {
+          const fromKey = logs.length;
+          await page.keyboard.press(key);
+          const f = await waitForLog(/ELEVEN bench focus name=(\S+)/, 1_000, fromKey);
+          if (f) reached.push(f.match[1]);
+          return f?.match[1] ?? null;
+        };
+        let on = null;
+        for (let i = 0; i < Number(order?.[2] ?? 40) + 1 && on !== walk; i++) on = await step('Tab');
+        for (let i = 0; i < back && on !== null; i++) on = await step('Shift+Tab');
+        const fromEnter = logs.length;
+        if (on) await page.keyboard.press('Enter');
+        const started = await waitForLog(done, 10_000, fromEnter);
+        if (!(await waitForLog(/ELEVEN bench closed/, 1_500, fromEnter))) await page.keyboard.press('Escape');
+        await waitForLog(/ELEVEN bench closed/, 3_000, fromEnter);
+        return { order, reached, on, started };
+      };
+      const toMatch = await keyPlay('11v11', 3, /ELEVEN match started via=bench seed=\d+ half=\d+s tier=\w+ config=[0-9a-f]{16} start=[0-9a-f]{16} side=1\b/);
+      const orderNames = (toMatch.order?.[1] ?? '').split(',');
+      const playsAt = orderNames.indexOf('Practice');
+      check('the bench\'s play switch is in the Presets tab\'s focus order, before the presets',
+        playsAt >= 0 && plays.every((p, i) => orderNames[playsAt + i] === p) && toMatch.order?.[3] === '0'
+          && orderNames.indexOf('Save_preset') > playsAt + plays.length - 1,
+        toMatch.order ? `order ${toMatch.order[1]}` : 'no focus order line in the Presets tab');
+      check('Tab reaches each play segment, and Enter on 1v1 starts that match',
+        plays.every((p) => toMatch.reached.includes(p)) && toMatch.on === '1v1' && !!toMatch.started,
+        `reached ${toMatch.reached.join(',') || 'nothing'}; on ${toMatch.on ?? 'nothing'}; ${toMatch.started ? toMatch.started.match[0].replace('ELEVEN ', '') : 'no match started'}`);
+      const toPractice = await keyPlay('Practice', 0, /ELEVEN play practice via=bench/);
+      check('Enter on Practice ends the match and returns to practice', toPractice.on === 'Practice' && !!toPractice.started,
+        `on ${toPractice.on ?? 'nothing'}; ${toPractice.started ? toPractice.started.match[0].replace('ELEVEN ', '') : 'no return to practice'}`);
     }
 
     // Tabular HUD data doesn't jitter (#53): the build panel keeps its size while the dropped-frame
