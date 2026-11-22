@@ -30,7 +30,7 @@ The career is its own package, **`Eleven.Career`** (`src/Eleven.Career`).
 - **Deterministic:** its randomness is counter-based on its own streams in the shared registry (`RandomStream.World` and later ones; INV-6). The simulation's banned-API analyzer applies to it: no `System.Random`, clocks, threads or `System.Math`.
 - **Plain data:** its state is classes of plain fields and lists (INV-3), encoded canonically and versioned (`WorldCodec`, then M6.07's saves; INV-7).
 - **Narrow dependency:** it references the simulation only for:
-  - the match-result contract (`MatchResult`, `ResultGoal`);
+  - the match-result contract (`MatchResult`, `ResultGoal`, and from #170 its own codec, `MatchResultCodec`, for a season's saved results);
   - the randomness (`CounterRng`, `RandomStream`);
   - the canonical encoding;
   - the portable maths;
