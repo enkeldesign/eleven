@@ -82,8 +82,12 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(RatingMap.Capabilities(mine.Starters[0]).KickError, his[0].Capabilities.KickError, 12);
             PlayerState mate = s.Players.Single(p => p.Id == Squads.HomeOutfielder(perSide - 1));
             Assert.Equal(RatingMap.Capabilities(mine.Starters[perSide - 1]).BallControl, mate.Capabilities.BallControl, 12);
+            // The human's team-mates play on their XI's mean CPU skill until a footballer's own follows
+            // him through a switch (#166, Codex on #165); the opponent's footballers on their own.
             CpuState mateCpu = s.Cpus.Single(x => x.PlayerId == Squads.HomeOutfielder(perSide - 1));
-            Assert.Equal(RatingMap.Skill(mine.Starters[perSide - 1]).DecisionInterval, mateCpu.Skill.DecisionInterval, 12);
+            Assert.Equal(mine.Starters.Take(perSide).Average(p => RatingMap.Skill(p).DecisionInterval), mateCpu.Skill.DecisionInterval, 12);
+            CpuState theirCpu = s.Cpus.Single(x => x.PlayerId == Squads.AwayOutfielder(perSide, 2));
+            Assert.Equal(RatingMap.Skill(theirs.Starters[2]).DecisionInterval, theirCpu.Skill.DecisionInterval, 12);
             PlayerState opponent = s.Players.Single(p => p.Id == Squads.AwayOutfielder(perSide, 1));
             Assert.Equal(RatingMap.Capabilities(theirs.Starters[1]).Tackling, opponent.Capabilities.Tackling, 12);
             KeeperState keeper = s.Keepers.Single(k => k.PlayerId == Squads.AwayKeeper(perSide));
@@ -139,6 +143,42 @@ namespace Eleven.Simulation.Tests
             TunableParameter half = SimConfig.Tunables.Single(p => p.Name == "halfLength");
             Assert.All(QuickMatch.Halves, h => Assert.InRange(h, half.Min, half.Max));
             Assert.All(QuickMatch.Sizes, n => Assert.Contains(n, new[] { 1, 2, 5, 10 }));
+        }
+
+        [Fact]
+        public void A_switch_never_hands_one_footballers_cpu_skill_to_another()
+        {
+            World w = QuickMatch.World;
+            List<Club> clubs = QuickMatch.Clubs(w);
+            Assert.NotEmpty(clubs);
+            SimConfig c = SpikeScenario.Config();
+            var sim = new Simulator(c, QuickMatch.Match(c, w, clubs[0].Id, clubs[5].Id, 5, 0x166));
+            SquadSelection mine = CareerSquads.Selection(w, clubs[0].Id, 5);
+            double mean = mine.Starters.Take(5).Average(p => RatingMap.Skill(p).DecisionInterval);
+            Dictionary<int, double> away = sim.PeekState().Cpus.Where(x => sim.PeekState().Players.Single(p => p.Id == x.PlayerId).TeamId == Squads.AwayTeam)
+                .ToDictionary(x => x.PlayerId, x => x.Skill.DecisionInterval);
+            Assert.True(away.Values.Distinct().Count() > 1, "the opponent plays on its footballers' own skills");
+
+            // Switch to each team-mate in turn, and back: every CPU footballer of the human's side
+            // keeps the side's skill, the bench too, and the opponent's are untouched.
+            var events = new List<SimEvent>();
+            int switches = 0;
+            foreach (int mate in Enumerable.Range(1, 4).Select(Squads.HomeOutfielder).Concat(new[] { Squads.HomeOutfielder(0) }))
+            {
+                events.Clear();
+                sim.Step(new[] { new Command(OneVOne.HomeController, sim.Tick, Vec2.Zero, switchTo: mate) }, events);
+                switches += events.Count(e => e.Kind == SimEventKind.Switched);
+                SimState s = sim.PeekState();
+                foreach (CpuState cpu in s.Cpus)
+                {
+                    if (s.Players.Single(p => p.Id == cpu.PlayerId).TeamId == Squads.HomeTeam) Assert.Equal(mean, cpu.Skill.DecisionInterval, 12);
+                    else Assert.Equal(away[cpu.PlayerId], cpu.Skill.DecisionInterval, 12);
+                }
+
+                Assert.All(s.Bench.Where(b => b.TeamId == Squads.HomeTeam), b => Assert.Equal(mean, b.Skill.DecisionInterval, 12));
+            }
+
+            Assert.True(switches >= 4, $"{switches} switches");
         }
     }
 }
