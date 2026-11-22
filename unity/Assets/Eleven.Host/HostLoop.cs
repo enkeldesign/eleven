@@ -642,7 +642,7 @@ namespace Eleven.Host
 
                 // Home (#160), over the HUD: Quick match with the world's clubs, or practice.
                 _home = new HomeSheet(_ui, _trace, QuickMatch.Clubs(QuickMatch.World), () => _buildId, ReadStored(QuickKey),
-                    text => WriteStored(QuickKey, text), KickOff, () => { });
+                    text => WriteStored(QuickKey, text), KickOff, PractiseFromHome);
                 _hud.AttachHome(_home);
                 if (_trace)
                 {

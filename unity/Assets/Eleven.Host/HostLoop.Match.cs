@@ -259,6 +259,17 @@ namespace Eleven.Host
 
         private static Eleven.Career.Club ClubById(int id) => QuickMatch.World.Clubs.Find(c => c.Id == id);
 
+        /// <summary>
+        /// PRACTICE on Home (#160): the practice pitch, ending any match first. An address such as
+        /// ?mode=match11&amp;home=1 starts a match under Home (Codex on #165).
+        /// </summary>
+        private void PractiseFromHome()
+        {
+            if (!_match) return;
+            EndMatch();
+            Log("ELEVEN play practice via=home");
+        }
+
         /// <summary>HOME in a quick match (#160): the match ends, and Home opens with its result if it had one.</summary>
         private void GoHome()
         {
