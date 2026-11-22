@@ -338,6 +338,16 @@ jobs:
           dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll throughput 3 | tee throughput.txt
           echo "::notice title=Throughput::$(cat throughput.txt)"
 
+      # #163: the quick-sim at eleven a side, for the world's clubs. Its sample is 480 full 11v11
+      # matches; CI plays the first 8 fixtures and diffs them against the reference's first rows.
+      - name: Calibrate the quick-sim at eleven a side
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll quicksim career quicksim-career 8 | tee quicksim-career.txt
+          echo "::notice title=Eleven-a-side sample::$(sed 's| -> .*||' quicksim-career.txt)"
+          diff <(head -n 9 docs/simulation/quicksim-career-reference.csv) quicksim-career/quicksim-career.csv
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll quicksim career-fit docs/simulation/quicksim-career-reference.csv | tee quicksim-career-fit.txt
+          echo "::notice title=Eleven-a-side fit::$(head -1 quicksim-career-fit.txt)"
+
       # M5's gate (#130), INV-13: the CPU's flight predictions are the simulation's own ball.
       - name: Check the CPU's predictions against the simulation
         run: |
