@@ -135,10 +135,12 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>The career as a save (#170), stamped with the host's clock.</summary>
-        public SaveFile ToSave(long savedAt) => new SaveFile();
+        public SaveFile ToSave(long savedAt) =>
+            new SaveFile { Seed = Seed, Club = Club, Role = (byte)Role, SavedAt = savedAt, World = World, Season = Season };
 
         /// <summary>A career from its save, its matches on <paramref name="config"/>.</summary>
-        public static CareerSession FromSave(SaveFile save, SimConfig config) => new CareerSession();
+        public static CareerSession FromSave(SaveFile save, SimConfig config) =>
+            new CareerSession { Seed = save.Seed, Club = save.Club, Role = (CareerRole)save.Role, Config = config, World = save.World, Season = save.Season };
 
         /// <summary>On to the next season, once this one is over.</summary>
         public void NextSeason() => Season = SeasonEngine.Rollover(World, Season, Seed, Rules);
