@@ -85,6 +85,7 @@ namespace Eleven.Simulation.Tests
         {
             World w = WorldGenerator.Generate(0x157);
             Season s = SeasonEngine.Start(w, 1, 0x164, SeasonEngine.FirstRanking(w), Rules);
+            Assert.NotEmpty(s.Divisions);
             int mine = s.Divisions[0][0];
             var played = new List<int>();
             MatchResult? Mine(Fixture f)
