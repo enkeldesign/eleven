@@ -53,3 +53,25 @@ Rollover refuses a season that isn't over.
 - **The hook:** `PlayMatchday` takes one, which plays chosen fixtures another way. M6.06 uses it to play the human's fixture with the full simulation.
 
 `RollForward` plays a new career's seasons in turn and rolls each into the next.
+
+## Evidence
+
+`eleven-sim seasons [count] [career seed]` rolls a new career forward headless and prints each season's tables, moves and cup. CI runs three seasons.
+
+Three seasons of the reference world (seed `0x157`, career seed `0x164`) take 0.65 s for 1,293 results, at 180 s halves:
+
+| Season | Goals a match | Drawn | Cup won by | To extra time, penalties | Up | Down |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1.13 | 37 % | ROT (1) | 11, 7 | BRN, JOT, PRM, LUA | ISK, DRA, JOA, TAV |
+| 2 | 1.12 | 45 % | ORL (1) | 14, 8 | PRM, ISA, FEN, LUB | JOT, BAL, ORT, LUA |
+| 3 | 1.15 | 42 % | BRI (1) | 13, 8 | BAL, STA, JOA, LUA | ZOR, PRM, KEW, YST |
+
+Each league match lasts two 3-minute halves, so a match has about 1.1 goals, and a third or more of league matches are drawn. That is the full simulation's own rate at eleven a side (#163's sample: 1.29 goals and 36 % drawn), which the quick-sim reproduces. It isn't real football's 2.7 goals and a quarter drawn over 90 minutes. Feel is not approved.
+
+The tests (`SeasonTests`, `CareerSeasonsTests`) check:
+- the tie-breakers, on built results;
+- a scripted season and a headless one, each complete: every club's 22 league matches, the cup's 35 ties and one winner, and points that add up;
+- refusals out of turn;
+- two up and two down, with 12 clubs a division after rollover;
+- three seasons rolled forward twice, the same story byte for byte, with the world's clubs, squads and players conserved;
+- a hook playing a chosen club's fixture.
