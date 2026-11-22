@@ -502,6 +502,57 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       return;
     }
 
+    // Home and Quick Match (#160): the plain address's front door. Home, then Quick match with the
+    // world's clubs; the opponent one on and eleven a side; Kick off plays those clubs; HOME, in
+    // the Reset action's place, ends the match and opens Home again.
+    if (url.includes('home=1')) {
+      const point = (m, i) => at(Number(m[i]), Number(m[i + 1]));
+      const home = (await waitForLog(/ELEVEN home shown page=home via=(\S+) quick=(\d+),(\d+) practice=(\d+),(\d+)/, 15_000))?.match ?? null;
+      check('the address opens on Home', !!home && home[1] === 'address', home ? home[0].trim().replace('ELEVEN ', '') : 'no "home shown" line');
+      if (!home) throw new Error('no Home');
+      await page.screenshot({ path: `${outDir}/${name}-home.png` }).catch(() => {});
+
+      const fromQuick = logs.length;
+      await tap(point(home, 2));
+      const quickPattern = /ELEVEN home shown page=quick clubs=(\d+) mine=(\d+) theirs=(\d+) size=(\d+) half=(\d+) theirsNext=(\d+),(\d+) size1=(\d+),(\d+) kickoff=(\d+),(\d+)/;
+      const quickPage = (await waitForLog(quickPattern, 10_000, fromQuick))?.match ?? null;
+      check('Quick match lists the world\'s 36 clubs', !!quickPage && Number(quickPage[1]) === 36, quickPage ? quickPage[0].trim().replace('ELEVEN ', '') : 'no Quick match line');
+      if (!quickPage) throw new Error('no Quick match');
+      await page.screenshot({ path: `${outDir}/${name}-quick.png` }).catch(() => {});
+
+      const fromPick = logs.length;
+      await tap(point(quickPage, 6));
+      const picked = (await waitForLog(/ELEVEN home pick theirs=(\d+) club=(\d+)/, 5_000, fromPick))?.match ?? null;
+      await tap(point(quickPage, 8));
+      const sized = (await waitForLog(/ELEVEN home pick size=(\d+)/, 5_000, fromPick))?.match ?? null;
+      check('the opponent and the size are chosen', !!picked && picked[2] !== quickPage[3] && picked[2] !== quickPage[2] && !!sized && sized[1] === '1',
+        `${picked ? picked[0].trim().replace('ELEVEN ', '') : 'no opponent pick'}; ${sized ? sized[0].trim().replace('ELEVEN ', '') : 'no size pick'}`);
+
+      const fromKick = logs.length;
+      await tap(point(quickPage, 10));
+      const started = (await waitForLog(/ELEVEN quick started home=(\d+) away=(\d+) side=(\d+) half=(\d+)s seed=(\d+)/, 10_000, fromKick))?.match ?? null;
+      const match = (await waitForLog(/ELEVEN match started via=quick seed=(\d+) .*side=(\d+)/, 10_000, fromKick))?.match ?? null;
+      check('Kick off plays the chosen clubs at the chosen size', !!started && !!match && !!picked
+        && started[1] === quickPage[2] && started[2] === picked[2] && started[3] === '10' && match[2] === '10' && match[1] === started[5],
+        `${started ? started[0].trim().replace('ELEVEN ', '') : 'no quick start'}; ${match ? match[0].trim().replace('ELEVEN ', '') : 'no match start'}`);
+      const running = (await waitForLog(/ELEVEN match budget second=5 side=10 steps=(\d+) meanMs=(\S+) maxMs=(\S+)/, 60_000, fromKick))?.match ?? null;
+      check('the quick match plays', !!running, running ? running[0].trim().replace('ELEVEN ', '') : 'no budget line by the clock\'s fifth second');
+      const panel = lastLog(/ELEVEN hud result fits=(\w+) .*/);
+      check('the score panel, with the clubs\' names, fits', !!panel && panel[1] === 'yes', panel ? panel[0].trim().replace('ELEVEN hud ', '') : 'no result panel report');
+      await page.screenshot({ path: `${outDir}/${name}-match.png` }).catch(() => {});
+
+      const fromHome = logs.length;
+      const placed = lastLog(layoutPattern);
+      if (placed) await tap(at(Number(placed[5]), Number(placed[6])));
+      const ended = (await waitForLog(/ELEVEN match ended to=practice/, 10_000, fromHome))?.match ?? null;
+      const back = (await waitForLog(/ELEVEN home shown page=home via=match/, 10_000, fromHome))?.match ?? null;
+      check('HOME ends the quick match and opens Home', !!ended && !!back, `${ended ? 'ended' : 'not ended'}; ${back ? back[0].trim().replace('ELEVEN ', '') : 'no Home'}`);
+
+      const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
     // The action sprites' sheet (#101): every pose in every kit over the play area, for the
     // screenshot regression.
     if (url.includes('sheet=1')) {
@@ -2377,6 +2428,8 @@ try {
   await runPass(browser, `${base}?trace=1&match=1&matchview=1&mode=match2&switching=manual`, 'match2-manual', quick(750, 342), true);
   // The action sprites' sheet (#101) on a phone at 1 px per pt, for the screenshot regression.
   await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
+  // Home and Quick Match (#160).
+  await runPass(browser, `${base}?trace=1&home=1`, 'home-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
   // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 6 since
   // #118's tired top speed (seed 3 after #134's keeper distribution, seed 4 after #138's carry):

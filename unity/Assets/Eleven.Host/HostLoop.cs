@@ -212,6 +212,9 @@ namespace Eleven.Host
             else if (url.Contains("mode=match5")) StartMatch("address", 5);
             else if (url.Contains("mode=match11")) StartMatch("address", 10);
             else if (url.Contains("mode=match")) StartMatch("address", 1);
+
+            // The plain address, or ?home=1, opens on Home (#160); any other address as before.
+            if (_home != null && QuickMatch.ShowsHome(url)) _home.Show("address");
         }
 
         private void OnDestroy() => _input?.Dispose();
@@ -241,7 +244,8 @@ namespace Eleven.Host
 
             // Play waits while the note sheet is open, as it did under the browser's prompt (#44),
             // and while a match is paused (#87).
-            bool waiting = (_hud != null && _hud.SheetOpen) || (_match && _matchPaused);
+            // And while Home is open (#160): its page covers the pitch.
+            bool waiting = (_hud != null && (_hud.SheetOpen || (_hud.Home != null && _hud.Home.Open))) || (_match && _matchPaused);
             if (_paused || waiting || frame > MaxFrameSeconds) _accumulator = 0;
             else
             {
@@ -405,6 +409,13 @@ namespace Eleven.Host
         // RESET: practice's fresh start, or in a match a new match from its kick-off (#87).
         private void ResetMatch()
         {
+            // In a quick match it reads HOME, and goes there (#160).
+            if (_match && _quick)
+            {
+                GoHome();
+                return;
+            }
+
             if (_match)
             {
                 StartMatch("reset", _perSide);
@@ -628,6 +639,11 @@ namespace Eleven.Host
                     () => PlayIndex, SwitchPlay, () => _switchRequested = _match && _perSide > 1, AskSubstitution,
                     () => (int)_switchMode, SwitchSwitching, CopyCapturePressed, AskPlan);
                 _input.OverUi = _ui.IsOverUi;
+
+                // Home (#160), over the HUD: Quick match with the world's clubs, or practice.
+                _home = new HomeSheet(_ui, _trace, QuickMatch.Clubs(QuickMatch.World), () => _buildId, ReadStored(QuickKey),
+                    text => WriteStored(QuickKey, text), KickOff, () => { });
+                _hud.AttachHome(_home);
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
