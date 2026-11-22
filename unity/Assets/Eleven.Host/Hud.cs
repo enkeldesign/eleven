@@ -216,6 +216,13 @@ namespace Eleven.Host
             // the sheet is open; not the key that opened it.
             tree.RegisterCallback<KeyDownEvent>(e =>
             {
+                if (Home != null && Home.Open && e.keyCode == KeyCode.Escape)
+                {
+                    Home.Back();
+                    e.StopPropagation();
+                    return;
+                }
+
                 if (Bench.Open && e.keyCode == KeyCode.Escape)
                 {
                     Bench.Close();
@@ -237,6 +244,13 @@ namespace Eleven.Host
             }, TrickleDown.TrickleDown);
             tree.RegisterCallback<NavigationCancelEvent>(e =>
             {
+                if (Home != null && Home.Open)
+                {
+                    Home.Back();
+                    e.StopPropagation();
+                    return;
+                }
+
                 if (Bench.Open)
                 {
                     Bench.Close();
@@ -330,7 +344,20 @@ namespace Eleven.Host
         public bool SheetOpen { get; private set; }
 
         /// <summary>Whether a sheet covers the match: the note sheet or the test bench.</summary>
-        public bool ModalOpen => SheetOpen || Bench.Open;
+        public bool ModalOpen => SheetOpen || Bench.Open || (Home != null && Home.Open);
+
+        /// <summary>Home (#160), over everything while it is open.</summary>
+        public HomeSheet Home { get; private set; }
+
+        /// <summary>Puts Home over the HUD: while it is open the HUD's actions take neither presses nor focus.</summary>
+        public void AttachHome(HomeSheet home)
+        {
+            Home = home;
+            home.OpenChanged = open =>
+            {
+                foreach (UiKit.Action a in _actions) a.Element.focusable = !open && Focusable(a);
+            };
+        }
 
         /// <summary>Whether a press on SAVE CAPTURE would save now: shown, and not behind a sheet.</summary>
         public bool SaveActive => _saveShown && !ModalOpen;
@@ -372,6 +399,7 @@ namespace Eleven.Host
             _scrim.style.paddingBottom = Spacing.L + bottom;
             _scrim.style.paddingLeft = Spacing.L + left;
             Bench.Inset(top, right, bottom, left);
+            Home?.Inset(top, right, bottom, left);
             _reportBuild = _reportResult = true;
         }
 
@@ -449,12 +477,13 @@ namespace Eleven.Host
             $"Full time · {(home > away ? "You win" : home < away ? "CPU wins" : "Draw")}";
 
         /// <summary>
-        /// In a match, RESET starts a new match and RUN SCENARIO pauses and resumes it (#87); in
-        /// practice they are as they were. Each keeps its accessible name in step with its label.
+        /// In a match, RESET starts a new match and RUN SCENARIO pauses and resumes it (#87); in a
+        /// quick match RESET goes Home (#160); in practice they are as they were. Each keeps its
+        /// accessible name in step with its label.
         /// </summary>
-        public void SetMatchActions(bool match, bool paused)
+        public void SetMatchActions(bool match, bool paused, bool quick = false)
         {
-            Relabel(Reset, match ? "New match" : "Reset");
+            Relabel(Reset, match ? (quick ? "Home" : "New match") : "Reset");
             Relabel(Run, match ? (paused ? "Resume" : "Pause") : "Run scenario");
         }
 
@@ -571,7 +600,11 @@ namespace Eleven.Host
         private void MoveFocus(int step)
         {
             var order = new List<VisualElement>();
-            if (Bench.Open)
+            if (Home != null && Home.Open)
+            {
+                order = Home.FocusOrder();
+            }
+            else if (Bench.Open)
             {
                 order = Bench.FocusOrder();
             }

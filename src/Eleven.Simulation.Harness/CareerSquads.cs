@@ -18,9 +18,10 @@ namespace Eleven.Simulation.Harness
         /// footballers, keeper, CPU footballers and bench given their own values from
         /// <see cref="RatingMap"/>.
         /// </summary>
-        public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true)
+        public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null)
         {
-            SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu);
+            SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
             Apply(s, Selection(world, homeClub, perSide), perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
             Apply(s, Selection(world, awayClub, perSide), perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
             return s;

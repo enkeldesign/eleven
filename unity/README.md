@@ -79,6 +79,12 @@ The **Deploy playable link** job publishes every build:
 
 The link is posted as a PR comment, which is kept up to date on every push.
 
+The plain link opens on **Home** ([#160](https://github.com/enkeldesign/eleven/issues/160)):
+- **Quick match** plays two of the world's clubs ([docs/career/quick-match.md](../docs/career/quick-match.md)).
+- **Practice** is the practice pitch with the test bench, as before.
+
+A link with any parameter (`?trace=1`, `?mode=match11`, …) opens as it always did; `?home=1` adds Home to such a link.
+
 The whole site lives on the orphan `site` branch (one commit, force-pushed), because each Pages deployment replaces the entire site. Previews of closed PRs are removed on the next deploy.
 
 Repository settings this needs, all set once:
