@@ -54,6 +54,16 @@ namespace Eleven.Simulation
             baseRate: 0.157396, home: 0.025975, tierRatings: new[] { 0, 0.230584, 0.243057, 0.706305 }, capabilityWeight: 9.166028, rho: -0.014,
             foulsPerSide: 1.846591, cautionsPerSide: 0.4375, sendingsOffPerSide: 0.074811);
 
+        /// <summary>
+        /// The fit at eleven a side (#163, docs/simulation/quicksim.md): the reference's ratings
+        /// scaled, and μ, h, ρ and the foul and card means refitted to the full simulation's
+        /// 11v11 matches between the world's clubs. `eleven-sim quicksim career-fit` reproduces it.
+        /// </summary>
+        public static QuickSimModel ElevenASide { get; } = Reference;
+
+        /// <summary>The model for a match of <paramref name="perSide"/> outfielders a side: eleven a side's, else the reference.</summary>
+        public static QuickSimModel For(int perSide) => perSide >= 10 ? ElevenASide : Reference;
+
         /// <summary>A shootout kick's chance of a goal (#163): the full simulation's, from #122's penalty benchmark.</summary>
         public const double ReferenceShootoutConversion = 0.76;
 

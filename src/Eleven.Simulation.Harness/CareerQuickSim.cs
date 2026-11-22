@@ -57,8 +57,8 @@ namespace Eleven.Simulation.Harness
             return new QuickSide(TierPosition(cpu / perSide), mean);
         }
 
-        /// <summary>A match between two clubs that nobody plays: the quick-sim's result.</summary>
+        /// <summary>A match between two clubs that nobody plays: the quick-sim's result, with the model for its size.</summary>
         public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed) =>
-            QuickSim.Play(config, Side(world, homeClub, perSide), Side(world, awayClub, perSide), seed);
+            QuickSim.Play(config, Side(world, homeClub, perSide), Side(world, awayClub, perSide), seed, model: QuickSimModel.For(perSide));
     }
 }
