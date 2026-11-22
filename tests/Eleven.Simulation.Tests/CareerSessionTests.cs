@@ -141,7 +141,8 @@ namespace Eleven.Simulation.Tests
                 Fixture? f = c.Next();
                 Assert.NotNull(f);
                 SimState s = c.MatchFor(f!, 0x167);
-                int human = s.Players.Count(p => p.OwnerControllerId == OneVOne.HomeController);
+                // A human footballer: his controller's, and no CPU state plays him.
+                int human = s.Players.Count(p => p.OwnerControllerId == OneVOne.HomeController && !s.Cpus.Any(x => x.PlayerId == p.Id));
                 Assert.Equal(role == CareerRole.PlayerManager ? 1 : 0, human);
 
                 // His club is the simulation's home side, on its own footballers' values.
