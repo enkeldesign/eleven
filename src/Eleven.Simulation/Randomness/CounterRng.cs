@@ -40,6 +40,9 @@ namespace Eleven.Simulation.Randomness
         QuickSim = 11,
         /// <summary>The career's fictional world (#157): every club, footballer and manager the generator draws.</summary>
         World = 12,
+
+        /// <summary>The career's competitions (#162): a league schedule's places and a cup round's draw, per season and round.</summary>
+        Competition = 13,
     }
 
     /// <summary>
