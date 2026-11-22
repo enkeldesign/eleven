@@ -101,9 +101,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     # About 25 minutes with Candidate B's two passes (#76), on a runner that draws a 3x phone
-    # at a few frames a second, and a few more for the whole 1v1 match (#87). A manual run that
-    # repeats passes (#120) gets the job's longest time.
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 300 || 45 }}
+    # at a few frames a second, and a few more for the whole 1v1 match (#87). By #158 the whole
+    # suite took 44 min 36 s, within half a minute of 45, so a push run has 60. A manual run
+    # that repeats passes (#120) gets the job's longest time.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 300 || 60 }}
     steps:
       - uses: actions/checkout@v4
 
