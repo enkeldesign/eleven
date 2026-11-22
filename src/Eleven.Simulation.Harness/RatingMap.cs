@@ -104,13 +104,40 @@ namespace Eleven.Simulation.Harness
             new RatingEntry("visionRange", 30, 70, 120, "vision"),
         });
 
-        /// <summary>Plumbing: the reference, whatever the ratings.</summary>
-        public static PlayerCapabilities Capabilities(Player p) => PlayerCapabilities.Reference;
+        private static double Get(ReadOnlyCollection<RatingEntry> entries, string target, Player p)
+        {
+            foreach (RatingEntry e in entries)
+            {
+                if (e.Target == target) return e.Value(p);
+            }
 
-        /// <summary>Plumbing: the reference keeper.</summary>
-        public static KeeperCapabilities Keeper(Player p) => KeeperCapabilities.Reference;
+            throw new ArgumentException($"No rating entry for '{target}'.", nameof(target));
+        }
 
-        /// <summary>Plumbing: the Pro tier.</summary>
-        public static CpuSkill Skill(Player p) => CpuSkill.Pro;
+        /// <summary>His outfield capabilities: each the reference's, replaced by its mapped value.</summary>
+        public static PlayerCapabilities Capabilities(Player p)
+        {
+            PlayerCapabilities c = PlayerCapabilities.Reference;
+            foreach (RatingEntry e in Outfield) c = c.With(e.Target, e.Value(p));
+            return c;
+        }
+
+        /// <summary>His keeping.</summary>
+        public static KeeperCapabilities Keeper(Player p) => new KeeperCapabilities
+        {
+            ReactionTime = Get(Keeping, "reactionTime", p),
+            DiveSpeed = Get(Keeping, "diveSpeed", p),
+            Reach = Get(Keeping, "reach", p),
+            Handling = Get(Keeping, "handling", p),
+        };
+
+        /// <summary>His skill as a CPU footballer.</summary>
+        public static CpuSkill Skill(Player p) => new CpuSkill
+        {
+            DecisionInterval = Get(Cpu, "decisionInterval", p),
+            ReactionDelay = Get(Cpu, "reactionDelay", p),
+            PerceptionError = Get(Cpu, "perceptionError", p),
+            VisionRange = Get(Cpu, "visionRange", p),
+        };
     }
 }
