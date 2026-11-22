@@ -36,6 +36,22 @@ jobs:
           echo "::notice title=Simulation tests::${passed:-0} of ${total:-0} passed"
           test "${total:-0}" -gt 0
 
+      # The career layer (ADR 0005, #157): the fictional world, and later its seasons and saves.
+      - name: Run career tests
+        run: >
+          dotnet test tests/Eleven.Career.Tests/Eleven.Career.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=career.trx"
+          --results-directory TestResults
+
+      - name: Check that career tests ran
+        run: |
+          counters=$(grep -o '<Counters [^>]*>' TestResults/career.trx)
+          total=$(echo "$counters" | grep -o 'total="[0-9]*"' | grep -o '[0-9]\+')
+          passed=$(echo "$counters" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]\+')
+          echo "::notice title=Career tests::${passed:-0} of ${total:-0} passed"
+          test "${total:-0}" -gt 0
+
       # The visual system's tokens (#48): palette, mappings, contrast and scales.
       - name: Run presentation tests
         run: >

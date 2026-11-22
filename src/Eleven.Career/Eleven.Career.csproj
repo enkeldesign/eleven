@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The career layer (ADR 0005, #157): the fictional world, competitions, seasons and saves.
+    Engine-free and netstandard2.1 like the simulation, deterministic, and under the same
+    banned-API analyzer. It reads matches only through the match-result contract (INV-14).
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>Eleven.Career</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Eleven.Simulation/Eleven.Simulation.csproj" />
+    <ProjectReference Include="../Eleven.Simulation.Analyzers/Eleven.Simulation.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

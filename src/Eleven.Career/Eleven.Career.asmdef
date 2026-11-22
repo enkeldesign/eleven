@@ -1,0 +1,16 @@
+{
+    "name": "Eleven.Career",
+    "rootNamespace": "Eleven.Career",
+    "references": [
+        "Eleven.Simulation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

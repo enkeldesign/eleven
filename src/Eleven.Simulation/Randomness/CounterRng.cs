@@ -38,6 +38,8 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>The quick-sim's result for a match nobody plays (#129): its scoreline, goal times and cards, at tick 0.</summary>
         QuickSim = 11,
+        /// <summary>The career's fictional world (#157): every club, footballer and manager the generator draws.</summary>
+        World = 12,
     }
 
     /// <summary>

@@ -113,4 +113,31 @@ namespace Eleven.Presentation
             ("Opponent", Opponent), ("OpponentKeeper", OpponentKeeper),
         };
     }
+
+    /// <summary>
+    /// The kit tier (#157): the colours clubs wear, one a career kit token (<c>Eleven.Career.KitColour</c>),
+    /// by its name. The world stores the token; the design system holds the colour, so a kit
+    /// follows the palette. Like the domain tier, components never take their colour from here.
+    /// </summary>
+    public static class Kit
+    {
+        public static readonly Rgba Red = Rgba.Hex("#C8323C");
+        public static readonly Rgba Blue = Rgba.Hex("#2F55C8");
+        public static readonly Rgba White = Rgba.Hex("#F4F5EE");
+        public static readonly Rgba Black = Rgba.Hex("#1A1D22");
+        public static readonly Rgba Yellow = Rgba.Hex("#F2CC3A");
+        public static readonly Rgba Green = Rgba.Hex("#2E8C4A");
+        public static readonly Rgba SkyBlue = Rgba.Hex("#7CC3E8");
+        public static readonly Rgba Orange = Rgba.Hex("#EE8A2C");
+        public static readonly Rgba Purple = Rgba.Hex("#6E4AA8");
+        public static readonly Rgba Maroon = Rgba.Hex("#7A1F2E");
+        public static readonly Rgba Navy = Rgba.Hex("#1C2D5A");
+        public static readonly Rgba Grey = Rgba.Hex("#9AA3B0");
+
+        public static readonly (string Name, Rgba Colour)[] All =
+        {
+            ("Red", Red), ("Blue", Blue), ("White", White), ("Black", Black), ("Yellow", Yellow), ("Green", Green),
+            ("SkyBlue", SkyBlue), ("Orange", Orange), ("Purple", Purple), ("Maroon", Maroon), ("Navy", Navy), ("Grey", Grey),
+        };
+    }
 }
