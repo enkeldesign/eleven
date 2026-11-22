@@ -17,14 +17,14 @@ It fails if a match is stuck (unfinished; an outfielder still, or the ball untou
 | | |
 | --- | --- |
 | Matches | 18: 15 in the league, 3 in the cup. All finished, none stuck. |
-| Goals a match | 3.3 |
-| Laws a match | 5.6 fouls, 0.06 offsides, 1.1 cautions, 0.06 sendings-off, no injuries, 4.1 substitutions |
-| Longest still, untouched | 4.2 s, 5.2 s |
+| Goals a match | 3.8 |
+| Laws a match | 5.4 fouls, 0.06 offsides, 1.0 cautions, 0.11 sendings-off, no injuries, 4.5 substitutions |
+| Longest still, untouched | 4.5 s, 5.2 s |
 | League | One draw in 15, Millbrook–Northfield 0–0. Kestrel, the elite side, won all five. |
 | Cup | No tie to extra time; Kestrel winning the final 2–1 against Riverside. |
 | Replays | 6 of 6 equal. |
 
-This is the reference after #118, which reckons tired CPU runs at their tired speed and changed every CPU match.
+This is the reference after #122, which sets the CPU taker's penalty: a match with a penalty plays on differently once it scores where it was saved before. The league and cup results are as after #118, which reckoned tired CPU runs at their tired speed.
 
 **What it shows:**
 - **Laws reached at eleven a side:** fouls, offside, cautions, a sending-off and substitutions.
