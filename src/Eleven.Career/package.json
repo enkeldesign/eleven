@@ -1,0 +1,7 @@
+{
+  "name": "com.enkeldesign.eleven.career",
+  "version": "0.1.0",
+  "displayName": "ELEVEN Career",
+  "description": "The engine-free career layer (ADR 0005): the fictional world, competitions, seasons and saves. The same source files build in plain .NET (Eleven.Career.csproj) and in Unity (Eleven.Career.asmdef).",
+  "unity": "6000.3"
+}
