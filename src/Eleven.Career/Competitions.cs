@@ -100,9 +100,16 @@ namespace Eleven.Career
     }
 
     /// <summary>What a matchday plays: a league round in every division, or a cup round.</summary>
+    public enum MatchdayKind : byte
+    {
+        League,
+        Cup,
+    }
+
+    /// <summary>One matchday of the season: its kind and that competition's round, from 1.</summary>
     public struct Matchday
     {
-        public CompetitionId Competition;
+        public MatchdayKind Kind;
         public int Round;
     }
 
