@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Eleven.Career/Eleven.Career.csproj" />
     <ProjectReference Include="../../src/Eleven.Simulation/Eleven.Simulation.csproj" />
+    <ProjectReference Include="../../src/Eleven.Presentation/Eleven.Presentation.csproj" />
   </ItemGroup>
 
 </Project>

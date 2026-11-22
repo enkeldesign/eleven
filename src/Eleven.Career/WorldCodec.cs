@@ -29,8 +29,8 @@ namespace Eleven.Career
                 w.WriteInt32(c.Id);
                 w.WriteString(c.Name);
                 w.WriteString(c.ShortName);
-                w.WriteInt32(c.PrimaryColour);
-                w.WriteInt32(c.SecondaryColour);
+                w.WriteByte((byte)c.Shirt);
+                w.WriteByte((byte)c.Shorts);
                 w.WriteInt32(c.Reputation);
                 w.WriteInt32(c.Division);
                 w.WriteInt32(c.ManagerId);
@@ -103,8 +103,8 @@ namespace Eleven.Career
                     Id = r.ReadInt32(),
                     Name = r.ReadString(),
                     ShortName = r.ReadString(),
-                    PrimaryColour = r.ReadInt32(),
-                    SecondaryColour = r.ReadInt32(),
+                    Shirt = (KitColour)r.ReadByte(),
+                    Shorts = (KitColour)r.ReadByte(),
                     Reputation = r.ReadInt32(),
                     Division = r.ReadInt32(),
                     ManagerId = r.ReadInt32(),

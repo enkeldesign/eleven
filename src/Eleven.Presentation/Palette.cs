@@ -113,4 +113,13 @@ namespace Eleven.Presentation
             ("Opponent", Opponent), ("OpponentKeeper", OpponentKeeper),
         };
     }
+
+    /// <summary>
+    /// The kit tier (#157): the colours clubs wear, by the career's kit tokens' names. Plumbing:
+    /// none yet.
+    /// </summary>
+    public static class Kit
+    {
+        public static readonly (string Name, Rgba Colour)[] All = { };
+    }
 }

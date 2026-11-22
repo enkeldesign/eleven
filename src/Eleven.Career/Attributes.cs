@@ -53,6 +53,27 @@ namespace Eleven.Career
         Striker = 7,
     }
 
+    /// <summary>
+    /// A kit colour (#157): a semantic token, resolved to a colour by the design system's kit tier
+    /// (<c>Eleven.Presentation.Kit</c>), never a hard-coded value in the world (AGENTS.md). Stable
+    /// numbers: they are stored.
+    /// </summary>
+    public enum KitColour : byte
+    {
+        Red = 0,
+        Blue = 1,
+        White = 2,
+        Black = 3,
+        Yellow = 4,
+        Green = 5,
+        SkyBlue = 6,
+        Orange = 7,
+        Purple = 8,
+        Maroon = 9,
+        Navy = 10,
+        Grey = 11,
+    }
+
     /// <summary>A footballer's stronger foot.</summary>
     public enum Foot : byte
     {

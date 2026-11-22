@@ -24,8 +24,8 @@ namespace Eleven.Career
         public int Id;
         public string Name = "";
         public string ShortName = "";
-        /// <summary>Home colours, 0xRRGGBB: shirt, then shorts.</summary>
-        public int PrimaryColour, SecondaryColour;
+        /// <summary>Home kit: shirt and shorts, as design tokens (<see cref="KitColour"/>).</summary>
+        public KitColour Shirt, Shorts;
         /// <summary>1–20: how the football world sees the club.</summary>
         public int Reputation;
         /// <summary>1 is the top division.</summary>

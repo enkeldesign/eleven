@@ -119,6 +119,17 @@ namespace Eleven.Career.Tests
             Assert.Throws<FormatException>(() => WorldCodec.Decode(bytes.Take(bytes.Length / 2).ToArray()));
         }
 
+        [Fact]
+        public void Every_club_wears_kit_tokens_the_design_system_resolves_with_shirt_and_shorts_apart()
+        {
+            // Codex on #158: colours come from semantic design tokens (AGENTS.md). The world
+            // stores the token; the design system's kit tier holds the colour.
+            var tokens = Eleven.Presentation.Kit.All.Select(t => t.Name).ToList();
+            foreach (KitColour k in Enum.GetValues(typeof(KitColour))) Assert.Contains(k.ToString(), tokens);
+            Assert.All(Reference.Clubs, c => Assert.NotEqual(c.Shirt, c.Shorts));
+            Assert.True(Reference.Clubs.Select(c => c.Shirt).Distinct().Count() >= 6, "the clubs' shirts vary");
+        }
+
         // ADR 0005: the career reaches into the simulation only for the result contract, the
         // randomness, the encoding, the portable maths and the formations' names. Read from the
         // career assembly's own type references, so any new use of a simulation type fails here.
