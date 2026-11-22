@@ -46,22 +46,50 @@ Every break is free for substitutions (#110), as half-time is.
 
 ## Measured
 
-**Twenty-four CPU knockouts at each size,** under the reference config, the managers substituting:
+**Twenty-four CPU knockouts at each size,** under the reference config, the managers substituting (#122's re-measure, seeds 0x111000000 onwards):
 
 | Side | Finished with a winner | Went to extra time | Went to a shootout | Kicks in each shootout |
 | --- | --- | --- | --- | --- |
-| 5v5 | 24 of 24 | 3 | 2 | 16 and 10 |
-| 11v11 | 24 of 24 | 8 | 4 | 14, 10, 12 and 9 |
+| 5v5 | 24 of 24 | 6 | 4 | 9, 16, 8 and 8 |
+| 11v11 | 24 of 24 | 6 | 4 | 9, 10, 16 and 9 |
 
-**How a shootout's kicks end,** from six level matches at each size:
+**How a shootout's kicks end,** from six level shootouts at each size (`PenaltyTrials`):
 
-| Side | Kicks | Scored | Held by the keeper | Wide of the goal | Parried, time ran out |
-| --- | --- | --- | --- | --- | --- |
-| 5v5 | 72 | 15 (21 %) | 33 | 18 | 6 |
-| 11v11 | 71 | 11 (15 %) | 28 | 28 | 4 |
+| Side | Kicks | Scored | Saved, held or parried | Missed, all off the frame |
+| --- | --- | --- | --- | --- |
+| 5v5 | 67 | 51 (76 %) | 13 | 3 |
+| 11v11 | 60 | 48 (80 %) | 7 | 5 |
 
-- **Shootouts are long** because the basic CPU taker's penalty (#99) rarely scores: about one in five, where professional football's is about three in four. That is the penalty's own reference, not the shootout's; #122 measures and sets it.
+- **Before #122,** the CPU taker scored about one kick in five (15 of 72 at 5v5, 11 of 71 at 11v11), and a shootout ran 9 to 16 kicks.
+- **Now most shootouts end in their first five each,** as in football.
 - These are untuned references.
+
+## The penalty
+
+The CPU taker's penalty (`RestartControllers.Take`) goes into a corner:
+- **`penaltyInside` (0.5 m):** how far inside the post he aims;
+- **`penaltyPower` (0.9):** the share of his kick power he uses;
+- **`penaltyLoft` (0.135):** the share of the maximum loft he gives it.
+
+The side he favours is set by his id. The simulation's kick error is applied to his kick, as to any (INV-12).
+
+**The benchmark** (#122, `PenaltyTrials`) plays knockouts level at the last step of extra time. Their shootouts' kicks are the CPU taker's, against the reference keeper's brain. `PenaltyTests` checks that the reference scores 65–85 %, is saved 8–27 % of the time and misses at most 15 %, over at least 300 kicks. Football's split is about 75 % scored, 17 % saved and 8 % missed.
+
+**The sweep that chose the values,** at five a side:
+
+| Inside, power, loft | Kicks | Scored | Saved | Missed |
+| --- | --- | --- | --- | --- |
+| 0.6 m, 0.9, 0.04 (before) | 499 | 18 % | 82 % | 0 % |
+| 0.6 m, 0.9, 0.12 | 410 | 52 % | 48 % | 0 % |
+| 0.6 m, 0.9, 0.14 | 502 | 81 % | 19 % | 0 % |
+| 0.5 m, 0.9, 0.13 | 438 | 65 % | 30 % | 6 % |
+| **0.5 m, 0.9, 0.135 (the reference)** | 891 | 76 % | 18 % | 6 % |
+| 0.5 m, 0.9, 0.14 | 926 | 82 % | 12 % | 6 % |
+| 0.3 m, 0.9, 0.2 | 197 | 79 % | 2 % | 19 % |
+
+- **Loft decides the saves.** The keeper's reach is a sharp cliff: about half are saved at 0.12, about a tenth at 0.14. Low and hard, the reference keeper reaches most kicks.
+- **The aim inside the post decides the misses.** At 0.5 m his kick error puts about 6 % against the frame; at 0.6 m and more, none; at 0.3 m, about one in five.
+- **Feel is open:** a taker who varies his corner and height, or reads the keeper, is M7's. These values are technical references.
 
 ## The result
 

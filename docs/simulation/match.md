@@ -77,7 +77,7 @@ They count in the halves and extra time, the step that ends one included, not th
 xG = 1 / (1 + e^−(a + b·d + c·θ)), with a = −1.0, b = −0.12 per metre, c = 1.0 per radian, and a penalty's kick 0.76 whatever the geometry (its rebound is an ordinary shot).
 
 - **It is a reader's model:** its parameters are metric references, not simulation config, and change no match. Centrally, it gives about 0.35 at 6 m, 0.16 at 11 m and 0.07 at the edge of the box.
-- **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 34.3 expected goals against 59 scored. A match has 15.8 shots, 14.2 of them on target, and xG 1.91 against 3.28 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by about two fifths (42 %). That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
+- **Checked against the gate's matches,** not fitted to them. Over the 18 matches of `gate11-reference.csv` it gives 36.3 expected goals against 68 scored. A match has 16.6 shots, 14.8 of them on target, and xG 2.01 against 3.78 goals. The CPU's keepers concede more of the chances than a real keeper would, so the model under-reads this game by nearly half (47 %). That is a measure of the game, kept as it is; quick-sim calibration (M5.05) will use it.
 - **Recorded and diffed in CI:** the gate's reference carries each match's possession, shots, shots on target, xG, passes and PPDA.
 - **Read while a match is played:** `MatchRecorder.Now(side)` gives the metrics so far (0 home, 1 away); at full time they are the result's. The host's dashboard reads them ([match.md](../ui/match.md#the-match-dashboard)).
 

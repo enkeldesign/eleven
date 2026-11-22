@@ -43,12 +43,12 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 
 | Parameter | Value | Standard error |
 | --- | --- | --- |
-| μ (log goals a side, sides level) | 0.129508 | 0.041 |
-| h (home) | 0.025385 | 0.052 |
-| Tier ratings: apprentice, club, pro, elite | 0, 0.234696, 0.260399, 0.724482 | 0, 0.050, 0.050, 0.051 |
-| w (capability index) | 9.042838 | 0.478 |
-| ρ | −0.031 | 0.065 |
-| Fouls, cautions, sendings-off a side | 1.846, 0.440, 0.077 | |
+| μ (log goals a side, sides level) | 0.157396 | 0.040 |
+| h (home) | 0.025975 | 0.051 |
+| Tier ratings: apprentice, club, pro, elite | 0, 0.230584, 0.243057, 0.706305 | 0, 0.050, 0.050, 0.050 |
+| w (capability index) | 9.166028 | 0.472 |
+| ρ | −0.014 | 0.064 |
+| Fouls, cautions, sendings-off a side | 1.847, 0.438, 0.075 | |
 
 **What the fit reads from the full simulation:**
 - **No home advantage:**
@@ -57,10 +57,10 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
   - The two 60-match fits before #151 had h at +0.18 ± 0.15 and −0.32 ± 0.15: noise.
 - **The tiers:**
   - The apprentice tier is clearly below the rest, and the elite tier clearly above.
-  - Club (0.235 ± 0.050) and pro (0.260 ± 0.050) play alike: their ratings overlap.
+  - Club (0.231 ± 0.050) and pro (0.243 ± 0.050) play alike: their ratings overlap.
   - The order of those two isn't resolved, and a bigger sample won't separate tiers that play the same. Telling them apart is M7's tuning of the CPU tiers.
 - **Capabilities matter:**
-  - A side at +0.05 on the capability index rates 0.45 higher: about 1.6 times the goals against a level side.
+  - A side at +0.05 on the capability index rates 0.46 higher: about 1.6 times the goals against a level side.
   - w is resolved to ± 5 %, now that tier and capabilities vary independently.
   - Before #151 it rested on two sides (−2.1 ± 3.7, then 10.9 ± 3.7).
 - **ρ is within one standard error of 0:** the full simulation's low scores are about as independent Poisson goals give.
@@ -104,10 +104,10 @@ At the reference, against the full simulation's 528 matches:
 
 | | Full simulation | Quick-sim (26,400) |
 | --- | --- | --- |
-| Home goals | 1.44 | 1.44 |
-| Away goals | 1.40 | 1.41 |
+| Home goals | 1.48 | 1.48 |
+| Away goals | 1.44 | 1.44 |
 | Home wins | 41 % | 41 % |
-| Draws | 20 % | 20 % |
+| Draws | 19 % | 19 % |
 | Cautions a match | 0.88 | 0.88 |
 
 **The sample's limits:**

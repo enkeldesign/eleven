@@ -49,8 +49,8 @@ namespace Eleven.Simulation
 
         /// <summary>The fit to the calibration sample (docs/simulation/quicksim.md): `eleven-sim quicksim fit` reproduces it.</summary>
         public static QuickSimModel Reference { get; } = new QuickSimModel(
-            baseRate: 0.129508, home: 0.025385, tierRatings: new[] { 0, 0.234696, 0.260399, 0.724482 }, capabilityWeight: 9.042838, rho: -0.031,
-            foulsPerSide: 1.845644, cautionsPerSide: 0.440341, sendingsOffPerSide: 0.076705);
+            baseRate: 0.157396, home: 0.025975, tierRatings: new[] { 0, 0.230584, 0.243057, 0.706305 }, capabilityWeight: 9.166028, rho: -0.014,
+            foulsPerSide: 1.846591, cautionsPerSide: 0.4375, sendingsOffPerSide: 0.074811);
 
         /// <summary>μ: the log of a side's goals in a match of reference halves, sides level.</summary>
         public double BaseRate { get; }

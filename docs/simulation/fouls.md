@@ -30,7 +30,7 @@ The advantage is in the restart's state: the side, the steps left, the place (st
   - the defending keeper on his line, between the posts;
   - everyone else outside the area and 9.15 m from the mark.
 - **The automatic take** (`RestartControllers`):
-  - a penalty is shot low into a corner;
+  - a penalty is shot into a corner, `penaltyInside` (0.5 m) inside the post, at `penaltyPower` (0.9) of his power and `penaltyLoft` (0.135) of the loft. #122 chose them with a penalty benchmark against football's split ([knockout.md](knockout.md#the-penalty));
   - a free kick within 25 m of the goal it attacks is shot at goal; otherwise it is a long ball up the pitch.
 
   The human takes his own through the ACTION surface, or has it taken for him after the wait (#85).

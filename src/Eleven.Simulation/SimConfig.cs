@@ -24,7 +24,7 @@ namespace Eleven.Simulation
     /// </summary>
     public sealed partial class SimConfig
     {
-        public const int FormatVersion = 32;
+        public const int FormatVersion = 33;
 
         public SimConfig(
             int tickRate = 60,
@@ -150,7 +150,10 @@ namespace Eleven.Simulation
             double keeperHoldSeconds = 1.2,
             double keeperThrowRange = 30,
             double keeperOpenDistance = 6,
-            double humanChallengeLeeway = 0)
+            double humanChallengeLeeway = 0,
+            double penaltyInside = 0.5,
+            double penaltyPower = 0.9,
+            double penaltyLoft = 0.135)
         {
             if (tickRate <= 0) throw new ArgumentOutOfRangeException(nameof(tickRate));
             if (kickCooldownTicks < 0) throw new ArgumentOutOfRangeException(nameof(kickCooldownTicks));
@@ -280,6 +283,9 @@ namespace Eleven.Simulation
             KeeperThrowRange = keeperThrowRange;
             KeeperOpenDistance = keeperOpenDistance;
             HumanChallengeLeeway = humanChallengeLeeway;
+            PenaltyInside = penaltyInside;
+            PenaltyPower = penaltyPower;
+            PenaltyLoft = penaltyLoft;
 
             CheckTunableRanges();
 
@@ -783,6 +789,15 @@ namespace Eleven.Simulation
         /// <summary>m. Extra reach the won't-reach check allows a human's standing challenge (#135), never the CPU's; 0, the reference, holds both to the same rule.</summary>
         public double HumanChallengeLeeway { get; }
 
+        /// <summary>m. How far inside a post the CPU taker aims his penalty (#122).</summary>
+        public double PenaltyInside { get; }
+
+        /// <summary>The fraction of his kick power the CPU taker puts into a penalty (#122).</summary>
+        public double PenaltyPower { get; }
+
+        /// <summary>The fraction of the maximum loft the CPU taker gives a penalty (#122).</summary>
+        public double PenaltyLoft { get; }
+
         /// <summary>Steps of a switched footballer's carry (#138): switchCarrySeconds at the tick rate.</summary>
         public int SwitchCarryTicks => (int)Math.Round(SwitchCarrySeconds * TickRate);
 
@@ -972,7 +987,10 @@ namespace Eleven.Simulation
                 keeperHoldSeconds: r.ReadDouble(nameof(KeeperHoldSeconds)),
                 keeperThrowRange: r.ReadDouble(nameof(KeeperThrowRange)),
                 keeperOpenDistance: r.ReadDouble(nameof(KeeperOpenDistance)),
-                humanChallengeLeeway: r.ReadDouble(nameof(HumanChallengeLeeway)));
+                humanChallengeLeeway: r.ReadDouble(nameof(HumanChallengeLeeway)),
+                penaltyInside: r.ReadDouble(nameof(PenaltyInside)),
+                penaltyPower: r.ReadDouble(nameof(PenaltyPower)),
+                penaltyLoft: r.ReadDouble(nameof(PenaltyLoft)));
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after the config.");
             return config;
@@ -1107,6 +1125,9 @@ namespace Eleven.Simulation
             w.WriteDouble(KeeperThrowRange, nameof(KeeperThrowRange));
             w.WriteDouble(KeeperOpenDistance, nameof(KeeperOpenDistance));
             w.WriteDouble(HumanChallengeLeeway, nameof(HumanChallengeLeeway));
+            w.WriteDouble(PenaltyInside, nameof(PenaltyInside));
+            w.WriteDouble(PenaltyPower, nameof(PenaltyPower));
+            w.WriteDouble(PenaltyLoft, nameof(PenaltyLoft));
             return w.ToArray();
         }
 
