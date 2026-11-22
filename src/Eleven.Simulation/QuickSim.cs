@@ -59,7 +59,9 @@ namespace Eleven.Simulation
         /// scaled, and μ, h, ρ and the foul and card means refitted to the full simulation's
         /// 11v11 matches between the world's clubs. `eleven-sim quicksim career-fit` reproduces it.
         /// </summary>
-        public static QuickSimModel ElevenASide { get; } = Reference;
+        public static QuickSimModel ElevenASide { get; } = new QuickSimModel(
+            baseRate: -0.569403, home: -0.072325, tierRatings: new[] { 0, 0.231839, 0.244379, 0.710148 }, capabilityWeight: 9.215901, rho: 0.098,
+            foulsPerSide: 2.290625, cautionsPerSide: 0.541667, sendingsOffPerSide: 0.064583);
 
         /// <summary>The model for a match of <paramref name="perSide"/> outfielders a side: eleven a side's, else the reference.</summary>
         public static QuickSimModel For(int perSide) => perSide >= 10 ? ElevenASide : Reference;
