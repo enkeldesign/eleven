@@ -64,8 +64,11 @@ namespace Eleven.Simulation
         /// <summary>The model for a match of <paramref name="perSide"/> outfielders a side: eleven a side's, else the reference.</summary>
         public static QuickSimModel For(int perSide) => perSide >= 10 ? ElevenASide : Reference;
 
-        /// <summary>A shootout kick's chance of a goal (#163): the full simulation's, from #122's penalty benchmark.</summary>
-        public const double ReferenceShootoutConversion = 0.76;
+        /// <summary>
+        /// A shootout kick's chance of a goal (#163): the full simulation's, from #122's penalty
+        /// benchmark at eleven a side, 160 shootouts: 1,450 of 1,875 kicks scored (77.3 %, ± 1.0 %).
+        /// </summary>
+        public const double ReferenceShootoutConversion = 0.773;
 
         /// <summary>A shootout kick's chance of a goal.</summary>
         public double ShootoutConversion { get; }
