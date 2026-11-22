@@ -502,6 +502,61 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       return;
     }
 
+    // The career hub (#168): Home, then Career and Start; the hub at matchday 1; Simulate, and
+    // matchday 2 with the table played once; Play starts the human's fixture; HUB leaves it,
+    // simulated, at matchday 3.
+    if (url.includes('career=1')) {
+      const point = (m, i) => at(Number(m[i]), Number(m[i + 1]));
+      const short = (m) => (m ? m[0].trim().replace('ELEVEN ', '') : 'none');
+      const home = (await waitForLog(/ELEVEN home shown page=home via=\S+ quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 15_000))?.match ?? null;
+      check('Home offers a career', !!home, short(home));
+      if (!home) throw new Error('no Home');
+
+      const fromCareer = logs.length;
+      await tap(point(home, 1));
+      const newCareer = (await waitForLog(/ELEVEN home shown page=newcareer clubs=(\d+) club=(\d+) role=(\d+) start=(\d+),(\d+)/, 10_000, fromCareer))?.match ?? null;
+      check('New career offers a new world\'s 36 clubs', !!newCareer && newCareer[1] === '36', short(newCareer));
+      if (!newCareer) throw new Error('no New career');
+
+      const fromStart = logs.length;
+      await tap(point(newCareer, 4));
+      const started = (await waitForLog(/ELEVEN career started seed=(\d+) club=(\d+) role=(\w+) division=(\d+)/, 10_000, fromStart))?.match ?? null;
+      const hubPattern = /ELEVEN hub shown via=\S+ season=(\d+) matchday=(\d+) played=(\d+) action=(\w+) primary=(\d+),(\d+) simulate=(\d+),(\d+) home=(\d+),(\d+)/;
+      const first = (await waitForLog(hubPattern, 10_000, fromStart))?.match ?? null;
+      check('Start opens the hub at the first matchday', !!started && !!first && started[2] === newCareer[2] && first[1] === '1' && first[2] === '1' && first[3] === '0' && first[4] === 'Play',
+        `${short(started)}; ${short(first)}`);
+      if (!first) throw new Error('no hub');
+      await page.screenshot({ path: `${outDir}/${name}-hub.png` }).catch(() => {});
+
+      const fromSimulate = logs.length;
+      await tap(point(first, 7));
+      const second = (await waitForLog(hubPattern, 10_000, fromSimulate))?.match ?? null;
+      check('Simulate plays the matchday and the table shows it', !!second && second[2] === '2' && second[3] === '1', short(second));
+      if (!second) throw new Error('no second matchday');
+
+      const fromPlay = logs.length;
+      await tap(point(second, 5));
+      const match = (await waitForLog(/ELEVEN match started via=career seed=(\d+) .*side=(\d+)/, 10_000, fromPlay))?.match ?? null;
+      const fixture = (await waitForLog(/ELEVEN career match fixture=(\d+) home=(\d+) away=(\d+) club=(\d+)/, 10_000, fromPlay))?.match ?? null;
+      check('Play starts the human\'s fixture at eleven a side', !!match && !!fixture && match[2] === '10' && (fixture[2] === fixture[4] || fixture[3] === fixture[4]),
+        `${short(match)}; ${short(fixture)}`);
+      const running = (await waitForLog(/ELEVEN match budget second=5 side=10/, 60_000, fromPlay))?.match ?? null;
+      check('the career match plays', !!running, short(running));
+      await page.screenshot({ path: `${outDir}/${name}-match.png` }).catch(() => {});
+
+      const fromHub = logs.length;
+      const placed = lastLog(layoutPattern);
+      if (placed) await tap(at(Number(placed[5]), Number(placed[6])));
+      const left = (await waitForLog(/ELEVEN career simulated fixture=(\d+) reason=left/, 10_000, fromHub))?.match ?? null;
+      const third = (await waitForLog(hubPattern, 10_000, fromHub))?.match ?? null;
+      check('HUB leaves the match, simulated, and the hub moves on', !!left && !!third && left[1] === fixture?.[1] && third[2] === '3' && third[3] === '2',
+        `${short(left)}; ${short(third)}`);
+
+      const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
+      check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
+      return;
+    }
+
     // Home and Quick Match (#160): the plain address's front door. Home, then Quick match with the
     // world's clubs; the opponent one on and eleven a side; Kick off plays those clubs; HOME, in
     // the Reset action's place, ends the match and opens Home again.
@@ -2430,6 +2485,8 @@ try {
   await runPass(browser, `${base}?trace=1&sheet=1`, 'sheet-phone', quick(390, 664), true);
   // Home and Quick Match (#160).
   await runPass(browser, `${base}?trace=1&home=1`, 'home-phone', quick(390, 664), true);
+  // The career hub (#168).
+  await runPass(browser, `${base}?trace=1&home=1&career=1`, 'career-phone', quick(390, 664), true);
   // The 5v5 match (#103): a whole one through the bench, on a seed whose match gives a foul and a
   // free kick in .NET (90 s halves, the human untouched), and SWITCH in landscape. Seed 6 since
   // #118's tired top speed (seed 3 after #134's keeper distribution, seed 4 after #138's carry):

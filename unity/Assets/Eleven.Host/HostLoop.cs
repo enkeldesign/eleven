@@ -409,6 +409,13 @@ namespace Eleven.Host
         // RESET: practice's fresh start, or in a match a new match from its kick-off (#87).
         private void ResetMatch()
         {
+            // In a career match it reads HUB, and goes there (#168).
+            if (_match && _careerMatch)
+            {
+                GoHub();
+                return;
+            }
+
             // In a quick match it reads HOME, and goes there (#160).
             if (_match && _quick)
             {
@@ -644,6 +651,13 @@ namespace Eleven.Host
                 _home = new HomeSheet(_ui, _trace, QuickMatch.Clubs(QuickMatch.World), () => _buildId, ReadStored(QuickKey),
                     text => WriteStored(QuickKey, text), KickOff, PractiseFromHome);
                 _hud.AttachHome(_home);
+
+                // The career's pages (#168) over #167's session.
+                _home.Career = () => _career;
+                _home.StartCareer = StartCareer;
+                _home.CareerPlay = CareerPlay;
+                _home.CareerSimulate = CareerSimulate;
+                _home.CareerNextSeason = CareerNextSeason;
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).
