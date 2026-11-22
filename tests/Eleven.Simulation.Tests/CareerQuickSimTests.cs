@@ -151,5 +151,150 @@ namespace Eleven.Simulation.Tests
             // A shootout stops once decided, which leans its last kicks a little; 4 standard errors.
             Assert.InRange(rate, p - 4 * Math.Sqrt(p * (1 - p) / kicks), p + 4 * Math.Sqrt(p * (1 - p) / kicks));
         }
+
+        // ---- Eleven a side (#163): the calibration sample and its fit ----
+
+        [Fact]
+        public void The_samples_fixtures_spread_over_every_club_at_home_and_away()
+        {
+            World w = CareerQuickSimCalibration.World();
+            List<(int Home, int Away, ulong Seed)> f = CareerQuickSimCalibration.Fixtures(w);
+            Assert.Equal(CareerQuickSimCalibration.Matches, f.Count);
+            Assert.Equal(f.Count, f.Select(x => (x.Home, x.Away)).Distinct().Count());
+            Assert.All(f, x => Assert.NotEqual(x.Home, x.Away));
+            Assert.Equal(Enumerable.Range(0, f.Count).Select(i => CareerQuickSimCalibration.FirstSeed + (ulong)i), f.Select(x => x.Seed));
+            foreach (Club c in w.Clubs)
+            {
+                Assert.InRange(f.Count(x => x.Home == c.Id), 10, 20);
+                Assert.InRange(f.Count(x => x.Away == c.Id), 10, 20);
+            }
+
+            // Every gap between divisions, both ways round.
+            int Gap((int Home, int Away, ulong Seed) x) => w.Clubs.Single(c => c.Id == x.Away).Division - w.Clubs.Single(c => c.Id == x.Home).Division;
+            foreach (int gap in new[] { -2, -1, 0, 1, 2 }) Assert.True(f.Count(x => Gap(x) == gap) >= 30, $"gap {gap}");
+        }
+
+        [Fact]
+        public void A_sample_round_trips_through_its_csv()
+        {
+            var sample = new List<CareerCalibrationMatch>
+            {
+                new CareerCalibrationMatch { Index = 0, Home = 3, Away = 17, Seed = 0x163000, HomeGoals = 2, AwayGoals = 1, HomeFouls = 3, AwayFouls = 4, HomeCautions = 1, AwayCautions = 0, HomeSendingsOff = 0, AwaySendingsOff = 1, ResultHash = 0xfeedfacecafebeefUL },
+                new CareerCalibrationMatch { Index = 1, Home = 17, Away = 3, Seed = 0x163001, ResultHash = 1 },
+            };
+            var text = new System.IO.StringWriter();
+            CareerQuickSimCalibration.Write(text, sample);
+            string[] lines = text.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(3, lines.Length);
+            List<CareerCalibrationMatch> back = CareerQuickSimCalibration.Read(lines);
+            Assert.Equal(sample.Count, back.Count);
+            for (int i = 0; i < sample.Count; i++)
+            {
+                Assert.Equal((sample[i].Index, sample[i].Home, sample[i].Away, sample[i].Seed, sample[i].HomeGoals, sample[i].AwayGoals, sample[i].ResultHash),
+                    (back[i].Index, back[i].Home, back[i].Away, back[i].Seed, back[i].HomeGoals, back[i].AwayGoals, back[i].ResultHash));
+                Assert.Equal((sample[i].HomeFouls, sample[i].AwayFouls, sample[i].HomeCautions, sample[i].AwayCautions, sample[i].HomeSendingsOff, sample[i].AwaySendingsOff),
+                    (back[i].HomeFouls, back[i].AwayFouls, back[i].HomeCautions, back[i].AwayCautions, back[i].HomeSendingsOff, back[i].AwaySendingsOff));
+            }
+        }
+
+        [Fact]
+        public void The_fit_recovers_a_model_it_draws_from()
+        {
+            // A sample drawn from a known eleven-a-side model, the reference's ratings scaled by 0.6,
+            // at the sample's fixtures, four times over: the fit finds it within its errors.
+            World w = CareerQuickSimCalibration.World();
+            QuickSimModel r = QuickSimModel.Reference;
+            const double scale = 0.6;
+            var truth = new QuickSimModel(r.BaseRate - 0.7, 0.05, Enumerable.Range(0, QuickSimModel.Tiers).Select(t => scale * r.TierRating(t)).ToArray(), scale * r.CapabilityWeight,
+                r.Rho, 2.5, 0.6, 0.05);
+            SimConfig c = CareerQuickSimCalibration.Config();
+            var sample = new List<CareerCalibrationMatch>();
+            List<(int Home, int Away, ulong Seed)> fixtures = CareerQuickSimCalibration.Fixtures(w);
+            Assert.NotEmpty(fixtures);
+            for (int round = 0; round < 4; round++)
+            {
+                foreach ((int home, int away, ulong seed) in fixtures)
+                {
+                    MatchResult m = QuickSim.Play(c, CareerQuickSim.Side(w, home, 10), CareerQuickSim.Side(w, away, 10), seed * 4 + (ulong)round, model: truth);
+                    sample.Add(new CareerCalibrationMatch { Home = home, Away = away, Seed = seed, HomeGoals = m.HomeGoals, AwayGoals = m.AwayGoals, HomeFouls = m.HomeFouls, AwayFouls = m.AwayFouls, HomeCautions = m.HomeCautions, AwayCautions = m.AwayCautions, HomeSendingsOff = m.HomeSendingsOff, AwaySendingsOff = m.AwaySendingsOff });
+                }
+            }
+
+            CareerFitResult fit = CareerQuickSimCalibration.Fit(w, sample);
+            Assert.InRange(fit.Model.BaseRate, truth.BaseRate - 3 * fit.BaseRateError, truth.BaseRate + 3 * fit.BaseRateError);
+            Assert.InRange(fit.Model.Home, truth.Home - 3 * fit.HomeError, truth.Home + 3 * fit.HomeError);
+            Assert.InRange(fit.Scale, scale - 3 * fit.ScaleError, scale + 3 * fit.ScaleError);
+            Assert.True(fit.BaseRateError > 0 && fit.ScaleError > 0 && fit.ScaleError < 0.2, $"errors: mu {fit.BaseRateError}, scale {fit.ScaleError}");
+            Assert.Equal(fit.Scale * r.TierRating(3), fit.Model.TierRating(3), 9);
+            Assert.Equal(fit.Scale * r.CapabilityWeight, fit.Model.CapabilityWeight, 9);
+            Assert.InRange(fit.Model.FoulsPerSide, 2.3, 2.7);
+        }
+
+        private static string CareerReference => System.IO.Path.Combine(BallCurvesTests.RepositoryRoot(), "docs", "simulation", "quicksim-career-reference.csv");
+
+        [Fact]
+        public void The_eleven_a_side_model_is_the_fit_of_its_reference_sample()
+        {
+            Assert.True(System.IO.File.Exists(CareerReference), "no eleven-a-side reference sample");
+            List<CareerCalibrationMatch> sample = CareerQuickSimCalibration.Read(System.IO.File.ReadAllLines(CareerReference));
+            Assert.Equal(CareerQuickSimCalibration.Matches, sample.Count);
+            QuickSimModel fit = CareerQuickSimCalibration.Fit(CareerQuickSimCalibration.World(), sample).Model, e = QuickSimModel.ElevenASide;
+            Assert.Equal(fit.BaseRate, e.BaseRate, 6);
+            Assert.Equal(fit.Home, e.Home, 6);
+            for (int t = 0; t < QuickSimModel.Tiers; t++) Assert.Equal(fit.TierRating(t), e.TierRating(t), 6);
+            Assert.Equal(fit.CapabilityWeight, e.CapabilityWeight, 6);
+            Assert.Equal(fit.Rho, e.Rho, 6);
+            Assert.Equal(fit.FoulsPerSide, e.FoulsPerSide, 6);
+            Assert.Equal(fit.CautionsPerSide, e.CautionsPerSide, 6);
+            Assert.Equal(fit.SendingsOffPerSide, e.SendingsOffPerSide, 6);
+            Assert.Same(e, QuickSimModel.For(10));
+            Assert.Same(QuickSimModel.Reference, QuickSimModel.For(5));
+        }
+
+        [Fact]
+        public void The_eleven_a_side_model_scores_as_its_sample_does()
+        {
+            Assert.True(System.IO.File.Exists(CareerReference), "no eleven-a-side reference sample");
+            List<CareerCalibrationMatch> sample = CareerQuickSimCalibration.Read(System.IO.File.ReadAllLines(CareerReference));
+            World w = CareerQuickSimCalibration.World();
+            SimConfig c = CareerQuickSimCalibration.Config();
+            var sides = new Dictionary<int, QuickSide>();
+            QuickSide Side(int club) => sides.TryGetValue(club, out QuickSide s) ? s : sides[club] = CareerQuickSim.Side(w, club, 10);
+            double qh = 0, qa = 0;
+            int[] full = new int[3], quick = new int[3];
+            const int Draws = 20;
+            foreach (CareerCalibrationMatch m in sample)
+            {
+                full[Math.Sign(m.HomeGoals - m.AwayGoals) + 1]++;
+                for (int d = 0; d < Draws; d++)
+                {
+                    MatchResult q = QuickSim.Play(c, Side(m.Home), Side(m.Away), m.Seed * 1000 + (ulong)d, model: QuickSimModel.ElevenASide);
+                    qh += q.HomeGoals;
+                    qa += q.AwayGoals;
+                    quick[Math.Sign(q.HomeGoals - q.AwayGoals) + 1]++;
+                }
+            }
+
+            int n = sample.Count;
+            double MeanError(Func<CareerCalibrationMatch, double> f)
+            {
+                double mean = sample.Average(f);
+                return Math.Sqrt(sample.Sum(x => (f(x) - mean) * (f(x) - mean)) / (n - 1) / n);
+            }
+
+            double fh = sample.Average(m => (double)m.HomeGoals), fa = sample.Average(m => (double)m.AwayGoals);
+            Assert.InRange(qh / (n * Draws), fh - 2 * MeanError(m => m.HomeGoals), fh + 2 * MeanError(m => m.HomeGoals));
+            Assert.InRange(qa / (n * Draws), fa - 2 * MeanError(m => m.AwayGoals), fa + 2 * MeanError(m => m.AwayGoals));
+
+            // Win, draw and loss: a two-sample χ² at 1 % (9.21, 2 df).
+            double chi = 0, nq = n * Draws;
+            for (int k = 0; k < 3; k++)
+            {
+                double pooled = (full[k] + quick[k]) / (n + nq);
+                chi += Math.Pow(full[k] - n * pooled, 2) / (n * pooled) + Math.Pow(quick[k] - nq * pooled, 2) / (nq * pooled);
+            }
+
+            Assert.True(chi < 9.21, $"win/draw/loss χ² {chi:F2}: full {string.Join("/", full)}, quick {string.Join("/", quick)}");
+        }
     }
 }
