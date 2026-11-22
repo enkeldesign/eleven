@@ -4,13 +4,13 @@ The career's screens ([#168](https://github.com/enkeldesign/eleven/issues/168)) 
 
 ## New career
 
-**Career** on Home opens **New career**, or the hub of the career already under way.
+**Career** on Home opens the five save slots ([saves.md](saves.md)): **Continue** a slot's career, or **New career** in an empty one.
 - **The world:** a new one of 36 clubs, from a seed taken at that moment.
 - **Your club:** any of the 36, shown with name, short name, division and kit, as in Quick match.
 - **Your role:** **Player-manager** or **Manager only** (#80).
 - **Start** begins the first season. Its matches have 3-minute halves, #80's default.
 
-Until saves arrive (M6.07), a career lasts as long as the page, and both pages say so.
+The career is saved into its slot on Start, after every fixture and on the next season. **Save** on the hub saves at once (#171).
 
 ## The hub
 
@@ -30,7 +30,8 @@ The actions:
 | **Simulate** | You have a fixture | Quick-sims the matchday, your fixture too |
 | **Next matchday** | No fixture of yours | Quick-sims the matchday |
 | **Next season** | The season is over | Rolls over (#164) |
-| **Home** | Always | Back to Home; Career returns here |
+| **Save** | Always | Saves into the career's slot at once (#171) |
+| **Home** | Always | Back to Home; Career's slots return here |
 
 ## A career match
 
