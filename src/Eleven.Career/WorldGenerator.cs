@@ -62,8 +62,12 @@ namespace Eleven.Career
 
         private static readonly string[] SurnameEnds = { "ard", "berg", "dahl", "enko", "feld", "gren", "ini", "kov", "lund", "mann", "oni", "quist", "son", "ström", "vik", "wall" };
 
-        // Plumbing: no kit colour is drawn yet.
-        private static readonly KitColour[] Colours = { KitColour.White };
+        // The kit tokens a club's shirt and shorts are drawn from (the design system holds the colours).
+        private static readonly KitColour[] Colours =
+        {
+            KitColour.Red, KitColour.Blue, KitColour.White, KitColour.Black, KitColour.Yellow, KitColour.Green,
+            KitColour.SkyBlue, KitColour.Orange, KitColour.Purple, KitColour.Maroon, KitColour.Navy, KitColour.Grey,
+        };
 
         private static readonly string[] Groups = BuildGroups();
 
@@ -130,7 +134,8 @@ namespace Eleven.Career
                 shortName = i < upper.Length ? upper.Substring(0, 2) + upper[i] : upper.Substring(0, 2) + (char)('0' + (i - upper.Length) % 10);
             }
 
-            int primary = 0, secondary = 0;
+            int primary = Pick(seed, ClubDraw, id, 1, Colours.Length);
+            int secondary = (primary + 1 + Pick(seed, ClubDraw, id, 2, Colours.Length - 1)) % Colours.Length;
             return new Club
             {
                 Id = id,

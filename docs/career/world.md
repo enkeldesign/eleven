@@ -8,7 +8,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
 
 - **A club:**
   - id, name and short name (2–4 letters);
-  - home colours (shirt, shorts);
+  - home kit, shirt and shorts, as design tokens (`KitColour`). The design system's kit tier (`Eleven.Presentation.Kit`) holds the colours, so a kit follows the palette (AGENTS.md);
   - reputation 1–20;
   - division (1 is the top);
   - manager and squad, as ids.
