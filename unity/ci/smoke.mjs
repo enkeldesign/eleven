@@ -512,15 +512,25 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       check('Home offers a career', !!home, short(home));
       if (!home) throw new Error('no Home');
 
-      const fromCareer = logs.length;
+      // #171: Career opens the five slots, all empty; New career in the first.
+      const slotsPattern = /ELEVEN home shown page=slots slots=(\d+) empty=(\d+) first=(\d+),(\d+) firstAction=(\S+)/;
+      const fromSlots = logs.length;
       await tap(point(home, 1));
+      const slots = (await waitForLog(slotsPattern, 10_000, fromSlots))?.match ?? null;
+      check('Career opens five empty slots', !!slots && slots[1] === '5' && slots[2] === '5' && slots[5] === 'New_career', short(slots));
+      if (!slots) throw new Error('no slots');
+
+      const fromCareer = logs.length;
+      await tap(point(slots, 3));
       const newCareer = (await waitForLog(/ELEVEN home shown page=newcareer clubs=(\d+) club=(\d+) role=(\d+) start=(\d+),(\d+)/, 10_000, fromCareer))?.match ?? null;
       check('New career offers a new world\'s 36 clubs', !!newCareer && newCareer[1] === '36', short(newCareer));
       if (!newCareer) throw new Error('no New career');
 
       const fromStart = logs.length;
       await tap(point(newCareer, 4));
-      const started = (await waitForLog(/ELEVEN career started seed=(\d+) club=(\d+) role=(\w+) division=(\d+)/, 10_000, fromStart))?.match ?? null;
+      const started = (await waitForLog(/ELEVEN career started seed=(\d+) club=(\d+) role=(\w+) division=(\d+) slot=0/, 10_000, fromStart))?.match ?? null;
+      const savedAtStart = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=start/, 10_000, fromStart))?.match ?? null;
+      check('Start saves the new career into its slot', !!savedAtStart, short(savedAtStart));
       const hubPattern = /ELEVEN hub shown via=\S+ season=(\d+) matchday=(\d+) played=(\d+) action=(\w+) primary=(\d+),(\d+) simulate=(\d+),(\d+) home=(\d+),(\d+)/;
       const first = (await waitForLog(hubPattern, 10_000, fromStart))?.match ?? null;
       check('Start opens the hub at the first matchday', !!started && !!first && started[2] === newCareer[2] && first[1] === '1' && first[2] === '1' && first[3] === '0' && first[4] === 'Play',
@@ -551,6 +561,27 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       const third = (await waitForLog(hubPattern, 10_000, fromHub))?.match ?? null;
       check('HUB leaves the match, simulated, and the hub moves on', !!left && !!third && left[1] === fixture?.[1] && third[2] === '3' && third[3] === '2',
         `${short(left)}; ${short(third)}`);
+      const savedLeft = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=left season=1 matchday=3/, 10_000, fromHub))?.match ?? null;
+      check('the simulated fixture is saved', !!savedLeft, short(savedLeft));
+
+      // #171: the career survives a reload. Career shows slot 1 at matchday 3; Continue opens its hub there.
+      const fromReload = logs.length;
+      await page.reload();
+      const again = (await waitForLog(/ELEVEN home shown page=home via=address quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 240_000, fromReload))?.match ?? null;
+      check('the page reloads to Home', !!again, short(again));
+      if (!again) throw new Error('no Home after the reload');
+      const fromAgain = logs.length;
+      await tap(point(again, 1));
+      const kept = (await waitForLog(slotsPattern, 10_000, fromAgain))?.match ?? null;
+      check('after the reload, slot 1 holds the career', !!kept && kept[2] === '4' && kept[5] === 'Continue', short(kept));
+      if (!kept) throw new Error('no slots after the reload');
+      const fromContinue = logs.length;
+      await tap(point(kept, 3));
+      const loaded = (await waitForLog(/ELEVEN career loaded slot=0 fromPrevious=(\w+) season=(\d+) matchday=(\d+)/, 10_000, fromContinue))?.match ?? null;
+      const resumed = (await waitForLog(hubPattern, 10_000, fromContinue))?.match ?? null;
+      check('Continue opens the hub where the career was', !!loaded && loaded[1] === 'False' && loaded[3] === '3' && !!resumed && resumed[2] === '3' && resumed[3] === '2',
+        `${short(loaded)}; ${short(resumed)}`);
+      await page.screenshot({ path: `${outDir}/${name}-continued.png` }).catch(() => {});
 
       const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');
