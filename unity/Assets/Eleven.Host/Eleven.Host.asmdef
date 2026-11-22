@@ -4,6 +4,7 @@
     "references": [
         "Eleven.Simulation",
         "Eleven.Simulation.Harness",
+        "Eleven.Career",
         "Eleven.Presentation",
         "Unity.InputSystem"
     ],
