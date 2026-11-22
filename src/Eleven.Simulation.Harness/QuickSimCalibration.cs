@@ -343,7 +343,7 @@ namespace Eleven.Simulation.Harness
         }
 
         // A small linear system by Gaussian elimination with partial pivoting.
-        private static double[] Solve(double[,] a, double[] b)
+        internal static double[] Solve(double[,] a, double[] b)
         {
             int n = b.Length;
             var m = new double[n, n + 1];

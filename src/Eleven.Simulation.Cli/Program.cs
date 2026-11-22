@@ -265,6 +265,36 @@ internal static class Program
                 return 0;
             }
 
+            case "quicksim" when args.Length >= 3 && args[1] == "career-fit":
+            {
+                // #163: the eleven-a-side model refitted from its sample, and its comparison by division gap.
+                Eleven.Career.World fitWorld = CareerQuickSimCalibration.World();
+                List<CareerCalibrationMatch> careerSample = CareerQuickSimCalibration.Read(File.ReadAllLines(args[2]));
+                CareerFitResult careerFit = CareerQuickSimCalibration.Fit(fitWorld, careerSample);
+                QuickSimModel e = careerFit.Model;
+                Console.WriteLine(FormattableString.Invariant(
+                    $"fit over {careerSample.Count} matches: mu {e.BaseRate:F6} ± {careerFit.BaseRateError:F3}, home {e.Home:F6} ± {careerFit.HomeError:F3}, scale {careerFit.Scale:F6} ± {careerFit.ScaleError:F3} (tiers 0 {e.TierRating(1):F6} {e.TierRating(2):F6} {e.TierRating(3):F6}, capabilities {e.CapabilityWeight:F6}), rho {e.Rho:F3} ± {careerFit.RhoError:F3}, fouls {e.FoulsPerSide:R}, cautions {e.CautionsPerSide:R}, sendings-off {e.SendingsOffPerSide:R} a side"));
+                Console.Write(CareerQuickSimCalibration.Compare(CareerQuickSimCalibration.Config(), fitWorld, careerSample, 100, e));
+                return 0;
+            }
+
+            case "quicksim" when args.Length >= 3 && args[1] == "career":
+            {
+                // #163: the eleven-a-side sample, the full simulation between the reference world's clubs.
+                // `quicksim career <dir> [count]` plays the first `count` fixtures: CI's prefix.
+                SimConfig careerConfig = CareerQuickSimCalibration.Config();
+                Eleven.Career.World careerWorld = CareerQuickSimCalibration.World();
+                var careerFixtures = CareerQuickSimCalibration.Fixtures(careerWorld);
+                if (args.Length >= 4 && int.TryParse(args[3], out int careerCount) && careerCount > 0 && careerCount < careerFixtures.Count) careerFixtures = careerFixtures.Take(careerCount).ToList();
+                var careerWatch = System.Diagnostics.Stopwatch.StartNew();
+                var careerPlayed = new CareerCalibrationMatch[careerFixtures.Count];
+                System.Threading.Tasks.Parallel.For(0, careerFixtures.Count, i => careerPlayed[i] = CareerQuickSimCalibration.Play(careerConfig, careerWorld, careerFixtures[i], i));
+                Directory.CreateDirectory(args[2]);
+                using (var csv = new StreamWriter(Path.Combine(args[2], "quicksim-career.csv"))) CareerQuickSimCalibration.Write(csv, careerPlayed);
+                Console.WriteLine(FormattableString.Invariant($"config {careerConfig.Hash:x16}, {careerPlayed.Length} full 11v11 matches in {careerWatch.Elapsed.TotalSeconds:F0} s on {Environment.ProcessorCount} cores -> {args[2]}"));
+                return 0;
+            }
+
             case "quicksim" when args.Length >= 2:
             {
                 // The quick-sim's calibration sample (#129, #151): the full simulation over the calibration
