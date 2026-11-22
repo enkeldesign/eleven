@@ -2,7 +2,8 @@
     "name": "Eleven.Simulation.Harness",
     "rootNamespace": "Eleven.Simulation.Harness",
     "references": [
-        "Eleven.Simulation"
+        "Eleven.Simulation",
+        "Eleven.Career"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

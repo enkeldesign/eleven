@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.enkeldesign.eleven.simulation": "file:../../src/Eleven.Simulation",
+    "com.enkeldesign.eleven.career": "file:../../src/Eleven.Career",
     "com.enkeldesign.eleven.simulation.harness": "file:../../src/Eleven.Simulation.Harness",
     "com.enkeldesign.eleven.presentation": "file:../../src/Eleven.Presentation",
     "com.unity.inputsystem": "1.20.0",
