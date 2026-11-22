@@ -11,13 +11,14 @@ namespace Eleven.Simulation
     /// </summary>
     public readonly struct QuickSide
     {
-        public QuickSide(int tier, PlayerCapabilities capabilities)
+        public QuickSide(double tier, PlayerCapabilities capabilities)
         {
             Tier = tier;
             Capabilities = capabilities;
         }
 
-        public int Tier { get; }
+        /// <summary>The side's CPU skill as a tier: apprentice 0, club 1, pro 2, elite 3, or anywhere between (#163).</summary>
+        public double Tier { get; }
 
         public PlayerCapabilities Capabilities { get; }
     }
@@ -34,8 +35,9 @@ namespace Eleven.Simulation
     public sealed class QuickSimModel
     {
         public QuickSimModel(double baseRate, double home, double[] tierRatings, double capabilityWeight, double rho,
-            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide)
+            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide, double shootoutConversion = ReferenceShootoutConversion)
         {
+            ShootoutConversion = shootoutConversion;
             if (tierRatings == null || tierRatings.Length != Tiers) throw new ArgumentException($"A rating for each of the {Tiers} tiers.", nameof(tierRatings));
             BaseRate = baseRate;
             Home = home;
@@ -52,6 +54,12 @@ namespace Eleven.Simulation
             baseRate: 0.157396, home: 0.025975, tierRatings: new[] { 0, 0.230584, 0.243057, 0.706305 }, capabilityWeight: 9.166028, rho: -0.014,
             foulsPerSide: 1.846591, cautionsPerSide: 0.4375, sendingsOffPerSide: 0.074811);
 
+        /// <summary>A shootout kick's chance of a goal (#163): the full simulation's, from #122's penalty benchmark.</summary>
+        public const double ReferenceShootoutConversion = 0.76;
+
+        /// <summary>A shootout kick's chance of a goal.</summary>
+        public double ShootoutConversion { get; }
+
         /// <summary>μ: the log of a side's goals in a match of reference halves, sides level.</summary>
         public double BaseRate { get; }
 
@@ -64,7 +72,7 @@ namespace Eleven.Simulation
         private readonly double[] _tierRatings;
 
         /// <summary>A tier's rating on the log scale of goals, apprentice 0 … elite 3; the apprentice tier's is 0.</summary>
-        public double TierRating(int tier) => _tierRatings[tier < 0 ? 0 : tier >= Tiers ? Tiers - 1 : tier];
+        public double TierRating(double tier) => _tierRatings[tier < 0 ? 0 : tier >= Tiers - 1 ? Tiers - 1 : (int)tier];
 
         /// <summary>The rating per unit of the capability index (<see cref="QuickSim.CapabilityIndex"/>).</summary>
         public double CapabilityWeight { get; }
