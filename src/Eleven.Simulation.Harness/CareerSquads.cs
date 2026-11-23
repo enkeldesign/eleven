@@ -331,6 +331,8 @@ namespace Eleven.Simulation.Harness
             }
 
             var sim = new Simulator(config, state);
+            // Each side managed by its manager (#182).
+            Dictionary<int, ManagerProfile> profiles = CareerManagers.Profiles(world, homeClub, awayClub, config);
             var recorder = new MatchRecorder();
             var commands = new List<Command>();
             var events = new List<SimEvent>();
@@ -341,10 +343,11 @@ namespace Eleven.Simulation.Harness
                 KeeperControllers.Append(sim, commands);
                 CpuControllers.Append(sim, commands);
                 RestartControllers.Append(sim, commands);
-                ManagerControllers.Append(sim, commands);
+                ManagerControllers.Append(sim, commands, profiles);
                 events.Clear();
                 sim.Step(commands, events);
                 recorder.Observe(config, sim.PeekState(), events);
+                if (observe != null) foreach (SimEvent e in events) observe(e);
             }
 
             return recorder.Result ?? throw new InvalidOperationException($"{homeClub} against {awayClub} (seed {seed}) didn't finish.");

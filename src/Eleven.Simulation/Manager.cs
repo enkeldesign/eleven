@@ -127,7 +127,10 @@ namespace Eleven.Simulation
     public static class ManagerControllers
     {
         /// <summary>What <paramref name="team"/>'s manager perceives in <paramref name="state"/>.</summary>
-        public static ManagerObservation Observe(SimState state, SimConfig config, int team)
+        public static ManagerObservation Observe(SimState state, SimConfig config, int team) => Observe(state, config, team, config.CpuTacticSpread);
+
+        /// <summary>What his observation is with his own spread (#182).</summary>
+        public static ManagerObservation Observe(SimState state, SimConfig config, int team, double spreadShare)
         {
             int t = Array.FindIndex(state.Teams, x => x.Id == team);
             TeamState side = state.Teams[t];
@@ -170,7 +173,7 @@ namespace Eleven.Simulation
 
             bool maySwitch = state.Tactics.Length > 0 && side.TacticCooldown == 0 && side.TacticPending == 0;
             var draws = new Randomness.StreamDraws(state.Seed, 0, Randomness.RandomStream.Manager, team);
-            double spread = (2 * draws.NextUniform() - 1) * config.CpuTacticSpread;
+            double spread = (2 * draws.NextUniform() - 1) * spreadShare;
             return new ManagerObservation(may, share > 1 ? 1 : share, players, bench, side.Goals, other >= 0 ? state.Teams[other].Goals : 0, onPitch, theirs, side.Tactic, maySwitch, spread);
         }
 
@@ -211,16 +214,17 @@ namespace Eleven.Simulation
         /// The CPU managers' commands (#182), each side by its profile in <paramref name="profiles"/>
         /// by team id, or by the config's without one.
         /// </summary>
-        public static void Append(Simulator simulator, List<Command> commands, IReadOnlyDictionary<int, ManagerProfile>? profiles) => Append(simulator, commands);
+        public static void Append(Simulator simulator, List<Command> commands) => Append(simulator, commands, null);
 
-        public static void Append(Simulator simulator, List<Command> commands)
+        public static void Append(Simulator simulator, List<Command> commands, IReadOnlyDictionary<int, ManagerProfile>? profiles)
         {
             SimState state = simulator.PeekState();
             if (state.Bench.Length == 0 && state.Tactics.Length == 0) return;
             foreach (TeamState team in state.Teams)
             {
                 if (!CpuManages(state, team.Id)) continue;
-                ManagerDecision d = AI.ManagerBrain.Decide(Observe(state, simulator.Config, team.Id), simulator.Config);
+                ManagerProfile profile = profiles != null && profiles.TryGetValue(team.Id, out ManagerProfile own) ? own : ManagerProfile.From(simulator.Config);
+                ManagerDecision d = AI.ManagerBrain.Decide(Observe(state, simulator.Config, team.Id, profile.Spread), simulator.Config, profile);
                 int off = d.Off, on = d.On;
                 if (off == 0 && d.TacticTo == 0) continue;
 
