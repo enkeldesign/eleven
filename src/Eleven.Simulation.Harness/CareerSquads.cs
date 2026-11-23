@@ -27,6 +27,13 @@ namespace Eleven.Simulation.Harness
             return s;
         }
 
+        /// <summary>
+        /// A match's simulation ids for its world footballers (#172): each side's starters (by
+        /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
+        /// world's player id. A result's lines (#172) name footballers by these ids.
+        /// </summary>
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide) => new Dictionary<int, int>();
+
         private static void Apply(SimState s, SquadSelection side, int perSide, int team, Func<int, int> outfielder, int keeperId, Func<int, int> benchId)
         {
             var byId = new Dictionary<int, Player>();

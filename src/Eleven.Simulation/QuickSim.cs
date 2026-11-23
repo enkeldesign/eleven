@@ -35,8 +35,11 @@ namespace Eleven.Simulation
     public sealed class QuickSimModel
     {
         public QuickSimModel(double baseRate, double home, double[] tierRatings, double capabilityWeight, double rho,
-            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide, double shootoutConversion = ReferenceShootoutConversion)
+            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide, double shootoutConversion = ReferenceShootoutConversion,
+            double minorInjuriesPerSide = 0, double seriousInjuriesPerSide = 0)
         {
+            MinorInjuriesPerSide = minorInjuriesPerSide;
+            SeriousInjuriesPerSide = seriousInjuriesPerSide;
             ShootoutConversion = shootoutConversion;
             if (tierRatings == null || tierRatings.Length != Tiers) throw new ArgumentException($"A rating for each of the {Tiers} tiers.", nameof(tierRatings));
             BaseRate = baseRate;
@@ -74,6 +77,11 @@ namespace Eleven.Simulation
 
         /// <summary>A shootout kick's chance of a goal.</summary>
         public double ShootoutConversion { get; }
+
+        /// <summary>Injuries a side a match of reference halves (#172), minor and serious: 0 in a model fitted without them.</summary>
+        public double MinorInjuriesPerSide { get; }
+
+        public double SeriousInjuriesPerSide { get; }
 
         /// <summary>μ: the log of a side's goals in a match of reference halves, sides level.</summary>
         public double BaseRate { get; }

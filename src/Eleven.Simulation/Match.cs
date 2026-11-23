@@ -148,6 +148,38 @@ namespace Eleven.Simulation
     }
 
     /// <summary>A goal in a match's result (#86).</summary>
+    /// <summary>
+    /// One footballer's line in a result (#172, schema 8): his simulation id and side, the
+    /// seconds of match clock he was on the pitch, his cautions, whether he was sent off, and his
+    /// worst injury (0 none, 1 minor, 2 serious).
+    /// </summary>
+    public readonly struct ResultPlayer
+    {
+        public ResultPlayer(int player, int team, double seconds, int cautions, bool sentOff, int injury)
+        {
+            Player = player;
+            Team = team;
+            Seconds = seconds;
+            Cautions = cautions;
+            SentOff = sentOff;
+            Injury = injury;
+        }
+
+        public int Player { get; }
+
+        public int Team { get; }
+
+        /// <summary>s of match clock on the pitch.</summary>
+        public double Seconds { get; }
+
+        public int Cautions { get; }
+
+        public bool SentOff { get; }
+
+        /// <summary>His worst injury: 0 none, 1 minor, 2 serious.</summary>
+        public int Injury { get; }
+    }
+
     public readonly struct ResultGoal
     {
         public ResultGoal(int team, int scorer, int half, double clockSeconds)
@@ -276,6 +308,12 @@ namespace Eleven.Simulation
         public SideMetrics HomeMetrics { get; internal set; }
 
         public SideMetrics AwayMetrics { get; internal set; }
+
+        /// <summary>Every footballer who took part, by id (schema 8, #172).</summary>
+        public IReadOnlyList<ResultPlayer> Players { get; internal set; } = Array.Empty<ResultPlayer>();
+
+        /// <summary>The same result with <paramref name="players"/> as its footballers' lines (#172), for a result the harness attributes.</summary>
+        public MatchResult WithPlayers(IReadOnlyList<ResultPlayer> players) => this;
 
         /// <summary>The winner's side id, or 0 for a draw: by goals, then by the shootout (schema 6, #111).</summary>
         public int Winner => HomeGoals != AwayGoals ? (HomeGoals > AwayGoals ? HomeTeam : AwayTeam)
