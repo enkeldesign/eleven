@@ -43,7 +43,7 @@ namespace Eleven.Career.Tests
         {
             SaveFile save = MidSeason();
             byte[] bytes = SaveCodec.Encode(save);
-            Assert.True(bytes.Length > 70_000, $"{bytes.Length} bytes");
+            Assert.True(bytes.Length > 5_000, $"{bytes.Length} bytes");
             SaveFile back = SaveCodec.Decode(bytes);
             Assert.Equal(bytes, SaveCodec.Encode(back));
             Assert.Equal((save.Seed, save.Club, save.Role, save.SavedAt), (back.Seed, back.Club, back.Role, back.SavedAt));

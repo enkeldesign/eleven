@@ -18,6 +18,21 @@ namespace Eleven.Simulation.Tests
         private static readonly SimConfig Config = SpikeScenario.Config().With("halfLength", 60);
 
         [Fact]
+        public void Five_slots_of_a_seasons_end_fit_the_smallest_browsers_storage()
+        {
+            // iOS Safari keeps about 2.5 million characters a page (WebKit stores UTF-16 in 5 MB);
+            // each slot holds a current and a previous save, and one is staged while saving.
+            World w = CareerSession.NewWorld(0x170);
+            CareerSession s = CareerSession.Start(w, 0x170, w.Clubs[0].Id, CareerRole.ManagerOnly, Config);
+            while (!s.SeasonOver) s.Simulate();
+            byte[] bytes = SaveCodec.Encode(s.ToSave(638_700_000_000_000_000));
+            int chars = Convert.ToBase64String(bytes).Length;
+            Assert.True(chars * (2 * SaveSlots.Count + 1) < 2_500_000 / 2, $"a season's end is {chars} characters");
+            SaveFile back = SaveCodec.Decode(bytes);
+            Assert.Equal(s.Season.Results.Count, back.Season.Results.Count);
+        }
+
+        [Fact]
         public void A_played_result_reads_back_text_for_text_with_its_metrics()
         {
             World w = WorldGenerator.Generate(0x157);
