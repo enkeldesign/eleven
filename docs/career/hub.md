@@ -4,7 +4,7 @@ The career's screens ([#168](https://github.com/enkeldesign/eleven/issues/168)) 
 
 ## New career
 
-**Career** on Home opens the five save slots ([saves.md](saves.md)): **Continue** a slot's career, or **New career** in an empty one.
+**Career** on Home opens the five save slots ([saves.md](saves.md)): **Continue** a slot's career, or **New career** in an empty one. The career in play continues from its own slot as it is, saved or not.
 - **The world:** a new one of 36 clubs, from a seed taken at that moment.
 - **Your club:** any of the 36, shown with name, short name, division and kit, as in Quick match.
 - **Your role:** **Player-manager** or **Manager only** (#80).
