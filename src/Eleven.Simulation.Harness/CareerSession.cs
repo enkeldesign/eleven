@@ -100,6 +100,12 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>
+        /// The human's fixture's lineup (#176): simulation id to the world's footballers, his club
+        /// the simulation's home side, each side without its footballers out.
+        /// </summary>
+        public Dictionary<int, int> LineupFor(Fixture fixture) => new Dictionary<int, int>();
+
+        /// <summary>
         /// The human's fixture played: <paramref name="played"/> is from his club's side, the
         /// simulation's home; it is recorded on the fixture's ground, mirrored for an away
         /// fixture, and the rest of the matchday is quick-simmed.
