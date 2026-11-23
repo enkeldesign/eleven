@@ -197,6 +197,13 @@ namespace Eleven.Simulation.Harness
                     ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line)
                     ?? Best(_ => true)
                     ?? throw new InvalidOperationException($"Club {clubId} hasn't {perSide} outfielders.");
+                // Rotation (#177): a tired starter rested for a fit footballer of the slot's line within the margin.
+                if (rotation != null && p.Fitness < rotation.RestBelow)
+                {
+                    double floor = OutfieldLevel(p) - rotation.RotationMargin;
+                    Player? fresh = Best(x => LineOf(x.Positions[0]) == line && x.Fitness >= rotation.RestBelow && OutfieldLevel(x) >= floor);
+                    if (fresh != null) p = fresh;
+                }
                 bySlot[i] = p;
                 chosen.Add(p.Id);
             }
@@ -226,6 +233,12 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static void TiredStart(SimState state, World world, IReadOnlyDictionary<int, int> lineup, SquadRules rules)
         {
+            var byId = new Dictionary<int, Player>(world.Players.Count);
+            foreach (Player p in world.Players) byId[p.Id] = p;
+            for (int i = 0; i < state.Players.Length; i++)
+            {
+                if (lineup.TryGetValue(state.Players[i].Id, out int id) && byId.TryGetValue(id, out Player? p)) state.Players[i].Fatigue = Availability.StartFatigue(p, rules);
+            }
         }
 
         public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, double homeFatigue = 0, double awayFatigue = 0)

@@ -200,7 +200,8 @@ namespace Eleven.Simulation
         }
 
         /// <summary>A side's rating: its tier's rating plus the weighted capability index.</summary>
-        public static double Rating(QuickSide side, QuickSimModel model) => model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities);
+        public static double Rating(QuickSide side, QuickSimModel model) =>
+            model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities) - model.FatigueWeight * side.Fatigue;
 
         /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>, each at most <see cref="MaxRate"/>.</summary>
         public static (double Home, double Away) Rates(QuickSide home, QuickSide away, double halfSeconds, QuickSimModel model)

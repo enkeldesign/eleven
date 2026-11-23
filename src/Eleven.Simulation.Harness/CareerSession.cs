@@ -94,9 +94,12 @@ namespace Eleven.Simulation.Harness
         {
             (int opponent, HashSet<int> mine, HashSet<int> theirs) = Sides(fixture);
             SimConfig c = MatchConfig(fixture);
-            return Role == CareerRole.PlayerManager
-                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs)
-                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans, homeOut: mine, awayOut: theirs);
+            SimState state = Role == CareerRole.PlayerManager
+                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs, Squad)
+                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans, homeOut: mine, awayOut: theirs, rotation: Squad);
+            // #177: each footballer starts at his own fatigue from his condition.
+            CareerSquads.TiredStart(state, World, LineupFor(fixture), Squad);
+            return state;
         }
 
         // The human's opponent, and each side's footballers out of the fixture (#176).
@@ -114,7 +117,7 @@ namespace Eleven.Simulation.Harness
         public Dictionary<int, int> LineupFor(Fixture fixture)
         {
             (int opponent, HashSet<int> mine, HashSet<int> theirs) = Sides(fixture);
-            return CareerSquads.Lineup(World, Club, opponent, PerSide, mine, theirs);
+            return CareerSquads.Lineup(World, Club, opponent, PerSide, mine, theirs, Squad);
         }
 
         /// <summary>

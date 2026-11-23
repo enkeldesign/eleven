@@ -55,7 +55,15 @@ namespace Eleven.Simulation.Harness
                 mean = mean.With(t.Name, sum / perSide);
             }
 
-            return new QuickSide(TierPosition(cpu / perSide), mean);
+            // #177: its outfielders' mean fatigue at kick-off, from their condition.
+            double fatigue = 0;
+            if (squad != null)
+            {
+                for (int i = 0; i < perSide; i++) fatigue += Availability.StartFatigue(xi.Starters[i], squad);
+                fatigue /= perSide;
+            }
+
+            return new QuickSide(TierPosition(cpu / perSide), mean, fatigue);
         }
 
         /// <summary>A match between two clubs that nobody plays: the quick-sim's result, with the model for its size.</summary>
