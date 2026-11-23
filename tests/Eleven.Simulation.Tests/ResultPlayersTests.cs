@@ -184,5 +184,45 @@ namespace Eleven.Simulation.Tests
             Assert.True(lines > 1000 && cautions > 10, $"{lines} lines, {cautions} cautions");
             Assert.True(injuries > 0, "no injury drawn");
         }
+
+        [Fact]
+        public void The_quick_sims_cards_fall_to_distinct_footballers_so_its_lines_total_its_counts()
+        {
+            // Codex on #184: a side's sendings-off went to footballers drawn with replacement, so two
+            // could fall to one and the lines undercount; two cautions could fall to one footballer
+            // never sent off. At card-heavy rates, every card goes to a footballer without one, the
+            // keeper never; beyond the outfielders none is named.
+            SimConfig c = CareerQuickSimCalibration.Config();
+            QuickSimModel e = QuickSimModel.ElevenASide;
+            double[] tiers = Enumerable.Range(0, QuickSimModel.Tiers).Select(t => e.TierRating(t)).ToArray();
+            QuickSimModel Cards(double cautions, double off) => new QuickSimModel(e.BaseRate, e.Home, tiers, e.CapabilityWeight, e.Rho,
+                e.FoulsPerSide, cautions, off, e.ShootoutConversion, e.MinorInjuriesPerSide, e.SeriousInjuriesPerSide);
+            int[] home = Enumerable.Range(100, 11).ToArray(), away = Enumerable.Range(200, 11).ToArray();
+            QuickSide side = CareerQuickSim.Side(World, World.Clubs[4].Id, 10);
+
+            int several = 0;
+            for (ulong seed = 0; seed < 200; seed++)
+            {
+                MatchResult r = QuickSim.Play(c, side, side, seed, model: Cards(3, 2), homePlayers: home, awayPlayers: away);
+                foreach ((int team, int cautions, int off) in new[] { (r.HomeTeam, r.HomeCautions, r.HomeSendingsOff), (r.AwayTeam, r.AwayCautions, r.AwaySendingsOff) })
+                {
+                    List<ResultPlayer> mine = r.Players.Where(p => p.Team == team).ToList();
+                    Assert.Equal(Math.Min(off, 10), mine.Count(p => p.SentOff));
+                    Assert.Equal(Math.Min(cautions, 10), mine.Sum(p => p.Cautions));
+                    Assert.All(mine, p => Assert.InRange(p.Cautions, 0, 1));
+                    ResultPlayer keeper = mine.Single(p => p.Player == (team == r.HomeTeam ? home[10] : away[10]));
+                    Assert.Equal((0, false), (keeper.Cautions, keeper.SentOff));
+                    if (off >= 2) several++;
+                }
+            }
+
+            Assert.True(several > 50, $"{several} sides with two or more sendings-off");
+
+            // More sendings-off than outfielders: each of them is named once, and no more.
+            MatchResult flood = QuickSim.Play(c, side, side, 5, model: Cards(40, 40), homePlayers: home, awayPlayers: away);
+            Assert.True(flood.HomeSendingsOff > 10 && flood.HomeCautions > 10, $"{flood.HomeSendingsOff} sendings-off, {flood.HomeCautions} cautions");
+            Assert.Equal(10, flood.Players.Count(p => p.Team == flood.HomeTeam && p.SentOff));
+            Assert.Equal(10, flood.Players.Count(p => p.Team == flood.HomeTeam && p.Cautions == 1));
+        }
     }
 }
