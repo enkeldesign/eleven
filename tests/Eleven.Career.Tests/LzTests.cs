@@ -40,13 +40,30 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
-        public void A_save_shrinks_several_times_over()
+        public void A_world_shrinks_by_a_third_and_a_seasons_results_many_times_over()
         {
+            // The world's attributes are near-random 1–20 values, which LZ77 can't shrink much;
+            // a season's results repeat their layout match after match.
             World w = WorldGenerator.Generate(0x170);
             byte[] world = WorldCodec.Encode(w);
             byte[] packed = Lz.Compress(world);
-            Assert.True(packed.Length * 3 < world.Length, $"{world.Length} bytes to {packed.Length}");
+            Assert.True(packed.Length * 3 < world.Length * 2, $"the world: {world.Length} bytes to {packed.Length}");
             Assert.Equal(world, Lz.Decompress(packed, world.Length));
+
+            Season s = SeasonEngine.Start(w, 1, 0x170, SeasonEngine.FirstRanking(w), CompetitionRules.Reference);
+            for (int day = 0; day < 20; day++)
+            {
+                foreach (Fixture f in SeasonEngine.Next(s, CompetitionRules.Reference))
+                    SeasonEngine.Record(s, CompetitionRules.Reference, f.Id, new Eleven.Simulation.MatchResult(1, 2, f.Home % 3, f.Away % 2 + (f.Home % 3 == f.Away % 2 + 0 ? 1 : 0), 180, 360, Array.Empty<Eleven.Simulation.ResultGoal>(), 9, homeFouls: f.Home % 4, awayFouls: f.Away % 5));
+                SeasonEngine.Advance(s, CompetitionRules.Reference);
+            }
+
+            var writer = new Eleven.Simulation.Encoding.CanonicalWriter(1 << 16);
+            SeasonCodec.Write(writer, s);
+            byte[] season = writer.ToArray();
+            byte[] small = Lz.Compress(season);
+            Assert.True(small.Length * 5 < season.Length, $"the season: {season.Length} bytes to {small.Length}");
+            Assert.Equal(season, Lz.Decompress(small, season.Length));
         }
 
         [Fact]

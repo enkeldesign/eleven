@@ -113,27 +113,37 @@ namespace Eleven.Career
     }
 
     /// <summary>
-    /// A save as bytes (#170): magic <c>ELSV</c>, the format version, the career, the world's and
-    /// the season's bytes, then a 64-bit checksum over everything before it.
+    /// A save as bytes (#170): magic <c>ELSV</c>, the format version, the payload's length, the
+    /// payload compressed (<see cref="Lz"/>), then a 64-bit checksum over everything before it.
+    /// The payload is the career, the world's bytes and the season's.
     /// </summary>
     public static class SaveCodec
     {
         public const int Magic = 0x454C5356; // "ELSV"
         public const int FormatVersion = 1;
 
+        /// <summary>The largest payload a save may claim, so a damaged length can't ask for more.</summary>
+        public const int MaxPayload = 64 * 1024 * 1024;
+
         public static byte[] Encode(SaveFile save)
         {
             byte[] world = WorldCodec.Encode(save.World);
-            var w = new CanonicalWriter(world.Length + 64 * 1024);
+            var p = new CanonicalWriter(world.Length + 64 * 1024);
+            p.WriteUInt64(save.Seed);
+            p.WriteInt32(save.Club);
+            p.WriteByte(save.Role);
+            p.WriteInt64(save.SavedAt);
+            p.WriteInt32(world.Length);
+            p.WriteBytes(world);
+            SeasonCodec.Write(p, save.Season);
+            byte[] payload = p.ToArray();
+            byte[] packed = Lz.Compress(payload);
+
+            var w = new CanonicalWriter(packed.Length + 32);
             w.WriteInt32(Magic);
             w.WriteInt32(FormatVersion);
-            w.WriteUInt64(save.Seed);
-            w.WriteInt32(save.Club);
-            w.WriteByte(save.Role);
-            w.WriteInt64(save.SavedAt);
-            w.WriteInt32(world.Length);
-            w.WriteBytes(world);
-            SeasonCodec.Write(w, save.Season);
+            w.WriteInt32(payload.Length);
+            w.WriteBytes(packed);
             w.WriteUInt64(w.Hash());
             return w.ToArray();
         }
@@ -158,6 +168,11 @@ namespace Eleven.Career
                     throw new FormatException($"Save format {format}; this build reads format {FormatVersion}.");
                 }
 
+                int size = r.ReadInt32();
+                if (size < 0 || size > MaxPayload) throw new FormatException($"Invalid payload length {size}.");
+                var packed = new byte[payload.Length - 12];
+                Array.Copy(payload, 12, packed, 0, packed.Length);
+                r = new CanonicalReader(Lz.Decompress(packed, size));
                 var save = new SaveFile { Seed = r.ReadUInt64(), Club = r.ReadInt32(), Role = r.ReadByte(), SavedAt = r.ReadInt64() };
                 int length = SeasonCodec.Count(r.ReadInt32());
                 var world = new byte[length];
