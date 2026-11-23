@@ -203,6 +203,19 @@ namespace Eleven.Host
             _squadList.style.flexShrink = 1;
             _squadList.style.minHeight = 0;
             _squadPage.Content.Add(_squadList);
+
+            // Where a focused row sits in the list (Codex on #187), for the smoke: once laid out, its
+            // top and bottom in the list against the scroll's offset and viewport.
+            _squadList.RegisterCallback<FocusInEvent>(e =>
+            {
+                if (!(e.target is VisualElement row) || !_squadList.contentContainer.Contains(row)) return;
+                _squadList.schedule.Execute(() =>
+                {
+                    int index = _squadRows.FindIndex(r => r.Row.Element == row);
+                    Log(FormattableString.Invariant(
+                        $"ELEVEN squad focus row={index} rows={_squadRows.Count} top={row.layout.yMin:F0} bottom={row.layout.yMax:F0} offset={_squadList.scrollOffset.y:F0} view={_squadList.contentViewport.layout.height:F0} content={_squadList.contentContainer.layout.height:F0}"));
+                }).StartingIn(100);
+            });
             _squadAuto = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, "Auto", SquadAuto);
             _squadBack = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Back", SquadBack);
             _squadPage.Actions.Add(_squadBack.Element);
