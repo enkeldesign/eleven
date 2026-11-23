@@ -60,8 +60,8 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
 
 | Season | Injuries (serious) | Sendings-off | Footballer-matches missed: injured | Banned | A club |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 19 (4) | 40 | 13 | 71 | 2.3 |
-| 2 | 11 (1) | 58 | 1 | 101 | 2.8 |
+| 1 | 19 (4) | 40 | 15 | 68 | 2.3 |
+| 2 | 11 (1) | 58 | 1 | 102 | 2.9 |
 | 3 | 18 (1) | 59 | 2 | 90 | 2.6 |
 
 - **Few injuries.** The full simulation injures about 0.02 footballers a side a match at 3-minute halves (#172), most of them knocks, so a club loses well under one footballer-match a season to injury. Whether the career should see more is a feel question, not settled here.
