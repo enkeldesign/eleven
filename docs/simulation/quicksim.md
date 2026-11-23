@@ -133,7 +133,7 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 
 **The sample:** `eleven-sim quicksim career <dir> [count]` plays the full simulation over 480 fixtures between the reference world's clubs (seed `0x157`).
 - **Fixtures:** every 17th of all 1,260 ordered pairs, so every club plays 10 to 20 times at home and away, and every gap between divisions is covered both ways round.
-- **Conditions:** 180 s halves, every brain running, each fixture on its own seed. Since #180 each club plays its manager's formation and plans, with its XI picked for the formation.
+- **Conditions:** 180 s halves, every brain running, each fixture on its own seed. Since #180 each club plays its manager's formation and plans, with its XI picked for the formation, and since #182 each side's manager manages it.
 - **Cost:** about 25 minutes on four cores.
 - **The record:** `quicksim-career-reference.csv`, with a hash of each result's text, so any change in a match shows, and each side's footballers injured, minor and serious. CI plays the first 8 fixtures and diffs them against its first rows.
 
@@ -141,20 +141,21 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 - **What stays:** the reference's tier ratings and capability weight, in proportion, so the 5v5 calibration's ordering of sides stands.
 - **What is refitted:**
   - μ, h and a scale s on the ratings, by Poisson maximum likelihood with their errors;
-  - ρ by the Dixon–Coles likelihood;
+  - ρ by the Dixon–Coles likelihood, over every value from −1 to 1 that the matches' rates allow (#182; it searched only ±0.3 before, and managed matches' ρ lies beyond);
   - the foul, card and injury means. Each side's injured footballers come from the result's lines (#172), by their worst injury.
 
 | | Eleven a side | Reference (5v5) |
 | --- | --- | --- |
-| μ | −0.721 ± 0.065 | 0.157 |
-| h | −0.015 ± 0.085 | 0.026 |
-| s | 1.023 ± 0.076 | 1 |
-| ρ | −0.074 ± 0.114 | −0.014 |
-| Fouls, cautions, sendings-off a side | 2.06, 0.51, 0.065 | 1.85, 0.44, 0.075 |
-| Minor, serious injuries a side | 0.0135, 0.0031 | 0, 0 |
+| μ | −0.693 ± 0.064 | 0.157 |
+| h | −0.003 ± 0.084 | 0.026 |
+| s | 0.978 ± 0.075 | 1 |
+| ρ | −0.369 ± 0.096 | −0.014 |
+| Fouls, cautions, sendings-off a side | 2.04, 0.52, 0.070 | 1.85, 0.44, 0.075 |
+| Minor, serious injuries a side | 0.0115, 0.0031 | 0, 0 |
 
 **What the fit says:**
-- **Scoring:** the world's clubs score at well under half the 5v5 rate (exp(−0.88) ≈ 0.41). Before #180, all in the reference 4-4-2, they scored at about half (μ −0.569).
+- **Scoring:** the world's clubs score at well under half the 5v5 rate (exp(−0.85) ≈ 0.43). Before #180, all in the reference 4-4-2, they scored at about half (μ −0.569).
+- **Draws:** managed matches draw more than independent Poisson goals predict, so ρ is well below 0. Behind late, a side chases and the side ahead protects, and level sides stay level.
 - **Separation:** they separate exactly as the reference predicts, with s within its error of 1.
 - **Home advantage:** h is within its error of none, as the full simulation has no home advantage.
 
@@ -162,14 +163,20 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 
 | Gap | Matches | Full: goals | Full: home W/D | Quick: goals | Quick: home W/D |
 | --- | --- | --- | --- | --- | --- |
-| −2 | 48 | 0.25–1.29 | 8 %/40 % | 0.19–1.21 | 6 %/32 % |
-| −1 | 108 | 0.33–0.87 | 16 %/39 % | 0.32–0.78 | 15 %/42 % |
-| 0 | 149 | 0.48–0.48 | 28 %/46 % | 0.51–0.51 | 26 %/47 % |
-| +1 | 117 | 0.80–0.24 | 42 %/47 % | 0.77–0.32 | 42 %/43 % |
-| +2 | 58 | 1.17–0.26 | 53 %/34 % | 1.24–0.21 | 63 %/31 % |
-| All | 480 | 0.59–0.56 | 30 %/43 % | 0.59–0.56 | 30 %/41 % |
+| −2 | 48 | 0.23–1.27 | 12 %/33 % | 0.21–1.21 | 4 %/36 % |
+| −1 | 108 | 0.31–0.84 | 11 %/48 % | 0.33–0.80 | 13 %/46 % |
+| 0 | 149 | 0.49–0.45 | 23 %/54 % | 0.53–0.52 | 24 %/51 % |
+| +1 | 117 | 0.80–0.33 | 37 %/54 % | 0.79–0.33 | 40 %/47 % |
+| +2 | 58 | 1.31–0.29 | 60 %/33 % | 1.23–0.22 | 60 %/34 % |
+| All | 480 | 0.60–0.57 | 27 %/48 % | 0.60–0.57 | 28 %/46 % |
 
-**With the managers' formations and plans** (#180) the full simulation scores 1.15 goals a match with 43 % draws, against 1.29 and 36 % with every club in the reference 4-4-2.
+**How the sample has moved:**
+
+| | Goals a match | Draws |
+| --- | --- | --- |
+| Every club in the reference 4-4-2 | 1.29 | 36 % |
+| The managers' formations and plans (#180) | 1.15 | 43 % |
+| Managed too (#182) | 1.17 | 48 % |
 
 **The tests** (`CareerQuickSimTests`):
 - mean home and away goals within 2 standard errors of the sample's;
@@ -188,13 +195,14 @@ A career side's footballers may start a match tired (#177, [squads.md](../career
 
 **The fit:** `eleven-sim condition fit <csv>` fits w by Poisson maximum likelihood, every other value `ElevenASide`'s. It is bounded at 0, as a tired start never helps a side.
 
-| Home fatigue | Matches | Full: goals | Full: home W/D | Quick at the fit (w = 0): goals | Home W/D |
+| Home fatigue | Matches | Full: goals | Full: home W/D | Quick at the fit: goals | Home W/D |
 | --- | --- | --- | --- | --- | --- |
-| 0.0 | 160 | 0.61–0.55 | 32 %/38 % | 0.58–0.56 | 30 %/41 % |
-| 0.3 | 160 | 0.68–0.58 | 31 %/42 % | 0.58–0.56 | 30 %/41 % |
-| 0.6 | 160 | 0.54–0.55 | 31 %/41 % | 0.58–0.56 | 30 %/41 % |
+| 0.0 | 160 | 0.65–0.56 | 26 %/49 % | 0.60–0.57 | 28 %/45 % |
+| 0.3 | 160 | 0.64–0.60 | 28 %/48 % | 0.57–0.59 | 27 %/46 % |
+| 0.6 | 160 | 0.47–0.59 | 28 %/40 % | 0.54–0.62 | 25 %/45 % |
 
-- **No cost measured.** The unbounded estimate is −0.07 ± 0.10 (−0.17 ± 0.10 before #180's formations): within noise of none. So `ElevenASide`'s weight is 0.
+- **Managed, a small cost:** w = 0.150 ± 0.109, so `ElevenASide`'s weight is 0.150. A side starting at fatigue 0.6 scores 0.47 goals against 0.65 fresh.
+- **Unmanaged,** before #182, the estimate was within noise of none: −0.07 ± 0.10 with #180's formations, −0.17 ± 0.10 before them.
 - **Why:** the full simulation's fatigue is in-match fatigue. A footballer running easy sheds it at about 0.02 a second (#100), and half-time halves what is left, so a tired start is gone within a minute or so of a 3-minute half.
 - **What would carry:** condition only through something that lasts the match, such as his stamina for it. That's open, and it would need its own measurement.
 
