@@ -5,7 +5,9 @@ namespace Eleven.Simulation.Encoding
     /// <summary>
     /// The match-result contract's own bytes (#170, INV-14): every field of a
     /// <see cref="MatchResult"/>, its metrics included, canonical and with its schema version,
-    /// so a career's saved results read back exactly. A result of another schema is refused.
+    /// so a career's saved results read back exactly. Schema 7, the first this codec wrote, reads
+    /// as a result with no footballers' lines (#172), so a save from before them still loads; a
+    /// result of any other schema is refused.
     /// </summary>
     public static class MatchResultCodec
     {
@@ -75,10 +77,13 @@ namespace Eleven.Simulation.Encoding
         private static SideMetrics ReadMetrics(CanonicalReader r) =>
             new SideMetrics(r.ReadDouble("result.possession"), r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.xg"), r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.ppda"));
 
+        /// <summary>The first schema this codec wrote (#170): schema 8 less the footballers' lines.</summary>
+        public const int FirstSchema = 7;
+
         public static MatchResult Read(CanonicalReader r)
         {
             int schema = r.ReadInt32();
-            if (schema != MatchResult.SchemaVersion) throw new FormatException($"Result schema {schema}; this build reads {MatchResult.SchemaVersion}.");
+            if (schema != MatchResult.SchemaVersion && schema != FirstSchema) throw new FormatException($"Result schema {schema}; this build reads {FirstSchema} and {MatchResult.SchemaVersion}.");
             int homeTeam = r.ReadInt32(), awayTeam = r.ReadInt32(), homeGoals = r.ReadInt32(), awayGoals = r.ReadInt32();
             double half = r.ReadDouble("result.half"), played = r.ReadDouble("result.played");
             int restarts = r.ReadInt32();
@@ -91,7 +96,7 @@ namespace Eleven.Simulation.Encoding
             if (count < 0 || count > 10_000) throw new FormatException($"Invalid goal count {count}.");
             var goals = new ResultGoal[count];
             for (int i = 0; i < count; i++) goals[i] = new ResultGoal(r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.goal"));
-            int lines = r.ReadInt32();
+            int lines = schema == FirstSchema ? 0 : r.ReadInt32();
             if (lines < 0 || lines > 10_000) throw new FormatException($"Invalid player count {lines}.");
             var players = new ResultPlayer[lines];
             for (int i = 0; i < lines; i++) players[i] = new ResultPlayer(r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.player"), r.ReadInt32(), r.ReadBool(), r.ReadByte());
