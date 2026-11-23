@@ -84,8 +84,8 @@ namespace Eleven.Career
 
         /// <summary>
         /// A matchday played: each club that played it serves a match of the ban of each of its
-        /// footballers banned in that competition, and the days pass for the injured. Call it before
-        /// the matchday's own cards and injuries are applied.
+        /// footballers banned in that competition. Call it before the matchday's own cards are
+        /// applied, so a ban it brings is served from the next.
         /// </summary>
         public static void Serve(World world, IReadOnlyList<Fixture> played, MatchdayKind kind, SquadRules rules)
         {
@@ -98,13 +98,9 @@ namespace Eleven.Career
 
             foreach (Player p in world.Players)
             {
-                if (clubs.Contains(p.ClubId))
-                {
-                    if (kind == MatchdayKind.League && p.LeagueBan > 0) p.LeagueBan--;
-                    else if (kind == MatchdayKind.Cup && p.CupBan > 0) p.CupBan--;
-                }
-
-                if (p.InjuredDays > 0) p.InjuredDays = Math.Max(0, p.InjuredDays - rules.DaysPerMatchday);
+                if (!clubs.Contains(p.ClubId)) continue;
+                if (kind == MatchdayKind.League && p.LeagueBan > 0) p.LeagueBan--;
+                else if (kind == MatchdayKind.Cup && p.CupBan > 0) p.CupBan--;
             }
         }
 
@@ -143,6 +139,10 @@ namespace Eleven.Career
         /// <summary>Days pass for the injured (#176): from a matchday to the next, or over the off-season.</summary>
         public static void Pass(World world, int days)
         {
+            foreach (Player p in world.Players)
+            {
+                if (p.InjuredDays > 0) p.InjuredDays = Math.Max(0, p.InjuredDays - days);
+            }
         }
 
         /// <summary>The season's turn: cautions start again, bans still to serve carry over, and the off-season's days pass.</summary>
@@ -152,8 +152,9 @@ namespace Eleven.Career
             {
                 p.LeagueCautions = 0;
                 p.CupCautions = 0;
-                p.InjuredDays = Math.Max(0, p.InjuredDays - rules.OffSeasonDays);
             }
+
+            Pass(world, rules.OffSeasonDays);
         }
     }
 }

@@ -78,9 +78,11 @@ namespace Eleven.Simulation.Harness
                 played.Add((f, r, lineup));
             }
 
-            // The bans of those who sat it out are served, and the days pass, before its own cards and injuries count.
+            // The bans of those who sat it out are served before its own cards count; its injuries
+            // count from its own day, and the days to the next matchday pass.
             Availability.Serve(world, day, kind, sr);
             foreach ((Fixture f, MatchResult r, IReadOnlyDictionary<int, int> lineup) in played) Availability.Apply(world, season, f, r, lineup, sr);
+            Availability.Pass(world, sr.DaysPerMatchday);
             SeasonEngine.Advance(season, rules);
             return day;
         }

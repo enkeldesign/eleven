@@ -78,9 +78,11 @@ namespace Eleven.Simulation.Tests
                             bans++;
                         }
 
-                        if (line.Injury == 2)
+                        if (line.Injury > 0)
                         {
-                            Assert.True(p.InjuredDays > 0, $"{p.Id} seriously injured and fit");
+                            // Its layoff, less the week to the next matchday; a longer one already running may outlast it.
+                            int left = Math.Max(0, Availability.Layoff(s.Seed, f.Id, p.Id, line.Injury, SquadRules.Reference) - SquadRules.Reference.DaysPerMatchday);
+                            Assert.True(p.InjuredDays >= left, $"{p.Id} injured for {left} more days, but {p.InjuredDays}");
                             injuries++;
                         }
                     }
@@ -112,13 +114,15 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(MatchdayKind.League, kind);
                 Assert.Equal(CareerSquads.Lineup(w, club, opponent, CareerSession.PerSide, Availability.OutOf(w, club, kind), Availability.OutOf(w, opponent, kind)), lineup);
 
-                // His footballer hurt in it, on the simulation's home side whatever the ground.
-                int hurtSim = Squads.HomeOutfielder(0);
-                Player hurt = w.Players.Single(p => p.Id == lineup[hurtSim]);
+                // His footballer hurt in it and another sent off, on the simulation's home side whatever the ground.
+                int hurtSim = Squads.HomeOutfielder(0), offSim = Squads.HomeOutfielder(1);
+                Player hurt = w.Players.Single(p => p.Id == lineup[hurtSim]), off = w.Players.Single(p => p.Id == lineup[offSim]);
                 MatchResult played = new MatchResult(Squads.HomeTeam, Squads.AwayTeam, 1, 0, 60, 120, Array.Empty<ResultGoal>(), 0)
-                    .WithPlayers(new[] { new ResultPlayer(hurtSim, Squads.HomeTeam, 120, 0, false, 2) });
+                    .WithPlayers(new[] { new ResultPlayer(hurtSim, Squads.HomeTeam, 120, 0, false, 2), new ResultPlayer(offSim, Squads.HomeTeam, 80, 0, true, 0) });
+                int left = Math.Max(0, Availability.Layoff(s.Season.Seed, fixture.Id, hurt.Id, 2, s.Squad) - s.Squad.DaysPerMatchday);
                 s.Finish(fixture, played);
-                Assert.True(hurt.InjuredDays > 0, $"home={home}: his injured footballer is fit");
+                Assert.Equal(left, hurt.InjuredDays);
+                Assert.Equal(1, off.LeagueBan);
                 Assert.Equal(0, banned.LeagueBan);
             }
         }
