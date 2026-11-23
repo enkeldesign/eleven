@@ -205,6 +205,41 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_damaged_current_never_replaces_a_good_previous()
+        {
+            // Codex on #181: a slot loaded from its previous save, its current damaged. The next
+            // save must keep that previous as the fallback, whether its own write succeeds or not.
+            var store = new Store();
+            var slots = new SaveSlots(store);
+            SaveFile first = MidSeason(), second = MidSeason(), third = MidSeason();
+            second.SavedAt += 5;
+            third.SavedAt += 9;
+            Assert.True(slots.Save(2, first));
+            Assert.True(slots.Save(2, second));
+            store.Values["eleven.save.2.current"] = "damaged";
+            (SaveFile? loaded, bool fromPrevious, _) = slots.Load(2);
+            Assert.True(fromPrevious);
+            Assert.Equal(first.SavedAt, loaded!.SavedAt);
+
+            // The new current is refused: the good previous is still there to load.
+            store.Refuse = key => key == "eleven.save.2.current";
+            Assert.False(slots.Save(2, third));
+            Assert.NotNull(slots.Load(2).Save);
+            Assert.Equal(first.SavedAt, slots.Load(2).Save!.SavedAt);
+
+            // Saved, the damaged current isn't rotated into previous: the fallback stays good.
+            store.Refuse = _ => false;
+            store.Values["eleven.save.2.current"] = "damaged";
+            Assert.True(slots.Save(2, third));
+            Assert.Equal(third.SavedAt, slots.Load(2).Save!.SavedAt);
+            store.Values["eleven.save.2.current"] = "damaged again";
+            (SaveFile? fallback, bool fromPreviousAgain, _) = slots.Load(2);
+            Assert.NotNull(fallback);
+            Assert.True(fromPreviousAgain);
+            Assert.Equal(first.SavedAt, fallback!.SavedAt);
+        }
+
+        [Fact]
         public void A_season_round_trips_through_its_codec()
         {
             Season s = MidSeason().Season;
