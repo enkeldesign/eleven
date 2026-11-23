@@ -23,7 +23,8 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
 - **A manager:**
   - id, name, age, club;
   - #80's seven competences, each 1–20: tactics, coaching, development, scouting, recruitment, motivation, adaptability;
-  - a preferred formation, temperament (1 cautious to 20 bold) and reputation.
+  - a preferred formation, temperament (1 cautious to 20 bold) and reputation;
+  - a philosophy (#180): how far up he presses and how high his line stands, 1–20 each ([managers.md](managers.md)).
 
   Memory and decisions come in M6.09.
 
@@ -57,7 +58,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
 ## The codec
 
 `WorldCodec` encodes a world to canonical, versioned bytes and back.
-- **The layout:** magic `ELWD`, format 3, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176), then each club's picks (#179). An older world reads with what it lacks empty: nobody banned or cautioned, no picks.
+- **The layout:** magic `ELWD`, format 4, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176), then each club's picks (#179), then each manager's philosophy (#180). An older world reads with what it lacks empty: nobody banned or cautioned, no picks, no philosophy.
 - **Migration:** the attribute and competence counts are written, so a later format can migrate a world (INV-7).
 - **Refusals:** a cut, padded or foreign buffer is a `FormatException`.
 - **Saves:** M6.07's saves build on it.
