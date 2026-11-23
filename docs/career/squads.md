@@ -66,7 +66,7 @@ A row: "J. Smith · CB, DM · 14.2 · 96", his name, positions, selection level 
 - **Your picks** are `Club.Picks` in the world: your eleven, then your bench. They're saved with it, at world format 3.
 - **They play your fixture,** whether played, watched or simulated:
   - the AI's rule places your eleven in the formation's slots;
-  - a pick out by kick-off is replaced by the AI's rule, and the hub says so;
+  - a pick out by kick-off is replaced from the rest, in his line, and the hub says so. A reserve of the slot's first-position line comes in before any pick is moved to his second position, and only then is anyone moved out of position, so every other pick keeps his place (Codex on #187);
   - nobody of yours is rotated (#177), as you decide who rests.
 
 ## A matchday
