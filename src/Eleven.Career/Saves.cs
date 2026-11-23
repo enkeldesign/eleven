@@ -254,8 +254,9 @@ namespace Eleven.Career
 
             // The old current becomes previous only if it verifies (Codex on #181): a damaged one
             // never replaces a good previous, the slot's only fallback.
+            // It is read back, too (Codex on #181): current is never overwritten without a good fallback.
             string? old = _store.Read(current);
-            if (old != null && Verify(old) != null && !_store.Write(previous, old))
+            if (old != null && Verify(old) != null && (!_store.Write(previous, old) || _store.Read(previous) != old))
             {
                 _store.Delete(staging);
                 return false;
