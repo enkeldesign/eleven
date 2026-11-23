@@ -32,7 +32,22 @@ namespace Eleven.Simulation.Harness
         /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
         /// world's player id. A result's lines (#172) name footballers by these ids.
         /// </summary>
-        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide) => new Dictionary<int, int>();
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide)
+        {
+            var lineup = new Dictionary<int, int>();
+            SquadSelection home = Selection(world, homeClub, perSide), away = Selection(world, awayClub, perSide);
+            for (int i = 0; i < perSide; i++)
+            {
+                lineup[Squads.HomeOutfielder(i)] = home.Starters[i].Id;
+                lineup[Squads.AwayOutfielder(perSide, i)] = away.Starters[i].Id;
+            }
+
+            lineup[Squads.HomeKeeper(perSide)] = home.Starters[perSide].Id;
+            lineup[Squads.AwayKeeper(perSide)] = away.Starters[perSide].Id;
+            for (int i = 0; i < home.Bench.Count; i++) lineup[Squads.HomeBench(perSide, i)] = home.Bench[i].Id;
+            for (int i = 0; i < away.Bench.Count; i++) lineup[Squads.AwayBench(perSide, i)] = away.Bench[i].Id;
+            return lineup;
+        }
 
         private static void Apply(SimState s, SquadSelection side, int perSide, int team, Func<int, int> outfielder, int keeperId, Func<int, int> benchId)
         {

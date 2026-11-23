@@ -46,6 +46,18 @@ namespace Eleven.Simulation.Encoding
                 w.WriteInt32(g.Half);
                 w.WriteDouble(g.ClockSeconds, "result.goal");
             }
+
+            // Schema 8 (#172): each footballer's line.
+            w.WriteInt32(r.Players.Count);
+            foreach (ResultPlayer p in r.Players)
+            {
+                w.WriteInt32(p.Player);
+                w.WriteInt32(p.Team);
+                w.WriteDouble(p.Seconds, "result.player");
+                w.WriteInt32(p.Cautions);
+                w.WriteBool(p.SentOff);
+                w.WriteByte((byte)p.Injury);
+            }
         }
 
         private static void WriteMetrics(CanonicalWriter w, SideMetrics m)
@@ -79,12 +91,17 @@ namespace Eleven.Simulation.Encoding
             if (count < 0 || count > 10_000) throw new FormatException($"Invalid goal count {count}.");
             var goals = new ResultGoal[count];
             for (int i = 0; i < count; i++) goals[i] = new ResultGoal(r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.goal"));
+            int lines = r.ReadInt32();
+            if (lines < 0 || lines > 10_000) throw new FormatException($"Invalid player count {lines}.");
+            var players = new ResultPlayer[lines];
+            for (int i = 0; i < lines; i++) players[i] = new ResultPlayer(r.ReadInt32(), r.ReadInt32(), r.ReadDouble("result.player"), r.ReadInt32(), r.ReadBool(), r.ReadByte());
             return new MatchResult(homeTeam, awayTeam, homeGoals, awayGoals, half, played, goals, restarts,
                 homeFouls, awayFouls, homePenalties, awayPenalties, homeCautions, awayCautions, homeOff, awayOff,
                 homeInjuries, awayInjuries, homeSubs, awaySubs, extraTime, homeKicks, awayKicks, homeShootout, awayShootout)
             {
                 HomeMetrics = homeMetrics,
                 AwayMetrics = awayMetrics,
+                Players = players,
             };
         }
     }

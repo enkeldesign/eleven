@@ -269,6 +269,9 @@ namespace Eleven.Simulation
         private const int ScorelineDraw = 0, GoalTimeDraw = 1, FoulsDraw = 2, CautionsDraw = 3, SendingsOffDraw = 4;
         private const int ExtraScorelineDraw = 5, ExtraGoalTimeDraw = 6, ShootoutDraw = 7;
 
+        // Injuries a side, and who got each card and injury (#172), on their own counters too.
+        private const int MinorInjuryDraw = 8, SeriousInjuryDraw = 9, CautionPickDraw = 10, SendingOffPickDraw = 11, MinorPickDraw = 12, SeriousPickDraw = 13;
+
         // A sudden death this long has a chance of about 10^-99 at the reference conversion; past it
         // the home side is given the shootout, so a knockout always ends.
         private const int MaxShootoutKicks = 1000;
@@ -294,7 +297,8 @@ namespace Eleven.Simulation
         /// The result of a match between <paramref name="home"/> (team id <paramref name="homeTeam"/>)
         /// and <paramref name="away"/>, from <paramref name="seed"/> alone.
         /// </summary>
-        public static MatchResult Play(SimConfig config, QuickSide home, QuickSide away, ulong seed, int homeTeam = 1, int awayTeam = 2, QuickSimModel? model = null)
+        public static MatchResult Play(SimConfig config, QuickSide home, QuickSide away, ulong seed, int homeTeam = 1, int awayTeam = 2, QuickSimModel? model = null,
+            IReadOnlyList<int>? homePlayers = null, IReadOnlyList<int>? awayPlayers = null)
         {
             QuickSimModel m = model ?? QuickSimModel.Reference;
             double half = config.HalfLength;
@@ -324,11 +328,44 @@ namespace Eleven.Simulation
 
             double scale = half / ReferenceHalf;
             int Side(int what, int side, double perSide) => Count(scale * perSide, Draw(seed, what, side));
-            return new MatchResult(homeTeam, awayTeam, hg, ag, half, played, goals.ToArray(), 0,
+            int homeCautions = Side(CautionsDraw, 0, m.CautionsPerSide), awayCautions = Side(CautionsDraw, 1, m.CautionsPerSide);
+            int homeOff = Side(SendingsOffDraw, 0, m.SendingsOffPerSide), awayOff = Side(SendingsOffDraw, 1, m.SendingsOffPerSide);
+            int homeMinor = Side(MinorInjuryDraw, 0, m.MinorInjuriesPerSide), awayMinor = Side(MinorInjuryDraw, 1, m.MinorInjuriesPerSide);
+            int homeSerious = Side(SeriousInjuryDraw, 0, m.SeriousInjuriesPerSide), awaySerious = Side(SeriousInjuryDraw, 1, m.SeriousInjuriesPerSide);
+            var result = new MatchResult(homeTeam, awayTeam, hg, ag, half, played, goals.ToArray(), 0,
                 homeFouls: Side(FoulsDraw, 0, m.FoulsPerSide), awayFouls: Side(FoulsDraw, 1, m.FoulsPerSide),
-                homeCautions: Side(CautionsDraw, 0, m.CautionsPerSide), awayCautions: Side(CautionsDraw, 1, m.CautionsPerSide),
-                homeSendingsOff: Side(SendingsOffDraw, 0, m.SendingsOffPerSide), awaySendingsOff: Side(SendingsOffDraw, 1, m.SendingsOffPerSide),
+                homeCautions: homeCautions, awayCautions: awayCautions, homeSendingsOff: homeOff, awaySendingsOff: awayOff,
+                homeInjuries: homeMinor + homeSerious, awayInjuries: awayMinor + awaySerious,
                 extraTime: extraTime, homeShootoutKicks: homeKicks, awayShootoutKicks: awayKicks, homeShootoutGoals: homeScored, awayShootoutGoals: awayScored);
+            if (homePlayers == null || awayPlayers == null) return result;
+
+            // The XIs named (#172): each card and injury to one of the side's outfielders (the
+            // keeper, last, keeps his goal), drawn on its own counter. Nobody is replaced in a
+            // quick-sim, so each plays the whole match.
+            var lines = new List<ResultPlayer>(homePlayers.Count + awayPlayers.Count);
+            AddLines(lines, seed, 0, homeTeam, homePlayers, played, homeCautions, homeOff, homeMinor, homeSerious);
+            AddLines(lines, seed, 1, awayTeam, awayPlayers, played, awayCautions, awayOff, awayMinor, awaySerious);
+            lines.Sort((a, b) => a.Player.CompareTo(b.Player));
+            return result.WithPlayers(lines.ToArray());
+        }
+
+        private static void AddLines(List<ResultPlayer> lines, ulong seed, int side, int team, IReadOnlyList<int> players, double played, int cautions, int off, int minor, int serious)
+        {
+            int n = players.Count, outfield = Math.Max(1, n - 1);
+            var cards = new int[n];
+            var sent = new bool[n];
+            var hurt = new int[n];
+            int Pick(int what, int k) => Math.Min(outfield - 1, (int)(Draw(seed, what, side * 1000 + k) * outfield));
+            for (int k = 0; k < cautions; k++) cards[Pick(CautionPickDraw, k)]++;
+            for (int k = 0; k < off; k++) sent[Pick(SendingOffPickDraw, k)] = true;
+            for (int k = 0; k < minor; k++)
+            {
+                int at = Pick(MinorPickDraw, k);
+                hurt[at] = Math.Max(hurt[at], 1);
+            }
+
+            for (int k = 0; k < serious; k++) hurt[Pick(SeriousPickDraw, k)] = 2;
+            for (int i = 0; i < n; i++) lines.Add(new ResultPlayer(players[i], team, played, cards[i], sent[i], hurt[i]));
         }
 
         // A scoreline: one draw against the grid's cumulative chances.

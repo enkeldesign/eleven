@@ -211,7 +211,7 @@ namespace Eleven.Simulation
     public sealed class MatchResult
     {
         /// <summary>Bumped whenever a field is added or changes meaning.</summary>
-        public const int SchemaVersion = 7;
+        public const int SchemaVersion = 8;
 
         public MatchResult(int homeTeam, int awayTeam, int homeGoals, int awayGoals, double halfSeconds, double playedSeconds, IReadOnlyList<ResultGoal> goals, int restarts,
             int homeFouls = 0, int awayFouls = 0, int homePenalties = 0, int awayPenalties = 0,
@@ -313,7 +313,12 @@ namespace Eleven.Simulation
         public IReadOnlyList<ResultPlayer> Players { get; internal set; } = Array.Empty<ResultPlayer>();
 
         /// <summary>The same result with <paramref name="players"/> as its footballers' lines (#172), for a result the harness attributes.</summary>
-        public MatchResult WithPlayers(IReadOnlyList<ResultPlayer> players) => this;
+        public MatchResult WithPlayers(IReadOnlyList<ResultPlayer> players)
+        {
+            MatchResult copy = Mirrored().Mirrored();
+            copy.Players = players;
+            return copy;
+        }
 
         /// <summary>The winner's side id, or 0 for a draw: by goals, then by the shootout (schema 6, #111).</summary>
         public int Winner => HomeGoals != AwayGoals ? (HomeGoals > AwayGoals ? HomeTeam : AwayTeam)
@@ -333,6 +338,7 @@ namespace Eleven.Simulation
             {
                 HomeMetrics = AwayMetrics,
                 AwayMetrics = HomeMetrics,
+                Players = Players,
             };
 
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
@@ -348,6 +354,8 @@ namespace Eleven.Simulation
                 HomeMetrics.Possession, AwayMetrics.Possession, HomeMetrics.Shots, AwayMetrics.Shots, HomeMetrics.OnTarget, AwayMetrics.OnTarget, HomeMetrics.Xg, AwayMetrics.Xg,
                 HomeMetrics.Passes, AwayMetrics.Passes, HomeMetrics.PassesCompleted, AwayMetrics.PassesCompleted, HomeMetrics.Corners, AwayMetrics.Corners, HomeMetrics.Ppda, AwayMetrics.Ppda));
             foreach (ResultGoal g in Goals) text.Append(string.Format(CultureInfo.InvariantCulture, "goal={0},{1},{2},{3:F2}\n", g.Team, g.Scorer, g.Half, g.ClockSeconds));
+            foreach (ResultPlayer p in Players)
+                text.Append(string.Format(CultureInfo.InvariantCulture, "player={0},{1},{2:F2},{3},{4},{5}\n", p.Player, p.Team, p.Seconds, p.Cautions, p.SentOff ? 1 : 0, p.Injury));
             return text.ToString();
         }
     }
@@ -360,6 +368,12 @@ namespace Eleven.Simulation
     public sealed class MatchRecorder
     {
         private readonly List<ResultGoal> _goals = new List<ResultGoal>();
+
+        // Each footballer's line as the match goes (#172): ticks of match clock on the pitch, his
+        // cards and his worst injury, by id in the order first seen; and the clock last seen.
+        private readonly SortedDictionary<int, (int Team, long Ticks, int Cautions, bool SentOff, int Injury)> _lines = new SortedDictionary<int, (int, long, int, bool, int)>();
+        private MatchPhase _linePhase;
+        private long _lineClock;
         private int _restarts;
         private int _homeFouls, _awayFouls, _homePenalties, _awayPenalties;
         private int _homeCautions, _awayCautions, _homeSendingsOff, _awaySendingsOff, _homeInjuries, _awayInjuries;
@@ -627,6 +641,7 @@ namespace Eleven.Simulation
         public void Observe(SimConfig config, SimState after, IReadOnlyList<SimEvent> events)
         {
             Measure(config, after, events);
+            Lines(after, events);
             foreach (SimEvent e in events)
             {
                 if (e.Kind == SimEventKind.Goal)
@@ -683,7 +698,43 @@ namespace Eleven.Simulation
                         _extraTime ? 1 : 0, home.ShootoutKicks, away.ShootoutKicks, home.ShootoutGoals, away.ShootoutGoals);
                     Result.HomeMetrics = Metrics(0);
                     Result.AwayMetrics = Metrics(1);
+                    var players = new List<ResultPlayer>(_lines.Count);
+                    foreach (KeyValuePair<int, (int Team, long Ticks, int Cautions, bool SentOff, int Injury)> l in _lines)
+                        players.Add(new ResultPlayer(l.Key, l.Value.Team, l.Value.Ticks * config.TickSeconds, l.Value.Cautions, l.Value.SentOff, l.Value.Injury));
+                    Result.Players = players.ToArray();
                 }
+            }
+        }
+
+        // Every footballer on the pitch is credited the match clock's advance (#172): the clock
+        // counts match time, so a whole match's starter is credited both halves exactly. A
+        // substitute takes his man's place in the state's footballers, and a footballer off
+        // (sent off or seriously injured) is credited nothing more.
+        private void Lines(SimState after, IReadOnlyList<SimEvent> events)
+        {
+            MatchPhase phase = after.Match.Phase;
+            bool playing = phase == MatchPhase.FirstHalf || phase == MatchPhase.SecondHalf || phase == MatchPhase.ExtraFirstHalf || phase == MatchPhase.ExtraSecondHalf;
+            long clock = after.Match.ClockTicks;
+            // The clock runs within a half and restarts at the next; a half's last step ends it, so
+            // the advance counts on the step the phase changes too.
+            long advanced = clock > _lineClock && (phase == _linePhase || !playing) ? clock - _lineClock
+                : playing && phase != _linePhase ? clock : 0;
+            _linePhase = phase;
+            _lineClock = clock;
+            foreach (PlayerState p in after.Players)
+            {
+                if (!_lines.TryGetValue(p.Id, out (int Team, long Ticks, int Cautions, bool SentOff, int Injury) line)) line = (p.TeamId, 0, 0, false, 0);
+                if (advanced > 0 && !p.Off) line.Ticks += advanced;
+                _lines[p.Id] = line;
+            }
+
+            foreach (SimEvent e in events)
+            {
+                if ((e.Kind != SimEventKind.Cautioned && e.Kind != SimEventKind.SentOff && e.Kind != SimEventKind.Injured) || !_lines.TryGetValue(e.Subject, out (int Team, long Ticks, int Cautions, bool SentOff, int Injury) l)) continue;
+                if (e.Kind == SimEventKind.Cautioned) l.Cautions++;
+                else if (e.Kind == SimEventKind.SentOff) l.SentOff = true;
+                else if (e.Other > l.Injury) l.Injury = e.Other;
+                _lines[e.Subject] = l;
             }
         }
     }

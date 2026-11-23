@@ -24,7 +24,8 @@ namespace Eleven.Simulation.Harness
             QuickSimModel model = QuickSimModel.For(perSide);
             if (fixture.Neutral) model = WithoutHome(model);
             ulong seed = CounterRng.Hash(season.Seed, fixture.Id, RandomStream.QuickSim, 0, 0);
-            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide), CareerQuickSim.Side(world, fixture.Away, perSide), seed, model: model);
+            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide), CareerQuickSim.Side(world, fixture.Away, perSide), seed, model: model,
+                homePlayers: CareerQuickSim.HomeIds(perSide), awayPlayers: CareerQuickSim.AwayIds(perSide));
         }
 
         private static QuickSimModel WithoutHome(QuickSimModel m)
