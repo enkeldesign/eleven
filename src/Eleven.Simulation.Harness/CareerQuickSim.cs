@@ -33,9 +33,9 @@ namespace Eleven.Simulation.Harness
         /// at <see cref="TierPosition"/>; its capabilities the mean of their mapped capabilities.
         /// The quick-sim's sides have no keeper, as its calibration league's sides had none apart.
         /// </summary>
-        public static QuickSide Side(World world, int clubId, int perSide, ISet<int>? unavailable = null)
+        public static QuickSide Side(World world, int clubId, int perSide, ISet<int>? unavailable = null, SquadRules? squad = null)
         {
-            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide, unavailable);
+            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide, unavailable, squad);
             var mapped = new PlayerCapabilities[perSide];
             double cpu = 0;
             for (int i = 0; i < perSide; i++)

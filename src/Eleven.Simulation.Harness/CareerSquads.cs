@@ -19,10 +19,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="RatingMap"/>.
         /// </summary>
         public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
-            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
-            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
             Apply(s, away, perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
 
@@ -40,10 +40,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
         /// world's player id. A result's lines (#172) name footballers by these ids.
         /// </summary>
-        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
             var lineup = new Dictionary<int, int>();
-            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             for (int i = 0; i < perSide; i++)
             {
                 lineup[Squads.HomeOutfielder(i)] = home.Starters[i].Id;
