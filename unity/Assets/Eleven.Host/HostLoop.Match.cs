@@ -44,6 +44,9 @@ namespace Eleven.Host
         private Eleven.Career.Fixture _careerFixture;
         private bool _careerMatch;
         private bool _careerDone;
+
+        // Each CPU side's manager's profile (#182), by team id: a career's or a quick match's clubs; none otherwise.
+        private Dictionary<int, ManagerProfile> _matchProfiles;
         private const double CareerHalf = 180;
 
         // Saves (#171): #170's five slots over the page's local storage, and the career's slot.
@@ -291,6 +294,10 @@ namespace Eleven.Host
                 : _perSide == 1
                 ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
                 : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans));
+            int opponent = _careerMatch ? (_careerFixture.Home == _career.Club ? _careerFixture.Away : _careerFixture.Home) : 0;
+            _matchProfiles = _careerMatch ? CareerManagers.Profiles(_career.World, _career.Club, opponent, _config)
+                : _quick ? CareerManagers.Profiles(QuickMatch.World, _quickHome.Id, _quickAway.Id, _config)
+                : null;
             _switcher = new SwitchController(OneVOne.HomeController, _switchMode);
             _switchRequested = false;
             _nextId = 0;
@@ -693,8 +700,9 @@ namespace Eleven.Host
             CpuControllers.Append(_simulator, _commands);
             RestartControllers.Append(_simulator, _commands);
 
-            // The CPU side's manager (#110); the human's side is his own to manage, with SUBS.
-            ManagerControllers.Append(_simulator, _commands);
+            // The CPU side's manager (#110), by his own profile in a career or quick match (#182);
+            // the human's side is his own to manage, with SUBS.
+            ManagerControllers.Append(_simulator, _commands, _matchProfiles);
         }
 
         // After each step: the result, the announcements, the side's end and the panel.
