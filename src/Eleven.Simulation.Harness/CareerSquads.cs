@@ -21,6 +21,9 @@ namespace Eleven.Simulation.Harness
         public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
             TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
+            // Each side's plans and formation are its manager's (#180), unless given.
+            homeTactics ??= CareerManagers.Plans(world, homeClub, Squads.HomeTeam);
+            awayTactics ??= CareerManagers.Plans(world, awayClub, Squads.AwayTeam);
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
             SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
@@ -112,8 +115,23 @@ namespace Eleven.Simulation.Harness
         public static Line[] SlotLines(int perSide, Formation formation)
         {
             var lines = new Line[perSide];
-            for (int i = 0; i < perSide; i++) lines[i] = SlotLine(perSide, i);
+            for (int i = 0; i < perSide; i++) lines[i] = SlotLine(perSide, i, formation);
             return lines;
+        }
+
+        // At ten outfielders, the formation's own lines; fewer, the old shares.
+        private static Line SlotLine(int perSide, int i, Formation formation)
+        {
+            if (perSide != 10) return SlotLine(perSide, i);
+            int slot = i == 0 ? perSide : i, seen = 0;
+            FormationLine[] lines = Formations.Lines(formation);
+            for (int l = 0; l < lines.Length; l++)
+            {
+                seen += lines[l].Count;
+                if (slot <= seen) return l == 0 ? Line.Defence : l == lines.Length - 1 ? Line.Attack : Line.Midfield;
+            }
+
+            return Line.Attack;
         }
 
         // Outfielder i's slot (Squads.SlotOf: the kick-off taker plays the last) and its line,
@@ -246,12 +264,13 @@ namespace Eleven.Simulation.Harness
                 ?? Gap(Best(_ => true, Others));
 
             var bySlot = new Player[perSide];
+            Formation formation = CareerManagers.FormationOf(world, clubId);
             // Fill slots from the back, in slot order, so each line takes its best.
             var order = new List<int>();
             for (int slot = 1; slot <= perSide; slot++) order.Add(slot == perSide ? 0 : slot);
             foreach (int i in order)
             {
-                Line line = SlotLine(perSide, i);
+                Line line = SlotLine(perSide, i, formation);
                 Player p = (eleven == null ? Fill(line, All) : Picked(line))
                     ?? throw new InvalidOperationException($"Club {clubId} hasn't {perSide} outfielders.");
                 // Rotation (#177): a tired starter rested for a fit footballer of the slot's line within the margin.

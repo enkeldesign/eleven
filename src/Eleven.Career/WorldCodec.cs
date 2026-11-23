@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 3;
+        public const int FormatVersion = 4;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -93,7 +93,8 @@ namespace Eleven.Career
                 w.WriteInt32(p.CupCautions);
             }
 
-            // Format 3 (#179): each club with picks, its id, then its picks.
+            // Format 3 (#179): each club with picks, its id, then its picks. Format 4 (#180) follows
+            // with each manager's philosophy.
             var picking = world.Clubs.FindAll(c => c.Picks.Count > 0);
             w.WriteInt32(picking.Count);
             foreach (Club c in picking)
@@ -101,6 +102,15 @@ namespace Eleven.Career
                 w.WriteInt32(c.Id);
                 w.WriteInt32(c.Picks.Count);
                 foreach (int id in c.Picks) w.WriteInt32(id);
+            }
+
+            var minded = world.Managers.FindAll(m => m.Pressing != 0 || m.Depth != 0);
+            w.WriteInt32(minded.Count);
+            foreach (Manager m in minded)
+            {
+                w.WriteInt32(m.Id);
+                w.WriteByte((byte)m.Pressing);
+                w.WriteByte((byte)m.Depth);
             }
 
             return w.ToArray();
@@ -219,6 +229,19 @@ namespace Eleven.Career
                         if (!known.Contains(pick)) throw new FormatException($"Club {id} picks footballer {pick}, who isn't in the world.");
                         c.Picks.Add(pick);
                     }
+                }
+            }
+
+            if (version >= 4)
+            {
+                int minded = Count(r.ReadInt32());
+                for (int i = 0; i < minded; i++)
+                {
+                    int id = r.ReadInt32();
+                    Manager m = world.Managers.Find(x => x.Id == id) ?? throw new FormatException($"A philosophy for manager {id}, who isn't in the world.");
+                    m.Pressing = r.ReadByte();
+                    m.Depth = r.ReadByte();
+                    if (m.Pressing < 1 || m.Pressing > 20 || m.Depth < 1 || m.Depth > 20) throw new FormatException($"Manager {id}'s philosophy is out of range.");
                 }
             }
 

@@ -11,7 +11,36 @@ namespace Eleven.Simulation.Harness
     public static class CareerManagers
     {
         /// <summary>His three plans for <paramref name="team"/>: balanced, chase, protect.</summary>
-        public static TeamTactic[] Plans(Manager manager, int team) => new[] { TeamTactic.Reference(team), TeamTactic.Reference(team), TeamTactic.Reference(team) };
+        public static TeamTactic[] Plans(Manager manager, int team)
+        {
+            Formation f = manager.PreferredFormation;
+            TeamTactic balanced = TeamTactic.Reference(team, f);
+            if (manager.Pressing != 0 || manager.Depth != 0)
+            {
+                // His line from −6 m to +6 m by his depth. Below the middle of his pressing his press
+                // draws back to #126's low block's; above it his shape steps up toward the high press's.
+                double t = (Math.Clamp(manager.Pressing, 1, 20) - 1) / 19.0, d = (Math.Clamp(manager.Depth, 1, 20) - 1) / 19.0;
+                balanced.Line = 12 * (d - 0.5);
+                balanced.Press = t < 0.5 ? TacticTrials.LowBlock.Press + (TeamTactic.PressMax - TacticTrials.LowBlock.Press) * 2 * t : TeamTactic.PressMax;
+                balanced.StepUp = t < 0.5 ? 6 : 6 + (TacticTrials.HighPress.StepUp - 6) * (2 * t - 1);
+            }
+
+            // His temperament, 0 cautious to 1 bold: the bold chase all the way to the high press, the cautious half way; the cautious protect all the way to the low block.
+            double bold = (Math.Clamp(manager.Temperament, 1, 20) - 1) / 19.0;
+            TeamTactic chase = Toward(balanced, TacticTrials.HighPress, 0.5 + 0.5 * bold), protect = Toward(balanced, TacticTrials.LowBlock, 1 - 0.5 * bold);
+            return new[] { balanced, chase, protect };
+        }
+
+        // The plan moved a share of the way to another's instructions, in its own formation and side.
+        private static TeamTactic Toward(TeamTactic from, TeamTactic to, double share) => new TeamTactic
+        {
+            TeamId = from.TeamId,
+            Formation = from.Formation,
+            StepUp = Math.Clamp(from.StepUp + (to.StepUp - from.StepUp) * share, 0, TeamTactic.StepUpMax),
+            Line = Math.Clamp(from.Line + (to.Line - from.Line) * share, -TeamTactic.LineMax, TeamTactic.LineMax),
+            Width = Math.Clamp(from.Width + (to.Width - from.Width) * share, TeamTactic.WidthMin, TeamTactic.WidthMax),
+            Press = Math.Clamp(from.Press + (to.Press - from.Press) * share, TeamTactic.PressMin, TeamTactic.PressMax),
+        };
 
         /// <summary>The plans of the club's manager, or the reference plans if it has none.</summary>
         public static TeamTactic[] Plans(World world, int club, int team)
@@ -22,6 +51,11 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>The club's formation: its manager's preferred one, or the 4-4-2.</summary>
-        public static Formation FormationOf(World world, int club) => Formation.FourFourTwo;
+        public static Formation FormationOf(World world, int club)
+        {
+            Club? c = world.Clubs.Find(x => x.Id == club);
+            Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
+            return m?.PreferredFormation ?? Formation.FourFourTwo;
+        }
     }
 }

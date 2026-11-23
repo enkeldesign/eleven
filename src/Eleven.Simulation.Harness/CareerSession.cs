@@ -96,7 +96,7 @@ namespace Eleven.Simulation.Harness
             SimConfig c = MatchConfig(fixture);
             SimState state = Role == CareerRole.PlayerManager
                 ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs, Squad)
-                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans, homeOut: mine, awayOut: theirs, rotation: Squad);
+                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeOut: mine, awayOut: theirs, rotation: Squad);
             // #177: each footballer starts at his own fatigue from his condition.
             CareerSquads.TiredStart(state, World, LineupFor(fixture), Squad);
             return state;
