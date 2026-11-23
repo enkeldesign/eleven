@@ -59,6 +59,24 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>A match between two clubs that nobody plays: the quick-sim's result, with the model for its size.</summary>
         public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed) =>
-            QuickSim.Play(config, Side(world, homeClub, perSide), Side(world, awayClub, perSide), seed, model: QuickSimModel.For(perSide));
+            QuickSim.Play(config, Side(world, homeClub, perSide), Side(world, awayClub, perSide), seed, model: QuickSimModel.For(perSide),
+                homePlayers: HomeIds(perSide), awayPlayers: AwayIds(perSide));
+
+        /// <summary>A side's XI by simulation id (#172), outfielders then the keeper, as a full match names them.</summary>
+        public static int[] HomeIds(int perSide)
+        {
+            var ids = new int[perSide + 1];
+            for (int i = 0; i < perSide; i++) ids[i] = Squads.HomeOutfielder(i);
+            ids[perSide] = Squads.HomeKeeper(perSide);
+            return ids;
+        }
+
+        public static int[] AwayIds(int perSide)
+        {
+            var ids = new int[perSide + 1];
+            for (int i = 0; i < perSide; i++) ids[i] = Squads.AwayOutfielder(perSide, i);
+            ids[perSide] = Squads.AwayKeeper(perSide);
+            return ids;
+        }
     }
 }

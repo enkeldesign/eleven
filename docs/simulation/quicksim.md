@@ -30,13 +30,19 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
   - **ρ's bounds:** ρ is bounded for the match's rates, max(−1/λ_h, −1/λ_a) ≤ ρ ≤ min(1/(λ_h·λ_a), 1), so no scoreline's chance is negative at long halves. At the reference half the fitted ρ is inside them for every pair of tiers. τ(0,0) = 1 − λ_h·λ_a·ρ, τ(0,1) = 1 + λ_h·ρ, τ(1,0) = 1 + λ_a·ρ and τ(1,1) = 1 − ρ.
 - **Each goal** falls at a uniform moment of the two halves, in order. Its scorer is 0: no footballer plays.
 - **Fouls, cautions and sendings-off** are Poisson a side at the fitted means.
+- **Injuries** (#172), minor and serious, are Poisson a side at the model's means. The 5v5 reference was fitted without them, so its are 0.
+- **The XIs named** (#172): given each side's footballer ids (keeper last), the result has a line for each (match.md's schema 8).
+  - **Each card and injury** falls to one of the side's outfielders, drawn on its own counter. The keeper keeps his goal. A footballer hurt twice keeps the worse.
+  - **Cards fall to distinct footballers** (Codex on #184): each is drawn among the outfielders without one. So the lines total the side's cautions and sendings-off, and nobody has two cautions without being sent off. A side's first card falls where it would alone. Cards beyond the outfielders go unnamed, a count the fitted rates never come near.
+  - **Everyone plays the whole match:** nobody is replaced in a quick-sim.
+  - **Draws:** the picks come after the scoreline and the counts, on their own counters, so naming the XIs changes nothing else in the result.
 - **A knockout** (`knockout`, #163) that is level after two halves goes on, as the full simulation's does (#111):
   - **Extra time:** two halves of `extraTimeShare` of a half, at the same rates; its goals fall in halves 3 and 4.
   - **A shootout:** if still level, the home side kicks first, then in turn. Each kick goes in at the model's `ShootoutConversion`. It is over once one side can't be caught in the first `shootoutKicks` each, or after them once both have taken as many and one has scored more. Past 1,000 kicks, a chance of about 10⁻⁹⁹, the home side is given it, so a knockout always ends.
   - **The result** carries `ExtraTime`, the shootout's kicks and goals, and the time played.
   - **Draws:** extra time and the shootout draw on their own counters, so the ninety minutes, fouls and cards are a league match's for the same seed.
   - **Conversion:** 77.3 %, the full simulation's. #122's penalty benchmark at eleven a side, over 160 shootouts, scored 1,450 of 1,875 kicks (± 1.0 %).
-- **The result's other fields are 0.** That covers penalties, injuries, substitutions, restarts and the match metrics.
+- **The result's other fields are 0.** That covers penalties, substitutions, restarts and the match metrics, and every goal's scorer.
 
 **Deterministic (INV-4, INV-6):**
 - every draw is counter-based on its own stream, `RandomStream.QuickSim`, at tick 0, keyed by what it is for;
@@ -129,14 +135,14 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 - **Fixtures:** every 17th of all 1,260 ordered pairs, so every club plays 10 to 20 times at home and away, and every gap between divisions is covered both ways round.
 - **Conditions:** 180 s halves, every brain running, each fixture on its own seed.
 - **Cost:** about 25 minutes on four cores.
-- **The record:** `quicksim-career-reference.csv`, with a hash of each result's text, so any change in a match shows. CI plays the first 8 fixtures and diffs them against its first rows.
+- **The record:** `quicksim-career-reference.csv`, with a hash of each result's text, so any change in a match shows, and each side's footballers injured, minor and serious. CI plays the first 8 fixtures and diffs them against its first rows.
 
 **The fit:** `eleven-sim quicksim career-fit <csv>` refits it, and `CareerQuickSimTests` checks that the model equals the fit.
 - **What stays:** the reference's tier ratings and capability weight, in proportion, so the 5v5 calibration's ordering of sides stands.
 - **What is refitted:**
   - μ, h and a scale s on the ratings, by Poisson maximum likelihood with their errors;
   - ρ by the Dixon–Coles likelihood;
-  - the foul and card means.
+  - the foul, card and injury means. Each side's injured footballers come from the result's lines (#172), by their worst injury.
 
 | | Eleven a side | Reference (5v5) |
 | --- | --- | --- |
@@ -145,6 +151,7 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 | s | 1.005 ± 0.073 | 1 |
 | ρ | 0.098 ± 0.102 | −0.014 |
 | Fouls, cautions, sendings-off a side | 2.29, 0.54, 0.065 | 1.85, 0.44, 0.075 |
+| Minor, serious injuries a side | 0.0167, 0.0031 | 0, 0 |
 
 **What the fit says:**
 - **Scoring:** the world's clubs score at about half the 5v5 rate (exp(−0.73) ≈ 0.48).

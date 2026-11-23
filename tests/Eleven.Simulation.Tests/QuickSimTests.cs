@@ -36,7 +36,7 @@ namespace Eleven.Simulation.Tests
             {
                 MatchResult r = QuickSim.Play(C, Side(3), Side(0), seed, homeTeam: 5, awayTeam: 9);
                 Assert.Equal((5, 9), (r.HomeTeam, r.AwayTeam));
-                Assert.StartsWith("eleven-result/7\n", r.ToText());
+                Assert.StartsWith("eleven-result/8\n", r.ToText());
                 Assert.Equal(r.HomeGoals + r.AwayGoals, r.Goals.Count);
                 Assert.Equal(r.HomeGoals, r.Goals.Count(g => g.Team == 5));
                 Assert.Equal(2 * C.HalfLength, r.PlayedSeconds, 9);

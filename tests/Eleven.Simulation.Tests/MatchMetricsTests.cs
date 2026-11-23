@@ -88,7 +88,7 @@ namespace Eleven.Simulation.Tests
 
             Assert.True(home.Shots + away.Shots > 0, "the match had shots");
             string text = r.ToText();
-            Assert.StartsWith("eleven-result/7\n", text);
+            Assert.StartsWith("eleven-result/8\n", text);
             Assert.Contains($"shots={home.Shots}-{away.Shots}\n", text);
         }
 

@@ -51,10 +51,28 @@ A goal is credited to the side attacking the end it went into (#82), once: the g
 | `HalfSeconds`, `PlayedSeconds` | A half's length, and the match clock played |
 | `Goals` | Each goal: its side, the footballer who last played the ball, its half, its time on the half's clock |
 | `Restarts` | Restarts taken, kick-offs included |
+| `Players` | Each footballer who played: his line (schema 8, below) |
 
-- **`MatchResult.SchemaVersion`** (1) is bumped whenever a field is added or changes meaning.
+- **`MatchResult.SchemaVersion`** (8 since #172) is bumped whenever a field is added or changes meaning.
 - **`ToText()`** writes a stable text form: `eleven-result/2`, then one `name=value` line each and a `goal=` line per goal. Schema 2 (#99) adds `fouls=` and `penalties=`, home–away.
 - **`MatchRecorder`** builds it as the match is played, from each step's events and state, and gives it at full time. It reads the match and is no part of it, so replaying the same commands builds the same result.
+
+### The footballers (schema 8, #172)
+
+The result names who played, so a career can carry each footballer's minutes, cards and injuries into his next match (M6.08b). `Players` holds one `ResultPlayer` per footballer who was on the pitch at any time, in id order. A substitute who never came on has none.
+
+| Field | Text | What it is |
+| --- | --- | --- |
+| `Player`, `Team` | `player={id},{team},…` | His simulation id and side |
+| `Seconds` | `…,{seconds},…` | Match clock he was on the pitch for, two decimals in the text |
+| `Cautions` | `…,{cautions},…` | Cautions shown to him |
+| `SentOff` | `…,1,…` or `…,0,…` | Whether he was sent off |
+| `Injury` | `…,{level}` | His worst injury: 0 none, 1 minor, 2 serious ([injuries.md](injuries.md)) |
+
+- **Time:** `MatchRecorder` credits every footballer on the pitch with each step's advance of the match clock. A starter who plays it all is credited the whole of `PlayedSeconds`, extra time included, the shootout not. A footballer off (sent off, or seriously injured) is credited nothing more. A substitute starts from nothing when he comes on, so he and the man he replaced make a whole match between them.
+- **Adds up:** a side's lines hold its cautions and sendings-off exactly, the quick-sim's too ([quicksim.md](quicksim.md)). Its injured lines are at most its injuries, as one footballer can be hurt twice.
+- **In the text and the codec:** a `player=` line each, after the goals; `MatchResultCodec` writes the same. The codec reads a schema-7 result, a save's from before #172, as one with no lines (INV-7).
+- **Read, never played:** like the rest of the result it comes from the match's events and state (INV-1).
 
 ### Match metrics (schema 7, #128)
 

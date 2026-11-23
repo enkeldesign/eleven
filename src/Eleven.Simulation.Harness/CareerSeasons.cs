@@ -24,14 +24,17 @@ namespace Eleven.Simulation.Harness
             QuickSimModel model = QuickSimModel.For(perSide);
             if (fixture.Neutral) model = WithoutHome(model);
             ulong seed = CounterRng.Hash(season.Seed, fixture.Id, RandomStream.QuickSim, 0, 0);
-            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide), CareerQuickSim.Side(world, fixture.Away, perSide), seed, model: model);
+            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide), CareerQuickSim.Side(world, fixture.Away, perSide), seed, model: model,
+                homePlayers: CareerQuickSim.HomeIds(perSide), awayPlayers: CareerQuickSim.AwayIds(perSide));
         }
 
-        private static QuickSimModel WithoutHome(QuickSimModel m)
+        /// <summary>A neutral ground's model (#163): the same in every way but its home advantage.</summary>
+        public static QuickSimModel WithoutHome(QuickSimModel m)
         {
             var tiers = new double[QuickSimModel.Tiers];
             for (int t = 0; t < tiers.Length; t++) tiers[t] = m.TierRating(t);
-            return new QuickSimModel(m.BaseRate, 0, tiers, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion);
+            return new QuickSimModel(m.BaseRate, 0, tiers, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion,
+                m.MinorInjuriesPerSide, m.SeriousInjuriesPerSide);
         }
 
         /// <summary>Plays the next matchday: each fixture by the hook if it gives a result, else the quick-sim; then on to the next.</summary>
