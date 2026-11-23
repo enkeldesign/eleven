@@ -28,7 +28,8 @@ namespace Eleven.Simulation.Harness
                 homePlayers: CareerQuickSim.HomeIds(perSide), awayPlayers: CareerQuickSim.AwayIds(perSide));
         }
 
-        private static QuickSimModel WithoutHome(QuickSimModel m)
+        /// <summary>A neutral ground's model (#163): the same in every way but its home advantage.</summary>
+        public static QuickSimModel WithoutHome(QuickSimModel m)
         {
             var tiers = new double[QuickSimModel.Tiers];
             for (int t = 0; t < tiers.Length; t++) tiers[t] = m.TierRating(t);

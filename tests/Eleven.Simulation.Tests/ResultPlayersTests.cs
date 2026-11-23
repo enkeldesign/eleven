@@ -125,6 +125,17 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_neutral_grounds_model_keeps_every_rate_but_home_advantage()
+        {
+            QuickSimModel m = QuickSimModel.ElevenASide, n = CareerSeasons.WithoutHome(m);
+            Assert.Equal(0, n.Home);
+            Assert.Equal((m.BaseRate, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion),
+                (n.BaseRate, n.CapabilityWeight, n.Rho, n.FoulsPerSide, n.CautionsPerSide, n.SendingsOffPerSide, n.ShootoutConversion));
+            Assert.Equal((m.MinorInjuriesPerSide, m.SeriousInjuriesPerSide), (n.MinorInjuriesPerSide, n.SeriousInjuriesPerSide));
+            for (int t = 0; t < QuickSimModel.Tiers; t++) Assert.Equal(m.TierRating(t), n.TierRating(t));
+        }
+
+        [Fact]
         public void A_matchs_lineup_maps_simulation_ids_to_the_worlds_footballers()
         {
             int home = World.Clubs[2].Id, away = World.Clubs[29].Id;
