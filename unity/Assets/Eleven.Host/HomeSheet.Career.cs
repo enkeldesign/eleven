@@ -56,6 +56,7 @@ namespace Eleven.Host
         private UiKit.Action _hubPrimary;
         private Label _hubStanding;
         private Label _hubNext;
+        private Label _hubOut;
         private Label _hubResults;
         private Label _hubSummary;
         private VisualElement _hubTable;
@@ -144,6 +145,11 @@ namespace Eleven.Host
             _hubNext = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubNext.style.marginBottom = Spacing.M;
             hub.Add(_hubNext);
+            // Who's out (#176): injured or banned, shown only when someone is.
+            _hubOut = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubOut.style.marginBottom = Spacing.M;
+            _hubOut.style.display = DisplayStyle.None;
+            hub.Add(_hubOut);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -258,6 +264,9 @@ namespace Eleven.Host
             _hubPage.Title.text = CareerHub.Header(s);
             _hubStanding.text = CareerHub.Standing(s);
             _hubNext.text = CareerHub.NextLine(s);
+            string outs = CareerHub.OutLine(s);
+            _hubOut.text = outs;
+            _hubOut.style.display = outs.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
