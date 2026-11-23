@@ -126,6 +126,43 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_pick_out_is_replaced_in_his_line_from_the_rest_and_the_other_picks_keep_their_places()
+        {
+            // Codex on #187: a picked defender out took a picked midfielder into defence, a forward
+            // into midfield and a reserve forward in, though a fit reserve defender was there. The
+            // gap is filled from the rest, in its line, and every other pick keeps his place.
+            int checkedSides = 0;
+            for (ulong seed = 0x1793; seed < 0x1793 + 8; seed++)
+            {
+                CareerSession s = New(seed);
+                int n = CareerSession.PerSide;
+                SquadSelection ai = CareerSquads.Selection(s.World, s.Club, n);
+                bool Defender(Player p) => p.Positions[0] is Position.CentreBack or Position.FullBack;
+                // Indices 1–4 are the back four's slots, 5–8 midfield's, 9 and 0 the forwards'.
+                if (!Enumerable.Range(1, 4).All(i => Defender(ai.Starters[i]))) continue;
+                Club mine = Mine(s);
+                mine.Picks.Clear();
+                mine.Picks.AddRange(ai.Starters.Select(p => p.Id));
+                mine.Picks.AddRange(ai.Bench.Select(p => p.Id));
+                var eleven = new HashSet<int>(ai.Starters.Select(p => p.Id));
+                if (!s.World.Players.Any(p => p.ClubId == s.Club && !eleven.Contains(p.Id) && Defender(p))) continue;
+
+                Player outDefender = ai.Starters[2];
+                SquadSelection picked = CareerSquads.Selection(s.World, s.Club, n, new HashSet<int> { outDefender.Id });
+                List<Player> newcomers = picked.Starters.Where(p => !eleven.Contains(p.Id)).ToList();
+                Assert.Single(newcomers);
+                Assert.True(Defender(newcomers[0]), $"seed {seed:x}: {newcomers[0].Positions[0]} came in for a defender");
+                foreach (int i in new[] { 5, 6, 7, 8, 9, 0 }) Assert.Equal(ai.Starters[i].Id, picked.Starters[i].Id);
+                Assert.Equal(ai.Starters[n].Id, picked.Starters[n].Id);
+                var backFour = new HashSet<int>(Enumerable.Range(1, 4).Select(i => picked.Starters[i].Id));
+                Assert.Subset(backFour, new HashSet<int>(Enumerable.Range(1, 4).Select(i => ai.Starters[i].Id).Where(id => id != outDefender.Id)));
+                checkedSides++;
+            }
+
+            Assert.True(checkedSides >= 3, $"{checkedSides} sides checked");
+        }
+
+        [Fact]
         public void A_pick_out_by_kick_off_is_replaced_and_the_hub_says_so()
         {
             CareerSession s = New(0x1792);
