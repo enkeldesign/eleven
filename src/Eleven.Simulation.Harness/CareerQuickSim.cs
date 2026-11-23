@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Eleven.Career;
 using Eleven.Simulation;
 
@@ -32,9 +33,9 @@ namespace Eleven.Simulation.Harness
         /// at <see cref="TierPosition"/>; its capabilities the mean of their mapped capabilities.
         /// The quick-sim's sides have no keeper, as its calibration league's sides had none apart.
         /// </summary>
-        public static QuickSide Side(World world, int clubId, int perSide)
+        public static QuickSide Side(World world, int clubId, int perSide, ISet<int>? unavailable = null)
         {
-            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide);
+            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide, unavailable);
             var mapped = new PlayerCapabilities[perSide];
             double cpu = 0;
             for (int i = 0; i < perSide; i++)
@@ -58,8 +59,8 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>A match between two clubs that nobody plays: the quick-sim's result, with the model for its size.</summary>
-        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed) =>
-            QuickSim.Play(config, Side(world, homeClub, perSide), Side(world, awayClub, perSide), seed, model: QuickSimModel.For(perSide),
+        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, ISet<int>? homeOut = null, ISet<int>? awayOut = null) =>
+            QuickSim.Play(config, Side(world, homeClub, perSide, homeOut), Side(world, awayClub, perSide, awayOut), seed, model: QuickSimModel.For(perSide),
                 homePlayers: HomeIds(perSide), awayPlayers: AwayIds(perSide));
 
         /// <summary>A side's XI by simulation id (#172), outfielders then the keeper, as a full match names them.</summary>

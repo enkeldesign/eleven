@@ -133,6 +133,12 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>The season's end: the human's finish, the moves and the cup's winner; empty while it goes on.</summary>
+        /// <summary>
+        /// The human's footballers out of his next match (#176), "Out: A. Name (injured, 12 days),
+        /// B. Name (banned, 1 league match)"; empty with none.
+        /// </summary>
+        public static string OutLine(CareerSession s) => "";
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";

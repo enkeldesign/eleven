@@ -19,11 +19,11 @@ namespace Eleven.Simulation.Harness
         /// <see cref="RatingMap"/>.
         /// </summary>
         public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
-            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null)
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
-            Apply(s, Selection(world, homeClub, perSide), perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
-            Apply(s, Selection(world, awayClub, perSide), perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
+            Apply(s, Selection(world, homeClub, perSide, homeOut), perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
+            Apply(s, Selection(world, awayClub, perSide, awayOut), perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
             return s;
         }
 
@@ -32,10 +32,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
         /// world's player id. A result's lines (#172) name footballers by these ids.
         /// </summary>
-        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide)
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             var lineup = new Dictionary<int, int>();
-            SquadSelection home = Selection(world, homeClub, perSide), away = Selection(world, awayClub, perSide);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
             for (int i = 0; i < perSide; i++)
             {
                 lineup[Squads.HomeOutfielder(i)] = home.Starters[i].Id;
@@ -136,9 +136,11 @@ namespace Eleven.Simulation.Harness
         /// A basic selection (#159; the real one is M6.08): the best keeper by his keeping, then
         /// for each outfield slot from the back the best unchosen footballer whose first position
         /// is in the slot's line, else whose second is, else the best left; the bench the best of
-        /// the rest. Ties go to the lower id, so it is deterministic.
+        /// the rest. Ties go to the lower id, so it is deterministic. Footballers in
+        /// <paramref name="unavailable"/> (#176: injured or banned) are never picked; with no fit
+        /// keeper, the best of the rest at keeping goes in goal.
         /// </summary>
-        public static SquadSelection Selection(World world, int clubId, int perSide)
+        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null)
         {
             var squad = new List<Player>();
             foreach (Player p in world.Players)

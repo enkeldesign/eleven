@@ -28,6 +28,9 @@ namespace Eleven.Simulation.Harness
         public CareerRole Role;
         public SimConfig Config = SpikeScenario.Config();
         public CompetitionRules Rules = CompetitionRules.Reference;
+
+        /// <summary>What keeps a footballer out (#176): injuries' layoffs and the cards' bans.</summary>
+        public SquadRules Squad = SquadRules.Reference;
         public Season Season = new Season();
 
         /// <summary>A new career's world, for choosing a club before it starts: the generator's, from the career's seed.</summary>

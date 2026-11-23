@@ -43,6 +43,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>The career's competitions (#162): a league schedule's places and a cup round's draw, per season and round.</summary>
         Competition = 13,
+
+        /// <summary>The career's squads (#176): an injury's layoff, per fixture and footballer.</summary>
+        Squad = 14,
     }
 
     /// <summary>

@@ -11,20 +11,35 @@ namespace Eleven.Simulation.Harness
     /// matches as league matches and cup ties as knockouts, unless a hook plays it another way:
     /// M6.06's human fixture, played by the full simulation.
     /// </summary>
+    /// <summary>A fixture played another way than the quick-sim (#176): its result, and its lineup when it names footballers (simulation id to the world's player id).</summary>
+    public sealed class PlayedFixture
+    {
+        public PlayedFixture(MatchResult result, IReadOnlyDictionary<int, int>? lineup)
+        {
+            Result = result;
+            Lineup = lineup;
+        }
+
+        public MatchResult Result { get; }
+
+        /// <summary>Null: the fixture's own clubs' selections, home as the simulation's home side.</summary>
+        public IReadOnlyDictionary<int, int>? Lineup { get; }
+    }
+
     public static class CareerSeasons
     {
         /// <summary>
         /// A fixture's quick-sim result: its own seed from the season's and the fixture's id; a
         /// cup tie as a knockout; the final, at a neutral ground, without home advantage.
         /// </summary>
-        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide)
+        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             bool cup = fixture.Competition == CompetitionId.Cup;
             SimConfig c = cup ? config.With("knockout", 1) : config;
             QuickSimModel model = QuickSimModel.For(perSide);
             if (fixture.Neutral) model = WithoutHome(model);
             ulong seed = CounterRng.Hash(season.Seed, fixture.Id, RandomStream.QuickSim, 0, 0);
-            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide), CareerQuickSim.Side(world, fixture.Away, perSide), seed, model: model,
+            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide, homeOut), CareerQuickSim.Side(world, fixture.Away, perSide, awayOut), seed, model: model,
                 homePlayers: CareerQuickSim.HomeIds(perSide), awayPlayers: CareerQuickSim.AwayIds(perSide));
         }
 
@@ -38,10 +53,18 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>Plays the next matchday: each fixture by the hook if it gives a result, else the quick-sim; then on to the next.</summary>
-        public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, MatchResult?>? hook = null)
+        public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, MatchResult?>? hook = null) =>
+            PlayMatchday(config, world, season, rules, perSide, hook == null ? (Func<Fixture, PlayedFixture?>?)null : f => hook(f) is MatchResult r ? new PlayedFixture(r, null) : null);
+
+        /// <summary>
+        /// Plays the next matchday (#176): each club's footballers out (<see cref="Availability"/>)
+        /// left out of its XI; each fixture by the hook if it gives one, else the quick-sim; then
+        /// the matchday's bans served and days passed, its cards and injuries applied, and on.
+        /// </summary>
+        public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, PlayedFixture?>? hook, SquadRules? squad = null)
         {
             List<Fixture> day = SeasonEngine.Next(season, rules);
-            foreach (Fixture f in day) SeasonEngine.Record(season, rules, f.Id, hook?.Invoke(f) ?? Quick(config, world, season, f, perSide));
+            foreach (Fixture f in day) SeasonEngine.Record(season, rules, f.Id, hook?.Invoke(f)?.Result ?? Quick(config, world, season, f, perSide));
             SeasonEngine.Advance(season, rules);
             return day;
         }
