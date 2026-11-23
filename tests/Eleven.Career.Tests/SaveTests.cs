@@ -240,6 +240,48 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_damaged_write_to_previous_leaves_current_alone()
+        {
+            // Codex on #181: the store keeps staging whole but damages the slot's other writes while
+            // saying they succeeded. The rotation into previous is read back, so current is never
+            // overwritten without a good fallback, and the old current still loads.
+            var store = new Store();
+            var slots = new SaveSlots(store);
+            SaveFile first = MidSeason(), second = MidSeason();
+            second.SavedAt += 5;
+            Assert.True(slots.Save(3, first));
+            var damaging = new DamagingStore(store, key => !key.EndsWith(".staging", StringComparison.Ordinal));
+            Assert.False(new SaveSlots(damaging).Save(3, second));
+            (SaveFile? loaded, bool fromPrevious, _) = slots.Load(3);
+            Assert.NotNull(loaded);
+            Assert.False(fromPrevious);
+            Assert.Equal(first.SavedAt, loaded!.SavedAt);
+        }
+
+        // Writes to the keys chosen are kept cut in half, and still reported as kept.
+        private sealed class DamagingStore : ISaveStore
+        {
+            private readonly Store _inner;
+            private readonly Func<string, bool> _damages;
+
+            public DamagingStore(Store inner, Func<string, bool> damages)
+            {
+                _inner = inner;
+                _damages = damages;
+            }
+
+            public string? Read(string key) => _inner.Read(key);
+
+            public bool Write(string key, string value)
+            {
+                _inner.Values[key] = _damages(key) ? value.Substring(0, value.Length / 2) : value;
+                return true;
+            }
+
+            public void Delete(string key) => _inner.Delete(key);
+        }
+
+        [Fact]
         public void A_season_round_trips_through_its_codec()
         {
             Season s = MidSeason().Season;
