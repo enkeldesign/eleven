@@ -26,8 +26,8 @@ A footballer's worst injury in a match (#109) puts him out for days. The draw is
 The bands are the study's. The shares by level are references: the full simulation's minor injury is a knock he plays on with, its serious one takes him off.
 
 - **A second injury** never shortens the first's layoff.
-- **The days pass** by `DaysPerMatchday` (7) each matchday, whether or not his club plays. He is out while any are left.
-- **So a knock rarely costs a match.** A slight or minor layoff is over within the week, so mostly a moderate or severe one does.
+- **The days pass** by `DaysPerMatchday` (7) at the end of each matchday, his injury's own included, whether or not his club plays. He is out while any are left.
+- **So a knock never costs a match.** A layoff of up to a week is over by the next matchday, so only a moderate or severe one is: 15 % of minor injuries, 80 % of serious ones.
 
 ## Bans
 
@@ -44,8 +44,9 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 1. **Who's out** of each club's match is read before any fixture is played, for the matchday's competition.
 2. **Each XI** is picked without them (`CareerSquads.Selection`), for the full simulation and the quick-sim alike. With no fit keeper, the best of the rest at keeping goes in goal.
 3. **The fixtures are played** and recorded, each with its lineup: simulation id to the world's footballer. The human's fixture brings its own lineup (`CareerSession.LineupFor`). His club is the simulation's home side whatever the ground (#167), so the lineup is his club's first.
-4. **Bans are served** by those who sat it out, and the days pass (`Availability.Serve`).
-5. **The matchday's injuries and cards** are applied (`Availability.Apply`), so nothing it brings counts until the next.
+4. **Bans are served** by those who sat it out (`Availability.Serve`).
+5. **The matchday's injuries and cards** are applied (`Availability.Apply`), so a ban it brings is served from the next.
+6. **The week passes** for the injured (`Availability.Pass`), so an injury's days count from its own matchday.
 
 **At the season's turn** (`SeasonEngine.Rollover`), cautions start again. Bans still to serve carry into the same competition. The off-season's `OffSeasonDays` (60) pass for the injured.
 
@@ -59,11 +60,11 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
 
 | Season | Injuries (serious) | Sendings-off | Footballer-matches missed: injured | Banned | A club |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 19 (4) | 40 | 30 | 71 | 2.8 |
-| 2 | 11 (1) | 58 | 8 | 101 | 3.0 |
-| 3 | 18 (1) | 59 | 16 | 90 | 2.9 |
+| 1 | 19 (4) | 40 | 13 | 71 | 2.3 |
+| 2 | 11 (1) | 58 | 1 | 101 | 2.8 |
+| 3 | 18 (1) | 59 | 2 | 90 | 2.6 |
 
-- **Few injuries.** The full simulation injures about 0.02 footballers a side a match at 3-minute halves (#172), so a club loses about one footballer-match a season to injury. Whether the career should see more is a feel question, not settled here.
+- **Few injuries.** The full simulation injures about 0.02 footballers a side a match at 3-minute halves (#172), most of them knocks, so a club loses well under one footballer-match a season to injury. Whether the career should see more is a feel question, not settled here.
 - **Bans** cost a club two or three.
 - **Training injuries** are M6.10's.
 
@@ -75,7 +76,8 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
   - a ban for a sending-off, in its competition;
   - the third caution, then every second;
   - the second yellow;
-  - serving, only in its competition's matches of his club, as the days pass;
+  - serving, only in its competition's matches of his club;
+  - the days passing, and a layoff within the week that misses no matchday;
   - the season's turn, in `Rollover` too;
   - the world's bytes, and a format-1 world.
 - **`AvailabilitySeasonTests`** (harness):
