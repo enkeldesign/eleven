@@ -45,6 +45,27 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_match_with_outfielders_out_has_only_the_bench_it_picked()
+        {
+            // Codex on #185: with two or more outfielders out the selection's bench is short, but
+            // the match kept every bench place, the rest at reference values, eligible to come on
+            // and missing from the lineup. Now a side's bench is exactly the substitutes picked.
+            World w = WorldGenerator.Generate(0x176);
+            int home = w.Clubs[4].Id, away = w.Clubs[30].Id;
+            SquadSelection full = CareerSquads.Selection(w, home, 10);
+            var outs = new HashSet<int>(full.Starters.Take(4).Select(p => p.Id));
+            SquadSelection picked = CareerSquads.Selection(w, home, 10, outs);
+            Assert.True(picked.Bench.Count < Squads.BenchOf(10), $"{picked.Bench.Count} substitutes");
+
+            SimState s = CareerSquads.Match(Config, w, home, away, 10, 0x185, homeOut: outs);
+            Dictionary<int, int> lineup = CareerSquads.Lineup(w, home, away, 10, homeOut: outs);
+            Assert.Equal(picked.Bench.Count, s.Bench.Count(b => b.TeamId == Squads.HomeTeam));
+            Assert.Equal(Squads.BenchOf(10), s.Bench.Count(b => b.TeamId == Squads.AwayTeam));
+            // Every substitute comes from the bench, so each names a footballer of the lineup.
+            Assert.All(s.Bench, b => Assert.True(lineup.ContainsKey(b.Id), $"substitute {b.Id} names no footballer"));
+        }
+
+        [Fact]
         public void A_headless_season_never_picks_anyone_out_and_carries_what_happened()
         {
             World w = WorldGenerator.Generate(0x1760);
