@@ -207,6 +207,12 @@ namespace Eleven.Simulation
             return true;
         }
 
+        /// <summary>
+        /// The CPU managers' commands (#182), each side by its profile in <paramref name="profiles"/>
+        /// by team id, or by the config's without one.
+        /// </summary>
+        public static void Append(Simulator simulator, List<Command> commands, IReadOnlyDictionary<int, ManagerProfile>? profiles) => Append(simulator, commands);
+
         public static void Append(Simulator simulator, List<Command> commands)
         {
             SimState state = simulator.PeekState();

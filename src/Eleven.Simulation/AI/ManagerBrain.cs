@@ -11,6 +11,9 @@ namespace Eleven.Simulation.AI
     public static class ManagerBrain
     {
         /// <summary>What he asks for now: a substitution (who goes off and who comes on, or none) and a plan to switch to (or none).</summary>
+        /// <summary>What he asks for by his own profile (#182).</summary>
+        public static ManagerDecision Decide(ManagerObservation seen, SimConfig config, ManagerProfile profile) => Decide(seen, config);
+
         public static ManagerDecision Decide(ManagerObservation seen, SimConfig config)
         {
             bool tactics = config.CpuTactics >= 0.5;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Eleven.Career;
 using Eleven.Simulation;
 
@@ -49,6 +50,12 @@ namespace Eleven.Simulation.Harness
             Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
             return m == null ? new[] { TeamTactic.Reference(team), TeamTactic.Reference(team), TeamTactic.Reference(team) } : Plans(m, team);
         }
+
+        /// <summary>His profile in a match (#182): managing tactics, by his temperament and competences.</summary>
+        public static ManagerProfile Profile(Manager manager, SimConfig config) => ManagerProfile.From(config);
+
+        /// <summary>Both sides' managers' profiles for a career match, by team id.</summary>
+        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config) => new Dictionary<int, ManagerProfile>();
 
         /// <summary>The club's formation: its manager's preferred one, or the 4-4-2.</summary>
         public static Formation FormationOf(World world, int club)

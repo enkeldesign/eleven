@@ -319,7 +319,7 @@ namespace Eleven.Simulation.Harness
             }
         }
 
-        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, double homeFatigue = 0, double awayFatigue = 0)
+        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, double homeFatigue = 0, double awayFatigue = 0, Action<SimEvent>? observe = null)
         {
             SimState state = Match(config, world, homeClub, awayClub, perSide, seed);
             // #177: a side may start tired, every outfielder at the same fatigue.
