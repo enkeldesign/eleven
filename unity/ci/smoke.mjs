@@ -564,7 +564,39 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       const savedLeft = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=left season=1 matchday=3/, 10_000, fromHub))?.match ?? null;
       check('the simulated fixture is saved', !!savedLeft, short(savedLeft));
 
-      // #171: the career survives a reload. Career shows slot 1 at matchday 3; Continue opens its hub there.
+      // Codex on #183: a save the device refuses never loses the career in play. With the page's
+      // storage refusing writes, Simulate's save fails; Home, Career and slot 1 return to the career
+      // at matchday 4, not its last save's 3, without loading. With storage back, Save keeps it.
+      if (!third) throw new Error('no third matchday');
+      await page.evaluate(() => {
+        window.__elevenSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new DOMException('refused by the smoke', 'QuotaExceededError'); };
+      });
+      const fromRefused = logs.length;
+      await tap(point(third, 7));
+      const refused = (await waitForLog(/ELEVEN career saved slot=0 ok=False reason=simulated season=1 matchday=4/, 10_000, fromRefused))?.match ?? null;
+      const fourth = (await waitForLog(hubPattern, 10_000, fromRefused))?.match ?? null;
+      check('a save the device refuses is said, and the career moves on', !!refused && !!fourth && fourth[2] === '4', `${short(refused)}; ${short(fourth)}`);
+      if (!fourth) throw new Error('no fourth matchday');
+      const fromHome = logs.length;
+      await tap(point(fourth, 9));
+      const homeAgain = (await waitForLog(/ELEVEN home shown page=home via=\S+ quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 10_000, fromHome))?.match ?? null;
+      const fromInPlay = logs.length;
+      if (homeAgain) await tap(point(homeAgain, 1));
+      const inPlay = (await waitForLog(/ELEVEN home shown page=slots slots=(\d+) empty=(\d+) first=(\d+),(\d+) firstAction=(\S+) firstOffer=(\w+)/, 10_000, fromInPlay))?.match ?? null;
+      const fromResume = logs.length;
+      if (inPlay) await tap(point(inPlay, 3));
+      const back = (await waitForLog(/ELEVEN hub shown via=resume season=(\d+) matchday=(\d+) played=(\d+) .* save=(\d+),(\d+)/, 10_000, fromResume))?.match ?? null;
+      const reloaded = logs.slice(fromResume).filter((l) => /ELEVEN career loaded/.test(l));
+      check('slot 1 resumes the career in play where it is, not its last save', !!inPlay && inPlay[5] === 'Continue' && inPlay[6] === 'Resume' && !!back && back[2] === '4' && back[3] === fourth[3] && reloaded.length === 0,
+        `${short(inPlay)}; ${short(back)}${reloaded.length ? `; ${reloaded[0]}` : ''}`);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__elevenSetItem; });
+      const fromSave = logs.length;
+      if (back) await tap(point(back, 4));
+      const savedNow = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=manual season=1 matchday=4/, 10_000, fromSave))?.match ?? null;
+      check('Save on the hub keeps it once the device takes it', !!savedNow, short(savedNow));
+
+      // #171: the career survives a reload. Career shows slot 1 at matchday 4; Continue opens its hub there.
       const fromReload = logs.length;
       await page.reload();
       const again = (await waitForLog(/ELEVEN home shown page=home via=address quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 240_000, fromReload))?.match ?? null;
@@ -579,7 +611,7 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       await tap(point(kept, 3));
       const loaded = (await waitForLog(/ELEVEN career loaded slot=0 fromPrevious=(\w+) season=(\d+) matchday=(\d+)/, 10_000, fromContinue))?.match ?? null;
       const resumed = (await waitForLog(hubPattern, 10_000, fromContinue))?.match ?? null;
-      check('Continue opens the hub where the career was', !!loaded && loaded[1] === 'False' && loaded[3] === '3' && !!resumed && resumed[2] === '3' && resumed[3] === '2',
+      check('Continue opens the hub where the career was', !!loaded && loaded[1] === 'False' && loaded[3] === '4' && !!resumed && resumed[2] === '4' && resumed[3] === fourth[3],
         `${short(loaded)}; ${short(resumed)}`);
       await page.screenshot({ path: `${outDir}/${name}-continued.png` }).catch(() => {});
 

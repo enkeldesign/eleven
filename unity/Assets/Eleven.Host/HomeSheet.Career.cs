@@ -200,6 +200,7 @@ namespace Eleven.Host
             SlotChoice offer = CareerHub.SlotOffer(slot, SlotSummary(slot), Career(), CareerSlot());
             Log(FormattableString.Invariant($"ELEVEN home slot={slot} {offer.ToString().ToLowerInvariant()}"));
             if (offer == SlotChoice.New) NewCareer(slot);
+            else if (offer == SlotChoice.Resume) ShowHub("resume");
             else ContinueSlot(slot);
         }
 
@@ -390,7 +391,7 @@ namespace Eleven.Host
             {
                 int empty = 0;
                 for (int i = 0; i < Eleven.Career.SaveSlots.Count; i++) empty += SlotSummary(i).Empty ? 1 : 0;
-                Log(FormattableString.Invariant($"ELEVEN home shown page=slots slots={Eleven.Career.SaveSlots.Count} empty={empty} first={at(_slotAction[0])} firstAction={_slotAction[0].Text.Replace(' ', '_')}"));
+                Log(FormattableString.Invariant($"ELEVEN home shown page=slots slots={Eleven.Career.SaveSlots.Count} empty={empty} first={at(_slotAction[0])} firstAction={_slotAction[0].Text.Replace(' ', '_')} firstOffer={CareerHub.SlotOffer(0, SlotSummary(0), Career(), CareerSlot())}"));
                 return;
             }
 
@@ -398,7 +399,7 @@ namespace Eleven.Host
             if (s == null) return;
             int played = s.Table().Find(r => r.Club == s.Club)?.Played ?? 0;
             Log(FormattableString.Invariant(
-                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)}"));
+                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)} save={at(_hubSave)}"));
         }
     }
 }
