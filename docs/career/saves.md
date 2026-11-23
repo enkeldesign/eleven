@@ -10,13 +10,20 @@ A career as bytes, in five slots ([#170](https://github.com/enkeldesign/eleven/i
 | --- | --- |
 | Magic `ELSV` | 4 |
 | Format version (1) | 4 |
+| The payload's length, uncompressed | 4 |
+| The payload, compressed (`Lz`) | … |
+| An FNV-1a 64 checksum over everything before it | 8 |
+
+**The payload:**
+
+| Field | Bytes |
+| --- | --- |
 | The career's seed | 8 |
 | The human's club | 4 |
 | His role (0 player-manager, 1 manager-only) | 1 |
 | When it was saved, by the host's clock | 8 |
 | The world's bytes, length first (`WorldCodec`, #157) | 4 + n |
 | The season (`SeasonCodec`) | … |
-| An FNV-1a 64 checksum over everything before it | 8 |
 
 **The season** holds:
 - its number and seed;
@@ -32,7 +39,22 @@ A career as bytes, in five slots ([#170](https://github.com/enkeldesign/eleven/i
 
 **The saved time** is shown in the slot list, never played on: the career is the same whatever the clock says.
 
-A career ten matchdays in is about 80 KB, and the world is most of it.
+## Size
+
+A save lives in the page's local storage as base64. The smallest browser's limit is iOS Safari's, about 2.5 million characters a page: WebKit stores UTF-16 in 5 MB. A WebKit report from iOS 16 says writing past it can clear the page's whole storage. Each slot holds a current and a previous save, and one more is staged while saving, so five slots hold up to 11 saves.
+
+**Compression:** `Lz` is LZ77 in LZ4's block layout, in pure managed code. It gives the same bytes on every runtime, and the browser needs nothing native.
+- **Decompression** checks every length and offset against its bounds, and is told the payload's length.
+- **Refused:** a stream that isn't whole, or holds any other length. So is a payload over 64 MB, so a damaged length can't ask for more.
+
+| | Uncompressed | Saved | Base64 |
+| --- | --- | --- | --- |
+| A new career | 83,514 B | 49,332 B | 65,776 chars |
+| A season's end, 431 results | 175,680 B | 62,278 B | 83,040 chars |
+
+- **The world** is 72,725 bytes, and LZ77 shrinks it by only a third, because its attributes are near-random values from 1 to 20.
+- **A season's results** repeat their layout, and shrink many times over.
+- **Eleven saves of a season's end** come to about 913,000 characters. `CareerSaveTests` holds them under half of iOS's limit, leaving the other half for the bench's presets and captures.
 
 ## Refusals
 
@@ -41,6 +63,7 @@ A career ten matchdays in is about 80 KB, and the world is most of it.
 - **a checksum that doesn't match**, which catches any flipped or cut byte;
 - **the wrong magic;**
 - **a format this build doesn't read;**
+- **a payload that doesn't decompress to its length;**
 - **a count out of range, or bytes after the end.**
 
 **A later format** is refused, not misread. A test writes a format-2 save with a good checksum and checks the refusal.
