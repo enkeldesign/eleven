@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using Eleven.Simulation;
 using Eleven.Simulation.Encoding;
 
@@ -14,7 +15,10 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 1;
+        public const int FormatVersion = 2;
+
+        /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
+        public const int FirstFormat = 1;
 
         public static byte[] Encode(World world)
         {
@@ -72,6 +76,23 @@ namespace Eleven.Career
                 w.WriteInt32(m.Reputation);
             }
 
+            // Format 2 (#176): each footballer with a ban or a caution, in the world's order.
+            var marked = new List<Player>();
+            foreach (Player p in world.Players)
+            {
+                if (p.LeagueBan != 0 || p.CupBan != 0 || p.LeagueCautions != 0 || p.CupCautions != 0) marked.Add(p);
+            }
+
+            w.WriteInt32(marked.Count);
+            foreach (Player p in marked)
+            {
+                w.WriteInt32(p.Id);
+                w.WriteInt32(p.LeagueBan);
+                w.WriteInt32(p.CupBan);
+                w.WriteInt32(p.LeagueCautions);
+                w.WriteInt32(p.CupCautions);
+            }
+
             return w.ToArray();
         }
 
@@ -92,7 +113,7 @@ namespace Eleven.Career
         {
             if (r.ReadInt32() != Magic) throw new FormatException("Not a world: wrong magic.");
             int version = r.ReadInt32();
-            if (version != FormatVersion) throw new FormatException($"World format {version}; this build reads {FormatVersion}.");
+            if (version != FormatVersion && version != FirstFormat) throw new FormatException($"World format {version}; this build reads {FirstFormat} and {FormatVersion}.");
             var world = new World { Seed = r.ReadUInt64() };
 
             int clubs = Count(r.ReadInt32());
@@ -156,11 +177,29 @@ namespace Eleven.Career
                 world.Managers.Add(m);
             }
 
+            if (version >= 2)
+            {
+                var byId = new Dictionary<int, Player>(world.Players.Count);
+                foreach (Player p in world.Players) byId[p.Id] = p;
+                int marked = Count(r.ReadInt32());
+                for (int i = 0; i < marked; i++)
+                {
+                    int id = r.ReadInt32();
+                    if (!byId.TryGetValue(id, out Player? p)) throw new FormatException($"A ban for footballer {id}, who isn't in the world.");
+                    p.LeagueBan = NonNegative(r.ReadInt32());
+                    p.CupBan = NonNegative(r.ReadInt32());
+                    p.LeagueCautions = NonNegative(r.ReadInt32());
+                    p.CupCautions = NonNegative(r.ReadInt32());
+                }
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
 
         // A count read from the bytes, refused when it can't be one.
         private static int Count(int n) => n < 0 || n > 1_000_000 ? throw new FormatException($"Invalid count {n}.") : n;
+
+        private static int NonNegative(int n) => n < 0 ? throw new FormatException($"Invalid ban or caution count {n}.") : n;
     }
 }

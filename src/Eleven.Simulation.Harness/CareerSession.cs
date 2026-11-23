@@ -92,18 +92,30 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public SimState MatchFor(Fixture fixture, ulong seed)
         {
-            int opponent = fixture.Home == Club ? fixture.Away : fixture.Home;
+            (int opponent, HashSet<int> mine, HashSet<int> theirs) = Sides(fixture);
             SimConfig c = MatchConfig(fixture);
             return Role == CareerRole.PlayerManager
-                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed)
-                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans);
+                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs)
+                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans, homeOut: mine, awayOut: theirs);
+        }
+
+        // The human's opponent, and each side's footballers out of the fixture (#176).
+        private (int Opponent, HashSet<int> Mine, HashSet<int> Theirs) Sides(Fixture fixture)
+        {
+            int opponent = fixture.Home == Club ? fixture.Away : fixture.Home;
+            MatchdayKind kind = fixture.Competition == CompetitionId.Cup ? MatchdayKind.Cup : MatchdayKind.League;
+            return (opponent, Availability.OutOf(World, Club, kind), Availability.OutOf(World, opponent, kind));
         }
 
         /// <summary>
         /// The human's fixture's lineup (#176): simulation id to the world's footballers, his club
         /// the simulation's home side, each side without its footballers out.
         /// </summary>
-        public Dictionary<int, int> LineupFor(Fixture fixture) => new Dictionary<int, int>();
+        public Dictionary<int, int> LineupFor(Fixture fixture)
+        {
+            (int opponent, HashSet<int> mine, HashSet<int> theirs) = Sides(fixture);
+            return CareerSquads.Lineup(World, Club, opponent, PerSide, mine, theirs);
+        }
 
         /// <summary>
         /// The human's fixture played: <paramref name="played"/> is from his club's side, the
@@ -114,11 +126,13 @@ namespace Eleven.Simulation.Harness
         {
             if (Next()?.Id != fixture.Id) throw new InvalidOperationException($"Fixture {fixture.Id} isn't the human's next.");
             MatchResult result = fixture.Home == Club ? played : played.Mirrored();
-            CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, f => f.Id == fixture.Id ? result : null);
+            // Its footballers by the lineup it was played with: his club the simulation's home side, whatever the ground.
+            var mine = new PlayedFixture(result, LineupFor(fixture));
+            CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, f => f.Id == fixture.Id ? mine : null, Squad);
         }
 
         /// <summary>The whole matchday quick-simmed, the human's fixture too.</summary>
-        public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide);
+        public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, (Func<Fixture, PlayedFixture?>?)null, Squad);
 
         /// <summary>The human's division's table.</summary>
         public List<TableRow> Table() => SeasonEngine.Table(Season, (CompetitionId)Division, Rules);
@@ -152,6 +166,6 @@ namespace Eleven.Simulation.Harness
             new CareerSession { Seed = save.Seed, Club = save.Club, Role = (CareerRole)save.Role, Config = config, World = save.World, Season = save.Season };
 
         /// <summary>On to the next season, once this one is over.</summary>
-        public void NextSeason() => Season = SeasonEngine.Rollover(World, Season, Seed, Rules);
+        public void NextSeason() => Season = SeasonEngine.Rollover(World, Season, Seed, Rules, Squad);
     }
 }

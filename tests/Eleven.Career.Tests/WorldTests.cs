@@ -136,6 +136,8 @@ namespace Eleven.Career.Tests
         private static readonly HashSet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "Eleven.Simulation.MatchResult", "Eleven.Simulation.ResultGoal", "Eleven.Simulation.Formation",
+            // #176: each footballer's line in the result, for who is out.
+            "Eleven.Simulation.ResultPlayer",
             "Eleven.Simulation.Randomness.CounterRng", "Eleven.Simulation.Randomness.RandomStream",
             "Eleven.Simulation.Encoding.CanonicalWriter", "Eleven.Simulation.Encoding.CanonicalReader", "Eleven.Simulation.Encoding.Fnv1a64",
             // #170: the result contract's own codec, for a season's saved results.

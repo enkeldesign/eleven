@@ -269,6 +269,7 @@ namespace Eleven.Career
             }
 
             (List<int> up, List<int> down) = Movement(season, rules);
+            Availability.NewSeason(world, squad ?? SquadRules.Reference);
             foreach (Club c in world.Clubs)
             {
                 if (up.Contains(c.Id)) c.Division--;

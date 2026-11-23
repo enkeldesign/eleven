@@ -63,8 +63,24 @@ namespace Eleven.Simulation.Harness
         /// </summary>
         public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, PlayedFixture?>? hook, SquadRules? squad = null)
         {
+            SquadRules sr = squad ?? SquadRules.Reference;
             List<Fixture> day = SeasonEngine.Next(season, rules);
-            foreach (Fixture f in day) SeasonEngine.Record(season, rules, f.Id, hook?.Invoke(f)?.Result ?? Quick(config, world, season, f, perSide));
+            MatchdayKind kind = SeasonCalendar.Of(rules)[season.Matchday].Kind;
+            var played = new List<(Fixture Fixture, MatchResult Result, IReadOnlyDictionary<int, int> Lineup)>(day.Count);
+            foreach (Fixture f in day)
+            {
+                // Who's out is read before the matchday: nothing it brings counts until the next.
+                HashSet<int> homeOut = Availability.OutOf(world, f.Home, kind), awayOut = Availability.OutOf(world, f.Away, kind);
+                PlayedFixture? other = hook?.Invoke(f);
+                MatchResult r = other?.Result ?? Quick(config, world, season, f, perSide, homeOut, awayOut);
+                IReadOnlyDictionary<int, int> lineup = other?.Lineup ?? CareerSquads.Lineup(world, f.Home, f.Away, perSide, homeOut, awayOut);
+                SeasonEngine.Record(season, rules, f.Id, r);
+                played.Add((f, r, lineup));
+            }
+
+            // The bans of those who sat it out are served, and the days pass, before its own cards and injuries count.
+            Availability.Serve(world, day, kind, sr);
+            foreach ((Fixture f, MatchResult r, IReadOnlyDictionary<int, int> lineup) in played) Availability.Apply(world, season, f, r, lineup, sr);
             SeasonEngine.Advance(season, rules);
             return day;
         }

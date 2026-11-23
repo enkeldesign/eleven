@@ -146,18 +146,24 @@ namespace Eleven.Simulation.Harness
             var squad = new List<Player>();
             foreach (Player p in world.Players)
             {
-                if (p.ClubId == clubId) squad.Add(p);
+                if (p.ClubId == clubId && (unavailable == null || !unavailable.Contains(p.Id))) squad.Add(p);
             }
 
             var chosen = new HashSet<int>();
-            Player? keeper = null;
-            foreach (Player p in squad)
+            Player? Keeper(bool keepersOnly)
             {
-                if (p.Positions.Count == 0 || p.Positions[0] != Position.Goalkeeper) continue;
-                if (keeper == null || KeeperLevel(p) > KeeperLevel(keeper) || (KeeperLevel(p) == KeeperLevel(keeper) && p.Id < keeper.Id)) keeper = p;
+                Player? best = null;
+                foreach (Player p in squad)
+                {
+                    if (p.Positions.Count == 0 || (keepersOnly && p.Positions[0] != Position.Goalkeeper)) continue;
+                    if (best == null || KeeperLevel(p) > KeeperLevel(best) || (KeeperLevel(p) == KeeperLevel(best) && p.Id < best.Id)) best = p;
+                }
+
+                return best;
             }
 
-            if (keeper == null) throw new InvalidOperationException($"Club {clubId} has no keeper.");
+            // With no fit keeper (#176), the best of the rest at keeping goes in goal.
+            Player keeper = Keeper(true) ?? Keeper(false) ?? throw new InvalidOperationException($"Club {clubId} has no one to play.");
             chosen.Add(keeper.Id);
 
             Player? Best(Func<Player, bool> fits)
