@@ -42,7 +42,7 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 
 `CareerSeasons.PlayMatchday` in order:
 1. **Who's out** of each club's match is read before any fixture is played, for the matchday's competition.
-2. **Each XI** is picked without them (`CareerSquads.Selection`), for the full simulation and the quick-sim alike. With no fit keeper, the best of the rest at keeping goes in goal.
+2. **Each XI** is picked without them (`CareerSquads.Selection`), for the full simulation and the quick-sim alike. With no fit keeper, the best of the rest at keeping goes in goal. The bench is the best of the rest, up to nine; with footballers out it can be shorter, and the match has only those places (Codex on #185).
 3. **The fixtures are played** and recorded, each with its lineup: simulation id to the world's footballer. The human's fixture brings its own lineup (`CareerSession.LineupFor`). His club is the simulation's home side whatever the ground (#167), so the lineup is his club's first.
 4. **Bans are served** by those who sat it out (`Availability.Serve`).
 5. **The matchday's injuries and cards** are applied (`Availability.Apply`), so a ban it brings is served from the next.
@@ -82,6 +82,7 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
   - the world's bytes, and a format-1 world.
 - **`AvailabilitySeasonTests`** (harness):
   - selection without who's out, the keeper's fallback included;
+  - a match with outfielders out, its bench only the substitutes picked;
   - a headless season that never picks anyone out, plays the quick-sim on the XI it picked, and bans and injures from its lines;
   - the human's lineup, home and away, and his played fixture carried;
   - the hub's line.
