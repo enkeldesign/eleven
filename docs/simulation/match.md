@@ -70,7 +70,7 @@ The result names who played, so a career can carry each footballer's minutes, ca
 | `Injury` | `…,{level}` | His worst injury: 0 none, 1 minor, 2 serious ([injuries.md](injuries.md)) |
 
 - **Time:** `MatchRecorder` credits every footballer on the pitch with each step's advance of the match clock. A starter who plays it all is credited the whole of `PlayedSeconds`, extra time included, the shootout not. A footballer off (sent off, or seriously injured) is credited nothing more. A substitute starts from nothing when he comes on, so he and the man he replaced make a whole match between them.
-- **Adds up:** a side's lines hold its cautions and sendings-off exactly. Its injured lines are at most its injuries, as one footballer can be hurt twice.
+- **Adds up:** a side's lines hold its cautions and sendings-off exactly, the quick-sim's too ([quicksim.md](quicksim.md)). Its injured lines are at most its injuries, as one footballer can be hurt twice.
 - **In the text and the codec:** a `player=` line each, after the goals; `MatchResultCodec` writes the same. The codec reads a schema-7 result, a save's from before #172, as one with no lines (INV-7).
 - **Read, never played:** like the rest of the result it comes from the match's events and state (INV-1).
 

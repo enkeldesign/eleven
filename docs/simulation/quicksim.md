@@ -33,6 +33,7 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
 - **Injuries** (#172), minor and serious, are Poisson a side at the model's means. The 5v5 reference was fitted without them, so its are 0.
 - **The XIs named** (#172): given each side's footballer ids (keeper last), the result has a line for each (match.md's schema 8).
   - **Each card and injury** falls to one of the side's outfielders, drawn on its own counter. The keeper keeps his goal. A footballer hurt twice keeps the worse.
+  - **Cards fall to distinct footballers** (Codex on #184): each is drawn among the outfielders without one. So the lines total the side's cautions and sendings-off, and nobody has two cautions without being sent off. A side's first card falls where it would alone. Cards beyond the outfielders go unnamed, a count the fitted rates never come near.
   - **Everyone plays the whole match:** nobody is replaced in a quick-sim.
   - **Draws:** the picks come after the scoreline and the counts, on their own counters, so naming the XIs changes nothing else in the result.
 - **A knockout** (`knockout`, #163) that is level after two halves goes on, as the full simulation's does (#111):
