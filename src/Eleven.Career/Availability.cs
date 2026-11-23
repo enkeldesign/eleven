@@ -140,6 +140,11 @@ namespace Eleven.Career
             }
         }
 
+        /// <summary>Days pass for the injured (#176): from a matchday to the next, or over the off-season.</summary>
+        public static void Pass(World world, int days)
+        {
+        }
+
         /// <summary>The season's turn: cautions start again, bans still to serve carry over, and the off-season's days pass.</summary>
         public static void NewSeason(World world, SquadRules rules)
         {

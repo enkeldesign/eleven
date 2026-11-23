@@ -130,7 +130,7 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
-        public void A_ban_is_served_only_in_its_competitions_matches_of_his_club_and_the_days_pass()
+        public void A_ban_is_served_only_in_its_competitions_matches_of_his_club()
         {
             (World w, Season s) = New();
             List<Fixture> day = SeasonEngine.Next(s, Rules);
@@ -144,15 +144,40 @@ namespace Eleven.Career.Tests
             Availability.Serve(w, day, MatchdayKind.League, Squad);
             Assert.Equal(1, banned.LeagueBan);
             Assert.Equal(1, cupOnly.CupBan);
-            Assert.Equal(10 - Squad.DaysPerMatchday, hurt.InjuredDays);
+            Assert.Equal(10, hurt.InjuredDays);
 
             // A club with no match that matchday serves nothing.
             Availability.Serve(w, day.Where(x => x.Home != f.Home && x.Away != f.Home).ToList(), MatchdayKind.League, Squad);
             Assert.Equal(1, banned.LeagueBan);
-            Assert.Equal(0, hurt.InjuredDays);
 
             Availability.Serve(w, new List<Fixture> { Cup(f.Away, f.Home) }, MatchdayKind.Cup, Squad);
             Assert.Equal((1, 0), (banned.LeagueBan, cupOnly.CupBan));
+        }
+
+        [Fact]
+        public void The_days_pass_for_everyone_injured_whether_his_club_plays_or_not()
+        {
+            (World w, _) = New();
+            w.Players[0].InjuredDays = 10;
+            w.Players[500].InjuredDays = 3;
+            Availability.Pass(w, Squad.DaysPerMatchday);
+            Assert.Equal((10 - Squad.DaysPerMatchday, 0), (w.Players[0].InjuredDays, w.Players[500].InjuredDays));
+        }
+
+        [Fact]
+        public void A_layoff_within_the_week_misses_no_matchday_and_a_longer_one_does()
+        {
+            // A matchday's injuries count from its own day: the days to the next pass before it.
+            (World w, Season s) = New();
+            List<Fixture> day = SeasonEngine.Next(s, Rules);
+            Fixture f = day[0];
+            Player knock = Of(w, f.Home), strain = w.Players.First(x => x.ClubId == f.Away && x.Positions[0] != Position.Goalkeeper);
+            Availability.Serve(w, day, MatchdayKind.League, Squad);
+            knock.InjuredDays = Squad.DaysPerMatchday;
+            strain.InjuredDays = Squad.DaysPerMatchday + 1;
+            Availability.Pass(w, Squad.DaysPerMatchday);
+            Assert.False(Availability.Out(knock, MatchdayKind.League));
+            Assert.True(Availability.Out(strain, MatchdayKind.League));
         }
 
         [Fact]
