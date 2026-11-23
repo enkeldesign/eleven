@@ -26,7 +26,7 @@ The actions:
 | Action | When | What it does |
 | --- | --- | --- |
 | **Play** | You have a fixture, as player-manager | Plays it on the full simulation, on your club's kick-off taker |
-| **Watch** | You have a fixture, as manager only | Plays it on the full simulation, both sides CPU |
+| **Watch** | You have a fixture, as manager only | Plays it on the full simulation, both sides CPU. The host sends no command of yours (`CareerSession.HumanPlays`), which would double the CPU's for your kick-off taker, so in the match both sides' CPU managers make the changes. |
 | **Simulate** | You have a fixture | Quick-sims the matchday, your fixture too |
 | **Next matchday** | No fixture of yours | Quick-sims the matchday |
 | **Next season** | The season is over | Rolls over (#164) |
