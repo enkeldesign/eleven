@@ -265,6 +265,50 @@ internal static class Program
                 return 0;
             }
 
+            case "seasons":
+            {
+                // #164: a new career's seasons rolled forward headless, every fixture quick-simmed:
+                // `seasons [count] [career seed]`. Each season's tables, moves, cup winner and timing.
+                int count = args.Length >= 2 && int.TryParse(args[1], out int sc) && sc > 0 ? sc : 3;
+                ulong careerSeed = args.Length >= 3 && ulong.TryParse(args[2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong cs) ? cs : 0x164;
+                Eleven.Career.World seasonWorld = Eleven.Career.WorldGenerator.Generate(0x157);
+                Eleven.Career.CompetitionRules seasonRules = Eleven.Career.CompetitionRules.Reference;
+                var seasonWatch = Stopwatch.StartNew();
+                List<Eleven.Career.Season> seasons = CareerSeasons.RollForward(CareerQuickSimCalibration.Config(), seasonWorld, careerSeed, count, seasonRules, 10);
+                double seasonSeconds = seasonWatch.Elapsed.TotalSeconds;
+                string Short(int id) => seasonWorld.Clubs.Find(c => c.Id == id)!.ShortName;
+                foreach (Eleven.Career.Season s in seasons)
+                {
+                    int goals = 0, level = 0, league = 0, extra = 0, shootouts = 0;
+                    foreach (Eleven.Career.Fixture f in s.Fixtures)
+                    {
+                        MatchResult r = s.Results[f.Id];
+                        if (f.Competition == Eleven.Career.CompetitionId.Cup)
+                        {
+                            extra += r.ExtraTime;
+                            if (r.HomeShootoutKicks > 0) shootouts++;
+                            continue;
+                        }
+
+                        league++;
+                        goals += r.HomeGoals + r.AwayGoals;
+                        if (r.HomeGoals == r.AwayGoals) level++;
+                    }
+
+                    (List<int> up, List<int> down) = Eleven.Career.SeasonEngine.Movement(s, seasonRules);
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"season {s.Number} (seed {s.Seed:x16}): {league} league matches, {(double)goals / league:F2} goals a match, {100.0 * level / league:F0} % drawn; cup won by {Short(s.CupWinner)}, {extra} ties to extra time, {shootouts} to penalties; up {string.Join(" ", up.Select(Short))}, down {string.Join(" ", down.Select(Short))}"));
+                    for (int d = 1; d <= s.Divisions.Count; d++)
+                    {
+                        var table = Eleven.Career.SeasonEngine.Table(s, (Eleven.Career.CompetitionId)d, seasonRules);
+                        Console.WriteLine($"  division {d}: " + string.Join(", ", table.Select(t => FormattableString.Invariant($"{Short(t.Club)} {t.Points}"))));
+                    }
+                }
+
+                Console.WriteLine(FormattableString.Invariant($"{count} seasons, {seasons.Sum(x => x.Results.Count)} results, in {seasonSeconds:F2} s"));
+                return 0;
+            }
+
             case "quicksim" when args.Length >= 3 && args[1] == "career-fit":
             {
                 // #163: the eleven-a-side model refitted from its sample, and its comparison by division gap.

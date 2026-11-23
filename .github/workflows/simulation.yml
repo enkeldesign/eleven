@@ -338,6 +338,12 @@ jobs:
           dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll throughput 3 | tee throughput.txt
           echo "::notice title=Throughput::$(cat throughput.txt)"
 
+      # #164: a new career's three seasons rolled forward headless, every fixture quick-simmed.
+      - name: Roll three seasons forward
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll seasons 3 | tee seasons.txt
+          echo "::notice title=Three seasons::$(tail -1 seasons.txt)"
+
       # #163: the quick-sim at eleven a side, for the world's clubs. Its sample is 480 full 11v11
       # matches; CI plays the first 8 fixtures and diffs them against the reference's first rows.
       - name: Calibrate the quick-sim at eleven a side
