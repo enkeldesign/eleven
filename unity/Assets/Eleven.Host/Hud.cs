@@ -478,12 +478,13 @@ namespace Eleven.Host
 
         /// <summary>
         /// In a match, RESET starts a new match and RUN SCENARIO pauses and resumes it (#87); in a
-        /// quick match RESET goes Home (#160); in practice they are as they were. Each keeps its
+        /// quick match RESET goes Home (#160), and in a career's to the hub (#168): RESET reads
+        /// <paramref name="matchReset"/>. In practice they are as they were. Each keeps its
         /// accessible name in step with its label.
         /// </summary>
-        public void SetMatchActions(bool match, bool paused, bool quick = false)
+        public void SetMatchActions(bool match, bool paused, string matchReset = "New match")
         {
-            Relabel(Reset, match ? (quick ? "Home" : "New match") : "Reset");
+            Relabel(Reset, match ? matchReset : "Reset");
             Relabel(Run, match ? (paused ? "Resume" : "Pause") : "Run scenario");
         }
 

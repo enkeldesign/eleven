@@ -37,6 +37,20 @@ namespace Eleven.Host
         private HomeSheet _home;
         private const string QuickKey = "eleven.quick";
 
+        // A career (#168): #167's session, the human's fixture being played, and whether its
+        // result is in. The career's matches have 3-minute halves, #80's default.
+        private CareerSession _career;
+        private Eleven.Career.Fixture _careerFixture;
+        private bool _careerMatch;
+        private bool _careerDone;
+        private const double CareerHalf = 180;
+
+        // A match whose sides are clubs, named on the score panel: a quick match's or a career's.
+        private bool Named => _quick || _careerMatch;
+
+        // What RESET reads in a match.
+        private string ResetName => _careerMatch ? "Hub" : _quick ? "Home" : "New match";
+
         private bool _match;
         private bool _matchPaused;
         private MatchRecorder _recorder;
@@ -193,9 +207,11 @@ namespace Eleven.Host
             if (tier.HasValue) _opponentSkill = tier.Value;
         }
 
-        // The bench's values, with the half's length chosen on Home or asked for in the address.
+        // The bench's values, with the half's length chosen on Home or asked for in the address;
+        // a career's fixture its own (#168), a cup tie's a knockout.
         private SimConfig MatchConfig()
         {
+            if (_careerMatch) return _career.MatchConfig(_careerFixture);
             double half = _quick ? _quickHalf : _halfLength;
             SimConfig config = half > 0 ? _bench.Config.With("halfLength", half) : _bench.Config;
             return _knockout ? config.With("knockout", 1) : config;
@@ -207,6 +223,8 @@ namespace Eleven.Host
         /// </summary>
         private void StartMatch(string via, int perSide)
         {
+            _careerMatch = via == "career" && _career != null && _careerFixture != null;
+            _careerDone = false;
             _quick = via == "quick" && _quickHome != null && _quickAway != null;
             _match = true;
             _matchPaused = false;
@@ -214,7 +232,9 @@ namespace Eleven.Host
             _config = MatchConfig();
             _view.Use(_config);
             _view.ShowMatch(true, _perSide);
-            _simulator = new Simulator(_config, _quick
+            _simulator = new Simulator(_config, _careerMatch
+                ? _career.MatchFor(_careerFixture, _matchSeed)
+                : _quick
                 ? QuickMatch.Match(_config, QuickMatch.World, _quickHome.Id, _quickAway.Id, _perSide, _matchSeed)
                 : _perSide == 1
                 ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
@@ -241,8 +261,8 @@ namespace Eleven.Host
             _resultLines = HudLayout.MaxResultLines;
             UpdateMatchPanel();
             UpdateLayout(force: false);
-            _hud?.SetMatchActions(true, false, _quick);
-            _hud?.ShowStatus(_quick ? $"{_quickHome.Name} v {_quickAway.Name}: kick-off. Attacking up." : $"{SideName(_perSide)} match: kick-off. Attacking up.");
+            _hud?.SetMatchActions(true, false, ResetName);
+            _hud?.ShowStatus(Named ? $"{_quickHome.Name} v {_quickAway.Name}: kick-off. Attacking up." : $"{SideName(_perSide)} match: kick-off. Attacking up.");
             Log(FormattableString.Invariant($"ELEVEN match started via={via} seed={_matchSeed} half={_config.HalfLength:F0}s tier={TierName(_opponentSkill)} config={_config.Hash:x16} start={_simulator.StateHash():x16} side={_perSide}"));
             if (_quick) Log(FormattableString.Invariant($"ELEVEN quick started home={_quickHome.Id} away={_quickAway.Id} side={_perSide} half={_config.HalfLength:F0}s seed={_matchSeed}"));
         }
@@ -258,6 +278,64 @@ namespace Eleven.Host
         }
 
         private static Eleven.Career.Club ClubById(int id) => QuickMatch.World.Clubs.Find(c => c.Id == id);
+
+        /// <summary>Start on New career (#168): #167's session for the chosen club and role, its matches at 3-minute halves.</summary>
+        private void StartCareer(Eleven.Career.World world, ulong seed, int club, CareerRole role)
+        {
+            _career = CareerSession.Start(world, seed, club, role, _bench.Config.With("halfLength", CareerHalf));
+            Log(FormattableString.Invariant($"ELEVEN career started seed={seed} club={club} role={role} division={_career.Division}"));
+        }
+
+        /// <summary>PLAY or WATCH on the hub (#168): the human's fixture on the full simulation, his club the home side (#167).</summary>
+        private void CareerPlay()
+        {
+            Eleven.Career.Fixture f = _career?.Next();
+            if (f == null)
+            {
+                _home?.ShowHub("play");
+                return;
+            }
+
+            _careerFixture = f;
+            int opponent = f.Home == _career.Club ? f.Away : f.Home;
+            _quickHome = _career.World.Clubs.Find(c => c.Id == _career.Club);
+            _quickAway = _career.World.Clubs.Find(c => c.Id == opponent);
+            if (!_seedAsked) _matchSeed = (ulong)DateTime.UtcNow.Ticks;
+            StartMatch("career", CareerSession.PerSide);
+            Log(FormattableString.Invariant($"ELEVEN career match fixture={f.Id} home={f.Home} away={f.Away} club={_career.Club} role={_career.Role} seed={_matchSeed}"));
+        }
+
+        /// <summary>SIMULATE or NEXT MATCHDAY on the hub: the matchday quick-simmed.</summary>
+        private void CareerSimulate()
+        {
+            if (_career == null || _career.SeasonOver) return;
+            _career.Simulate();
+            Log(FormattableString.Invariant($"ELEVEN career simulated matchday={_career.Season.Matchday}"));
+        }
+
+        /// <summary>NEXT SEASON on the hub: the rollover.</summary>
+        private void CareerNextSeason()
+        {
+            if (_career == null || !_career.SeasonOver) return;
+            _career.NextSeason();
+            Log(FormattableString.Invariant($"ELEVEN career season={_career.Season.Number} division={_career.Division}"));
+        }
+
+        /// <summary>HUB in a career match (#168): the match ends; a fixture left before its result is simulated instead.</summary>
+        private void GoHub()
+        {
+            bool done = _careerDone;
+            Eleven.Career.Fixture fixture = _careerFixture;
+            EndMatch();
+            if (!done && _career != null && fixture != null && _career.Next()?.Id == fixture.Id)
+            {
+                _career.Simulate();
+                Log(FormattableString.Invariant($"ELEVEN career simulated fixture={fixture.Id} reason=left"));
+            }
+
+            _careerFixture = null;
+            _home?.ShowHub("match");
+        }
 
         /// <summary>
         /// PRACTICE on Home (#160): the practice pitch, ending any match first. An address such as
@@ -291,6 +369,8 @@ namespace Eleven.Host
             if (!_match) return;
             _match = false;
             _quick = false;
+            _careerMatch = false;
+            _careerDone = false;
             _matchPaused = false;
             _config = _bench.Config;
             _view.Use(_config);
@@ -455,7 +535,7 @@ namespace Eleven.Host
             _matchPaused = !_matchPaused;
             _accumulator = 0;
             _input.Clear();
-            _hud?.SetMatchActions(true, _matchPaused, _quick);
+            _hud?.SetMatchActions(true, _matchPaused, ResetName);
             _hud?.ShowStatus(_matchPaused ? "Paused. The clock has stopped." : "Play on.");
             Log(FormattableString.Invariant($"ELEVEN match {(_matchPaused ? "paused" : "resumed")} tick={_simulator.Tick} clock={_simulator.PeekState().Match.ClockTicks}"));
 
@@ -673,7 +753,8 @@ namespace Eleven.Host
                     case SimEventKind.FullTime:
                         _subRequested = false;
                         _hud?.ShowSubs(false);
-                        _hud?.ShowStatus(_quick ? $"Full time {QuickMatch.Score(_quickHome, s.Teams[0].Goals, s.Teams[1].Goals, _quickAway)}. HOME for another." : $"Full time {Score(s)}");
+                        _hud?.ShowStatus(_careerMatch ? $"Full time {QuickMatch.Score(_quickHome, s.Teams[0].Goals, s.Teams[1].Goals, _quickAway)}. HUB for the table."
+                            : _quick ? $"Full time {QuickMatch.Score(_quickHome, s.Teams[0].Goals, s.Teams[1].Goals, _quickAway)}. HOME for another." : $"Full time {Score(s)}");
                         UpdateMatchPanel();
                         Log(FormattableString.Invariant($"ELEVEN match fulltime score={Score(s)} tick={s.Tick}"));
                         break;
@@ -687,6 +768,13 @@ namespace Eleven.Host
                 else _hud?.ShowMatchResult(_shownResult.HomeShootoutGoals, _shownResult.AwayShootoutGoals);
                 Log($"ELEVEN match result {_shownResult.ToText().Replace('\n', ' ').Trim()}");
                 if (_quick) _home?.SetLast(QuickResult(_shownResult));
+                if (_careerMatch && !_careerDone)
+                {
+                    // The human's result, from his club's side, recorded on the fixture's ground (#167).
+                    _career.Finish(_careerFixture, _shownResult);
+                    _careerDone = true;
+                    Log(FormattableString.Invariant($"ELEVEN career finished fixture={_careerFixture.Id} matchday={_career.Season.Matchday}"));
+                }
                 Log($"ELEVEN match recording steps={_recording.StepCount} replay={(_recording.Replay(_config).StateHash() == _simulator.StateHash() ? "match" : "MISMATCH")}");
             }
 
@@ -725,7 +813,7 @@ namespace Eleven.Host
             if (!_match || _hud == null) return;
             SimState s = _simulator.PeekState();
             int clock = (int)(s.Match.ClockTicks * _config.TickSeconds);
-            _hud.ShowMatch(_quick ? QuickMatch.Score(_quickHome, s.Teams[0].Goals, s.Teams[1].Goals, _quickAway) : $"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), HalfName(s));
+            _hud.ShowMatch(Named ? QuickMatch.Score(_quickHome, s.Teams[0].Goals, s.Teams[1].Goals, _quickAway) : $"You {s.Teams[0].Goals} – {s.Teams[1].Goals} CPU", FormattableString.Invariant($"{clock / 60}:{clock % 60:00}"), HalfName(s));
         }
 
         private static string HalfName(SimState s) =>

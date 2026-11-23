@@ -314,7 +314,10 @@ namespace Eleven.Host
             // keepers' and the CPU's perception and decisions, then the simulation's step.
             _stepWatch.Restart();
             _commands.Clear();
-            _commands.Add(WithPlan(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick)))));
+            Command human = WithPlan(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick))));
+            // A watched career match (Codex on #178): both sides are CPU, the kick-off taker on the
+            // human's controller too, so a human command would double his and both would be lost.
+            if (!_careerMatch || _career.HumanPlays) _commands.Add(human);
 
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
@@ -409,6 +412,13 @@ namespace Eleven.Host
         // RESET: practice's fresh start, or in a match a new match from its kick-off (#87).
         private void ResetMatch()
         {
+            // In a career match it reads HUB, and goes there (#168).
+            if (_match && _careerMatch)
+            {
+                GoHub();
+                return;
+            }
+
             // In a quick match it reads HOME, and goes there (#160).
             if (_match && _quick)
             {
@@ -644,6 +654,13 @@ namespace Eleven.Host
                 _home = new HomeSheet(_ui, _trace, QuickMatch.Clubs(QuickMatch.World), () => _buildId, ReadStored(QuickKey),
                     text => WriteStored(QuickKey, text), KickOff, PractiseFromHome);
                 _hud.AttachHome(_home);
+
+                // The career's pages (#168) over #167's session.
+                _home.Career = () => _career;
+                _home.StartCareer = StartCareer;
+                _home.CareerPlay = CareerPlay;
+                _home.CareerSimulate = CareerSimulate;
+                _home.CareerNextSeason = CareerNextSeason;
                 if (_trace)
                 {
                     // Whether pointer input reaches UI Toolkit at all, and where (#48 spike).

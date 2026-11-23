@@ -20,7 +20,7 @@ namespace Eleven.Host
     /// The clubs' kits are the world's tokens, resolved through the design system's kit tier.
     /// Play waits while Home is open, and its page covers the pitch.
     /// </summary>
-    internal sealed class HomeSheet
+    internal sealed partial class HomeSheet
     {
         /// <summary>A quick match's choices: the two clubs' ids, and indices into the sizes and the halves.</summary>
         public struct Choice
@@ -105,6 +105,18 @@ namespace Eleven.Host
         private Choice _choice;
         private string _via = "";
         private bool _reported;
+        private readonly UiKit.Action _career;
+
+        // The pages (#160, #168): Home, Quick match, New career and the career's hub.
+        private enum Shown
+        {
+            Home,
+            Quick,
+            NewCareer,
+            Hub,
+        }
+
+        private Shown _page;
 
         public HomeSheet(UiRoot ui, bool trace, IReadOnlyList<Club> clubs, Func<string> build, string kept, Action<string> keep,
             Action<Choice> kickOff, System.Action practise)
@@ -144,9 +156,12 @@ namespace Eleven.Host
             _buildLine = UiKit.Text(_theme, TypeScale.Small, "", Role.TextMuted);
             _homePage.Content.Add(_buildLine);
             _practice = UiKit.MakeAction(ui, _theme, ActionRole.Supporting, "Practice", Practise);
+            _career = UiKit.MakeAction(ui, _theme, ActionRole.Supporting, "Career", OpenCareer);
             _quick = UiKit.MakeAction(ui, _theme, ActionRole.Primary, "Quick match", ShowQuick);
             _homePage.Actions.Add(_practice.Element);
+            _homePage.Actions.Add(_career.Element);
             _homePage.Actions.Add(_quick.Element);
+            _homePage.Actions.style.flexWrap = Wrap.Wrap;
             UiKit.Gaps(_homePage.Actions);
 
             // Quick match: the two clubs, the size and the half, then Kick off.
@@ -185,6 +200,7 @@ namespace Eleven.Host
 
             _scrim.Add(_homePage.Element);
             _scrim.Add(_quickPage.Element);
+            BuildCareerPages();
             ui.Root.Add(_scrim);
             _homePage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
             _quickPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
@@ -197,7 +213,7 @@ namespace Eleven.Host
         public bool Open { get; private set; }
 
         /// <summary>Whether the Quick match page is the one shown.</summary>
-        public bool QuickShown { get; private set; }
+        public bool QuickShown => _page == Shown.Quick;
 
         /// <summary>Called with true when Home opens and false when it closes: the HUD behind it takes neither focus nor presses.</summary>
         public Action<bool> OpenChanged;
@@ -216,13 +232,7 @@ namespace Eleven.Host
         {
             _via = via;
             _buildLine.text = $"Build {_build()}";
-            if (!Open)
-            {
-                Open = true;
-                _scrim.style.display = DisplayStyle.Flex;
-                OpenChanged?.Invoke(true);
-            }
-
+            OpenSheet();
             ShowHome();
         }
 
@@ -233,19 +243,21 @@ namespace Eleven.Host
             _last.style.display = DisplayStyle.Flex;
         }
 
-        /// <summary>Escape: from Quick match back to Home; on Home, nothing.</summary>
+        /// <summary>Escape: from any other page back to Home; on Home, nothing.</summary>
         public void Back()
         {
-            if (Open && QuickShown) ShowHome();
+            if (Open && _page != Shown.Home) ShowHome();
         }
 
         /// <summary>The shown page's controls in order, for Tab.</summary>
         public List<VisualElement> FocusOrder()
         {
             var order = new List<VisualElement>();
-            if (!QuickShown)
+            if (_page == Shown.NewCareer || _page == Shown.Hub) return CareerFocusOrder();
+            if (_page == Shown.Home)
             {
                 order.Add(_practice.Element);
+                order.Add(_career.Element);
                 order.Add(_quick.Element);
                 return order;
             }
@@ -269,23 +281,36 @@ namespace Eleven.Host
             OpenChanged?.Invoke(false);
         }
 
-        private void ShowHome()
-        {
-            QuickShown = false;
-            _homePage.Element.style.display = DisplayStyle.Flex;
-            _quickPage.Element.style.display = DisplayStyle.None;
-            _reported = false;
-            Report();
-        }
+        private void ShowHome() => ShowPage(Shown.Home);
 
         private void ShowQuick()
         {
-            QuickShown = true;
-            _homePage.Element.style.display = DisplayStyle.None;
-            _quickPage.Element.style.display = DisplayStyle.Flex;
             ShowChoice();
+            ShowPage(Shown.Quick);
+        }
+
+        // One page at a time, and its places said once it has its layout.
+        private void ShowPage(Shown page)
+        {
+            _page = page;
+            _homePage.Element.style.display = page == Shown.Home ? DisplayStyle.Flex : DisplayStyle.None;
+            _quickPage.Element.style.display = page == Shown.Quick ? DisplayStyle.Flex : DisplayStyle.None;
+            _newCareerPage.Element.style.display = page == Shown.NewCareer ? DisplayStyle.Flex : DisplayStyle.None;
+            _hubPage.Element.style.display = page == Shown.Hub ? DisplayStyle.Flex : DisplayStyle.None;
             _reported = false;
-            Report();
+
+            // Said once laid out: a page already shown may have changed its size (the hub after a
+            // matchday), and a newly shown one reports on its first layout too.
+            _scrim.schedule.Execute(Report).StartingIn(100);
+        }
+
+        // Opens the sheet, if it isn't, without choosing a page.
+        private void OpenSheet()
+        {
+            if (Open) return;
+            Open = true;
+            _scrim.style.display = DisplayStyle.Flex;
+            OpenChanged?.Invoke(true);
         }
 
         private void Practise()
@@ -431,7 +456,7 @@ namespace Eleven.Host
         private void Report()
         {
             if (!Open || _reported) return;
-            UiKit.Surface page = QuickShown ? _quickPage : _homePage;
+            UiKit.Surface page = _page == Shown.Quick ? _quickPage : _page == Shown.NewCareer ? _newCareerPage : _page == Shown.Hub ? _hubPage : _homePage;
             if (!(page.Body.layout.width > 0)) return;
             _reported = true;
             float s = _ui.PixelsPerPoint;
@@ -441,9 +466,15 @@ namespace Eleven.Host
                 return FormattableString.Invariant($"{c.x:F0},{c.y:F0}");
             }
 
-            if (!QuickShown)
+            if (_page == Shown.Home)
             {
-                Log($"ELEVEN home shown page=home via={_via} quick={At(_quick)} practice={At(_practice)}");
+                Log($"ELEVEN home shown page=home via={_via} quick={At(_quick)} practice={At(_practice)} career={At(_career)}");
+                return;
+            }
+
+            if (_page == Shown.NewCareer || _page == Shown.Hub)
+            {
+                ReportCareer(At);
                 return;
             }
 
