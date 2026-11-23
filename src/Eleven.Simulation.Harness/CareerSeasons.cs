@@ -32,7 +32,7 @@ namespace Eleven.Simulation.Harness
         /// A fixture's quick-sim result: its own seed from the season's and the fixture's id; a
         /// cup tie as a knockout; the final, at a neutral ground, without home advantage.
         /// </summary>
-        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? squad = null)
         {
             bool cup = fixture.Competition == CompetitionId.Cup;
             SimConfig c = cup ? config.With("knockout", 1) : config;
