@@ -366,6 +366,46 @@ internal static class Program
                 return 0;
             }
 
+            case "condition" when args.Length >= 2:
+            {
+                // #177: a tired start's effect on the full simulation. `condition <dir> [step]`: every
+                // step-th eleven-a-side calibration fixture, the home side's outfielders starting at
+                // each fatigue level, the away side fresh.
+                int step = args.Length >= 3 && int.TryParse(args[2], out int st) && st > 0 ? st : 3;
+                double[] levels = { 0, 0.3, 0.6 };
+                SimConfig condConfig = CareerQuickSimCalibration.Config();
+                Eleven.Career.World condWorld = CareerQuickSimCalibration.World();
+                var all = CareerQuickSimCalibration.Fixtures(condWorld);
+                var picked = new List<(int Home, int Away, ulong Seed)>();
+                for (int i = 0; i < all.Count; i += step) picked.Add(all[i]);
+                var rows = new (int Index, double Level, int Home, int Away, int HomeGoals, int AwayGoals)[picked.Count * levels.Length];
+                var condWatch = Stopwatch.StartNew();
+                System.Threading.Tasks.Parallel.For(0, rows.Length, k =>
+                {
+                    int i = k / levels.Length;
+                    double level = levels[k % levels.Length];
+                    MatchResult r = CareerSquads.Play(condConfig, condWorld, picked[i].Home, picked[i].Away, 10, picked[i].Seed, homeFatigue: level);
+                    rows[k] = (i, level, picked[i].Home, picked[i].Away, r.HomeGoals, r.AwayGoals);
+                });
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "condition.csv")))
+                {
+                    csv.Write("index,home_fatigue,home,away,home_goals,away_goals\n");
+                    foreach (var row in rows) csv.Write(FormattableString.Invariant($"{row.Index},{row.Level:F2},{row.Home},{row.Away},{row.HomeGoals},{row.AwayGoals}\n"));
+                }
+
+                foreach (double level in levels)
+                {
+                    var at = rows.Where(x => x.Level == level).ToList();
+                    double hg = at.Average(x => x.HomeGoals), ag = at.Average(x => x.AwayGoals);
+                    double w = at.Count(x => x.HomeGoals > x.AwayGoals) * 100.0 / at.Count, d = at.Count(x => x.HomeGoals == x.AwayGoals) * 100.0 / at.Count;
+                    Console.WriteLine(FormattableString.Invariant($"home fatigue {level:F2}: {at.Count} matches, goals {hg:F2}-{ag:F2}, home won {w:F0} %, drawn {d:F0} %"));
+                }
+
+                Console.WriteLine(FormattableString.Invariant($"{rows.Length} full 11v11 matches in {condWatch.Elapsed.TotalSeconds:F0} s on {Environment.ProcessorCount} cores -> {args[1]}"));
+                return 0;
+            }
+
             case "quicksim" when args.Length >= 3 && args[1] == "career":
             {
                 // #163: the eleven-a-side sample, the full simulation between the reference world's clubs.

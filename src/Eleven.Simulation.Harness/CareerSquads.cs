@@ -149,7 +149,7 @@ namespace Eleven.Simulation.Harness
         /// <paramref name="unavailable"/> (#176: injured or banned) are never picked; with no fit
         /// keeper, the best of the rest at keeping goes in goal.
         /// </summary>
-        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null)
+        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null, SquadRules? rotation = null)
         {
             var squad = new List<Player>();
             foreach (Player p in world.Players)
@@ -219,9 +219,27 @@ namespace Eleven.Simulation.Harness
         /// A CPU-against-CPU match between two clubs, played to its result by the full simulation
         /// with every brain running: the keepers', the CPU's, the restarts' and the managers'.
         /// </summary>
-        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed)
+        /// <summary>
+        /// A career match's tired start (#177): each of its footballers named in
+        /// <paramref name="lineup"/> starts at his own fatigue from his condition. A fresh side plays
+        /// exactly as before.
+        /// </summary>
+        public static void TiredStart(SimState state, World world, IReadOnlyDictionary<int, int> lineup, SquadRules rules)
         {
-            var sim = new Simulator(config, Match(config, world, homeClub, awayClub, perSide, seed));
+        }
+
+        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, double homeFatigue = 0, double awayFatigue = 0)
+        {
+            SimState state = Match(config, world, homeClub, awayClub, perSide, seed);
+            // #177: a side may start tired, every outfielder at the same fatigue.
+            for (int i = 0; i < state.Players.Length; i++)
+            {
+                if (state.Keepers.Length > 0 && Array.Exists(state.Keepers, k => k.PlayerId == state.Players[i].Id)) continue;
+                double f = state.Players[i].TeamId == Squads.HomeTeam ? homeFatigue : awayFatigue;
+                if (f > 0) state.Players[i].Fatigue = f;
+            }
+
+            var sim = new Simulator(config, state);
             var recorder = new MatchRecorder();
             var commands = new List<Command>();
             var events = new List<SimEvent>();

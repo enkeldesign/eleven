@@ -162,6 +162,9 @@ namespace Eleven.Simulation.Harness
             return parts.Count == 0 ? "" : "Out: " + string.Join(", ", parts);
         }
 
+        /// <summary>The human's XI below full condition (#177), lowest first, "Condition: A. Name 72, B. Name 88"; empty with none.</summary>
+        public static string ConditionLine(CareerSession s) => "";
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";

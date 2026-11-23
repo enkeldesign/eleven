@@ -45,6 +45,12 @@ namespace Eleven.Career
 
         public bool CupNeutralFinal { get; set; } = true;
 
+        /// <summary>Days from one league round to the next (#177).</summary>
+        public int LeagueGapDays { get; set; } = 7;
+
+        /// <summary>Days from the league round before a cup round to it (#177): midweek.</summary>
+        public int CupGapDays { get; set; } = 3;
+
         /// <summary>A league season's rounds: each club meets each other <see cref="Meetings"/> times.</summary>
         public int LeagueRounds => (LeagueClubs - 1) * Meetings;
 
@@ -261,6 +267,9 @@ namespace Eleven.Career
     {
         public MatchdayKind Kind;
         public int Round;
+
+        /// <summary>Its day of the season (#177), from 0: league rounds a week apart, a cup round midweek.</summary>
+        public int Day;
     }
 
     /// <summary>

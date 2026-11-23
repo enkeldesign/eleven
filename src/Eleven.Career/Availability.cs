@@ -33,6 +33,24 @@ namespace Eleven.Career
         /// <summary>The caution that brings the first one-match ban, and then each how many more bring another.</summary>
         public int CautionsForBan = 3, CautionsPerFurtherBan = 2;
 
+        /// <summary>A whole match's cost to his condition (#177), at reference stamina, from 100.</summary>
+        public double ConditionCostPerMatch = 30;
+
+        /// <summary>How far his stamina (1–20, reference 10.5) moves the cost: ± this at the ends.</summary>
+        public double StaminaWeight = 0.4;
+
+        /// <summary>Days to recover a whole match's cost (#177): Nédélec et al.'s 72–96 hours.</summary>
+        public double RecoveryDays = 3.5;
+
+        /// <summary>A tired start (#177): his fatigue at kick-off per point of condition below 100, as a share.</summary>
+        public double ConditionFatigue = 1.0;
+
+        /// <summary>Rotation (#177): a starter below this condition is rested for a fit footballer of his line within the margin.</summary>
+        public int RestBelow = 70;
+
+        /// <summary>Rotation's margin, in selection level (the 1–20 scale).</summary>
+        public double RotationMargin = 1.5;
+
         public static SquadRules Reference { get; } = new SquadRules();
     }
 
@@ -135,6 +153,18 @@ namespace Eleven.Career
                 }
             }
         }
+
+        /// <summary>A match's cost to his condition (#177): by the share of a whole match he played, and his stamina.</summary>
+        public static double ConditionCost(Player p, double seconds, double matchSeconds, SquadRules rules) => 0;
+
+        /// <summary>His fatigue at kick-off (#177), from his condition: 0 when full.</summary>
+        public static double StartFatigue(Player p, SquadRules rules) => 0;
+
+        /// <summary>The days from this matchday to the next (#177), or a league round's gap after the last.</summary>
+        public static int GapAfter(CompetitionRules rules, int matchday) => 7;
+
+        /// <summary>Days pass (#176, #177): the injured heal, and every footballer's condition recovers.</summary>
+        public static void Pass(World world, int days, SquadRules rules) => Pass(world, days);
 
         /// <summary>Days pass for the injured (#176): from a matchday to the next, or over the off-season.</summary>
         public static void Pass(World world, int days)
