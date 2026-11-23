@@ -75,7 +75,7 @@ namespace Eleven.Simulation.Harness
         /// plays his club's kick-off taker; a manager-only career's sides are both CPU, so the host
         /// sends no command of the human's, which would duplicate the CPU's for that footballer.
         /// </summary>
-        public bool HumanPlays => true;
+        public bool HumanPlays => Role == CareerRole.PlayerManager;
 
         /// <summary>A fixture's match config: a cup tie is a knockout.</summary>
         public SimConfig MatchConfig(Fixture fixture) => fixture.Competition == CompetitionId.Cup ? Config.With("knockout", 1) : Config;

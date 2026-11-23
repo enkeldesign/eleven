@@ -314,7 +314,10 @@ namespace Eleven.Host
             // keepers' and the CPU's perception and decisions, then the simulation's step.
             _stepWatch.Restart();
             _commands.Clear();
-            _commands.Add(WithPlan(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick)))));
+            Command human = WithPlan(WithSubstitution(WithSwitch(_input.CommandFor(_simulator.Tick))));
+            // A watched career match (Codex on #178): both sides are CPU, the kick-off taker on the
+            // human's controller too, so a human command would double his and both would be lost.
+            if (!_careerMatch || _career.HumanPlays) _commands.Add(human);
 
             // The keeper's brain decides his command on what he perceives (#69, INV-9), and it is
             // recorded with the player's, so a replay never runs it.
