@@ -11,13 +11,14 @@ namespace Eleven.Simulation
     /// </summary>
     public readonly struct QuickSide
     {
-        public QuickSide(int tier, PlayerCapabilities capabilities)
+        public QuickSide(double tier, PlayerCapabilities capabilities)
         {
             Tier = tier;
             Capabilities = capabilities;
         }
 
-        public int Tier { get; }
+        /// <summary>The side's CPU skill as a tier: apprentice 0, club 1, pro 2, elite 3, or anywhere between (#163).</summary>
+        public double Tier { get; }
 
         public PlayerCapabilities Capabilities { get; }
     }
@@ -34,8 +35,9 @@ namespace Eleven.Simulation
     public sealed class QuickSimModel
     {
         public QuickSimModel(double baseRate, double home, double[] tierRatings, double capabilityWeight, double rho,
-            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide)
+            double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide, double shootoutConversion = ReferenceShootoutConversion)
         {
+            ShootoutConversion = shootoutConversion;
             if (tierRatings == null || tierRatings.Length != Tiers) throw new ArgumentException($"A rating for each of the {Tiers} tiers.", nameof(tierRatings));
             BaseRate = baseRate;
             Home = home;
@@ -52,6 +54,27 @@ namespace Eleven.Simulation
             baseRate: 0.157396, home: 0.025975, tierRatings: new[] { 0, 0.230584, 0.243057, 0.706305 }, capabilityWeight: 9.166028, rho: -0.014,
             foulsPerSide: 1.846591, cautionsPerSide: 0.4375, sendingsOffPerSide: 0.074811);
 
+        /// <summary>
+        /// The fit at eleven a side (#163, docs/simulation/quicksim.md): the reference's ratings
+        /// scaled, and μ, h, ρ and the foul and card means refitted to the full simulation's
+        /// 11v11 matches between the world's clubs. `eleven-sim quicksim career-fit` reproduces it.
+        /// </summary>
+        public static QuickSimModel ElevenASide { get; } = new QuickSimModel(
+            baseRate: -0.569403, home: -0.072325, tierRatings: new[] { 0, 0.231839, 0.244379, 0.710148 }, capabilityWeight: 9.215901, rho: 0.098,
+            foulsPerSide: 2.290625, cautionsPerSide: 0.541667, sendingsOffPerSide: 0.064583);
+
+        /// <summary>The model for a match of <paramref name="perSide"/> outfielders a side: eleven a side's, else the reference.</summary>
+        public static QuickSimModel For(int perSide) => perSide >= 10 ? ElevenASide : Reference;
+
+        /// <summary>
+        /// A shootout kick's chance of a goal (#163): the full simulation's, from #122's penalty
+        /// benchmark at eleven a side, 160 shootouts: 1,450 of 1,875 kicks scored (77.3 %, ± 1.0 %).
+        /// </summary>
+        public const double ReferenceShootoutConversion = 0.773;
+
+        /// <summary>A shootout kick's chance of a goal.</summary>
+        public double ShootoutConversion { get; }
+
         /// <summary>μ: the log of a side's goals in a match of reference halves, sides level.</summary>
         public double BaseRate { get; }
 
@@ -64,7 +87,19 @@ namespace Eleven.Simulation
         private readonly double[] _tierRatings;
 
         /// <summary>A tier's rating on the log scale of goals, apprentice 0 … elite 3; the apprentice tier's is 0.</summary>
-        public double TierRating(int tier) => _tierRatings[tier < 0 ? 0 : tier >= Tiers ? Tiers - 1 : tier];
+        /// <summary>
+        /// A tier's rating: each whole tier's own, and between two tiers the line between their
+        /// ratings (#163), so a whole tier rates exactly as before. Below apprentice or above
+        /// elite, theirs.
+        /// </summary>
+        public double TierRating(double tier)
+        {
+            if (!(tier > 0)) return _tierRatings[0];
+            if (tier >= Tiers - 1) return _tierRatings[Tiers - 1];
+            int below = (int)tier;
+            double share = tier - below;
+            return share == 0 ? _tierRatings[below] : _tierRatings[below] + share * (_tierRatings[below + 1] - _tierRatings[below]);
+        }
 
         /// <summary>The rating per unit of the capability index (<see cref="QuickSim.CapabilityIndex"/>).</summary>
         public double CapabilityWeight { get; }
@@ -221,8 +256,14 @@ namespace Eleven.Simulation
             return homeGoals < 0 || awayGoals < 0 || homeGoals >= rows || awayGoals >= width ? 0 : grid[homeGoals * width + awayGoals];
         }
 
-        // The draws' entities: what each uniform is for.
+        // The draws' entities: what each uniform is for. A knockout's extra time and shootout
+        // (#163) draw on their own, so a league match's draws, and its result, never move.
         private const int ScorelineDraw = 0, GoalTimeDraw = 1, FoulsDraw = 2, CautionsDraw = 3, SendingsOffDraw = 4;
+        private const int ExtraScorelineDraw = 5, ExtraGoalTimeDraw = 6, ShootoutDraw = 7;
+
+        // A sudden death this long has a chance of about 10^-99 at the reference conversion; past it
+        // the home side is given the shootout, so a knockout always ends.
+        private const int MaxShootoutKicks = 1000;
 
         private static double Draw(ulong seed, int what, int entity) => CounterRng.Uniform(seed, 0, RandomStream.QuickSim, what, entity);
 
@@ -251,9 +292,42 @@ namespace Eleven.Simulation
             double half = config.HalfLength;
             (double lh, double la) = Rates(home, away, half, m);
 
-            // The scoreline: one draw against the grid's cumulative chances.
-            double[] grid = Grid(lh, la, m.Rho, out int width);
-            double u = Draw(seed, ScorelineDraw, 0), cumulative = 0;
+            // The scoreline, and each goal at a uniform moment of the two halves.
+            (int hg, int ag) = Scoreline(seed, ScorelineDraw, lh, la, m.Rho);
+            var goals = new List<ResultGoal>();
+            AddGoals(goals, seed, GoalTimeDraw, hg, ag, half, 1, homeTeam, awayTeam);
+
+            // A knockout level after two halves (#163): extra time at the same rates, two halves of
+            // extraTimeShare of a half; still level, a shootout. As the full simulation plays it (#111).
+            int extraTime = 0, homeKicks = 0, awayKicks = 0, homeScored = 0, awayScored = 0;
+            double played = 2 * half;
+            if (config.Knockout >= 0.5 && hg == ag)
+            {
+                extraTime = 1;
+                double extraHalf = half * config.ExtraTimeShare;
+                (double eh, double ea) = Rates(home, away, extraHalf, m);
+                (int ehg, int eag) = Scoreline(seed, ExtraScorelineDraw, eh, ea, m.Rho);
+                AddGoals(goals, seed, ExtraGoalTimeDraw, ehg, eag, extraHalf, 3, homeTeam, awayTeam);
+                hg += ehg;
+                ag += eag;
+                played += 2 * extraHalf;
+                if (hg == ag) (homeKicks, homeScored, awayKicks, awayScored) = Shootout(seed, (int)config.ShootoutKicks, m.ShootoutConversion);
+            }
+
+            double scale = half / ReferenceHalf;
+            int Side(int what, int side, double perSide) => Count(scale * perSide, Draw(seed, what, side));
+            return new MatchResult(homeTeam, awayTeam, hg, ag, half, played, goals.ToArray(), 0,
+                homeFouls: Side(FoulsDraw, 0, m.FoulsPerSide), awayFouls: Side(FoulsDraw, 1, m.FoulsPerSide),
+                homeCautions: Side(CautionsDraw, 0, m.CautionsPerSide), awayCautions: Side(CautionsDraw, 1, m.CautionsPerSide),
+                homeSendingsOff: Side(SendingsOffDraw, 0, m.SendingsOffPerSide), awaySendingsOff: Side(SendingsOffDraw, 1, m.SendingsOffPerSide),
+                extraTime: extraTime, homeShootoutKicks: homeKicks, awayShootoutKicks: awayKicks, homeShootoutGoals: homeScored, awayShootoutGoals: awayScored);
+        }
+
+        // A scoreline: one draw against the grid's cumulative chances.
+        private static (int Home, int Away) Scoreline(ulong seed, int what, double homeRate, double awayRate, double rho)
+        {
+            double[] grid = Grid(homeRate, awayRate, rho, out int width);
+            double u = Draw(seed, what, 0), cumulative = 0;
             int cell = grid.Length - 1;
             for (int i = 0; i < grid.Length; i++)
             {
@@ -265,25 +339,50 @@ namespace Eleven.Simulation
                 }
             }
 
-            int hg = cell / width, ag = cell % width;
+            return (cell / width, cell % width);
+        }
 
-            // Each goal at a uniform moment of the two halves, in the order they fall.
+        // Each goal at a uniform moment of two halves of `halfSeconds`, the first of them
+        // `firstHalf`, in the order they fall.
+        private static void AddGoals(List<ResultGoal> goals, ulong seed, int what, int home, int away, double halfSeconds, int firstHalf, int homeTeam, int awayTeam)
+        {
             var times = new List<(double At, int Team)>();
-            for (int i = 0; i < hg + ag; i++) times.Add((Draw(seed, GoalTimeDraw, i) * 2 * half, i < hg ? homeTeam : awayTeam));
+            for (int i = 0; i < home + away; i++) times.Add((Draw(seed, what, i) * 2 * halfSeconds, i < home ? homeTeam : awayTeam));
             times.Sort((a, b) => a.At.CompareTo(b.At));
-            var goals = new ResultGoal[times.Count];
-            for (int i = 0; i < times.Count; i++)
+            foreach ((double at, int team) in times)
             {
-                bool second = times[i].At >= half;
-                goals[i] = new ResultGoal(times[i].Team, 0, second ? 2 : 1, second ? times[i].At - half : times[i].At);
+                bool second = at >= halfSeconds;
+                goals.Add(new ResultGoal(team, 0, second ? firstHalf + 1 : firstHalf, second ? at - halfSeconds : at));
+            }
+        }
+
+        // A shootout (#163): the home side first, then in turn, each kick in at `conversion`. Over,
+        // as in the full simulation (#111), once one side can't be caught in the first `each`
+        // kicks, or after them when both have taken as many and one has scored more.
+        private static (int HomeKicks, int HomeGoals, int AwayKicks, int AwayGoals) Shootout(ulong seed, int each, double conversion)
+        {
+            int hk = 0, hs = 0, ak = 0, @as = 0;
+            for (int kick = 0; kick < MaxShootoutKicks; kick++)
+            {
+                bool scored = Draw(seed, ShootoutDraw, kick) < conversion;
+                if (kick % 2 == 0)
+                {
+                    hk++;
+                    if (scored) hs++;
+                }
+                else
+                {
+                    ak++;
+                    if (scored) @as++;
+                }
+
+                bool decided = hk <= each && ak <= each && !(hk == each && ak == each)
+                    ? hs > @as + (each - ak) || @as > hs + (each - hk)
+                    : hk == ak && hs != @as;
+                if (decided) return (hk, hs, ak, @as);
             }
 
-            double scale = half / ReferenceHalf;
-            int Side(int what, int side, double perSide) => Count(scale * perSide, Draw(seed, what, side));
-            return new MatchResult(homeTeam, awayTeam, hg, ag, half, 2 * half, goals, 0,
-                homeFouls: Side(FoulsDraw, 0, m.FoulsPerSide), awayFouls: Side(FoulsDraw, 1, m.FoulsPerSide),
-                homeCautions: Side(CautionsDraw, 0, m.CautionsPerSide), awayCautions: Side(CautionsDraw, 1, m.CautionsPerSide),
-                homeSendingsOff: Side(SendingsOffDraw, 0, m.SendingsOffPerSide), awaySendingsOff: Side(SendingsOffDraw, 1, m.SendingsOffPerSide));
+            return (hk, hs + 1, ak, @as);
         }
     }
 }

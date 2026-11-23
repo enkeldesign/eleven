@@ -23,13 +23,20 @@ M6's three tiers play their other fixtures between the human's matches: 17 a rou
   - away λ = exp(μ − (r_home − r_away)).
   - **Bounded:** each rate is at most `QuickSim.MaxRate`, 30 goals a match, and its exponent lies within ±40. The calibrated rates are a few goals a match. With the fitted weight, though, valid sides at the capability extremes would extrapolate to tens of thousands. The bound keeps the sampler's maths in range for any valid sides (Codex's finding on #150, `QuickSimTests`).
 - **A side's rating** r = its CPU tier's rating (apprentice 0, club, pro, elite) + w × its capability index.
+  - **Between tiers** (#163): a side's tier may lie anywhere from 0 to 3, and its rating is the line between the two tiers' ratings. A whole tier rates exactly as before, so no existing result moves.
   - **The capability index** is the mean, over every capability, of its outfielders' difference from the reference as a share of the capability's range. Kick error counts the other way round, since less is better.
 - **The scoreline** is one draw against the Dixon–Coles grid, normalised.
   - **The grid's size:** each side's grid holds at least 12 goals, and grows with its rate until the Poisson tail beyond is under 10⁻¹². At 600 s halves an elite side's rate is about 12.5, and the grid holds its goals.
   - **ρ's bounds:** ρ is bounded for the match's rates, max(−1/λ_h, −1/λ_a) ≤ ρ ≤ min(1/(λ_h·λ_a), 1), so no scoreline's chance is negative at long halves. At the reference half the fitted ρ is inside them for every pair of tiers. τ(0,0) = 1 − λ_h·λ_a·ρ, τ(0,1) = 1 + λ_h·ρ, τ(1,0) = 1 + λ_a·ρ and τ(1,1) = 1 − ρ.
 - **Each goal** falls at a uniform moment of the two halves, in order. Its scorer is 0: no footballer plays.
 - **Fouls, cautions and sendings-off** are Poisson a side at the fitted means.
-- **The result's other fields are 0.** That covers penalties, injuries, substitutions, restarts, extra time, the shootout and the match metrics. A quick-simmed knockout tie that ends level stays level; its competition (M6) resolves it.
+- **A knockout** (`knockout`, #163) that is level after two halves goes on, as the full simulation's does (#111):
+  - **Extra time:** two halves of `extraTimeShare` of a half, at the same rates; its goals fall in halves 3 and 4.
+  - **A shootout:** if still level, the home side kicks first, then in turn. Each kick goes in at the model's `ShootoutConversion`. It is over once one side can't be caught in the first `shootoutKicks` each, or after them once both have taken as many and one has scored more. Past 1,000 kicks, a chance of about 10⁻⁹⁹, the home side is given it, so a knockout always ends.
+  - **The result** carries `ExtraTime`, the shootout's kicks and goals, and the time played.
+  - **Draws:** extra time and the shootout draw on their own counters, so the ninety minutes, fouls and cards are a league match's for the same seed.
+  - **Conversion:** 77.3 %, the full simulation's. #122's penalty benchmark at eleven a side, over 160 shootouts, scored 1,450 of 1,875 kicks (± 1.0 %).
+- **The result's other fields are 0.** That covers penalties, injuries, substitutions, restarts and the match metrics.
 
 **Deterministic (INV-4, INV-6):**
 - every draw is counter-based on its own stream, `RandomStream.QuickSim`, at tick 0, keyed by what it is for;
@@ -113,3 +120,51 @@ At the reference, against the full simulation's 528 matches:
 **The sample's limits:**
 - 528 matches resolve h, w and the tiers' ratings to about ± 0.05 on the log scale. They don't resolve scorers, minutes or fine scoreline structure, which the model doesn't have (ADR 0004).
 - A league of different sides would rate differently. M6's sides should fall inside the calibration league's tiers and capability levels, where the fit has data.
+
+## Eleven a side
+
+The reference was fitted at 5v5, the calibration league's size. The world's clubs play 11v11 (#163), where the full simulation scores about half as often. `QuickSimModel.ElevenASide` is the model for 11v11 matches; `QuickSimModel.For(perSide)` picks it from ten outfielders a side.
+
+**The sample:** `eleven-sim quicksim career <dir> [count]` plays the full simulation over 480 fixtures between the reference world's clubs (seed `0x157`).
+- **Fixtures:** every 17th of all 1,260 ordered pairs, so every club plays 10 to 20 times at home and away, and every gap between divisions is covered both ways round.
+- **Conditions:** 180 s halves, every brain running, each fixture on its own seed.
+- **Cost:** about 25 minutes on four cores.
+- **The record:** `quicksim-career-reference.csv`, with a hash of each result's text, so any change in a match shows. CI plays the first 8 fixtures and diffs them against its first rows.
+
+**The fit:** `eleven-sim quicksim career-fit <csv>` refits it, and `CareerQuickSimTests` checks that the model equals the fit.
+- **What stays:** the reference's tier ratings and capability weight, in proportion, so the 5v5 calibration's ordering of sides stands.
+- **What is refitted:**
+  - μ, h and a scale s on the ratings, by Poisson maximum likelihood with their errors;
+  - ρ by the Dixon–Coles likelihood;
+  - the foul and card means.
+
+| | Eleven a side | Reference (5v5) |
+| --- | --- | --- |
+| μ | −0.569 ± 0.061 | 0.157 |
+| h | −0.072 ± 0.080 | 0.026 |
+| s | 1.005 ± 0.073 | 1 |
+| ρ | 0.098 ± 0.102 | −0.014 |
+| Fouls, cautions, sendings-off a side | 2.29, 0.54, 0.065 | 1.85, 0.44, 0.075 |
+
+**What the fit says:**
+- **Scoring:** the world's clubs score at about half the 5v5 rate (exp(−0.73) ≈ 0.48).
+- **Separation:** they separate exactly as the reference predicts, with s within its error of 1.
+- **Home advantage:** h is within its error of none, as the full simulation has no home advantage.
+
+**Against the sample**, the quick-sim drawn 100 times per fixture, by the gap between the clubs' divisions (away's less home's):
+
+| Gap | Matches | Full: goals | Full: home W/D | Quick: goals | Quick: home W/D |
+| --- | --- | --- | --- | --- | --- |
+| −2 | 48 | 0.25–1.48 | 8 %/21 % | 0.21–1.41 | 7 %/25 % |
+| −1 | 108 | 0.39–0.98 | 17 %/32 % | 0.35–0.91 | 16 %/36 % |
+| 0 | 149 | 0.49–0.49 | 25 %/49 % | 0.56–0.60 | 28 %/41 % |
+| +1 | 117 | 0.88–0.44 | 48 %/32 % | 0.83–0.39 | 44 %/37 % |
+| +2 | 58 | 1.31–0.19 | 60 %/33 % | 1.33–0.23 | 65 %/27 % |
+| All | 480 | 0.64–0.65 | 31 %/36 % | 0.64–0.65 | 32 %/36 % |
+
+**The tests** (`CareerQuickSimTests`):
+- mean home and away goals within 2 standard errors of the sample's;
+- win, draw and loss by a two-sample χ² at 1 %;
+- a fit that recovers a model it draws from, within 3 of its errors.
+
+**Before the fit**, on 240 of these matches, the reference scored 2.80 goals a match against the full simulation's 1.35, with 21 % draws against 35 %.

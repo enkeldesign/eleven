@@ -88,3 +88,19 @@ Adjacent divisions are about 2½ rating points apart, and 12 low-scoring matches
 - a footballer's values are his ratings mapped;
 - a career match gives each footballer, keeper and CPU footballer his own values;
 - a top-division club beats a bottom-division one more often than not.
+
+## A club in the quick-sim
+
+A fixture nobody plays is quick-simmed (ADR 0004). `CareerQuickSim.Side(world, club, perSide)` reads the club's selected XI (#163):
+
+- **Its tier** is the outfielders' mean CPU rating, each the mean of his CPU entries' ratings, placed on the CPU tiers' own points of the rating scale:
+
+  | Tier | Apprentice | Club | Pro | Elite |
+  | --- | --- | --- | --- | --- |
+  | Rating | 1 | 5.75 | 10.5 | 20 |
+
+  The scale is piecewise-linear between those points, so a tier position lies anywhere from 0 to 3. Club's point is where the decision interval's entry gives Club's 0.20 s.
+- **Its capabilities** are the mean of its outfielders' mapped capabilities.
+- **The keeper** isn't part of the side, as in the quick-sim's calibration.
+
+`CareerQuickSim.Play` plays a match between two clubs with the model for its size: 11v11 uses the eleven-a-side fit ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
