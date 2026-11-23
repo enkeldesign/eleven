@@ -62,6 +62,7 @@ A row: "J. Smith · CB, DM · 14.2 · 96", his name, positions, selection level 
   - **Who can't:** one who's out can't come into the XI or onto the bench.
   - **Keepers:** in the XI, a keeper's place is a keeper's and an outfielder's an outfielder's. No keeper sits on the bench, as substitutes are outfielders (#110).
   - **The first swap** starts from the AI's pick. **Auto** returns to it.
+- **By keyboard,** Tab moves through the rows, then Back and Auto. The list scrolls to keep the focused row in view, as every list of the host's does (Codex on #187).
 - **Your picks** are `Club.Picks` in the world: your eleven, then your bench. They're saved with it, at world format 3.
 - **They play your fixture,** whether played, watched or simulated:
   - the AI's rule places your eleven in the formation's slots;
