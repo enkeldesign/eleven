@@ -248,11 +248,7 @@ namespace Eleven.Host
             _list = UiKit.MakeScroll();
             _list.style.flexGrow = 1;
             _list.style.flexShrink = 1;
-            // A knob's control reached with Tab scrolls into view.
-            _list.RegisterCallback<FocusInEvent>(e =>
-            {
-                if (e.target is VisualElement focused && _list.contentContainer.Contains(focused)) _list.ScrollTo(focused);
-            });
+            // A knob's control reached with Tab scrolls into view, as in every UiKit scroll.
 
             // A scrolled Presets tab reports its places again, for the smoke test.
             _list.verticalScroller.valueChanged += _ =>
