@@ -317,7 +317,7 @@ internal static class Program
                 CareerFitResult careerFit = CareerQuickSimCalibration.Fit(fitWorld, careerSample);
                 QuickSimModel e = careerFit.Model;
                 Console.WriteLine(FormattableString.Invariant(
-                    $"fit over {careerSample.Count} matches: mu {e.BaseRate:F6} ± {careerFit.BaseRateError:F3}, home {e.Home:F6} ± {careerFit.HomeError:F3}, scale {careerFit.Scale:F6} ± {careerFit.ScaleError:F3} (tiers 0 {e.TierRating(1):F6} {e.TierRating(2):F6} {e.TierRating(3):F6}, capabilities {e.CapabilityWeight:F6}), rho {e.Rho:F3} ± {careerFit.RhoError:F3}, fouls {e.FoulsPerSide:R}, cautions {e.CautionsPerSide:R}, sendings-off {e.SendingsOffPerSide:R} a side"));
+                    $"fit over {careerSample.Count} matches: mu {e.BaseRate:F6} ± {careerFit.BaseRateError:F3}, home {e.Home:F6} ± {careerFit.HomeError:F3}, scale {careerFit.Scale:F6} ± {careerFit.ScaleError:F3} (tiers 0 {e.TierRating(1):F6} {e.TierRating(2):F6} {e.TierRating(3):F6}, capabilities {e.CapabilityWeight:F6}), rho {e.Rho:F3} ± {careerFit.RhoError:F3}, fouls {e.FoulsPerSide:R}, cautions {e.CautionsPerSide:R}, sendings-off {e.SendingsOffPerSide:R}, injuries {e.MinorInjuriesPerSide:R} minor and {e.SeriousInjuriesPerSide:R} serious a side"));
                 Console.Write(CareerQuickSimCalibration.Compare(CareerQuickSimCalibration.Config(), fitWorld, careerSample, 100, e));
                 return 0;
             }

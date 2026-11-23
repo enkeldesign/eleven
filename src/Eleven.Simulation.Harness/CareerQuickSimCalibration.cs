@@ -19,6 +19,9 @@ namespace Eleven.Simulation.Harness
         public ulong Seed;
         public int HomeGoals, AwayGoals, HomeFouls, AwayFouls, HomeCautions, AwayCautions, HomeSendingsOff, AwaySendingsOff;
 
+        /// <summary>Each side's footballers injured (#172), by their worst injury: minor, serious.</summary>
+        public int HomeMinor, AwayMinor, HomeSerious, AwaySerious;
+
         /// <summary>The result's text form, hashed: any change in the match shows.</summary>
         public ulong ResultHash;
     }
@@ -96,18 +99,35 @@ namespace Eleven.Simulation.Harness
                 HomeSendingsOff = r.HomeSendingsOff,
                 AwaySendingsOff = r.AwaySendingsOff,
                 ResultHash = Fnv1a64.Hash(System.Text.Encoding.UTF8.GetBytes(r.ToText())),
+                HomeMinor = Injured(r, r.HomeTeam, 1),
+                AwayMinor = Injured(r, r.AwayTeam, 1),
+                HomeSerious = Injured(r, r.HomeTeam, 2),
+                AwaySerious = Injured(r, r.AwayTeam, 2),
             };
         }
 
-        private const string Header = "index,home,away,seed,home_goals,away_goals,home_fouls,away_fouls,home_cautions,away_cautions,home_sendings_off,away_sendings_off,result_hash";
+        private const string Header = "index,home,away,seed,home_goals,away_goals,home_fouls,away_fouls,home_cautions,away_cautions,home_sendings_off,away_sendings_off,result_hash,home_minor,away_minor,home_serious,away_serious";
+
+        // A side's footballers whose worst injury was this level (#172).
+        private static int Injured(MatchResult r, int team, int level)
+        {
+            int n = 0;
+            foreach (ResultPlayer p in r.Players)
+            {
+                if (p.Team == team && p.Injury == level) n++;
+            }
+
+            return n;
+        }
 
         public static void Write(TextWriter w, IReadOnlyList<CareerCalibrationMatch> sample)
         {
             w.Write(Header + "\n");
             foreach (CareerCalibrationMatch m in sample)
             {
-                w.Write(string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3:x},{4},{5},{6},{7},{8},{9},{10},{11},{12:x16}\n",
-                    m.Index, m.Home, m.Away, m.Seed, m.HomeGoals, m.AwayGoals, m.HomeFouls, m.AwayFouls, m.HomeCautions, m.AwayCautions, m.HomeSendingsOff, m.AwaySendingsOff, m.ResultHash));
+                w.Write(string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3:x},{4},{5},{6},{7},{8},{9},{10},{11},{12:x16},{13},{14},{15},{16}\n",
+                    m.Index, m.Home, m.Away, m.Seed, m.HomeGoals, m.AwayGoals, m.HomeFouls, m.AwayFouls, m.HomeCautions, m.AwayCautions, m.HomeSendingsOff, m.AwaySendingsOff, m.ResultHash,
+                    m.HomeMinor, m.AwayMinor, m.HomeSerious, m.AwaySerious));
             }
         }
 
@@ -135,6 +155,10 @@ namespace Eleven.Simulation.Harness
                     HomeSendingsOff = I(10),
                     AwaySendingsOff = I(11),
                     ResultHash = ulong.Parse(f[12], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+                    HomeMinor = f.Length > 16 ? I(13) : 0,
+                    AwayMinor = f.Length > 16 ? I(14) : 0,
+                    HomeSerious = f.Length > 16 ? I(15) : 0,
+                    AwaySerious = f.Length > 16 ? I(16) : 0,
                 });
             }
 
@@ -254,7 +278,8 @@ namespace Eleven.Simulation.Harness
             double sides2 = 2.0 * sample.Count * (HalfLength / QuickSim.ReferenceHalf);
             var model = new QuickSimModel(beta[0], beta[1], tiers, scale * r.CapabilityWeight, bestRho,
                 sample.Sum(m => m.HomeFouls + m.AwayFouls) / sides2, sample.Sum(m => m.HomeCautions + m.AwayCautions) / sides2,
-                sample.Sum(m => m.HomeSendingsOff + m.AwaySendingsOff) / sides2, r.ShootoutConversion);
+                sample.Sum(m => m.HomeSendingsOff + m.AwaySendingsOff) / sides2, r.ShootoutConversion,
+                sample.Sum(m => m.HomeMinor + m.AwayMinor) / sides2, sample.Sum(m => m.HomeSerious + m.AwaySerious) / sides2);
             return new CareerFitResult
             {
                 Model = model,

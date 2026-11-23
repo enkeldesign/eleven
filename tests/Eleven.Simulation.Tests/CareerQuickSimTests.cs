@@ -247,6 +247,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(fit.FoulsPerSide, e.FoulsPerSide, 6);
             Assert.Equal(fit.CautionsPerSide, e.CautionsPerSide, 6);
             Assert.Equal(fit.SendingsOffPerSide, e.SendingsOffPerSide, 6);
+            Assert.Equal(fit.MinorInjuriesPerSide, e.MinorInjuriesPerSide, 6);
+            Assert.Equal(fit.SeriousInjuriesPerSide, e.SeriousInjuriesPerSide, 6);
             Assert.Same(e, QuickSimModel.For(10));
             Assert.Same(QuickSimModel.Reference, QuickSimModel.For(5));
         }
