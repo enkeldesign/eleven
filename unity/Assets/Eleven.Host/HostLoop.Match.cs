@@ -45,6 +45,57 @@ namespace Eleven.Host
         private bool _careerDone;
         private const double CareerHalf = 180;
 
+        // Saves (#171): #170's five slots over the page's local storage, and the career's slot.
+        private readonly Eleven.Career.SaveSlots _saves = new Eleven.Career.SaveSlots(new PageStore());
+        private int _careerSlot;
+
+        // The page's local storage (#46's bridge) as #170's store: an empty value is no value.
+        private sealed class PageStore : Eleven.Career.ISaveStore
+        {
+            public string Read(string key)
+            {
+                string value = ReadStored(key);
+                return string.IsNullOrEmpty(value) ? null : value;
+            }
+
+            public bool Write(string key, string value) => WriteStored(key, value);
+
+            public void Delete(string key) => WriteStored(key, "");
+        }
+
+        /// <summary>
+        /// Saves the career into its slot (#171): after every fixture, on Start, on the next season
+        /// and on Save. What happened, in words, for the hub.
+        /// </summary>
+        private string Autosave(string reason)
+        {
+            if (_career == null) return "";
+            bool saved = _saves.Save(_careerSlot, _career.ToSave(DateTime.UtcNow.Ticks));
+            Log(FormattableString.Invariant($"ELEVEN career saved slot={_careerSlot} ok={saved} reason={reason} season={_career.Season.Number} matchday={_career.Season.Matchday + 1}"));
+            string text = saved ? FormattableString.Invariant($"Saved to slot {_careerSlot + 1}.") : "Couldn't save: the device refused it. Your last save is kept.";
+            _home?.SetCareerStatus(text);
+            return text;
+        }
+
+        /// <summary>CONTINUE on a slot (#171): its career loaded at its hub, from its previous save if the latest is damaged.</summary>
+        private void ContinueSlot(int slot)
+        {
+            (Eleven.Career.SaveFile save, bool fromPrevious, string problem) = _saves.Load(slot);
+            if (save == null)
+            {
+                Log(FormattableString.Invariant($"ELEVEN career load failed slot={slot} problem={problem}"));
+                return;
+            }
+
+            _career = CareerSession.FromSave(save, _bench.Config.With("halfLength", CareerHalf));
+            _careerSlot = slot;
+            Log(FormattableString.Invariant($"ELEVEN career loaded slot={slot} fromPrevious={fromPrevious} season={_career.Season.Number} matchday={_career.Season.Matchday + 1}"));
+            _home?.ShowHub("slot");
+            _home?.SetCareerStatus(fromPrevious
+                ? FormattableString.Invariant($"Slot {slot + 1}'s latest save was damaged, so its previous one was loaded.")
+                : FormattableString.Invariant($"Loaded from slot {slot + 1}."));
+        }
+
         // A match whose sides are clubs, named on the score panel: a quick match's or a career's.
         private bool Named => _quick || _careerMatch;
 
@@ -279,11 +330,13 @@ namespace Eleven.Host
 
         private static Eleven.Career.Club ClubById(int id) => QuickMatch.World.Clubs.Find(c => c.Id == id);
 
-        /// <summary>Start on New career (#168): #167's session for the chosen club and role, its matches at 3-minute halves.</summary>
-        private void StartCareer(Eleven.Career.World world, ulong seed, int club, CareerRole role)
+        /// <summary>Start on New career (#168): #167's session for the chosen club and role, its matches at 3-minute halves, saved into its slot (#171).</summary>
+        private void StartCareer(Eleven.Career.World world, ulong seed, int club, CareerRole role, int slot)
         {
             _career = CareerSession.Start(world, seed, club, role, _bench.Config.With("halfLength", CareerHalf));
-            Log(FormattableString.Invariant($"ELEVEN career started seed={seed} club={club} role={role} division={_career.Division}"));
+            _careerSlot = slot;
+            Log(FormattableString.Invariant($"ELEVEN career started seed={seed} club={club} role={role} division={_career.Division} slot={slot}"));
+            Autosave("start");
         }
 
         /// <summary>PLAY or WATCH on the hub (#168): the human's fixture on the full simulation, his club the home side (#167).</summary>
@@ -311,6 +364,7 @@ namespace Eleven.Host
             if (_career == null || _career.SeasonOver) return;
             _career.Simulate();
             Log(FormattableString.Invariant($"ELEVEN career simulated matchday={_career.Season.Matchday}"));
+            Autosave("simulated");
         }
 
         /// <summary>NEXT SEASON on the hub: the rollover.</summary>
@@ -319,6 +373,7 @@ namespace Eleven.Host
             if (_career == null || !_career.SeasonOver) return;
             _career.NextSeason();
             Log(FormattableString.Invariant($"ELEVEN career season={_career.Season.Number} division={_career.Division}"));
+            Autosave("season");
         }
 
         /// <summary>HUB in a career match (#168): the match ends; a fixture left before its result is simulated instead.</summary>
@@ -331,6 +386,7 @@ namespace Eleven.Host
             {
                 _career.Simulate();
                 Log(FormattableString.Invariant($"ELEVEN career simulated fixture={fixture.Id} reason=left"));
+                Autosave("left");
             }
 
             _careerFixture = null;
@@ -774,6 +830,7 @@ namespace Eleven.Host
                     _career.Finish(_careerFixture, _shownResult);
                     _careerDone = true;
                     Log(FormattableString.Invariant($"ELEVEN career finished fixture={_careerFixture.Id} matchday={_career.Season.Matchday}"));
+                    Autosave("played");
                 }
                 Log($"ELEVEN match recording steps={_recording.StepCount} replay={(_recording.Replay(_config).StateHash() == _simulator.StateHash() ? "match" : "MISMATCH")}");
             }

@@ -21,6 +21,19 @@ namespace Eleven.Simulation.Harness
         NextSeason,
     }
 
+    /// <summary>What a career slot offers on Career (#171).</summary>
+    public enum SlotChoice
+    {
+        /// <summary>An empty slot: New career.</summary>
+        New,
+
+        /// <summary>A saved career: Continue loads it.</summary>
+        Continue,
+
+        /// <summary>The career in play, in its own slot: Continue returns to its hub as it is.</summary>
+        Resume,
+    }
+
     /// <summary>One line of the hub's table: its text, and whether it is the human's club.</summary>
     public readonly struct HubRow
     {
@@ -127,6 +140,36 @@ namespace Eleven.Simulation.Harness
             string fate = up.Contains(s.Club) ? " You go up." : down.Contains(s.Club) ? " You go down." : "";
             string winner = s.World.Clubs.Find(c => c.Id == s.Season.CupWinner)?.Name ?? "nobody";
             return FormattableString.Invariant($"You finished {Ordinal(s.Position)} in division {s.Division}.{fate} Up: {string.Join(", ", up.ConvertAll(id => Short(s, id)))}. Down: {string.Join(", ", down.ConvertAll(id => Short(s, id)))}. Cup won by {winner}.");
+        }
+
+        /// <summary>
+        /// What slot <paramref name="slot"/> offers on Career (#171), from its save and the career in
+        /// play, if any, with its slot. The career in play resumes from its own slot as it is,
+        /// whatever the slot's save says, so a save the device refused never loses it (Codex on #183).
+        /// Every other slot offers its save, or a new career.
+        /// </summary>
+        public static SlotChoice SlotOffer(int slot, SlotSummary saved, CareerSession? playing, int playingSlot) =>
+            playing != null && slot == playingSlot ? SlotChoice.Resume
+            : saved.Empty ? SlotChoice.New
+            : SlotChoice.Continue;
+
+        /// <summary>
+        /// A slot's line on Career: "1. Name (NAM) · Season 1 · Matchday 4", or "1. Empty". The career
+        /// in play is its own: "· in play", and "· in play, not saved" when the slot's save is behind it.
+        /// </summary>
+        public static string SlotLine(int slot, SlotSummary saved, CareerSession? playing, int playingSlot)
+        {
+            if (SlotOffer(slot, saved, playing, playingSlot) == SlotChoice.Resume)
+            {
+                Club? club = playing!.World.Clubs.Find(c => c.Id == playing.Club);
+                int season = playing.Season.Number, matchday = playing.Season.Matchday + 1;
+                bool behind = saved.Empty || saved.Club != playing.Club || saved.Season != season || saved.Matchday != matchday;
+                return FormattableString.Invariant($"{slot + 1}. {club?.Name} ({club?.ShortName}) · Season {season} · Matchday {matchday} · in play{(behind ? ", not saved" : "")}");
+            }
+
+            return saved.Empty
+                ? FormattableString.Invariant($"{slot + 1}. Empty")
+                : FormattableString.Invariant($"{slot + 1}. {saved.ClubName} ({saved.ClubShort}) · Season {saved.Season} · Matchday {saved.Matchday}{(saved.FromPrevious ? " · its previous save" : "")}");
         }
 
         /// <summary>The hub's forward action.</summary>

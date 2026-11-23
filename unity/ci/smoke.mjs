@@ -512,15 +512,25 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       check('Home offers a career', !!home, short(home));
       if (!home) throw new Error('no Home');
 
-      const fromCareer = logs.length;
+      // #171: Career opens the five slots, all empty; New career in the first.
+      const slotsPattern = /ELEVEN home shown page=slots slots=(\d+) empty=(\d+) first=(\d+),(\d+) firstAction=(\S+)/;
+      const fromSlots = logs.length;
       await tap(point(home, 1));
+      const slots = (await waitForLog(slotsPattern, 10_000, fromSlots))?.match ?? null;
+      check('Career opens five empty slots', !!slots && slots[1] === '5' && slots[2] === '5' && slots[5] === 'New_career', short(slots));
+      if (!slots) throw new Error('no slots');
+
+      const fromCareer = logs.length;
+      await tap(point(slots, 3));
       const newCareer = (await waitForLog(/ELEVEN home shown page=newcareer clubs=(\d+) club=(\d+) role=(\d+) start=(\d+),(\d+)/, 10_000, fromCareer))?.match ?? null;
       check('New career offers a new world\'s 36 clubs', !!newCareer && newCareer[1] === '36', short(newCareer));
       if (!newCareer) throw new Error('no New career');
 
       const fromStart = logs.length;
       await tap(point(newCareer, 4));
-      const started = (await waitForLog(/ELEVEN career started seed=(\d+) club=(\d+) role=(\w+) division=(\d+)/, 10_000, fromStart))?.match ?? null;
+      const started = (await waitForLog(/ELEVEN career started seed=(\d+) club=(\d+) role=(\w+) division=(\d+) slot=0/, 10_000, fromStart))?.match ?? null;
+      const savedAtStart = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=start/, 10_000, fromStart))?.match ?? null;
+      check('Start saves the new career into its slot', !!savedAtStart, short(savedAtStart));
       const hubPattern = /ELEVEN hub shown via=\S+ season=(\d+) matchday=(\d+) played=(\d+) action=(\w+) primary=(\d+),(\d+) simulate=(\d+),(\d+) home=(\d+),(\d+)/;
       const first = (await waitForLog(hubPattern, 10_000, fromStart))?.match ?? null;
       check('Start opens the hub at the first matchday', !!started && !!first && started[2] === newCareer[2] && first[1] === '1' && first[2] === '1' && first[3] === '0' && first[4] === 'Play',
@@ -551,6 +561,59 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       const third = (await waitForLog(hubPattern, 10_000, fromHub))?.match ?? null;
       check('HUB leaves the match, simulated, and the hub moves on', !!left && !!third && left[1] === fixture?.[1] && third[2] === '3' && third[3] === '2',
         `${short(left)}; ${short(third)}`);
+      const savedLeft = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=left season=1 matchday=3/, 10_000, fromHub))?.match ?? null;
+      check('the simulated fixture is saved', !!savedLeft, short(savedLeft));
+
+      // Codex on #183: a save the device refuses never loses the career in play. With the page's
+      // storage refusing writes, Simulate's save fails; Home, Career and slot 1 return to the career
+      // at matchday 4, not its last save's 3, without loading. With storage back, Save keeps it.
+      if (!third) throw new Error('no third matchday');
+      await page.evaluate(() => {
+        window.__elevenSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new DOMException('refused by the smoke', 'QuotaExceededError'); };
+      });
+      const fromRefused = logs.length;
+      await tap(point(third, 7));
+      const refused = (await waitForLog(/ELEVEN career saved slot=0 ok=False reason=simulated season=1 matchday=4/, 10_000, fromRefused))?.match ?? null;
+      const fourth = (await waitForLog(hubPattern, 10_000, fromRefused))?.match ?? null;
+      check('a save the device refuses is said, and the career moves on', !!refused && !!fourth && fourth[2] === '4', `${short(refused)}; ${short(fourth)}`);
+      if (!fourth) throw new Error('no fourth matchday');
+      const fromHome = logs.length;
+      await tap(point(fourth, 9));
+      const homeAgain = (await waitForLog(/ELEVEN home shown page=home via=\S+ quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 10_000, fromHome))?.match ?? null;
+      const fromInPlay = logs.length;
+      if (homeAgain) await tap(point(homeAgain, 1));
+      const inPlay = (await waitForLog(/ELEVEN home shown page=slots slots=(\d+) empty=(\d+) first=(\d+),(\d+) firstAction=(\S+) firstOffer=(\w+)/, 10_000, fromInPlay))?.match ?? null;
+      const fromResume = logs.length;
+      if (inPlay) await tap(point(inPlay, 3));
+      const back = (await waitForLog(/ELEVEN hub shown via=resume season=(\d+) matchday=(\d+) played=(\d+) .* save=(\d+),(\d+)/, 10_000, fromResume))?.match ?? null;
+      const reloaded = logs.slice(fromResume).filter((l) => /ELEVEN career loaded/.test(l));
+      check('slot 1 resumes the career in play where it is, not its last save', !!inPlay && inPlay[5] === 'Continue' && inPlay[6] === 'Resume' && !!back && back[2] === '4' && back[3] === fourth[3] && reloaded.length === 0,
+        `${short(inPlay)}; ${short(back)}${reloaded.length ? `; ${reloaded[0]}` : ''}`);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__elevenSetItem; });
+      const fromSave = logs.length;
+      if (back) await tap(point(back, 4));
+      const savedNow = (await waitForLog(/ELEVEN career saved slot=0 ok=True reason=manual season=1 matchday=4/, 10_000, fromSave))?.match ?? null;
+      check('Save on the hub keeps it once the device takes it', !!savedNow, short(savedNow));
+
+      // #171: the career survives a reload. Career shows slot 1 at matchday 4; Continue opens its hub there.
+      const fromReload = logs.length;
+      await page.reload();
+      const again = (await waitForLog(/ELEVEN home shown page=home via=address quick=\d+,\d+ practice=\d+,\d+ career=(\d+),(\d+)/, 240_000, fromReload))?.match ?? null;
+      check('the page reloads to Home', !!again, short(again));
+      if (!again) throw new Error('no Home after the reload');
+      const fromAgain = logs.length;
+      await tap(point(again, 1));
+      const kept = (await waitForLog(slotsPattern, 10_000, fromAgain))?.match ?? null;
+      check('after the reload, slot 1 holds the career', !!kept && kept[2] === '4' && kept[5] === 'Continue', short(kept));
+      if (!kept) throw new Error('no slots after the reload');
+      const fromContinue = logs.length;
+      await tap(point(kept, 3));
+      const loaded = (await waitForLog(/ELEVEN career loaded slot=0 fromPrevious=(\w+) season=(\d+) matchday=(\d+)/, 10_000, fromContinue))?.match ?? null;
+      const resumed = (await waitForLog(hubPattern, 10_000, fromContinue))?.match ?? null;
+      check('Continue opens the hub where the career was', !!loaded && loaded[1] === 'False' && loaded[3] === '4' && !!resumed && resumed[2] === '4' && resumed[3] === fourth[3],
+        `${short(loaded)}; ${short(resumed)}`);
+      await page.screenshot({ path: `${outDir}/${name}-continued.png` }).catch(() => {});
 
       const errors = logs.filter((l) => /^pageerror|Exception|error CS/i.test(l));
       check('no page errors or exceptions', errors.length === 0, errors.length ? errors.slice(0, 5).join(' | ') : 'none');

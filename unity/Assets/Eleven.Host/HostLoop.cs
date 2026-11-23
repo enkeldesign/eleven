@@ -658,6 +658,10 @@ namespace Eleven.Host
                 // The career's pages (#168) over #167's session.
                 _home.Career = () => _career;
                 _home.StartCareer = StartCareer;
+                _home.SlotSummary = slot => _saves.Summary(slot);
+                _home.ContinueSlot = ContinueSlot;
+                _home.CareerSlot = () => _career == null ? -1 : _careerSlot;
+                _home.CareerSaveNow = () => Autosave("manual");
                 _home.CareerPlay = CareerPlay;
                 _home.CareerSimulate = CareerSimulate;
                 _home.CareerNextSeason = CareerNextSeason;

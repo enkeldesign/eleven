@@ -1,6 +1,6 @@
 # Saves
 
-A career as bytes, in five slots ([#170](https://github.com/enkeldesign/eleven/issues/170)). #80 asks for transactional local storage with versioned migration, a checksum and a fallback to the previous save, and no account, server or internet. This page is the format and the slots' logic (`Eleven.Career`, `Saves.cs`). M6.07b's host gives them the page's local storage, autosaves after every fixture and offers a manual save.
+A career as bytes, in five slots ([#170](https://github.com/enkeldesign/eleven/issues/170)). #80 asks for transactional local storage with versioned migration, a checksum and a fallback to the previous save, and no account, server or internet. This page is the format and the slots' logic (`Eleven.Career`, `Saves.cs`), and the host's use of them ([#171](https://github.com/enkeldesign/eleven/issues/171)).
 
 ## The format
 
@@ -103,3 +103,34 @@ A save lives in the page's local storage as base64. The smallest browser's limit
 - **`CareerSaveTests`** (simulation):
   - a played knockout's result reading back text for text, metrics and goals included;
   - a career saved after nine matchdays and loaded, playing eight more exactly as the one that never stopped.
+- **`CareerSlotTests`** (Codex on #183):
+  - with no career in play, a slot offers its save or a new career;
+  - the career in play resumes from its own slot as it is, said not saved while the device refuses its saves;
+  - one whose first save was refused is offered back, not a new career.
+
+## In the host
+
+#171 puts the slots in the page's local storage, through the host's stored-text bridge (#46). There is no network. An empty value counts as no value, so a delete writes an empty one.
+
+- **Career on Home** opens the five slots. Each shows its club, season and matchday, or Empty, and says when a slot's previous save was read.
+  - **Continue** loads a slot's career at its hub.
+  - **New career** opens New career for that slot.
+  - **The career in play** is its own slot's, whatever that slot's save says (Codex on #183). Its line says "in play", and "in play, not saved" when the device refused its last save. **Continue** returns to its hub as it is, without loading, so a refused save never loses it; Save on the hub tries again. `CareerHub.SlotOffer` and `SlotLine` decide, engine-free.
+- **Autosave** into the career's slot happens:
+  - on Start;
+  - after every fixture played or simulated;
+  - after a match left before full time;
+  - on the next season.
+- **Save** on the hub saves at once.
+- **The hub says each outcome:** "Saved to slot 2", or why not. If a slot's latest save was damaged, it says its previous one was loaded.
+- **The saved time** is the device clock's.
+
+**Smoke** (`career-phone`):
+- Career shows five empty slots;
+- New career in the first, then Start saves it;
+- after #168's matchdays, the simulated fixture is saved;
+- with the page's storage refusing writes, Simulate's save fails and is said;
+- Home, Career and slot 1 return to the career at matchday 4 without loading;
+- with storage back, Save on the hub keeps it;
+- the page reloads, and slot 1 shows the career at matchday 4;
+- Continue opens its hub there, the table played as before.

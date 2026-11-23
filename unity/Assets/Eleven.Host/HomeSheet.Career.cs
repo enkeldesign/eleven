@@ -19,8 +19,20 @@ namespace Eleven.Host
         /// <summary>The career being played, if any.</summary>
         public Func<CareerSession> Career = () => null;
 
-        /// <summary>Start a career: its world, seed, club and role.</summary>
-        public Action<World, ulong, int, CareerRole> StartCareer = (world, seed, club, role) => { };
+        /// <summary>Start a career: its world, seed, club, role and slot (#171).</summary>
+        public Action<World, ulong, int, CareerRole, int> StartCareer = (world, seed, club, role, slot) => { };
+
+        /// <summary>A slot as the list shows it (#171).</summary>
+        public Func<int, Eleven.Career.SlotSummary> SlotSummary = slot => new Eleven.Career.SlotSummary();
+
+        /// <summary>Continue the career in a slot: loaded, at its hub.</summary>
+        public Action<int> ContinueSlot = slot => { };
+
+        /// <summary>The slot of the career in play, or −1 with none.</summary>
+        public Func<int> CareerSlot = () => -1;
+
+        /// <summary>Save now, on the hub: what happened, in words.</summary>
+        public Func<string> CareerSaveNow = () => "";
 
         /// <summary>Play (or watch) the human's fixture: Home closes and the match starts.</summary>
         public System.Action CareerPlay = () => { };
@@ -53,6 +65,15 @@ namespace Eleven.Host
         private int _careerClub;
         private int _careerRole;
 
+        // The slots (#171): five rows, each its words and its action; the slot a new career goes into.
+        private UiKit.Surface _slotsPage;
+        private readonly Label[] _slotText = new Label[Eleven.Career.SaveSlots.Count];
+        private readonly UiKit.Action[] _slotAction = new UiKit.Action[Eleven.Career.SaveSlots.Count];
+        private UiKit.Action _slotsBack;
+        private UiKit.Action _hubSave;
+        private Label _hubStatus;
+        private int _newSlot;
+
         private void BuildCareerPages()
         {
             // New career: a new world's clubs, the role, then Start.
@@ -61,7 +82,7 @@ namespace Eleven.Host
             list.style.flexShrink = 1;
             list.style.minHeight = 0;
             _newCareerPage.Content.Add(list);
-            Label about = UiKit.Text(_theme, TypeScale.Body, "A new world of 36 clubs in three divisions. Until saves arrive, a career lasts as long as this page.", Role.Text);
+            Label about = UiKit.Text(_theme, TypeScale.Body, "A new world of 36 clubs in three divisions, saved on this device after every fixture.", Role.Text);
             about.style.marginBottom = Spacing.M;
             list.Add(about);
             _careerPicker = MakePicker("Your club", StepCareerClub);
@@ -73,8 +94,38 @@ namespace Eleven.Host
                 Log($"ELEVEN home pick role={index}");
             });
             list.Add(_roles.Element);
-            _careerBack = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Back", ShowHome);
+            _careerBack = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Back", OpenCareer);
             _careerStart = UiKit.MakeAction(_ui, _theme, ActionRole.Primary, "Start", StartPressed);
+
+            // The slots (#171): each slot's career, or Empty, with Continue or New career.
+            _slotsPage = Page("Slots page", "Career");
+            ScrollView slots = UiKit.MakeScroll();
+            slots.style.flexShrink = 1;
+            slots.style.minHeight = 0;
+            _slotsPage.Content.Add(slots);
+            Label saved = UiKit.Text(_theme, TypeScale.Body, "Five careers, saved on this device after every fixture.", Role.Text);
+            saved.style.marginBottom = Spacing.M;
+            slots.Add(saved);
+            for (int i = 0; i < Eleven.Career.SaveSlots.Count; i++)
+            {
+                int slot = i;
+                VisualElement row = UiKit.Row(Spacing.S);
+                row.style.alignItems = Align.Center;
+                row.style.marginBottom = Spacing.S;
+                _slotText[i] = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
+                _slotText[i].style.flexGrow = 1;
+                _slotText[i].style.flexShrink = 1;
+                _slotAction[i] = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, $"Slot {i + 1}", () => SlotPressed(slot));
+                row.Add(_slotText[i]);
+                row.Add(_slotAction[i].Element);
+                UiKit.Gaps(row);
+                slots.Add(row);
+            }
+
+            _slotsBack = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Back", ShowHome);
+            _slotsPage.Actions.Add(_slotsBack.Element);
+            UiKit.Gaps(_slotsPage.Actions);
+            _slotsPage.Element.style.display = DisplayStyle.None;
             _newCareerPage.Actions.Add(_careerBack.Element);
             _newCareerPage.Actions.Add(_careerStart.Element);
             UiKit.Gaps(_newCareerPage.Actions);
@@ -104,13 +155,15 @@ namespace Eleven.Host
             hub.Add(Heading("Your last results"));
             _hubResults = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
             hub.Add(_hubResults);
-            Label note = UiKit.Text(_theme, TypeScale.Small, "Until saves arrive, this career lasts as long as the page.", Role.TextMuted);
-            note.style.marginTop = Spacing.M;
-            hub.Add(note);
+            _hubStatus = UiKit.Text(_theme, TypeScale.Small, "", Role.TextMuted);
+            _hubStatus.style.marginTop = Spacing.M;
+            hub.Add(_hubStatus);
             _hubHome = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Home", ShowHome);
+            _hubSave = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Save", HubSave);
             _hubSimulate = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, "Simulate", HubSimulate);
             _hubPrimary = UiKit.MakeAction(_ui, _theme, ActionRole.Primary, "Play", HubPrimary);
             _hubPage.Actions.Add(_hubHome.Element);
+            _hubPage.Actions.Add(_hubSave.Element);
             _hubPage.Actions.Add(_hubSimulate.Element);
             _hubPage.Actions.Add(_hubPrimary.Element);
             _hubPage.Actions.style.flexWrap = Wrap.Wrap;
@@ -119,19 +172,42 @@ namespace Eleven.Host
 
             _scrim.Add(_newCareerPage.Element);
             _scrim.Add(_hubPage.Element);
+            _scrim.Add(_slotsPage.Element);
             _newCareerPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
             _hubPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
+            _slotsPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
         }
 
-        // Career on Home: the hub of the career being played, or a new one.
+        // Career on Home: the five slots (#171).
         private void OpenCareer()
         {
-            if (Career() != null)
-            {
-                ShowHub(null);
-                return;
-            }
+            RefreshSlots();
+            ShowPage(Shown.Slots);
+        }
 
+        private void RefreshSlots()
+        {
+            for (int i = 0; i < Eleven.Career.SaveSlots.Count; i++)
+            {
+                Eleven.Career.SlotSummary s = SlotSummary(i);
+                _slotText[i].text = CareerHub.SlotLine(i, s, Career(), CareerSlot());
+                Relabel(_slotAction[i], CareerHub.SlotOffer(i, s, Career(), CareerSlot()) == SlotChoice.New ? "New career" : "Continue");
+            }
+        }
+
+        private void SlotPressed(int slot)
+        {
+            SlotChoice offer = CareerHub.SlotOffer(slot, SlotSummary(slot), Career(), CareerSlot());
+            Log(FormattableString.Invariant($"ELEVEN home slot={slot} {offer.ToString().ToLowerInvariant()}"));
+            if (offer == SlotChoice.New) NewCareer(slot);
+            else if (offer == SlotChoice.Resume) ShowHub("resume");
+            else ContinueSlot(slot);
+        }
+
+        // New career into a slot: a new world's clubs, from a seed taken now.
+        private void NewCareer(int slot)
+        {
+            _newSlot = slot;
             _careerSeed = (ulong)DateTime.UtcNow.Ticks;
             _careerWorld = CareerSession.NewWorld(_careerSeed);
             _careerClubs = QuickMatch.Clubs(_careerWorld);
@@ -153,7 +229,7 @@ namespace Eleven.Host
 
         private void StartPressed()
         {
-            StartCareer(_careerWorld, _careerSeed, _careerClub, (CareerRole)_careerRole);
+            StartCareer(_careerWorld, _careerSeed, _careerClub, (CareerRole)_careerRole, _newSlot);
             ShowHub(null);
         }
 
@@ -259,6 +335,15 @@ namespace Eleven.Host
             ShowHub(null);
         }
 
+        private void HubSave()
+        {
+            Log("ELEVEN hub action Save");
+            SetCareerStatus(CareerSaveNow());
+        }
+
+        /// <summary>What the hub says about the last save or load.</summary>
+        public void SetCareerStatus(string text) => _hubStatus.text = text;
+
         private void HubSimulate()
         {
             Log("ELEVEN hub action Simulate");
@@ -279,7 +364,15 @@ namespace Eleven.Host
                 return order;
             }
 
+            if (_page == Shown.Slots)
+            {
+                foreach (UiKit.Action a in _slotAction) order.Add(a.Element);
+                order.Add(_slotsBack.Element);
+                return order;
+            }
+
             order.Add(_hubHome.Element);
+            order.Add(_hubSave.Element);
             if (_hubSimulate.Element.resolvedStyle.display != DisplayStyle.None) order.Add(_hubSimulate.Element);
             order.Add(_hubPrimary.Element);
             return order;
@@ -294,11 +387,19 @@ namespace Eleven.Host
                 return;
             }
 
+            if (_page == Shown.Slots)
+            {
+                int empty = 0;
+                for (int i = 0; i < Eleven.Career.SaveSlots.Count; i++) empty += SlotSummary(i).Empty ? 1 : 0;
+                Log(FormattableString.Invariant($"ELEVEN home shown page=slots slots={Eleven.Career.SaveSlots.Count} empty={empty} first={at(_slotAction[0])} firstAction={_slotAction[0].Text.Replace(' ', '_')} firstOffer={CareerHub.SlotOffer(0, SlotSummary(0), Career(), CareerSlot())}"));
+                return;
+            }
+
             CareerSession s = Career();
             if (s == null) return;
             int played = s.Table().Find(r => r.Club == s.Club)?.Played ?? 0;
             Log(FormattableString.Invariant(
-                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)}"));
+                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)} save={at(_hubSave)}"));
         }
     }
 }

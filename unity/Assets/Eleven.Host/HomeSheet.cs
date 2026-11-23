@@ -114,6 +114,7 @@ namespace Eleven.Host
             Quick,
             NewCareer,
             Hub,
+            Slots,
         }
 
         private Shown _page;
@@ -253,7 +254,7 @@ namespace Eleven.Host
         public List<VisualElement> FocusOrder()
         {
             var order = new List<VisualElement>();
-            if (_page == Shown.NewCareer || _page == Shown.Hub) return CareerFocusOrder();
+            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots) return CareerFocusOrder();
             if (_page == Shown.Home)
             {
                 order.Add(_practice.Element);
@@ -297,6 +298,7 @@ namespace Eleven.Host
             _quickPage.Element.style.display = page == Shown.Quick ? DisplayStyle.Flex : DisplayStyle.None;
             _newCareerPage.Element.style.display = page == Shown.NewCareer ? DisplayStyle.Flex : DisplayStyle.None;
             _hubPage.Element.style.display = page == Shown.Hub ? DisplayStyle.Flex : DisplayStyle.None;
+            _slotsPage.Element.style.display = page == Shown.Slots ? DisplayStyle.Flex : DisplayStyle.None;
             _reported = false;
 
             // Said once laid out: a page already shown may have changed its size (the hub after a
@@ -456,7 +458,7 @@ namespace Eleven.Host
         private void Report()
         {
             if (!Open || _reported) return;
-            UiKit.Surface page = _page == Shown.Quick ? _quickPage : _page == Shown.NewCareer ? _newCareerPage : _page == Shown.Hub ? _hubPage : _homePage;
+            UiKit.Surface page = _page == Shown.Quick ? _quickPage : _page == Shown.NewCareer ? _newCareerPage : _page == Shown.Hub ? _hubPage : _page == Shown.Slots ? _slotsPage : _homePage;
             if (!(page.Body.layout.width > 0)) return;
             _reported = true;
             float s = _ui.PixelsPerPoint;
@@ -472,7 +474,7 @@ namespace Eleven.Host
                 return;
             }
 
-            if (_page == Shown.NewCareer || _page == Shown.Hub)
+            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots)
             {
                 ReportCareer(At);
                 return;
