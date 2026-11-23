@@ -80,6 +80,7 @@ A save lives in the page's local storage as base64. The smallest browser's limit
   1. The new save is written to the slot's staging key.
   2. It is read back and decoded.
   3. Only if it verifies does the current save become previous and the new one current.
+  4. **A damaged current save is never rotated into previous** (Codex on #181). After a load fell back to the previous save, that previous stays the slot's fallback until a good save replaces it.
 
   If the store refuses or damages any write, `Save` returns false, and a load still finds the last good save.
 - **Load** takes the current save if it verifies, else the previous one, and says which and why.

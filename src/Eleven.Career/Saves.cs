@@ -239,8 +239,8 @@ namespace Eleven.Career
 
         /// <summary>
         /// Saves into <paramref name="slot"/>: the save is staged, read back and verified, and only
-        /// then becomes current, the old current becoming previous. False, with the slot as it
-        /// was, when the store refuses or damages it.
+        /// then becomes current, the old current becoming previous if it verifies. False, with
+        /// the slot as it was, when the store refuses or damages it.
         /// </summary>
         public bool Save(int slot, SaveFile save)
         {
@@ -252,8 +252,10 @@ namespace Eleven.Career
                 return false;
             }
 
+            // The old current becomes previous only if it verifies (Codex on #181): a damaged one
+            // never replaces a good previous, the slot's only fallback.
             string? old = _store.Read(current);
-            if (old != null && !_store.Write(previous, old))
+            if (old != null && Verify(old) != null && !_store.Write(previous, old))
             {
                 _store.Delete(staging);
                 return false;
