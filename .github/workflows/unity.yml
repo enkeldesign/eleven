@@ -193,6 +193,7 @@ jobs:
       pages: write
       id-token: write
       pull-requests: write
+      actions: read
     environment:
       name: github-pages
       url: ${{ steps.link.outputs.url }}
@@ -251,19 +252,52 @@ jobs:
           git commit --quiet -m "Site for ${GITHUB_SHA::7} (${{ github.event_name }})"
           git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" next:site
 
+      # The artifact is named per attempt (#188): a re-run's own upload would otherwise be a second
+      # "github-pages" in the run, and deploy-pages refuses a run with two of one name.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+          name: github-pages-${{ github.run_attempt }}
+
+      # GitHub's listing of a run's artifacts can lag an upload by seconds, and deploy-pages then
+      # finds none (#188). Wait until it's listed, a minute at most.
+      - name: Wait until the Pages artifact is listed
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 30); do
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[].name' \
+              | grep -qx "github-pages-${{ github.run_attempt }}"; then
+              echo "listed after $(( (i - 1) * 2 )) s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning title=Pages artifact::not listed after 60 s; deploying anyway"
 
       - name: Deploy to GitHub Pages
         id: pages
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+
+      # Pages sometimes answers "Deployment failed, try again later" (#188): once more, after a wait.
+      - name: Wait before deploying again
+        if: steps.pages.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy to GitHub Pages, again
+        id: pages_again
+        if: steps.pages.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
 
       - name: Check the link and measure push to link
         id: link
         run: |
           set -euo pipefail
-          base="${{ steps.pages.outputs.page_url }}"
+          base="${{ steps.pages.outputs.page_url || steps.pages_again.outputs.page_url }}"
           path="${{ steps.site.outputs.path }}"
           url="${base%/}/"; [ "$path" = "." ] || url="${url}${path}/"
           echo "url=$url" >> "$GITHUB_OUTPUT"
