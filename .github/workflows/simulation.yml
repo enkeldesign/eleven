@@ -354,6 +354,17 @@ jobs:
           dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll quicksim career-fit docs/simulation/quicksim-career-reference.csv | tee quicksim-career-fit.txt
           echo "::notice title=Eleven-a-side fit::$(head -1 quicksim-career-fit.txt)"
 
+      # #177: a tired start on the full simulation. Its sample is 480 full 11v11 matches, 160
+      # fixtures at three home fatigue levels; CI plays the first 6 and diffs them against the
+      # reference's first rows, then refits the quick-sim's fatigue weight.
+      - name: Measure a tired start
+        run: |
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll condition condition 6 | tee condition.txt
+          echo "::notice title=Condition sample::$(sed 's| -> .*||' condition.txt)"
+          diff <(head -n 7 docs/simulation/condition-reference.csv) condition/condition.csv
+          dotnet artifacts/bin/Eleven.Simulation.Cli/release/Eleven.Simulation.Cli.dll condition fit docs/simulation/condition-reference.csv | tee condition-fit.txt
+          echo "::notice title=Fatigue weight::$(head -1 condition-fit.txt)"
+
       # M5's gate (#130), INV-13: the CPU's flight predictions are the simulation's own ball.
       - name: Check the CPU's predictions against the simulation
         run: |
