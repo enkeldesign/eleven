@@ -290,7 +290,8 @@ namespace Eleven.Simulation.Harness
             }
 
             double bestRho = 0, best = double.NegativeInfinity;
-            for (int step = -300; step <= 300; step++)
+            // Every rho from -1 to 1 (#182): one the rates don't allow has no likelihood, and is passed over.
+            for (int step = -1000; step <= 1000; step++)
             {
                 double rho = step / 1000.0, likelihood = RhoLikelihood(rho);
                 if (likelihood > best)
