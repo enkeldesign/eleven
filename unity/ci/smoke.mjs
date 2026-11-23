@@ -552,21 +552,6 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       const list = (await waitForLog(/ELEVEN squad shown mode=list selected=0 rows=(\d+) first=(\d+),(\d+) firstId=(\d+) back=(\d+),(\d+)/, 10_000, fromSquad))?.match ?? null;
       check('Squad lists the club, its XI first', !!list && Number(list[1]) >= 20, short(list));
 
-      // Codex on #187: by keyboard the list keeps the focused row in view. Tab to the last row,
-      // below the fold on a phone: it must sit within the scroll's viewport. Three more Tabs
-      // (Back, Auto, then round) bring the first row, and the list's top, back.
-      if (list) {
-        const rows = Number(list[1]);
-        const fromKeys = logs.length;
-        for (let i = 0; i < rows; i++) await page.keyboard.press('Tab');
-        const last = (await waitForLog(new RegExp(`ELEVEN squad focus row=${rows - 1} rows=${rows} top=(\\d+) bottom=(\\d+) offset=(-?\\d+) view=(\\d+) content=(\\d+)`), 5_000, fromKeys))?.match ?? null;
-        const [top, bottom, offset, view, content] = last ? last.slice(1).map(Number) : [0, 0, 0, 0, 0];
-        check('by keyboard, the last squad row scrolls into view', !!last && content > view && top >= offset - 1 && bottom <= offset + view + 1, short(last));
-        const fromRound = logs.length;
-        for (let i = 0; i < 3; i++) await page.keyboard.press('Tab');
-        const round = (await waitForLog(/ELEVEN squad focus row=0 rows=\d+ top=\d+ bottom=\d+ offset=(-?\d+)/, 5_000, fromRound))?.match ?? null;
-        check('and the first row brings the list back to its top', !!round && Number(round[1]) <= 1, short(round));
-      }
       const fromChoose = logs.length;
       if (list) await tap(point(list, 2));
       const offer = (await waitForLog(/ELEVEN squad shown mode=swap selected=(\d+) rows=(\d+) first=(\d+),(\d+) firstId=(\d+)/, 10_000, fromChoose))?.match ?? null;
@@ -576,6 +561,30 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       const swapped = (await waitForLog(/ELEVEN squad swap a=(\d+) b=(\d+) ok=1/, 10_000, fromSwap))?.match ?? null;
       const relisted = (await waitForLog(/ELEVEN squad shown mode=list .* back=(\d+),(\d+)/, 10_000, fromSwap))?.match ?? null;
       check('a swap puts him in the XI', !!swapped && swapped[1] === list?.[4] && swapped[2] === offer?.[5], short(swapped));
+
+      // Codex on #187: by keyboard the list keeps the focused row in view. After the taps, as it
+      // scrolls the list: Tab until the last row has focus, below the fold on a phone, and it must
+      // sit within the scroll's viewport; Tab on round to the first, and it is back in view. Back
+      // is outside the list, so its place holds.
+      if (relisted && list) {
+        const rows = Number(list[1]);
+        const focusPattern = /ELEVEN squad focus row=(-?\d+) rows=(\d+) top=(\d+) bottom=(\d+) offset=(-?\d+) view=(\d+) content=(\d+)/;
+        // Tab until the squad's focus line names row `want`, at most `limit` presses; that line, or null.
+        const tabTo = async (want, limit) => {
+          for (let i = 0; i < limit; i++) {
+            const from = logs.length;
+            await page.keyboard.press('Tab');
+            const seen = (await waitForLog(focusPattern, 1_000, from))?.match ?? null;
+            if (seen && Number(seen[1]) === want) return seen;
+          }
+          return null;
+        };
+        const inView = (m) => !!m && Number(m[3]) >= Number(m[5]) - 1 && Number(m[4]) <= Number(m[5]) + Number(m[6]) + 1;
+        const last = await tabTo(rows - 1, rows + 3);
+        check('by keyboard, the last squad row scrolls into view', !!last && Number(last[7]) > Number(last[6]) && inView(last), short(last));
+        const round = await tabTo(0, 4);
+        check('and Tab on round brings the first row back into view', !!round && Number(round[5]) < Number(last?.[5] ?? 0) && inView(round), short(round));
+      }
       const fromBack = logs.length;
       if (relisted) await tap(point(relisted, 1));
       const hubAgain = (await waitForLog(hubPattern, 10_000, fromBack))?.match ?? null;
