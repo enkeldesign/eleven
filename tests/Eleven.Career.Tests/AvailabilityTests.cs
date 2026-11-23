@@ -160,8 +160,8 @@ namespace Eleven.Career.Tests
             (World w, _) = New();
             w.Players[0].InjuredDays = 10;
             w.Players[500].InjuredDays = 3;
-            Availability.Pass(w, Squad.DaysPerMatchday);
-            Assert.Equal((10 - Squad.DaysPerMatchday, 0), (w.Players[0].InjuredDays, w.Players[500].InjuredDays));
+            Availability.Pass(w, Rules.LeagueGapDays, Squad);
+            Assert.Equal((10 - Rules.LeagueGapDays, 0), (w.Players[0].InjuredDays, w.Players[500].InjuredDays));
         }
 
         [Fact]
@@ -173,9 +173,10 @@ namespace Eleven.Career.Tests
             Fixture f = day[0];
             Player knock = Of(w, f.Home), strain = w.Players.First(x => x.ClubId == f.Away && x.Positions[0] != Position.Goalkeeper);
             Availability.Serve(w, day, MatchdayKind.League, Squad);
-            knock.InjuredDays = Squad.DaysPerMatchday;
-            strain.InjuredDays = Squad.DaysPerMatchday + 1;
-            Availability.Pass(w, Squad.DaysPerMatchday);
+            int gap = Availability.GapAfter(Rules, 0);
+            knock.InjuredDays = gap;
+            strain.InjuredDays = gap + 1;
+            Availability.Pass(w, gap, Squad);
             Assert.False(Availability.Out(knock, MatchdayKind.League));
             Assert.True(Availability.Out(strain, MatchdayKind.League));
         }

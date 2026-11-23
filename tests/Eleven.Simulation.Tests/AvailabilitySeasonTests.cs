@@ -80,9 +80,9 @@ namespace Eleven.Simulation.Tests
                 {
                     HashSet<int> h = Availability.OutOf(w, f.Home, kind), a = Availability.OutOf(w, f.Away, kind);
                     absences += h.Count + a.Count;
-                    Dictionary<int, int> lineup = CareerSquads.Lineup(w, f.Home, f.Away, 10, h, a);
+                    Dictionary<int, int> lineup = CareerSquads.Lineup(w, f.Home, f.Away, 10, h, a, SquadRules.Reference);
                     outPicks += lineup.Values.Count(id => h.Contains(id) || a.Contains(id));
-                    expected[f.Id] = (lineup, CareerSeasons.Quick(Config, w, s, f, 10, h, a).ToText());
+                    expected[f.Id] = (lineup, CareerSeasons.Quick(Config, w, s, f, 10, h, a, SquadRules.Reference).ToText());
                 }
 
                 CareerSeasons.PlayMatchday(Config, w, s, Rules, 10, (Func<Fixture, PlayedFixture?>?)null);
@@ -102,7 +102,7 @@ namespace Eleven.Simulation.Tests
                         if (line.Injury > 0)
                         {
                             // Its layoff, less the week to the next matchday; a longer one already running may outlast it.
-                            int left = Math.Max(0, Availability.Layoff(s.Seed, f.Id, p.Id, line.Injury, SquadRules.Reference) - SquadRules.Reference.DaysPerMatchday);
+                            int left = Math.Max(0, Availability.Layoff(s.Seed, f.Id, p.Id, line.Injury, SquadRules.Reference) - Availability.GapAfter(Rules, s.Matchday - 1));
                             Assert.True(p.InjuredDays >= left, $"{p.Id} injured for {left} more days, but {p.InjuredDays}");
                             injuries++;
                         }
@@ -133,14 +133,14 @@ namespace Eleven.Simulation.Tests
                 int opponent = fixture.Home == club ? fixture.Away : fixture.Home;
                 MatchdayKind kind = fixture.Competition == CompetitionId.Cup ? MatchdayKind.Cup : MatchdayKind.League;
                 Assert.Equal(MatchdayKind.League, kind);
-                Assert.Equal(CareerSquads.Lineup(w, club, opponent, CareerSession.PerSide, Availability.OutOf(w, club, kind), Availability.OutOf(w, opponent, kind)), lineup);
+                Assert.Equal(CareerSquads.Lineup(w, club, opponent, CareerSession.PerSide, Availability.OutOf(w, club, kind), Availability.OutOf(w, opponent, kind), s.Squad), lineup);
 
                 // His footballer hurt in it and another sent off, on the simulation's home side whatever the ground.
                 int hurtSim = Squads.HomeOutfielder(0), offSim = Squads.HomeOutfielder(1);
                 Player hurt = w.Players.Single(p => p.Id == lineup[hurtSim]), off = w.Players.Single(p => p.Id == lineup[offSim]);
                 MatchResult played = new MatchResult(Squads.HomeTeam, Squads.AwayTeam, 1, 0, 60, 120, Array.Empty<ResultGoal>(), 0)
                     .WithPlayers(new[] { new ResultPlayer(hurtSim, Squads.HomeTeam, 120, 0, false, 2), new ResultPlayer(offSim, Squads.HomeTeam, 80, 0, true, 0) });
-                int left = Math.Max(0, Availability.Layoff(s.Season.Seed, fixture.Id, hurt.Id, 2, s.Squad) - s.Squad.DaysPerMatchday);
+                int left = Math.Max(0, Availability.Layoff(s.Season.Seed, fixture.Id, hurt.Id, 2, s.Squad) - Availability.GapAfter(s.Rules, s.Season.Matchday));
                 s.Finish(fixture, played);
                 Assert.Equal(left, hurt.InjuredDays);
                 Assert.Equal(1, off.LeagueBan);
