@@ -175,3 +175,24 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 - a fit that recovers a model it draws from, within 3 of its errors.
 
 **Before the fit**, on 240 of these matches, the reference scored 2.80 goals a match against the full simulation's 1.35, with 21 % draws against 35 %.
+
+## Condition
+
+A career side's footballers may start a match tired (#177, [squads.md](../career/squads.md#condition)). A `QuickSide` carries its outfielders' mean fatigue at kick-off, and the model's `FatigueWeight` takes it from the side's rating: r − w × fatigue. A fresh side, or a weight of 0, rates exactly as before.
+
+**The sample:** `eleven-sim condition <dir> [count]` plays every third fixture of the eleven-a-side sample, 160 of them. Each is played three times, with the home side's outfielders starting at fatigue 0, 0.3 and 0.6 and the away side fresh. That's 480 full matches, about 27 minutes on four cores.
+- **The record:** `condition-reference.csv`.
+- **CI** plays the first 6 matches and diffs them against it.
+
+**The fit:** `eleven-sim condition fit <csv>` fits w by Poisson maximum likelihood, every other value `ElevenASide`'s. It is bounded at 0, as a tired start never helps a side.
+
+| Home fatigue | Matches | Full: goals | Full: home W/D | Quick at the unbounded fit: goals | Home W/D |
+| --- | --- | --- | --- | --- | --- |
+| 0.0 | 160 | 0.59–0.69 | 29 %/36 % | 0.63–0.65 | 32 %/35 % |
+| 0.3 | 160 | 0.70–0.59 | 32 %/39 % | 0.66–0.61 | 34 %/35 % |
+| 0.6 | 160 | 0.71–0.62 | 31 %/35 % | 0.70–0.59 | 36 %/35 % |
+
+- **No cost measured.** The unbounded estimate is −0.17 ± 0.10: tired sides scored a little more, which is noise. So `ElevenASide`'s weight is 0.
+- **Why:** the full simulation's fatigue is in-match fatigue. A footballer running easy sheds it at about 0.02 a second (#100), and half-time halves what is left, so a tired start is gone within a minute or so of a 3-minute half.
+- **What would carry:** condition only through something that lasts the match, such as his stamina for it. That's open, and it would need its own measurement.
+

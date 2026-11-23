@@ -277,10 +277,14 @@ internal static class Program
                 // RollForward's own loop, with who was out of each fixture counted (#176).
                 var seasons = new List<Eleven.Career.Season>(count);
                 var outs = new List<(int Injuries, int Serious, int SentOff, int Injured, int Banned)>();
+                var condition = new List<(double LeagueFit, double CupFit, int LeagueRests, int CupRests, int LeagueXis, int CupXis, int Lowest)>();
                 Eleven.Career.Season played = Eleven.Career.SeasonEngine.Start(seasonWorld, 1, careerSeed, Eleven.Career.SeasonEngine.FirstRanking(seasonWorld), seasonRules);
                 for (int i = 1; i <= count; i++)
                 {
                     int injuries = 0, serious = 0, sentOff = 0, injured = 0, banned = 0;
+                    // #177: each XI's condition at kick-off, and the starters rotation rested, league and midweek cup.
+                    double leagueFit = 0, cupFit = 0;
+                    int leagueRests = 0, cupRests = 0, leagueXis = 0, cupXis = 0, lowest = 100;
                     while (!Eleven.Career.SeasonEngine.Finished(played, seasonRules))
                     {
                         Eleven.Career.MatchdayKind kind = Eleven.Career.SeasonCalendar.Of(seasonRules)[played.Matchday].Kind;
@@ -289,6 +293,25 @@ internal static class Program
                         {
                             foreach (int club in new[] { f.Home, f.Away })
                             {
+                                HashSet<int> clubOut = Eleven.Career.Availability.OutOf(seasonWorld, club, kind);
+                                var rotated = CareerSquads.Selection(seasonWorld, club, 10, clubOut, Eleven.Career.SquadRules.Reference);
+                                var plain = CareerSquads.Selection(seasonWorld, club, 10, clubOut);
+                                int rests = rotated.Starters.Count(x => !plain.Starters.Contains(x));
+                                double fit = rotated.Starters.Average(x => x.Fitness);
+                                lowest = Math.Min(lowest, rotated.Starters.Min(x => x.Fitness));
+                                if (kind == Eleven.Career.MatchdayKind.Cup)
+                                {
+                                    cupFit += fit;
+                                    cupRests += rests;
+                                    cupXis++;
+                                }
+                                else
+                                {
+                                    leagueFit += fit;
+                                    leagueRests += rests;
+                                    leagueXis++;
+                                }
+
                                 foreach (Eleven.Career.Player p in seasonWorld.Players)
                                 {
                                     if (p.ClubId != club || !Eleven.Career.Availability.Out(p, kind)) continue;
@@ -312,6 +335,7 @@ internal static class Program
 
                     seasons.Add(played);
                     outs.Add((injuries, serious, sentOff, injured, banned));
+                    condition.Add((leagueFit / Math.Max(1, leagueXis), cupFit / Math.Max(1, cupXis), leagueRests, cupRests, leagueXis, cupXis, lowest));
                     if (i < count) played = Eleven.Career.SeasonEngine.Rollover(seasonWorld, played, careerSeed, seasonRules);
                 }
 
@@ -342,6 +366,9 @@ internal static class Program
                     int clubs = seasonWorld.Clubs.Count;
                     Console.WriteLine(FormattableString.Invariant(
                         $"  squads: {o.Injuries} injuries ({o.Serious} serious) and {o.SentOff} sendings-off; footballer-matches missed {o.Injured} injured and {o.Banned} banned, {(double)(o.Injured + o.Banned) / clubs:F1} a club"));
+                    var k = condition[s.Number - 1];
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"  condition: XIs at kick-off {k.LeagueFit:F1} in the league, {k.CupFit:F1} midweek in the cup, lowest starter {k.Lowest}; rested {k.LeagueRests} league and {k.CupRests} cup starters ({(double)(k.LeagueRests + k.CupRests) / clubs:F1} a club)"));
                     for (int d = 1; d <= s.Divisions.Count; d++)
                     {
                         var table = Eleven.Career.SeasonEngine.Table(s, (Eleven.Career.CompetitionId)d, seasonRules);
@@ -363,6 +390,36 @@ internal static class Program
                 Console.WriteLine(FormattableString.Invariant(
                     $"fit over {careerSample.Count} matches: mu {e.BaseRate:F6} ± {careerFit.BaseRateError:F3}, home {e.Home:F6} ± {careerFit.HomeError:F3}, scale {careerFit.Scale:F6} ± {careerFit.ScaleError:F3} (tiers 0 {e.TierRating(1):F6} {e.TierRating(2):F6} {e.TierRating(3):F6}, capabilities {e.CapabilityWeight:F6}), rho {e.Rho:F3} ± {careerFit.RhoError:F3}, fouls {e.FoulsPerSide:R}, cautions {e.CautionsPerSide:R}, sendings-off {e.SendingsOffPerSide:R}, injuries {e.MinorInjuriesPerSide:R} minor and {e.SeriousInjuriesPerSide:R} serious a side"));
                 Console.Write(CareerQuickSimCalibration.Compare(CareerQuickSimCalibration.Config(), fitWorld, careerSample, 100, e));
+                return 0;
+            }
+
+            case "condition" when args.Length >= 3 && args[1] == "fit":
+            {
+                // #177: the quick-sim's fatigue weight fitted to the condition sample, and the comparison by level.
+                Eleven.Career.World condWorld = CareerQuickSimCalibration.World();
+                List<ConditionMatch> condSample = CareerConditionCalibration.Read(File.ReadAllLines(args[2]));
+                (double weight, double error) = CareerConditionCalibration.Fit(condWorld, condSample, QuickSimModel.ElevenASide);
+                (double unbounded, _) = CareerConditionCalibration.Fit(condWorld, condSample, QuickSimModel.ElevenASide, bounded: false);
+                Console.WriteLine(FormattableString.Invariant($"fit over {condSample.Count} matches: fatigue weight {weight:F6} ± {error:F3} (unbounded {unbounded:F6})"));
+                Console.Write(CareerConditionCalibration.Compare(CareerQuickSimCalibration.Config(), condWorld, condSample, 100, CareerConditionCalibration.With(QuickSimModel.ElevenASide, weight)));
+                return 0;
+            }
+
+            case "condition" when args.Length >= 2:
+            {
+                // #177: a tired start's effect on the full simulation. `condition <dir> [count]`: every
+                // third eleven-a-side calibration fixture, the home side's outfielders starting at each
+                // fatigue level, the away side fresh; the first `count` matches only, for CI's prefix.
+                SimConfig condConfig = CareerQuickSimCalibration.Config();
+                Eleven.Career.World condWorld = CareerQuickSimCalibration.World();
+                var matches = CareerConditionCalibration.Matches(condWorld);
+                if (args.Length >= 3 && int.TryParse(args[2], out int cc) && cc > 0 && cc < matches.Count) matches = matches.Take(cc).ToList();
+                var rows = new ConditionMatch[matches.Count];
+                var condWatch = Stopwatch.StartNew();
+                System.Threading.Tasks.Parallel.For(0, rows.Length, k => rows[k] = CareerConditionCalibration.Play(condConfig, condWorld, matches[k].Fixture, matches[k].Index, matches[k].Level));
+                Directory.CreateDirectory(args[1]);
+                using (var csv = new StreamWriter(Path.Combine(args[1], "condition.csv"))) CareerConditionCalibration.Write(csv, rows);
+                Console.WriteLine(FormattableString.Invariant($"config {condConfig.Hash:x16}, {rows.Length} full 11v11 matches in {condWatch.Elapsed.TotalSeconds:F0} s on {Environment.ProcessorCount} cores -> {args[1]}"));
                 return 0;
             }
 

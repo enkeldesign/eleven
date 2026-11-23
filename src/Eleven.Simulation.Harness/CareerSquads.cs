@@ -19,10 +19,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="RatingMap"/>.
         /// </summary>
         public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
-            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
-            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
             Apply(s, away, perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
 
@@ -40,10 +40,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
         /// world's player id. A result's lines (#172) name footballers by these ids.
         /// </summary>
-        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
             var lineup = new Dictionary<int, int>();
-            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             for (int i = 0; i < perSide; i++)
             {
                 lineup[Squads.HomeOutfielder(i)] = home.Starters[i].Id;
@@ -149,7 +149,7 @@ namespace Eleven.Simulation.Harness
         /// <paramref name="unavailable"/> (#176: injured or banned) are never picked; with no fit
         /// keeper, the best of the rest at keeping goes in goal.
         /// </summary>
-        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null)
+        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null, SquadRules? rotation = null)
         {
             var squad = new List<Player>();
             foreach (Player p in world.Players)
@@ -197,6 +197,13 @@ namespace Eleven.Simulation.Harness
                     ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line)
                     ?? Best(_ => true)
                     ?? throw new InvalidOperationException($"Club {clubId} hasn't {perSide} outfielders.");
+                // Rotation (#177): a tired starter rested for a fit footballer of the slot's line within the margin.
+                if (rotation != null && p.Fitness < rotation.RestBelow)
+                {
+                    double floor = OutfieldLevel(p) - rotation.RotationMargin;
+                    Player? fresh = Best(x => LineOf(x.Positions[0]) == line && x.Fitness >= rotation.RestBelow && OutfieldLevel(x) >= floor);
+                    if (fresh != null) p = fresh;
+                }
                 bySlot[i] = p;
                 chosen.Add(p.Id);
             }
@@ -219,9 +226,33 @@ namespace Eleven.Simulation.Harness
         /// A CPU-against-CPU match between two clubs, played to its result by the full simulation
         /// with every brain running: the keepers', the CPU's, the restarts' and the managers'.
         /// </summary>
-        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed)
+        /// <summary>
+        /// A career match's tired start (#177): each of its footballers named in
+        /// <paramref name="lineup"/> starts at his own fatigue from his condition. A fresh side plays
+        /// exactly as before.
+        /// </summary>
+        public static void TiredStart(SimState state, World world, IReadOnlyDictionary<int, int> lineup, SquadRules rules)
         {
-            var sim = new Simulator(config, Match(config, world, homeClub, awayClub, perSide, seed));
+            var byId = new Dictionary<int, Player>(world.Players.Count);
+            foreach (Player p in world.Players) byId[p.Id] = p;
+            for (int i = 0; i < state.Players.Length; i++)
+            {
+                if (lineup.TryGetValue(state.Players[i].Id, out int id) && byId.TryGetValue(id, out Player? p)) state.Players[i].Fatigue = Availability.StartFatigue(p, rules);
+            }
+        }
+
+        public static MatchResult Play(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, double homeFatigue = 0, double awayFatigue = 0)
+        {
+            SimState state = Match(config, world, homeClub, awayClub, perSide, seed);
+            // #177: a side may start tired, every outfielder at the same fatigue.
+            for (int i = 0; i < state.Players.Length; i++)
+            {
+                if (state.Keepers.Length > 0 && Array.Exists(state.Keepers, k => k.PlayerId == state.Players[i].Id)) continue;
+                double f = state.Players[i].TeamId == Squads.HomeTeam ? homeFatigue : awayFatigue;
+                if (f > 0) state.Players[i].Fatigue = f;
+            }
+
+            var sim = new Simulator(config, state);
             var recorder = new MatchRecorder();
             var commands = new List<Command>();
             var events = new List<SimEvent>();

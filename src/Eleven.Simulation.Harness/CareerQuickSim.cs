@@ -33,9 +33,9 @@ namespace Eleven.Simulation.Harness
         /// at <see cref="TierPosition"/>; its capabilities the mean of their mapped capabilities.
         /// The quick-sim's sides have no keeper, as its calibration league's sides had none apart.
         /// </summary>
-        public static QuickSide Side(World world, int clubId, int perSide, ISet<int>? unavailable = null)
+        public static QuickSide Side(World world, int clubId, int perSide, ISet<int>? unavailable = null, SquadRules? squad = null)
         {
-            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide, unavailable);
+            SquadSelection xi = CareerSquads.Selection(world, clubId, perSide, unavailable, squad);
             var mapped = new PlayerCapabilities[perSide];
             double cpu = 0;
             for (int i = 0; i < perSide; i++)
@@ -55,7 +55,15 @@ namespace Eleven.Simulation.Harness
                 mean = mean.With(t.Name, sum / perSide);
             }
 
-            return new QuickSide(TierPosition(cpu / perSide), mean);
+            // #177: its outfielders' mean fatigue at kick-off, from their condition.
+            double fatigue = 0;
+            if (squad != null)
+            {
+                for (int i = 0; i < perSide; i++) fatigue += Availability.StartFatigue(xi.Starters[i], squad);
+                fatigue /= perSide;
+            }
+
+            return new QuickSide(TierPosition(cpu / perSide), mean, fatigue);
         }
 
         /// <summary>A match between two clubs that nobody plays: the quick-sim's result, with the model for its size.</summary>

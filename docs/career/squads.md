@@ -1,9 +1,10 @@
 # Who's out
 
-Injuries and bans carried from one match to the next ([#176](https://github.com/enkeldesign/eleven/issues/176), M6.08b). Each result names its footballers (#172). What happened to them in a match keeps them out of the next ones, and nobody out is picked.
+Injuries, bans and condition carried from one match to the next ([#176](https://github.com/enkeldesign/eleven/issues/176) and [#177](https://github.com/enkeldesign/eleven/issues/177), M6.08b and c). Each result names its footballers (#172). What happened to them in a match keeps them out of the next ones, or tired for them, and nobody out is picked.
 
 The state is the footballer's own, in the world (`Player`), so it is saved with him:
 - `InjuredDays`, days out injured;
+- `Fitness`, his condition, 0–100 (#177);
 - `LeagueBan` and `CupBan`, his club's matches he must still sit out in each competition;
 - `LeagueCautions` and `CupCautions`, this season's cautions toward a ban.
 
@@ -26,8 +27,8 @@ A footballer's worst injury in a match (#109) puts him out for days. The draw is
 The bands are the study's. The shares by level are references: the full simulation's minor injury is a knock he plays on with, its serious one takes him off.
 
 - **A second injury** never shortens the first's layoff.
-- **The days pass** by `DaysPerMatchday` (7) at the end of each matchday, his injury's own included, whether or not his club plays. He is out while any are left.
-- **So a knock never costs a match.** A layoff of up to a week is over by the next matchday, so only a moderate or severe one is: 15 % of minor injuries, 80 % of serious ones.
+- **The days pass** at the end of each matchday, his injury's own included, whether or not his club plays: the calendar's days to the next matchday, 7 to a league round and 3 to a midweek cup round ([competitions.md](competitions.md#the-calendar)). He is out while any are left.
+- **So a knock rarely costs a match.** A layoff of up to a week is over by the next league round, so mostly a moderate or severe one does: 15 % of minor injuries, 80 % of serious ones. A midweek tie three days on comes sooner.
 
 ## Bans
 
@@ -38,6 +39,16 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 - **A second yellow's two cautions** don't count toward the total; its sending-off bans him. A caution before a straight red does count.
 - **Served** only in his club's matches of that competition. A bye, or a match in the other competition, doesn't serve it.
 
+## Condition
+
+`Player.Fitness`, 0–100 (#177). Recovery from a match takes 72–96 hours (Nédélec et al. 2012, *Recovery in soccer, part I*), so a week's gap recovers it and a midweek tie's three days nearly do.
+- **A match's cost** is `ConditionCostPerMatch` (30) for a whole match at reference stamina. It scales by the share of the match he played (his #172 line's seconds over two halves, so extra time costs more) and by his stamina: ± `StaminaWeight` (0.4) of it at stamina 1 and 20.
+- **Recovery** is the cost of a whole match over `RecoveryDays` (3.5) days, per day passed, to 100.
+- **A tired start:** in a career match on the full simulation, each footballer starts at fatigue (100 − condition) / 100 × `ConditionFatigue` (1.0) (#100). A fresh side plays exactly as before. Fatigue is already state, so no schema changes. A substitute still comes on fresh.
+- **Measured, it costs nothing.** In-match fatigue clears within a minute or so, so a side starting at fatigue 0.6 scores as a fresh one does ([quicksim.md](../simulation/quicksim.md#condition)). The quick-sim's weight for it is fitted at 0. For condition to tell in a match it would have to act on something that lasts the match, such as his stamina for it. That is open.
+- **Rotation:** a starter below `RestBelow` (70) is rested for a footballer of the slot's line at or above it, within `RotationMargin` (1.5) of his selection level. With none, he plays tired. Every club is picked this way, the human's too until M6.08d. Keepers aren't rotated.
+- **The season's turn:** the off-season's days leave everyone fresh.
+
 ## A matchday
 
 `CareerSeasons.PlayMatchday` in order:
@@ -46,7 +57,7 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 3. **The fixtures are played** and recorded, each with its lineup: simulation id to the world's footballer. The human's fixture brings its own lineup (`CareerSession.LineupFor`). His club is the simulation's home side whatever the ground (#167), so the lineup is his club's first.
 4. **Bans are served** by those who sat it out (`Availability.Serve`).
 5. **The matchday's injuries and cards** are applied (`Availability.Apply`), so a ban it brings is served from the next.
-6. **The week passes** for the injured (`Availability.Pass`), so an injury's days count from its own matchday.
+6. **The days to the next matchday pass** (`Availability.Pass`): the injured heal and everyone recovers, so an injury's days count from its own matchday.
 
 **At the season's turn** (`SeasonEngine.Rollover`), cautions start again. Bans still to serve carry into the same competition. The off-season's `OffSeasonDays` (60) pass for the injured.
 
@@ -60,12 +71,19 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
 
 | Season | Injuries (serious) | Sendings-off | Footballer-matches missed: injured | Banned | A club |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 19 (4) | 40 | 15 | 68 | 2.3 |
-| 2 | 11 (1) | 58 | 1 | 102 | 2.9 |
-| 3 | 18 (1) | 59 | 2 | 90 | 2.6 |
+| 1 | 19 (4) | 40 | 20 | 68 | 2.4 |
+| 2 | 11 (1) | 58 | 3 | 102 | 2.9 |
+| 3 | 18 (1) | 59 | 4 | 90 | 2.6 |
+
+| Season | XI's condition at kick-off: league | Midweek cup | Lowest starter | Starters rested |
+| --- | --- | --- | --- | --- |
+| 1 | 99.8 | 97.9 | 80 | 0 |
+| 2 | 99.8 | 97.8 | 80 | 0 |
+| 3 | 99.7 | 97.6 | 80 | 0 |
 
 - **Few injuries.** The full simulation injures about 0.02 footballers a side a match at 3-minute halves (#172), most of them knocks, so a club loses well under one footballer-match a season to injury. Whether the career should see more is a feel question, not settled here.
 - **Bans** cost a club two or three.
+- **Condition hardly bites at the references.** A week recovers a whole match, and three days nearly do, as the recovery research says. So no XI starts below 80 and rotation never rests anyone. That's the references' answer, not a tuned one: a later `RecoveryDays`, a higher `RestBelow` or a busier calendar would make it bite, and which is a feel question.
 - **Training injuries** are M6.10's.
 
 ## Tests
@@ -78,6 +96,7 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
   - the second yellow;
   - serving, only in its competition's matches of his club;
   - the days passing, and a layoff within the week that misses no matchday;
+- **`ConditionTests`** (career): the calendar's days; a match's cost by minutes and stamina; recovery by the days; a tired start; the season's turn;
   - the season's turn, in `Rollover` too;
   - the world's bytes, and a format-1 world.
 - **`AvailabilitySeasonTests`** (harness):
@@ -86,3 +105,4 @@ The world's bytes are format 2 (`WorldCodec`): after the managers, each football
   - a headless season that never picks anyone out, plays the quick-sim on the XI it picked, and bans and injures from its lines;
   - the human's lineup, home and away, and his played fixture carried;
   - the hub's line.
+- **`ConditionSeasonTests`** (harness): a career match's tired start; rotation's rule; the quick-sim's tired side and its rating; a headless matchday's cost and recovery before a midweek tie; the human's tired start; the condition sample and its fit; the hub's line.

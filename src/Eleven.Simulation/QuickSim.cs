@@ -11,8 +11,9 @@ namespace Eleven.Simulation
     /// </summary>
     public readonly struct QuickSide
     {
-        public QuickSide(double tier, PlayerCapabilities capabilities)
+        public QuickSide(double tier, PlayerCapabilities capabilities, double fatigue = 0)
         {
+            Fatigue = fatigue;
             Tier = tier;
             Capabilities = capabilities;
         }
@@ -21,6 +22,9 @@ namespace Eleven.Simulation
         public double Tier { get; }
 
         public PlayerCapabilities Capabilities { get; }
+
+        /// <summary>Its outfielders' mean fatigue at kick-off (#177), 0–1: 0 fresh.</summary>
+        public double Fatigue { get; }
     }
 
     /// <summary>
@@ -36,8 +40,9 @@ namespace Eleven.Simulation
     {
         public QuickSimModel(double baseRate, double home, double[] tierRatings, double capabilityWeight, double rho,
             double foulsPerSide, double cautionsPerSide, double sendingsOffPerSide, double shootoutConversion = ReferenceShootoutConversion,
-            double minorInjuriesPerSide = 0, double seriousInjuriesPerSide = 0)
+            double minorInjuriesPerSide = 0, double seriousInjuriesPerSide = 0, double fatigueWeight = 0)
         {
+            FatigueWeight = fatigueWeight;
             MinorInjuriesPerSide = minorInjuriesPerSide;
             SeriousInjuriesPerSide = seriousInjuriesPerSide;
             ShootoutConversion = shootoutConversion;
@@ -78,6 +83,9 @@ namespace Eleven.Simulation
 
         /// <summary>A shootout kick's chance of a goal.</summary>
         public double ShootoutConversion { get; }
+
+        /// <summary>A tired start's cost to the side's rating (#177), per unit of its mean fatigue at kick-off: 0 in a model fitted without it.</summary>
+        public double FatigueWeight { get; }
 
         /// <summary>Injuries a side a match of reference halves (#172), minor and serious: 0 in a model fitted without them.</summary>
         public double MinorInjuriesPerSide { get; }
@@ -192,7 +200,8 @@ namespace Eleven.Simulation
         }
 
         /// <summary>A side's rating: its tier's rating plus the weighted capability index.</summary>
-        public static double Rating(QuickSide side, QuickSimModel model) => model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities);
+        public static double Rating(QuickSide side, QuickSimModel model) =>
+            model.TierRating(side.Tier) + model.CapabilityWeight * CapabilityIndex(side.Capabilities) - model.FatigueWeight * side.Fatigue;
 
         /// <summary>The two sides' goal rates for a match with halves of <paramref name="halfSeconds"/>, each at most <see cref="MaxRate"/>.</summary>
         public static (double Home, double Away) Rates(QuickSide home, QuickSide away, double halfSeconds, QuickSimModel model)

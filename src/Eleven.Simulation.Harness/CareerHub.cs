@@ -162,6 +162,28 @@ namespace Eleven.Simulation.Harness
             return parts.Count == 0 ? "" : "Out: " + string.Join(", ", parts);
         }
 
+        /// <summary>The human's XI below full condition (#177), lowest first, "Condition: A. Name 72, B. Name 88"; empty with none.</summary>
+        public static string ConditionLine(CareerSession s)
+        {
+            Fixture? next = s.Next();
+            if (next == null) return "";
+            var byId = new Dictionary<int, Player>(s.World.Players.Count);
+            foreach (Player p in s.World.Players) byId[p.Id] = p;
+            var tired = new List<Player>();
+            foreach (KeyValuePair<int, int> e in s.LineupFor(next))
+            {
+                bool starter = false;
+                for (int i = 0; i < CareerSession.PerSide; i++) starter |= e.Key == Squads.HomeOutfielder(i);
+                starter |= e.Key == Squads.HomeKeeper(CareerSession.PerSide);
+                if (starter && byId.TryGetValue(e.Value, out Player? p) && p.Fitness < 100) tired.Add(p);
+            }
+
+            tired.Sort((a, b) => a.Fitness != b.Fitness ? a.Fitness.CompareTo(b.Fitness) : a.Id.CompareTo(b.Id));
+            var parts = new List<string>();
+            foreach (Player p in tired) parts.Add($"{(p.FirstName.Length > 0 ? p.FirstName.Substring(0, 1) + ". " : "")}{p.LastName} {p.Fitness}");
+            return parts.Count == 0 ? "" : "Condition: " + string.Join(", ", parts);
+        }
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";

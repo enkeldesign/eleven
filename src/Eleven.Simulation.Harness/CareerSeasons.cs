@@ -32,14 +32,14 @@ namespace Eleven.Simulation.Harness
         /// A fixture's quick-sim result: its own seed from the season's and the fixture's id; a
         /// cup tie as a knockout; the final, at a neutral ground, without home advantage.
         /// </summary>
-        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
+        public static MatchResult Quick(SimConfig config, World world, Season season, Fixture fixture, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? squad = null)
         {
             bool cup = fixture.Competition == CompetitionId.Cup;
             SimConfig c = cup ? config.With("knockout", 1) : config;
             QuickSimModel model = QuickSimModel.For(perSide);
             if (fixture.Neutral) model = WithoutHome(model);
             ulong seed = CounterRng.Hash(season.Seed, fixture.Id, RandomStream.QuickSim, 0, 0);
-            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide, homeOut), CareerQuickSim.Side(world, fixture.Away, perSide, awayOut), seed, model: model,
+            return QuickSim.Play(c, CareerQuickSim.Side(world, fixture.Home, perSide, homeOut, squad), CareerQuickSim.Side(world, fixture.Away, perSide, awayOut, squad), seed, model: model,
                 homePlayers: CareerQuickSim.HomeIds(perSide), awayPlayers: CareerQuickSim.AwayIds(perSide));
         }
 
@@ -49,7 +49,7 @@ namespace Eleven.Simulation.Harness
             var tiers = new double[QuickSimModel.Tiers];
             for (int t = 0; t < tiers.Length; t++) tiers[t] = m.TierRating(t);
             return new QuickSimModel(m.BaseRate, 0, tiers, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion,
-                m.MinorInjuriesPerSide, m.SeriousInjuriesPerSide);
+                m.MinorInjuriesPerSide, m.SeriousInjuriesPerSide, m.FatigueWeight);
         }
 
         /// <summary>Plays the next matchday: each fixture by the hook if it gives a result, else the quick-sim; then on to the next.</summary>
@@ -72,8 +72,8 @@ namespace Eleven.Simulation.Harness
                 // Who's out is read before the matchday: nothing it brings counts until the next.
                 HashSet<int> homeOut = Availability.OutOf(world, f.Home, kind), awayOut = Availability.OutOf(world, f.Away, kind);
                 PlayedFixture? other = hook?.Invoke(f);
-                MatchResult r = other?.Result ?? Quick(config, world, season, f, perSide, homeOut, awayOut);
-                IReadOnlyDictionary<int, int> lineup = other?.Lineup ?? CareerSquads.Lineup(world, f.Home, f.Away, perSide, homeOut, awayOut);
+                MatchResult r = other?.Result ?? Quick(config, world, season, f, perSide, homeOut, awayOut, sr);
+                IReadOnlyDictionary<int, int> lineup = other?.Lineup ?? CareerSquads.Lineup(world, f.Home, f.Away, perSide, homeOut, awayOut, sr);
                 SeasonEngine.Record(season, rules, f.Id, r);
                 played.Add((f, r, lineup));
             }
@@ -82,7 +82,7 @@ namespace Eleven.Simulation.Harness
             // count from its own day, and the days to the next matchday pass.
             Availability.Serve(world, day, kind, sr);
             foreach ((Fixture f, MatchResult r, IReadOnlyDictionary<int, int> lineup) in played) Availability.Apply(world, season, f, r, lineup, sr);
-            Availability.Pass(world, sr.DaysPerMatchday);
+            Availability.Pass(world, Availability.GapAfter(rules, season.Matchday), sr);
             SeasonEngine.Advance(season, rules);
             return day;
         }

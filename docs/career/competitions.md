@@ -70,6 +70,12 @@ From 36 clubs that makes six rounds and 35 ties: 4, 16, 8, 4, 2 and 1.
 L1 L2 L3 C1 L4 L5 L6 L7 C2 L8 L9 L10 L11 C3 L12 L13 L14 C4 L15 L16 L17 L18 C5 L19 L20 L21 L22 C6
 ```
 
+**Each matchday has its day** of the season (`Matchday.Day`, #177), from 0:
+- **League rounds** are `LeagueGapDays` (7) apart.
+- **A cup round** is midweek, `CupGapDays` (3) after the league round before it.
+
+So L1 is day 0, C1 day 17 and L4 day 21, and the final, C6, is day 150. The days between matchdays are what recovery and injuries count ([squads.md](squads.md)).
+
 ## Randomness
 
 All of it is on `RandomStream.Competition` (13), counter-based:

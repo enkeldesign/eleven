@@ -21,9 +21,6 @@ namespace Eleven.Career
         /// <summary>A serious injury's chance of each band (he left the pitch).</summary>
         public double[] SeriousShares = { 0, 0.2, 0.55, 0.25 };
 
-        /// <summary>Days from one matchday to the next.</summary>
-        public int DaysPerMatchday = 7;
-
         /// <summary>Days between one season's last matchday and the next's first.</summary>
         public int OffSeasonDays = 60;
 
@@ -32,6 +29,24 @@ namespace Eleven.Career
 
         /// <summary>The caution that brings the first one-match ban, and then each how many more bring another.</summary>
         public int CautionsForBan = 3, CautionsPerFurtherBan = 2;
+
+        /// <summary>A whole match's cost to his condition (#177), at reference stamina, from 100.</summary>
+        public double ConditionCostPerMatch = 30;
+
+        /// <summary>How far his stamina (1–20, reference 10.5) moves the cost: ± this at the ends.</summary>
+        public double StaminaWeight = 0.4;
+
+        /// <summary>Days to recover a whole match's cost (#177): Nédélec et al.'s 72–96 hours.</summary>
+        public double RecoveryDays = 3.5;
+
+        /// <summary>A tired start (#177): his fatigue at kick-off per point of condition below 100, as a share.</summary>
+        public double ConditionFatigue = 1.0;
+
+        /// <summary>Rotation (#177): a starter below this condition is rested for a fit footballer of his line within the margin.</summary>
+        public int RestBelow = 70;
+
+        /// <summary>Rotation's margin, in selection level (the 1–20 scale).</summary>
+        public double RotationMargin = 1.5;
 
         public static SquadRules Reference { get; } = new SquadRules();
     }
@@ -118,6 +133,7 @@ namespace Eleven.Career
             {
                 if (!lineup.TryGetValue(line.Player, out int id) || !byId.TryGetValue(id, out Player? p)) continue;
                 if (line.Injury > 0) p.InjuredDays = Math.Max(p.InjuredDays, Layoff(season.Seed, fixture.Id, p.Id, line.Injury, rules));
+                p.Fitness = Math.Max(0, p.Fitness - (int)Math.Round(ConditionCost(p, line.Seconds, 2 * result.HalfSeconds, rules)));
                 int cautions = line.SentOff && line.Cautions >= 2 ? line.Cautions - 2 : line.Cautions;
                 for (int c = 0; c < cautions; c++)
                 {
@@ -136,12 +152,33 @@ namespace Eleven.Career
             }
         }
 
-        /// <summary>Days pass for the injured (#176): from a matchday to the next, or over the off-season.</summary>
-        public static void Pass(World world, int days)
+        /// <summary>A match's cost to his condition (#177): by the share of a whole match he played, and his stamina.</summary>
+        public static double ConditionCost(Player p, double seconds, double matchSeconds, SquadRules rules)
         {
+            if (matchSeconds <= 0 || seconds <= 0) return 0;
+            double stamina = p.Get("stamina");
+            double factor = 1 + rules.StaminaWeight * (10.5 - stamina) / 9.5;
+            return rules.ConditionCostPerMatch * (seconds / matchSeconds) * factor;
+        }
+
+        /// <summary>His fatigue at kick-off (#177), from his condition: 0 when full.</summary>
+        public static double StartFatigue(Player p, SquadRules rules) => Math.Clamp((100 - p.Fitness) / 100.0 * rules.ConditionFatigue, 0, 1);
+
+        /// <summary>The days from this matchday to the next (#177), or a league round's gap after the last.</summary>
+        public static int GapAfter(CompetitionRules rules, int matchday)
+        {
+            List<Matchday> days = SeasonCalendar.Of(rules);
+            return matchday + 1 < days.Count ? days[matchday + 1].Day - days[matchday].Day : rules.LeagueGapDays;
+        }
+
+        /// <summary>Days pass (#176, #177): the injured heal, and every footballer's condition recovers.</summary>
+        public static void Pass(World world, int days, SquadRules rules)
+        {
+            int recovered = rules.RecoveryDays > 0 ? (int)Math.Round(days * rules.ConditionCostPerMatch / rules.RecoveryDays) : 100;
             foreach (Player p in world.Players)
             {
                 if (p.InjuredDays > 0) p.InjuredDays = Math.Max(0, p.InjuredDays - days);
+                if (p.Fitness < 100) p.Fitness = Math.Min(100, p.Fitness + recovered);
             }
         }
 
@@ -154,7 +191,7 @@ namespace Eleven.Career
                 p.CupCautions = 0;
             }
 
-            Pass(world, rules.OffSeasonDays);
+            Pass(world, rules.OffSeasonDays, rules);
         }
     }
 }

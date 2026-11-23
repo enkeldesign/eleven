@@ -45,6 +45,12 @@ namespace Eleven.Career
 
         public bool CupNeutralFinal { get; set; } = true;
 
+        /// <summary>Days from one league round to the next (#177).</summary>
+        public int LeagueGapDays { get; set; } = 7;
+
+        /// <summary>Days from the league round before a cup round to it (#177): midweek.</summary>
+        public int CupGapDays { get; set; } = 3;
+
         /// <summary>A league season's rounds: each club meets each other <see cref="Meetings"/> times.</summary>
         public int LeagueRounds => (LeagueClubs - 1) * Meetings;
 
@@ -261,6 +267,9 @@ namespace Eleven.Career
     {
         public MatchdayKind Kind;
         public int Round;
+
+        /// <summary>Its day of the season (#177), from 0: league rounds a week apart, a cup round midweek.</summary>
+        public int Day;
     }
 
     /// <summary>
@@ -274,13 +283,18 @@ namespace Eleven.Career
         {
             int league = rules.LeagueRounds, cup = CompetitionRules.CupRounds.Count;
             var days = new List<Matchday>(league + cup);
-            int next = 1;
+            int next = 1, lastLeague = 0, last = -1;
             for (int r = 1; r <= league; r++)
             {
-                days.Add(new Matchday { Kind = MatchdayKind.League, Round = r });
+                // A league round a week after the last (#177), and never on or before a cup round's day.
+                int day = r == 1 ? 0 : Math.Max(lastLeague + rules.LeagueGapDays, last + 1);
+                days.Add(new Matchday { Kind = MatchdayKind.League, Round = r, Day = day });
+                lastLeague = last = day;
                 while (next <= cup && (next == cup ? r == league : r == next * league / cup))
                 {
-                    days.Add(new Matchday { Kind = MatchdayKind.Cup, Round = next });
+                    // A cup round midweek after the league round before it.
+                    last = Math.Max(lastLeague + rules.CupGapDays, last + 1);
+                    days.Add(new Matchday { Kind = MatchdayKind.Cup, Round = next, Day = last });
                     next++;
                 }
             }
