@@ -25,6 +25,51 @@ namespace Eleven.Simulation.Tests
             return CareerSession.Start(w, seed, club, role, Config);
         }
 
+        // The host's step (HostLoop.StepOnce): the human's command when he plays a footballer,
+        // then the keepers', the CPU's, the restarts' and the managers'.
+        private static int Duplicates(CareerSession s, int ticks, bool human)
+        {
+            Fixture f = s.Next()!;
+            var sim = new Simulator(s.MatchConfig(f), s.MatchFor(f, 0x178));
+            var commands = new List<Command>();
+            var events = new List<SimEvent>();
+            int duplicates = 0;
+            for (int t = 0; t < ticks; t++)
+            {
+                commands.Clear();
+                if (human) commands.Add(new Command(OneVOne.HomeController, sim.Tick, default));
+                KeeperControllers.Append(sim, commands);
+                CpuControllers.Append(sim, commands);
+                RestartControllers.Append(sim, commands);
+                ManagerControllers.Append(sim, commands);
+                events.Clear();
+                sim.Step(commands, events);
+                duplicates += events.Count(e => e.Kind == SimEventKind.CommandRejected && e.Rejection == CommandRejection.Duplicate);
+            }
+
+            return duplicates;
+        }
+
+        [Fact]
+        public void Only_a_player_manager_controls_a_footballer_so_no_command_is_ever_doubled()
+        {
+            CareerSession player = New(CareerRole.PlayerManager), manager = New(CareerRole.ManagerOnly);
+            Assert.True(player.HumanPlays);
+            Assert.False(manager.HumanPlays);
+
+            // A manager-only match is CPU on both sides, his kick-off taker included.
+            SimState watched = manager.MatchFor(manager.Next()!, 1);
+            Assert.Contains(watched.Cpus, c => c.PlayerId == Squads.HomeOutfielder(0));
+            SimState played = player.MatchFor(player.Next()!, 1);
+            Assert.DoesNotContain(played.Cpus, c => c.PlayerId == Squads.HomeOutfielder(0));
+
+            Assert.Equal(0, Duplicates(player, 600, player.HumanPlays));
+            Assert.Equal(0, Duplicates(manager, 600, manager.HumanPlays));
+
+            // Sent anyway, the human's command doubles the CPU's for his kick-off taker, and both are lost.
+            Assert.True(Duplicates(New(CareerRole.ManagerOnly), 600, true) > 0);
+        }
+
         [Fact]
         public void A_new_career_has_its_own_world_its_club_and_its_first_season()
         {
