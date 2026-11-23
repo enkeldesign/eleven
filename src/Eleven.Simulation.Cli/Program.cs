@@ -277,10 +277,14 @@ internal static class Program
                 // RollForward's own loop, with who was out of each fixture counted (#176).
                 var seasons = new List<Eleven.Career.Season>(count);
                 var outs = new List<(int Injuries, int Serious, int SentOff, int Injured, int Banned)>();
+                var condition = new List<(double LeagueFit, double CupFit, int LeagueRests, int CupRests, int LeagueXis, int CupXis, int Lowest)>();
                 Eleven.Career.Season played = Eleven.Career.SeasonEngine.Start(seasonWorld, 1, careerSeed, Eleven.Career.SeasonEngine.FirstRanking(seasonWorld), seasonRules);
                 for (int i = 1; i <= count; i++)
                 {
                     int injuries = 0, serious = 0, sentOff = 0, injured = 0, banned = 0;
+                    // #177: each XI's condition at kick-off, and the starters rotation rested, league and midweek cup.
+                    double leagueFit = 0, cupFit = 0;
+                    int leagueRests = 0, cupRests = 0, leagueXis = 0, cupXis = 0, lowest = 100;
                     while (!Eleven.Career.SeasonEngine.Finished(played, seasonRules))
                     {
                         Eleven.Career.MatchdayKind kind = Eleven.Career.SeasonCalendar.Of(seasonRules)[played.Matchday].Kind;
@@ -289,6 +293,25 @@ internal static class Program
                         {
                             foreach (int club in new[] { f.Home, f.Away })
                             {
+                                HashSet<int> clubOut = Eleven.Career.Availability.OutOf(seasonWorld, club, kind);
+                                var rotated = CareerSquads.Selection(seasonWorld, club, 10, clubOut, Eleven.Career.SquadRules.Reference);
+                                var plain = CareerSquads.Selection(seasonWorld, club, 10, clubOut);
+                                int rests = rotated.Starters.Count(x => !plain.Starters.Contains(x));
+                                double fit = rotated.Starters.Average(x => x.Fitness);
+                                lowest = Math.Min(lowest, rotated.Starters.Min(x => x.Fitness));
+                                if (kind == Eleven.Career.MatchdayKind.Cup)
+                                {
+                                    cupFit += fit;
+                                    cupRests += rests;
+                                    cupXis++;
+                                }
+                                else
+                                {
+                                    leagueFit += fit;
+                                    leagueRests += rests;
+                                    leagueXis++;
+                                }
+
                                 foreach (Eleven.Career.Player p in seasonWorld.Players)
                                 {
                                     if (p.ClubId != club || !Eleven.Career.Availability.Out(p, kind)) continue;
@@ -312,6 +335,7 @@ internal static class Program
 
                     seasons.Add(played);
                     outs.Add((injuries, serious, sentOff, injured, banned));
+                    condition.Add((leagueFit / Math.Max(1, leagueXis), cupFit / Math.Max(1, cupXis), leagueRests, cupRests, leagueXis, cupXis, lowest));
                     if (i < count) played = Eleven.Career.SeasonEngine.Rollover(seasonWorld, played, careerSeed, seasonRules);
                 }
 
@@ -342,6 +366,9 @@ internal static class Program
                     int clubs = seasonWorld.Clubs.Count;
                     Console.WriteLine(FormattableString.Invariant(
                         $"  squads: {o.Injuries} injuries ({o.Serious} serious) and {o.SentOff} sendings-off; footballer-matches missed {o.Injured} injured and {o.Banned} banned, {(double)(o.Injured + o.Banned) / clubs:F1} a club"));
+                    var k = condition[s.Number - 1];
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"  condition: XIs at kick-off {k.LeagueFit:F1} in the league, {k.CupFit:F1} midweek in the cup, lowest starter {k.Lowest}; rested {k.LeagueRests} league and {k.CupRests} cup starters ({(double)(k.LeagueRests + k.CupRests) / clubs:F1} a club)"));
                     for (int d = 1; d <= s.Divisions.Count; d++)
                     {
                         var table = Eleven.Career.SeasonEngine.Table(s, (Eleven.Career.CompetitionId)d, seasonRules);
