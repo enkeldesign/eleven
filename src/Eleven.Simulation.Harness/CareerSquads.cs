@@ -110,7 +110,8 @@ namespace Eleven.Simulation.Harness
             PlayerAttributes.Index("keeperReflexes"), PlayerAttributes.Index("keeperHandling"), PlayerAttributes.Index("keeperPositioning"),
         };
 
-        private static double KeeperLevel(Player p)
+        /// <summary>His keeping: the mean of his three keeper attributes.</summary>
+        public static double KeeperLevel(Player p)
         {
             double sum = 0;
             foreach (int i in Keeping) sum += p.Attributes[i];
