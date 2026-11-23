@@ -22,8 +22,16 @@ namespace Eleven.Simulation.Harness
             TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
-            Apply(s, Selection(world, homeClub, perSide, homeOut), perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
-            Apply(s, Selection(world, awayClub, perSide, awayOut), perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
+            Apply(s, away, perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
+
+            // A side with footballers out picks a shorter bench (#176): its places beyond the
+            // substitutes picked go, so nobody unpicked can come on (Codex on #185).
+            var picked = new HashSet<int>();
+            for (int i = 0; i < home.Bench.Count; i++) picked.Add(Squads.HomeBench(perSide, i));
+            for (int i = 0; i < away.Bench.Count; i++) picked.Add(Squads.AwayBench(perSide, i));
+            s.Bench = Array.FindAll(s.Bench, b => picked.Contains(b.Id));
             return s;
         }
 
