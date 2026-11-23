@@ -90,7 +90,8 @@ namespace Eleven.Simulation.Harness
         }
 
         // A footballer's lines, for the basic selection: a slot's from its share of the side.
-        private enum Line
+        /// <summary>A line of a side's shape, from the back (#180): what the selection fills a slot from.</summary>
+        public enum Line
         {
             Defence,
             Midfield,
@@ -103,6 +104,17 @@ namespace Eleven.Simulation.Harness
             Position.Striker => Line.Attack,
             _ => Line.Midfield,
         };
+
+        /// <summary>
+        /// Each outfielder's line, by index (#180): at ten outfielders the formation's own lines,
+        /// its first defending, its last attacking and those between in midfield; fewer, as before.
+        /// </summary>
+        public static Line[] SlotLines(int perSide, Formation formation)
+        {
+            var lines = new Line[perSide];
+            for (int i = 0; i < perSide; i++) lines[i] = SlotLine(perSide, i);
+            return lines;
+        }
 
         // Outfielder i's slot (Squads.SlotOf: the kick-off taker plays the last) and its line,
         // the first two fifths of the side defending and the last fifth attacking.
