@@ -281,6 +281,22 @@ namespace Eleven.Simulation
         public int Winner => HomeGoals != AwayGoals ? (HomeGoals > AwayGoals ? HomeTeam : AwayTeam)
             : HomeShootoutGoals != AwayShootoutGoals ? (HomeShootoutGoals > AwayShootoutGoals ? HomeTeam : AwayTeam) : 0;
 
+        /// <summary>
+        /// The same match seen from the other ground (#167): every home field the away one's and
+        /// back, the metrics too. The goals keep their sides' ids, so the winner is the same side.
+        /// </summary>
+        public MatchResult Mirrored() =>
+            new MatchResult(AwayTeam, HomeTeam, AwayGoals, HomeGoals, HalfSeconds, PlayedSeconds, Goals, Restarts,
+                homeFouls: AwayFouls, awayFouls: HomeFouls, homePenalties: AwayPenalties, awayPenalties: HomePenalties,
+                homeCautions: AwayCautions, awayCautions: HomeCautions, homeSendingsOff: AwaySendingsOff, awaySendingsOff: HomeSendingsOff,
+                homeInjuries: AwayInjuries, awayInjuries: HomeInjuries, homeSubstitutions: AwaySubstitutions, awaySubstitutions: HomeSubstitutions,
+                extraTime: ExtraTime, homeShootoutKicks: AwayShootoutKicks, awayShootoutKicks: HomeShootoutKicks,
+                homeShootoutGoals: AwayShootoutGoals, awayShootoutGoals: HomeShootoutGoals)
+            {
+                HomeMetrics = AwayMetrics,
+                AwayMetrics = HomeMetrics,
+            };
+
         /// <summary>The text form: one <c>name=value</c> line each, then one <c>goal=</c> line per goal. Invariant culture, stable.</summary>
         public string ToText()
         {
