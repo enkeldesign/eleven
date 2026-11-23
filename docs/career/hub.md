@@ -17,6 +17,7 @@ The career is saved into its slot on Start, after every fixture and on the next 
 - **The header:** the season and matchday, "Season 1 · Matchday 4 of 28".
 - **The standing:** your division, place and points, "Division 1 · 5th · 12 points".
 - **Your next fixture:** "League round 4: LIN v ROV, at home", or "Cup, Round of 16: ROV v LIN, away". If there is none, why: "No match for you: a bye into the round of 32", or "out of the cup".
+- **Your picks out** (#179), when any is: "Picked but out: A. Name; the AI's pick takes his place."
 - **Who's out** (#176), when anyone is: "Out: A. Name (injured, 12 days), B. Name (banned, 1 league match)" ([squads.md](squads.md)).
 - **The table:** your division's place, club, played, goal difference and points. Your row is bold and marked by a dot, not only coloured.
 - **Your last results:** "W 2–1 v ROV (home)", or "L 1–1 v ROT (away, cup, on penalties)".
@@ -32,6 +33,7 @@ The actions:
 | **Next matchday** | No fixture of yours | Quick-sims the matchday |
 | **Next season** | The season is over | Rolls over (#164) |
 | **Save** | Always | Saves into the career's slot at once (#171) |
+| **Squad** | Always | Your squad: pick your XI and bench ([squads.md](squads.md#your-squad)) |
 | **Home** | Always | Back to Home; Career's slots return here |
 
 ## A career match

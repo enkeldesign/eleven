@@ -19,6 +19,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
   - **Attributes:** #80's 26 football attributes, each 1–20.
   - **Separate properties:** potential (1–20), fitness (0–100), morale (1–20) and days injured.
   - **Who's out** (#176): his bans to serve and this season's cautions, in the league and the cup ([squads.md](squads.md)).
+- **A club's picks** (#179): the human's XI and bench, empty for every club the AI picks for.
 - **A manager:**
   - id, name, age, club;
   - #80's seven competences, each 1–20: tactics, coaching, development, scouting, recruitment, motivation, adaptability;
@@ -56,7 +57,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
 ## The codec
 
 `WorldCodec` encodes a world to canonical, versioned bytes and back.
-- **The layout:** magic `ELWD`, format 2, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176). A format-1 world reads with nobody banned or cautioned.
+- **The layout:** magic `ELWD`, format 3, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176), then each club's picks (#179). An older world reads with what it lacks empty: nobody banned or cautioned, no picks.
 - **Migration:** the attribute and competence counts are written, so a later format can migrate a world (INV-7).
 - **Refusals:** a cut, padded or foreign buffer is a `FormatException`.
 - **Saves:** M6.07's saves build on it.
