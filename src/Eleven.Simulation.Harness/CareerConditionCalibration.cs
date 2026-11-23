@@ -89,9 +89,10 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>
         /// The fatigue weight w by Poisson maximum likelihood over the sample, every other value the
-        /// model's: the home side's rating less w × its fatigue. With its standard error.
+        /// model's: the home side's rating less w × its fatigue. With its standard error. Bounded,
+        /// w is at least 0: a tired start never helps a side, so an estimate below it is noise.
         /// </summary>
-        public static (double Weight, double Error) Fit(World world, IReadOnlyList<ConditionMatch> sample, QuickSimModel model)
+        public static (double Weight, double Error) Fit(World world, IReadOnlyList<ConditionMatch> sample, QuickSimModel model, bool bounded = true)
         {
             var sides = new Dictionary<int, QuickSide>();
             QuickSide Side(int club) => sides.TryGetValue(club, out QuickSide s) ? s : sides[club] = CareerQuickSim.Side(world, club, CareerQuickSimCalibration.PerSide);
@@ -136,7 +137,8 @@ namespace Eleven.Simulation.Harness
             }
 
             double curvature = (Likelihood(best + H) - 2 * Likelihood(best) + Likelihood(best - H)) / (H * H);
-            return (Math.Round(best, 6), curvature < 0 ? Eleven.Simulation.Maths.SimMath.Sqrt(-1 / curvature) : 0);
+            double error = curvature < 0 ? Eleven.Simulation.Maths.SimMath.Sqrt(-1 / curvature) : 0;
+            return (Math.Round(bounded ? Math.Max(0, best) : best, 6), error);
         }
 
         /// <summary>The full simulation's sample against the model's quick-sim, by the home side's fatigue at kick-off.</summary>

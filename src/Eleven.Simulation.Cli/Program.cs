@@ -399,7 +399,8 @@ internal static class Program
                 Eleven.Career.World condWorld = CareerQuickSimCalibration.World();
                 List<ConditionMatch> condSample = CareerConditionCalibration.Read(File.ReadAllLines(args[2]));
                 (double weight, double error) = CareerConditionCalibration.Fit(condWorld, condSample, QuickSimModel.ElevenASide);
-                Console.WriteLine(FormattableString.Invariant($"fit over {condSample.Count} matches: fatigue weight {weight:F6} ± {error:F3}"));
+                (double unbounded, _) = CareerConditionCalibration.Fit(condWorld, condSample, QuickSimModel.ElevenASide, bounded: false);
+                Console.WriteLine(FormattableString.Invariant($"fit over {condSample.Count} matches: fatigue weight {weight:F6} ± {error:F3} (unbounded {unbounded:F6})"));
                 Console.Write(CareerConditionCalibration.Compare(CareerQuickSimCalibration.Config(), condWorld, condSample, 100, CareerConditionCalibration.With(QuickSimModel.ElevenASide, weight)));
                 return 0;
             }
