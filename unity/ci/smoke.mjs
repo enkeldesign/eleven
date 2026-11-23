@@ -544,12 +544,36 @@ async function runPassOnce(browser, url, name, contextOptions, useTouch) {
       check('Simulate plays the matchday and the table shows it', !!second && second[2] === '2' && second[3] === '1', short(second));
       if (!second) throw new Error('no second matchday');
 
+      // #179: your squad. Squad lists the club, its XI first; choosing the first offers who can
+      // take his place; a swap puts the first of them in; Back returns to the hub; Play kicks off with him.
+      const hubSquad = lastLog(/ELEVEN hub shown via=\S+ .* squad=(\d+),(\d+)/);
+      const fromSquad = logs.length;
+      if (hubSquad) await tap(point(hubSquad, 1));
+      const list = (await waitForLog(/ELEVEN squad shown mode=list selected=0 rows=(\d+) first=(\d+),(\d+) firstId=(\d+) back=(\d+),(\d+)/, 10_000, fromSquad))?.match ?? null;
+      check('Squad lists the club, its XI first', !!list && Number(list[1]) >= 20, short(list));
+      const fromChoose = logs.length;
+      if (list) await tap(point(list, 2));
+      const offer = (await waitForLog(/ELEVEN squad shown mode=swap selected=(\d+) rows=(\d+) first=(\d+),(\d+) firstId=(\d+)/, 10_000, fromChoose))?.match ?? null;
+      check('choosing a footballer offers who can take his place', !!offer && offer[1] === list?.[4] && Number(offer[2]) > 0, short(offer));
+      const fromSwap = logs.length;
+      if (offer) await tap(point(offer, 3));
+      const swapped = (await waitForLog(/ELEVEN squad swap a=(\d+) b=(\d+) ok=1/, 10_000, fromSwap))?.match ?? null;
+      const relisted = (await waitForLog(/ELEVEN squad shown mode=list .* back=(\d+),(\d+)/, 10_000, fromSwap))?.match ?? null;
+      check('a swap puts him in the XI', !!swapped && swapped[1] === list?.[4] && swapped[2] === offer?.[5], short(swapped));
+      const fromBack = logs.length;
+      if (relisted) await tap(point(relisted, 1));
+      const hubAgain = (await waitForLog(hubPattern, 10_000, fromBack))?.match ?? null;
+      check('Back returns to the hub', !!hubAgain && hubAgain[2] === '2', short(hubAgain));
+
       const fromPlay = logs.length;
-      await tap(point(second, 5));
+      await tap(point(hubAgain ?? second, 5));
       const match = (await waitForLog(/ELEVEN match started via=career seed=(\d+) .*side=(\d+)/, 10_000, fromPlay))?.match ?? null;
       const fixture = (await waitForLog(/ELEVEN career match fixture=(\d+) home=(\d+) away=(\d+) club=(\d+)/, 10_000, fromPlay))?.match ?? null;
       check('Play starts the human\'s fixture at eleven a side', !!match && !!fixture && match[2] === '10' && (fixture[2] === fixture[4] || fixture[3] === fixture[4]),
         `${short(match)}; ${short(fixture)}`);
+      const lineup = (await waitForLog(/ELEVEN career lineup xi=([\d,]+)/, 10_000, fromPlay))?.match ?? null;
+      const xi = lineup ? lineup[1].split(',') : [];
+      check('the XI kicks off with your swap', !!swapped && xi.length === 11 && xi.includes(swapped[2]) && !xi.includes(swapped[1]), short(lineup));
       const running = (await waitForLog(/ELEVEN match budget second=5 side=10/, 60_000, fromPlay))?.match ?? null;
       check('the career match plays', !!running, short(running));
       await page.screenshot({ path: `${outDir}/${name}-match.png` }).catch(() => {});

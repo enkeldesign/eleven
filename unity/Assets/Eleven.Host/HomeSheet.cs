@@ -115,6 +115,7 @@ namespace Eleven.Host
             NewCareer,
             Hub,
             Slots,
+            Squad,
         }
 
         private Shown _page;
@@ -254,7 +255,7 @@ namespace Eleven.Host
         public List<VisualElement> FocusOrder()
         {
             var order = new List<VisualElement>();
-            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots) return CareerFocusOrder();
+            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots || _page == Shown.Squad) return CareerFocusOrder();
             if (_page == Shown.Home)
             {
                 order.Add(_practice.Element);
@@ -299,6 +300,7 @@ namespace Eleven.Host
             _newCareerPage.Element.style.display = page == Shown.NewCareer ? DisplayStyle.Flex : DisplayStyle.None;
             _hubPage.Element.style.display = page == Shown.Hub ? DisplayStyle.Flex : DisplayStyle.None;
             _slotsPage.Element.style.display = page == Shown.Slots ? DisplayStyle.Flex : DisplayStyle.None;
+            _squadPage.Element.style.display = page == Shown.Squad ? DisplayStyle.Flex : DisplayStyle.None;
             _reported = false;
 
             // Said once laid out: a page already shown may have changed its size (the hub after a
@@ -458,7 +460,7 @@ namespace Eleven.Host
         private void Report()
         {
             if (!Open || _reported) return;
-            UiKit.Surface page = _page == Shown.Quick ? _quickPage : _page == Shown.NewCareer ? _newCareerPage : _page == Shown.Hub ? _hubPage : _page == Shown.Slots ? _slotsPage : _homePage;
+            UiKit.Surface page = _page == Shown.Quick ? _quickPage : _page == Shown.NewCareer ? _newCareerPage : _page == Shown.Hub ? _hubPage : _page == Shown.Slots ? _slotsPage : _page == Shown.Squad ? _squadPage : _homePage;
             if (!(page.Body.layout.width > 0)) return;
             _reported = true;
             float s = _ui.PixelsPerPoint;
@@ -474,7 +476,7 @@ namespace Eleven.Host
                 return;
             }
 
-            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots)
+            if (_page == Shown.NewCareer || _page == Shown.Hub || _page == Shown.Slots || _page == Shown.Squad)
             {
                 ReportCareer(At);
                 return;

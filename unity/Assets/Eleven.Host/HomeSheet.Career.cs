@@ -57,6 +57,14 @@ namespace Eleven.Host
         private Label _hubStanding;
         private Label _hubNext;
         private Label _hubOut;
+        private Label _hubPicks;
+
+        // Your squad (#179): the rows, the footballer chosen to swap, and the page's actions.
+        private UiKit.Surface _squadPage;
+        private ScrollView _squadList;
+        private UiKit.Action _hubSquad, _squadAuto, _squadBack;
+        private readonly List<(int Player, UiKit.Action Row)> _squadRows = new List<(int, UiKit.Action)>();
+        private int _squadSelected;
         private Label _hubCondition;
         private Label _hubResults;
         private Label _hubSummary;
@@ -151,6 +159,11 @@ namespace Eleven.Host
             _hubOut.style.marginBottom = Spacing.M;
             _hubOut.style.display = DisplayStyle.None;
             hub.Add(_hubOut);
+            // Your picks out of your next match (#179), shown only when one is.
+            _hubPicks = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubPicks.style.marginBottom = Spacing.M;
+            _hubPicks.style.display = DisplayStyle.None;
+            hub.Add(_hubPicks);
             // Your XI below full condition (#177), lowest first.
             _hubCondition = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
             _hubCondition.style.marginBottom = Spacing.M;
@@ -173,16 +186,33 @@ namespace Eleven.Host
             _hubHome = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Home", ShowHome);
             _hubSave = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Save", HubSave);
             _hubSimulate = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, "Simulate", HubSimulate);
+            _hubSquad = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Squad", ShowSquad);
             _hubPrimary = UiKit.MakeAction(_ui, _theme, ActionRole.Primary, "Play", HubPrimary);
             _hubPage.Actions.Add(_hubHome.Element);
             _hubPage.Actions.Add(_hubSave.Element);
+            _hubPage.Actions.Add(_hubSquad.Element);
             _hubPage.Actions.Add(_hubSimulate.Element);
             _hubPage.Actions.Add(_hubPrimary.Element);
             _hubPage.Actions.style.flexWrap = Wrap.Wrap;
             UiKit.Gaps(_hubPage.Actions);
             _hubPage.Element.style.display = DisplayStyle.None;
 
+            // Your squad (#179): every footballer of your club; tap one, then who takes his place.
+            _squadPage = Page("Squad page", "Squad");
+            _squadList = UiKit.MakeScroll();
+            _squadList.style.flexShrink = 1;
+            _squadList.style.minHeight = 0;
+            _squadPage.Content.Add(_squadList);
+            _squadAuto = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, "Auto", SquadAuto);
+            _squadBack = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Back", SquadBack);
+            _squadPage.Actions.Add(_squadBack.Element);
+            _squadPage.Actions.Add(_squadAuto.Element);
+            UiKit.Gaps(_squadPage.Actions);
+            _squadPage.Element.style.display = DisplayStyle.None;
+
             _scrim.Add(_newCareerPage.Element);
+            _scrim.Add(_squadPage.Element);
+            _squadPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
             _scrim.Add(_hubPage.Element);
             _scrim.Add(_slotsPage.Element);
             _newCareerPage.Body.RegisterCallback<GeometryChangedEvent>(_ => Report());
@@ -273,6 +303,9 @@ namespace Eleven.Host
             string outs = CareerHub.OutLine(s);
             _hubOut.text = outs;
             _hubOut.style.display = outs.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            string picksOut = CareerHub.PickLine(s);
+            _hubPicks.text = picksOut;
+            _hubPicks.style.display = picksOut.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             string condition = CareerHub.ConditionLine(s);
             _hubCondition.text = condition;
             _hubCondition.style.display = condition.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
@@ -369,9 +402,107 @@ namespace Eleven.Host
             ShowHub(null);
         }
 
+        // SQUAD on the hub (#179): your squad's rows, nobody chosen.
+        private void ShowSquad()
+        {
+            if (Career() == null) return;
+            _squadSelected = 0;
+            RefreshSquad();
+            ShowPage(Shown.Squad);
+        }
+
+        // The rows: the three groups, or, with a footballer chosen, who can take his place.
+        private void RefreshSquad()
+        {
+            CareerSession s = Career();
+            if (s == null) return;
+            _squadList.Clear();
+            _squadRows.Clear();
+            void Add(SquadRow r, System.Action onClick)
+            {
+                UiKit.Action row = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, r.Text, onClick);
+                row.Element.style.marginBottom = Spacing.Xs;
+                row.Body.style.alignItems = Align.FlexStart;
+                row.Label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                _squadList.Add(row.Element);
+                _squadRows.Add((r.Player, row));
+            }
+
+            if (_squadSelected == 0)
+            {
+                Relabel(_squadBack, "Back");
+                List<SquadRow> rows = CareerHub.SquadRows(s);
+                foreach ((SquadGroup group, string title) in new[] { (SquadGroup.Xi, "XI"), (SquadGroup.Bench, "Bench"), (SquadGroup.NotPicked, "Not picked") })
+                {
+                    _squadList.Add(Heading(title));
+                    foreach (SquadRow r in rows.FindAll(x => x.Group == group)) Add(r, () => SquadChoose(r.Player));
+                }
+
+                return;
+            }
+
+            Relabel(_squadBack, "Cancel");
+            SquadRow me = CareerHub.SquadRows(s).Find(x => x.Player == _squadSelected);
+            _squadList.Add(Heading(me != null ? $"Swap {me.Name} with" : "Swap with"));
+            foreach (SquadRow r in CareerHub.SwapCandidates(s, _squadSelected)) Add(r, () => SquadSwap(r.Player));
+        }
+
+        private void SquadChoose(int player)
+        {
+            Log(FormattableString.Invariant($"ELEVEN squad chose player={player}"));
+            _squadSelected = player;
+            RefreshSquad();
+            _reported = false;
+            _scrim.schedule.Execute(Report).StartingIn(100);
+        }
+
+        private void SquadSwap(int player)
+        {
+            CareerSession s = Career();
+            if (s == null) return;
+            bool ok = s.Swap(_squadSelected, player);
+            Log(FormattableString.Invariant($"ELEVEN squad swap a={_squadSelected} b={player} ok={(ok ? 1 : 0)}"));
+            _squadSelected = 0;
+            RefreshSquad();
+            _reported = false;
+            _scrim.schedule.Execute(Report).StartingIn(100);
+        }
+
+        private void SquadAuto()
+        {
+            Career()?.AutoPick();
+            Log("ELEVEN squad auto");
+            _squadSelected = 0;
+            RefreshSquad();
+            _reported = false;
+            _scrim.schedule.Execute(Report).StartingIn(100);
+        }
+
+        private void SquadBack()
+        {
+            if (_squadSelected != 0)
+            {
+                _squadSelected = 0;
+                RefreshSquad();
+                _reported = false;
+                _scrim.schedule.Execute(Report).StartingIn(100);
+                return;
+            }
+
+            ShowHub(null);
+        }
+
         private List<VisualElement> CareerFocusOrder()
         {
             var order = new List<VisualElement>();
+            if (_page == Shown.Squad)
+            {
+                foreach ((int Player, UiKit.Action Row) entry in _squadRows) order.Add(entry.Row.Element);
+                order.Add(_squadBack.Element);
+                order.Add(_squadAuto.Element);
+                return order;
+            }
+
             if (_page == Shown.NewCareer)
             {
                 order.Add(_careerPicker.Previous.Element);
@@ -391,6 +522,7 @@ namespace Eleven.Host
 
             order.Add(_hubHome.Element);
             order.Add(_hubSave.Element);
+            order.Add(_hubSquad.Element);
             if (_hubSimulate.Element.resolvedStyle.display != DisplayStyle.None) order.Add(_hubSimulate.Element);
             order.Add(_hubPrimary.Element);
             return order;
@@ -402,6 +534,15 @@ namespace Eleven.Host
             if (_page == Shown.NewCareer)
             {
                 Log(FormattableString.Invariant($"ELEVEN home shown page=newcareer clubs={_careerClubs.Count} club={_careerClub} role={_careerRole} start={at(_careerStart)}"));
+                return;
+            }
+
+            if (_page == Shown.Squad)
+            {
+                string mode = _squadSelected == 0 ? "list" : "swap";
+                string first = _squadRows.Count > 0 ? at(_squadRows[0].Row) : "0,0";
+                int firstId = _squadRows.Count > 0 ? _squadRows[0].Player : 0;
+                Log(FormattableString.Invariant($"ELEVEN squad shown mode={mode} selected={_squadSelected} rows={_squadRows.Count} first={first} firstId={firstId} back={at(_squadBack)} auto={at(_squadAuto)}"));
                 return;
             }
 
@@ -417,7 +558,7 @@ namespace Eleven.Host
             if (s == null) return;
             int played = s.Table().Find(r => r.Club == s.Club)?.Played ?? 0;
             Log(FormattableString.Invariant(
-                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)} save={at(_hubSave)}"));
+                $"ELEVEN hub shown via={_via} season={s.Season.Number} matchday={s.Season.Matchday + 1} played={played} action={CareerHub.Action(s)} primary={at(_hubPrimary)} simulate={at(_hubSimulate)} home={at(_hubHome)} save={at(_hubSave)} squad={at(_hubSquad)}"));
         }
     }
 }
