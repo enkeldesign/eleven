@@ -33,7 +33,8 @@ namespace Eleven.Simulation.Harness
         {
             var tiers = new double[QuickSimModel.Tiers];
             for (int t = 0; t < tiers.Length; t++) tiers[t] = m.TierRating(t);
-            return new QuickSimModel(m.BaseRate, 0, tiers, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion);
+            return new QuickSimModel(m.BaseRate, 0, tiers, m.CapabilityWeight, m.Rho, m.FoulsPerSide, m.CautionsPerSide, m.SendingsOffPerSide, m.ShootoutConversion,
+                m.MinorInjuriesPerSide, m.SeriousInjuriesPerSide);
         }
 
         /// <summary>Plays the next matchday: each fixture by the hook if it gives a result, else the quick-sim; then on to the next.</summary>
