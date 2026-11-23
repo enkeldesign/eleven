@@ -118,6 +118,9 @@ namespace Eleven.Simulation.Harness
             PlayerAttributes.Index("keeperReflexes"), PlayerAttributes.Index("keeperHandling"), PlayerAttributes.Index("keeperPositioning"),
         };
 
+        /// <summary>His selection level (#179): his keeping for a keeper, else his outfield level, on the 1–20 scale.</summary>
+        public static double Level(Player p) => 0;
+
         /// <summary>His keeping: the mean of his three keeper attributes.</summary>
         public static double KeeperLevel(Player p)
         {

@@ -184,6 +184,15 @@ namespace Eleven.Simulation.Harness
             return parts.Count == 0 ? "" : "Condition: " + string.Join(", ", parts);
         }
 
+        /// <summary>Your squad (#179): the XI in its slots' order, the bench, then everyone else by level.</summary>
+        public static List<SquadRow> SquadRows(CareerSession s) => new List<SquadRow>();
+
+        /// <summary>Who can change places with <paramref name="player"/> (#179): everyone in another group who isn't out, best first.</summary>
+        public static List<SquadRow> SwapCandidates(CareerSession s, int player) => new List<SquadRow>();
+
+        /// <summary>Your picks out of your next match (#179), "Picked but out: A. Name; the AI's pick takes his place."; empty with none.</summary>
+        public static string PickLine(CareerSession s) => "";
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";
@@ -228,5 +237,26 @@ namespace Eleven.Simulation.Harness
             s.SeasonOver ? HubAction.NextSeason
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
+    }
+
+    /// <summary>Where a footballer is in your squad (#179).</summary>
+    public enum SquadGroup
+    {
+        Xi,
+        Bench,
+        NotPicked,
+    }
+
+    /// <summary>A row of your squad (#179): who, where, his level and condition, and why he's out.</summary>
+    public sealed class SquadRow
+    {
+        public int Player;
+        public string Name = "", Positions = "", Out = "";
+        public double Level;
+        public int Condition;
+        public SquadGroup Group;
+
+        /// <summary>The row's text: "J. Smith · CB, DM · 14.2 · 96" with the reason he's out after.</summary>
+        public string Text => "";
     }
 }
