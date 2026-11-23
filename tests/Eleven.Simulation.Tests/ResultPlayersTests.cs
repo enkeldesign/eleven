@@ -122,7 +122,7 @@ namespace Eleven.Simulation.Tests
         public void A_quick_sims_result_names_the_xis_with_its_scoreline_unchanged()
         {
             SimConfig c = CareerQuickSimCalibration.Config();
-            int lines = 0, cautions = 0;
+            int lines = 0, cautions = 0, injuries = 0;
             for (ulong seed = 0; seed < 60; seed++)
             {
                 int home = World.Clubs[(int)(seed % 36)].Id, away = World.Clubs[(int)((seed * 7 + 5) % 36)].Id;
@@ -137,13 +137,16 @@ namespace Eleven.Simulation.Tests
                 Assert.All(r.Players, p => Assert.True(lineup.ContainsKey(p.Player), $"line for {p.Player}"));
                 Assert.Equal(r.HomeCautions, r.Players.Where(p => p.Team == r.HomeTeam).Sum(p => p.Cautions));
                 Assert.Equal(r.AwaySendingsOff, r.Players.Count(p => p.Team == r.AwayTeam && p.SentOff));
-                Assert.Equal(r.HomeInjuries, r.Players.Count(p => p.Team == r.HomeTeam && p.Injury > 0));
+                // Two injuries can fall to one footballer, whose line keeps the worse.
+                Assert.InRange(r.Players.Count(p => p.Team == r.HomeTeam && p.Injury > 0), Math.Min(1, r.HomeInjuries), r.HomeInjuries);
+                injuries += r.HomeInjuries + r.AwayInjuries;
                 Assert.All(r.Players, p => Assert.Equal(r.PlayedSeconds, p.Seconds, 9));
                 lines += r.Players.Count;
                 cautions += r.HomeCautions + r.AwayCautions;
             }
 
             Assert.True(lines > 1000 && cautions > 10, $"{lines} lines, {cautions} cautions");
+            Assert.True(injuries > 0, "no injury drawn");
         }
     }
 }

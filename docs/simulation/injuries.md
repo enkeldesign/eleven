@@ -21,7 +21,7 @@ Injuries are a competition rule in config data (#80): `injuriesFrom`, in outfiel
 3. **The rest are minor.** He plays on at `injuredSpeed` (0.85) of his top speed and acceleration, through his body, so every prediction of his run agrees (INV-13). A CPU footballer knows he is hurt (`OutfieldObservation.Injured`) and reckons his own runs at that speed.
 4. **A second injury is never lighter** than the first.
 
-`Injured` is an event, with its level. The match result's schema 4 counts each side's injuries (INV-14), and the host's status line announces each one.
+`Injured` is an event, with its level. The match result's schema 4 counts each side's injuries (INV-14), and schema 8 gives each footballer his worst ([match.md](match.md#the-footballers-schema-8-172)). The host's status line announces each one.
 
 ### Simplifications
 

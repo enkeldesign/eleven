@@ -104,3 +104,5 @@ A fixture nobody plays is quick-simmed (ADR 0004). `CareerQuickSim.Side(world, c
 - **The keeper** isn't part of the side, as in the quick-sim's calibration.
 
 `CareerQuickSim.Play` plays a match between two clubs with the model for its size: 11v11 uses the eleven-a-side fit ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
+
+**Who played** (#172): `CareerSquads.Lineup(world, home, away, perSide)` maps a match's simulation ids to the world's footballers: each side's starters, keeper and bench, as `CareerSquads.Match` places them. `CareerQuickSim.Play` names both XIs by the same ids, so a quick-simmed result and a played one read alike: each has a line per footballer (match.md's schema 8).
