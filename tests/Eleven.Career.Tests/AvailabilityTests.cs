@@ -220,17 +220,38 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void The_worlds_bytes_keep_a_clubs_picks_and_a_format_2_world_reads_with_none()
+        {
+            World w = WorldGenerator.Generate(0x179);
+            byte[] plain = WorldCodec.Encode(w);
+            Assert.Equal(3, WorldCodec.FormatVersion);
+
+            // Format 2 is format 3 with no club's picks, less that section's empty count.
+            var two = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
+            two.WriteBytes(plain[..4]);
+            two.WriteInt32(2);
+            two.WriteBytes(plain[8..^4]);
+            Assert.Equal(plain, WorldCodec.Encode(WorldCodec.Decode(two.ToArray())));
+
+            Club c = w.Clubs[5];
+            c.Picks.AddRange(c.Squad.Take(20));
+            World back = WorldCodec.Decode(WorldCodec.Encode(w));
+            Assert.Equal(c.Picks, back.Clubs[5].Picks);
+            Assert.All(back.Clubs.Where(x => x.Id != c.Id), x => Assert.Empty(x.Picks));
+            c.Picks[0] = -1;
+            Assert.Throws<FormatException>(() => WorldCodec.Decode(WorldCodec.Encode(w)));
+        }
+
+        [Fact]
         public void The_worlds_bytes_keep_the_bans_and_a_world_from_before_them_reads_with_none()
         {
             World w = WorldGenerator.Generate(0x176);
             byte[] plain = WorldCodec.Encode(w);
-            Assert.Equal(2, WorldCodec.FormatVersion);
-
-            // Format 1 is format 2 with nobody banned or cautioned, less that section's empty count.
+            // Format 1 is today's with nobody banned or cautioned and no picks, less those sections' empty counts.
             var one = new CanonicalWriter(plain.Length);
             one.WriteBytes(plain[..4]);
             one.WriteInt32(1);
-            one.WriteBytes(plain[8..^4]);
+            one.WriteBytes(plain[8..^8]);
             World old = WorldCodec.Decode(one.ToArray());
             Assert.Equal(plain, WorldCodec.Encode(old));
 

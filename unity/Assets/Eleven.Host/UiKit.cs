@@ -572,6 +572,13 @@ namespace Eleven.Host
             scroll.contentViewport.style.overflow = Overflow.Hidden;
             scroll.contentViewport.style.flexGrow = 1;
             scroll.contentContainer.style.flexShrink = 0;
+
+            // Whatever takes keyboard focus inside comes into view (Codex on #187), so a list
+            // longer than its viewport stays usable without a pointer.
+            scroll.RegisterCallback<FocusInEvent>(e =>
+            {
+                if (e.target is VisualElement focused && scroll.contentContainer.Contains(focused)) scroll.ScrollTo(focused);
+            });
             return scroll;
         }
 

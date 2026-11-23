@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 2;
+        public const int FormatVersion = 3;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -93,6 +93,16 @@ namespace Eleven.Career
                 w.WriteInt32(p.CupCautions);
             }
 
+            // Format 3 (#179): each club with picks, its id, then its picks.
+            var picking = world.Clubs.FindAll(c => c.Picks.Count > 0);
+            w.WriteInt32(picking.Count);
+            foreach (Club c in picking)
+            {
+                w.WriteInt32(c.Id);
+                w.WriteInt32(c.Picks.Count);
+                foreach (int id in c.Picks) w.WriteInt32(id);
+            }
+
             return w.ToArray();
         }
 
@@ -113,7 +123,7 @@ namespace Eleven.Career
         {
             if (r.ReadInt32() != Magic) throw new FormatException("Not a world: wrong magic.");
             int version = r.ReadInt32();
-            if (version != FormatVersion && version != FirstFormat) throw new FormatException($"World format {version}; this build reads {FirstFormat} and {FormatVersion}.");
+            if (version < FirstFormat || version > FormatVersion) throw new FormatException($"World format {version}; this build reads {FirstFormat} to {FormatVersion}.");
             var world = new World { Seed = r.ReadUInt64() };
 
             int clubs = Count(r.ReadInt32());
@@ -190,6 +200,25 @@ namespace Eleven.Career
                     p.CupBan = NonNegative(r.ReadInt32());
                     p.LeagueCautions = NonNegative(r.ReadInt32());
                     p.CupCautions = NonNegative(r.ReadInt32());
+                }
+            }
+
+            if (version >= 3)
+            {
+                var known = new HashSet<int>();
+                foreach (Player p in world.Players) known.Add(p.Id);
+                int picking = Count(r.ReadInt32());
+                for (int i = 0; i < picking; i++)
+                {
+                    int id = r.ReadInt32();
+                    Club? c = world.Clubs.Find(x => x.Id == id) ?? throw new FormatException($"Picks for club {id}, which isn't in the world.");
+                    int n = Count(r.ReadInt32());
+                    for (int k = 0; k < n; k++)
+                    {
+                        int pick = r.ReadInt32();
+                        if (!known.Contains(pick)) throw new FormatException($"Club {id} picks footballer {pick}, who isn't in the world.");
+                        c.Picks.Add(pick);
+                    }
                 }
             }
 

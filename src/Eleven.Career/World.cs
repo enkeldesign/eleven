@@ -32,6 +32,12 @@ namespace Eleven.Career
         public int Division;
         public int ManagerId;
         public List<int> Squad = new List<int>();
+
+        /// <summary>
+        /// The human's picks (#179): his XI's 11 footballers, then his bench. Empty: the AI's rule
+        /// picks, as it does for every other club.
+        /// </summary>
+        public List<int> Picks = new List<int>();
     }
 
     /// <summary>A footballer: identity, positions, attributes (<see cref="PlayerAttributes"/>) and condition.</summary>

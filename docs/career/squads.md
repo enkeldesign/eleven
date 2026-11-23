@@ -49,6 +49,26 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 - **Rotation:** a starter below `RestBelow` (70) is rested for a footballer of the slot's line at or above it, within `RotationMargin` (1.5) of his selection level. With none, he plays tired. Every club is picked this way, the human's too until M6.08d. Keepers aren't rotated.
 - **The season's turn:** the off-season's days leave everyone fresh.
 
+## Your squad
+
+**Squad** on the hub (#179) shows every footballer of your club in three groups:
+- **XI**, 11, the keeper among them;
+- **Bench**, up to 9;
+- **Not picked**, by level.
+
+A row: "J. Smith · CB, DM · 14.2 · 96", his name, positions, selection level (the 1–20 mean the AI picks by), condition, and why he's out if he is.
+
+- **Picking is a swap:** choose a footballer, then one of those who can take his place, best first.
+  - **Who can't:** one who's out can't come into the XI or onto the bench.
+  - **Keepers:** in the XI, a keeper's place is a keeper's and an outfielder's an outfielder's. No keeper sits on the bench, as substitutes are outfielders (#110).
+  - **The first swap** starts from the AI's pick. **Auto** returns to it.
+- **By keyboard,** Tab moves through the rows, then Back and Auto. The list scrolls to keep the focused row in view, as every list of the host's does (Codex on #187).
+- **Your picks** are `Club.Picks` in the world: your eleven, then your bench. They're saved with it, at world format 3.
+- **They play your fixture,** whether played, watched or simulated:
+  - the AI's rule places your eleven in the formation's slots;
+  - a pick out by kick-off is replaced from the rest, in his line, and the hub says so. A reserve of the slot's first-position line comes in before any pick is moved to his second position, and only then is anyone moved out of position, so every other pick keeps his place (Codex on #187);
+  - nobody of yours is rotated (#177), as you decide who rests.
+
 ## A matchday
 
 `CareerSeasons.PlayMatchday` in order:

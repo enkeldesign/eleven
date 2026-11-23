@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Eleven.Simulation;
 using Eleven.Simulation.Harness;
 using UnityEngine;
@@ -356,6 +357,12 @@ namespace Eleven.Host
             if (!_seedAsked) _matchSeed = (ulong)DateTime.UtcNow.Ticks;
             StartMatch("career", CareerSession.PerSide);
             Log(FormattableString.Invariant($"ELEVEN career match fixture={f.Id} home={f.Home} away={f.Away} club={_career.Club} role={_career.Role} seed={_matchSeed}"));
+            // #179: the human's XI as it kicks off, world ids, for the smoke's check of his picks.
+            Dictionary<int, int> lineup = _career.LineupFor(f);
+            var xi = new List<int>();
+            for (int i = 0; i < CareerSession.PerSide; i++) xi.Add(lineup[Squads.HomeOutfielder(i)]);
+            xi.Add(lineup[Squads.HomeKeeper(CareerSession.PerSide)]);
+            Log($"ELEVEN career lineup xi={string.Join(",", xi)}");
         }
 
         /// <summary>SIMULATE or NEXT MATCHDAY on the hub: the matchday quick-simmed.</summary>

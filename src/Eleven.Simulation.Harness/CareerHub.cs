@@ -184,6 +184,113 @@ namespace Eleven.Simulation.Harness
             return parts.Count == 0 ? "" : "Condition: " + string.Join(", ", parts);
         }
 
+        /// <summary>Your squad (#179): the XI in its slots' order, the bench, then everyone else by level.</summary>
+        public static List<SquadRow> SquadRows(CareerSession s)
+        {
+            Club club = s.World.Clubs.Find(c => c.Id == s.Club)!;
+            HashSet<int> outs = s.OutOfNext();
+            SquadSelection playing = CareerSquads.Selection(s.World, s.Club, CareerSession.PerSide, outs, s.Squad);
+            List<int> picks = club.Picks.Count > 0 ? club.Picks : s.Picked();
+            var placed = new List<int>();
+            foreach (Player p in playing.Starters) placed.Add(p.Id);
+            var xi = new List<int>();
+            var bench = new List<int>();
+            for (int i = 0; i < picks.Count; i++) (i <= CareerSession.PerSide ? xi : bench).Add(picks[i]);
+            // The XI in the order it plays, its picks out of it last.
+            xi.Sort((a, b) => Place(placed, a).CompareTo(Place(placed, b)));
+            var rows = new List<SquadRow>();
+            foreach (int id in xi) rows.Add(Row(s, id, SquadGroup.Xi, outs));
+            foreach (int id in bench) rows.Add(Row(s, id, SquadGroup.Bench, outs));
+            var rest = new List<SquadRow>();
+            foreach (Player p in s.World.Players)
+            {
+                if (p.ClubId == s.Club && !picks.Contains(p.Id)) rest.Add(Row(s, p.Id, SquadGroup.NotPicked, outs));
+            }
+
+            rest.Sort((a, b) => a.Level != b.Level ? b.Level.CompareTo(a.Level) : a.Player.CompareTo(b.Player));
+            rows.AddRange(rest);
+            return rows;
+        }
+
+        private static int Place(List<int> placed, int id)
+        {
+            int at = placed.IndexOf(id);
+            return at < 0 ? int.MaxValue : at;
+        }
+
+        private static readonly string[] PositionCodes = { "GK", "CB", "FB", "DM", "CM", "WM", "AM", "ST" };
+
+        private static SquadRow Row(CareerSession s, int id, SquadGroup group, HashSet<int> outs)
+        {
+            Player p = s.World.Players.Find(x => x.Id == id)!;
+            var positions = new List<string>();
+            foreach (Position at in p.Positions) positions.Add(PositionCodes[(int)at]);
+            return new SquadRow
+            {
+                Player = id,
+                Name = $"{(p.FirstName.Length > 0 ? p.FirstName.Substring(0, 1) + ". " : "")}{p.LastName}",
+                Positions = string.Join(", ", positions),
+                Level = CareerSquads.Level(p),
+                Condition = p.Fitness,
+                Group = group,
+                Out = outs.Contains(id) || p.InjuredDays > 0 ? Why(p) : "",
+            };
+        }
+
+        // Why he's out, as the hub's out line says it (#176).
+        private static string Why(Player p)
+        {
+            var why = new List<string>();
+            if (p.InjuredDays > 0) why.Add($"injured, {p.InjuredDays} day{(p.InjuredDays == 1 ? "" : "s")}");
+            var bans = new List<string>();
+            if (p.LeagueBan > 0) bans.Add($"{p.LeagueBan} league match{(p.LeagueBan == 1 ? "" : "es")}");
+            if (p.CupBan > 0) bans.Add($"{p.CupBan} cup match{(p.CupBan == 1 ? "" : "es")}");
+            if (bans.Count > 0) why.Add("banned, " + string.Join(" and ", bans));
+            return string.Join("; ", why);
+        }
+
+        /// <summary>Who can change places with <paramref name="player"/> (#179): everyone in another group who may take his place and isn't out, best first.</summary>
+        public static List<SquadRow> SwapCandidates(CareerSession s, int player)
+        {
+            List<SquadRow> rows = SquadRows(s);
+            SquadRow? me = rows.Find(r => r.Player == player);
+            var candidates = new List<SquadRow>();
+            if (me == null) return candidates;
+            foreach (SquadRow r in rows)
+            {
+                if (r.Group == me.Group) continue;
+                bool keeper = s.World.Players.Find(p => p.Id == r.Player)!.Positions[0] == Position.Goalkeeper;
+                bool meKeeper = s.World.Players.Find(p => p.Id == player)!.Positions[0] == Position.Goalkeeper;
+                // Each goes to the other's place: one out can't come in, nor a keeper onto the bench;
+                // in the XI a keeper's place is a keeper's, an outfielder's an outfielder's.
+                if (me.Group != SquadGroup.NotPicked && (r.Out.Length > 0 || (me.Group == SquadGroup.Bench && keeper) || (me.Group == SquadGroup.Xi && keeper != meKeeper))) continue;
+                if (r.Group != SquadGroup.NotPicked && (me.Out.Length > 0 || (r.Group == SquadGroup.Bench && meKeeper) || (r.Group == SquadGroup.Xi && keeper != meKeeper))) continue;
+                candidates.Add(r);
+            }
+
+            candidates.Sort((a, b) => a.Level != b.Level ? b.Level.CompareTo(a.Level) : a.Player.CompareTo(b.Player));
+            return candidates;
+        }
+
+        /// <summary>Your picks out of your next match (#179), "Picked but out: A. Name; the AI's pick takes his place."; empty with none.</summary>
+        public static string PickLine(CareerSession s)
+        {
+            Club club = s.World.Clubs.Find(c => c.Id == s.Club)!;
+            if (club.Picks.Count == 0) return "";
+            HashSet<int> outs = s.OutOfNext();
+            var names = new List<string>();
+            for (int i = 0; i <= CareerSession.PerSide && i < club.Picks.Count; i++)
+            {
+                if (!outs.Contains(club.Picks[i])) continue;
+                Player p = s.World.Players.Find(x => x.Id == club.Picks[i])!;
+                names.Add($"{(p.FirstName.Length > 0 ? p.FirstName.Substring(0, 1) + ". " : "")}{p.LastName}");
+            }
+
+            return names.Count == 0 ? ""
+                : names.Count == 1 ? $"Picked but out: {names[0]}; the AI's pick takes his place."
+                : $"Picked but out: {string.Join(", ", names)}; the AI's picks take their places.";
+        }
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";
@@ -228,5 +335,26 @@ namespace Eleven.Simulation.Harness
             s.SeasonOver ? HubAction.NextSeason
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
+    }
+
+    /// <summary>Where a footballer is in your squad (#179).</summary>
+    public enum SquadGroup
+    {
+        Xi,
+        Bench,
+        NotPicked,
+    }
+
+    /// <summary>A row of your squad (#179): who, where, his level and condition, and why he's out.</summary>
+    public sealed class SquadRow
+    {
+        public int Player;
+        public string Name = "", Positions = "", Out = "";
+        public double Level;
+        public int Condition;
+        public SquadGroup Group;
+
+        /// <summary>The row's text: "J. Smith · CB, DM · 14.2 · 96" with the reason he's out after.</summary>
+        public string Text => FormattableString.Invariant($"{Name} · {Positions} · {Level:F1} · {Condition}") + (Out.Length > 0 ? $" · out: {Out}" : "");
     }
 }

@@ -118,6 +118,9 @@ namespace Eleven.Simulation.Harness
             PlayerAttributes.Index("keeperReflexes"), PlayerAttributes.Index("keeperHandling"), PlayerAttributes.Index("keeperPositioning"),
         };
 
+        /// <summary>His selection level (#179): his keeping for a keeper, else his outfield level, on the 1–20 scale.</summary>
+        public static double Level(Player p) => p.Positions.Count > 0 && p.Positions[0] == Position.Goalkeeper ? KeeperLevel(p) : OutfieldLevel(p);
+
         /// <summary>His keeping: the mean of his three keeper attributes.</summary>
         public static double KeeperLevel(Player p)
         {
@@ -157,34 +160,78 @@ namespace Eleven.Simulation.Harness
                 if (p.ClubId == clubId && (unavailable == null || !unavailable.Contains(p.Id))) squad.Add(p);
             }
 
+            // #179: the human's picks, his eleven and then his bench. The AI's rule places his
+            // eleven and fills a gap from the rest; he decides who rests, so nobody is rotated.
+            Club? club = world.Clubs.Find(c => c.Id == clubId);
+            HashSet<int>? eleven = null, benched = null;
+            if (club != null && club.Picks.Count > 0)
+            {
+                eleven = new HashSet<int>();
+                benched = new HashSet<int>();
+                for (int i = 0; i < club.Picks.Count; i++) (i <= perSide ? eleven : benched).Add(club.Picks[i]);
+                rotation = null;
+            }
+
+            bool All(Player p) => true;
+            bool Mine(Player p) => eleven == null || eleven.Contains(p.Id);
+            bool Others(Player p) => eleven != null && !eleven.Contains(p.Id);
             var chosen = new HashSet<int>();
-            Player? Keeper(bool keepersOnly)
+            Player? Keeper(bool keepersOnly, Func<Player, bool> pool)
             {
                 Player? best = null;
                 foreach (Player p in squad)
                 {
-                    if (p.Positions.Count == 0 || (keepersOnly && p.Positions[0] != Position.Goalkeeper)) continue;
+                    if (!pool(p) || p.Positions.Count == 0 || (keepersOnly && p.Positions[0] != Position.Goalkeeper)) continue;
                     if (best == null || KeeperLevel(p) > KeeperLevel(best) || (KeeperLevel(p) == KeeperLevel(best) && p.Id < best.Id)) best = p;
                 }
 
                 return best;
             }
 
-            // With no fit keeper (#176), the best of the rest at keeping goes in goal.
-            Player keeper = Keeper(true) ?? Keeper(false) ?? throw new InvalidOperationException($"Club {clubId} has no one to play.");
+            // With no fit keeper (#176), the best of the rest at keeping goes in goal. With picks,
+            // his keeper; one out is replaced by a keeper of the rest before anyone else goes in goal.
+            int mineFit = eleven == null ? 0 : squad.FindAll(p => eleven.Contains(p.Id)).Count;
+            Player keeper = (eleven == null
+                    ? Keeper(true, All) ?? Keeper(false, All)
+                    : Keeper(true, Mine) ?? (mineFit <= perSide ? Keeper(true, Others) : null) ?? Keeper(false, Mine) ?? Keeper(true, Others) ?? Keeper(false, Others))
+                ?? throw new InvalidOperationException($"Club {clubId} has no one to play.");
             chosen.Add(keeper.Id);
 
-            Player? Best(Func<Player, bool> fits)
+            Player? Best(Func<Player, bool> fits, Func<Player, bool> pool)
             {
                 Player? best = null;
                 foreach (Player p in squad)
                 {
-                    if (chosen.Contains(p.Id) || p.Positions.Count == 0 || p.Positions[0] == Position.Goalkeeper || !fits(p)) continue;
+                    if (chosen.Contains(p.Id) || !pool(p) || p.Positions.Count == 0 || p.Positions[0] == Position.Goalkeeper || !fits(p)) continue;
                     if (best == null || OutfieldLevel(p) > OutfieldLevel(best) || (OutfieldLevel(p) == OutfieldLevel(best) && p.Id < best.Id)) best = p;
                 }
 
                 return best;
             }
+
+            Player? Fill(Line line, Func<Player, bool> pool) =>
+                Best(x => LineOf(x.Positions[0]) == line, pool)
+                ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, pool)
+                ?? Best(_ => true, pool);
+
+            // With picks, a gap left by a pick who is out is filled from the rest, in its line, before
+            // any pick is moved out of his (Codex on #187): his first position's line, then a reserve
+            // of it, then his second's, then a reserve of that; only then anyone. Nobody out, no gaps:
+            // his eleven placed exactly as before.
+            int gaps = eleven == null ? 0 : perSide - squad.FindAll(p => Mine(p) && !chosen.Contains(p.Id) && p.Positions.Count > 0 && p.Positions[0] != Position.Goalkeeper).Count;
+            Player? Gap(Player? reserve)
+            {
+                if (reserve != null) gaps--;
+                return reserve;
+            }
+
+            Player? Picked(Line line) =>
+                Best(x => LineOf(x.Positions[0]) == line, Mine)
+                ?? (gaps > 0 ? Gap(Best(x => LineOf(x.Positions[0]) == line, Others)) : null)
+                ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, Mine)
+                ?? (gaps > 0 ? Gap(Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, Others)) : null)
+                ?? Best(_ => true, Mine)
+                ?? Gap(Best(_ => true, Others));
 
             var bySlot = new Player[perSide];
             // Fill slots from the back, in slot order, so each line takes its best.
@@ -193,17 +240,16 @@ namespace Eleven.Simulation.Harness
             foreach (int i in order)
             {
                 Line line = SlotLine(perSide, i);
-                Player p = Best(x => LineOf(x.Positions[0]) == line)
-                    ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line)
-                    ?? Best(_ => true)
+                Player p = (eleven == null ? Fill(line, All) : Picked(line))
                     ?? throw new InvalidOperationException($"Club {clubId} hasn't {perSide} outfielders.");
                 // Rotation (#177): a tired starter rested for a fit footballer of the slot's line within the margin.
                 if (rotation != null && p.Fitness < rotation.RestBelow)
                 {
                     double floor = OutfieldLevel(p) - rotation.RotationMargin;
-                    Player? fresh = Best(x => LineOf(x.Positions[0]) == line && x.Fitness >= rotation.RestBelow && OutfieldLevel(x) >= floor);
+                    Player? fresh = Best(x => LineOf(x.Positions[0]) == line && x.Fitness >= rotation.RestBelow && OutfieldLevel(x) >= floor, All);
                     if (fresh != null) p = fresh;
                 }
+
                 bySlot[i] = p;
                 chosen.Add(p.Id);
             }
@@ -211,9 +257,10 @@ namespace Eleven.Simulation.Harness
             var selection = new SquadSelection();
             selection.Starters.AddRange(bySlot);
             selection.Starters.Add(keeper);
+            // The bench: his, then the best of the rest. A keeper never sits on it: substitutes are outfielders (#110).
             for (int i = 0; i < Squads.BenchOf(perSide); i++)
             {
-                Player? p = Best(_ => true);
+                Player? p = (benched != null ? Best(_ => true, x => benched.Contains(x.Id)) : null) ?? Best(_ => true, All);
                 if (p == null) break;
                 selection.Bench.Add(p);
                 chosen.Add(p.Id);

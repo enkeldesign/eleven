@@ -117,11 +117,7 @@ namespace Eleven.Host
 
             _scroll.Add(table);
 
-            // A plan's segment reached with Tab scrolls into view.
-            _scroll.RegisterCallback<FocusInEvent>(e =>
-            {
-                if (e.target is VisualElement focused && _scroll.contentContainer.Contains(focused)) _scroll.ScrollTo(focused);
-            });
+            // A plan's segment reached with Tab scrolls into view, as in every UiKit scroll.
 
             // Once shown and laid out, where it and its plans' segments are, in HUD pixels (the smoke's).
             _sheet.Element.RegisterCallback<GeometryChangedEvent>(_ => ReportPlaces());
