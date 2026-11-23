@@ -100,6 +100,31 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void A_schema_7_result_from_a_save_before_lines_reads_back_with_none()
+        {
+            // A save written before #172 holds schema-7 results: schema 8's fields less the lines.
+            // Those bytes are schema 8's with the version changed and the empty lines' count dropped.
+            MatchResult plain = QuickSim.Play(CareerQuickSimCalibration.Config(), CareerQuickSim.Side(World, World.Clubs[3].Id, 10), CareerQuickSim.Side(World, World.Clubs[20].Id, 10), 0x1724, model: QuickSimModel.ElevenASide);
+            Assert.Empty(plain.Players);
+            var w8 = new CanonicalWriter(1 << 12);
+            MatchResultCodec.Write(w8, plain);
+            byte[] eight = w8.ToArray();
+            var w7 = new CanonicalWriter(1 << 12);
+            w7.WriteInt32(7);
+            w7.WriteBytes(eight[4..^4]);
+
+            MatchResult back = MatchResultCodec.Read(new CanonicalReader(w7.ToArray()));
+            Assert.Equal(plain.ToText(), back.ToText());
+            Assert.Empty(back.Players);
+
+            // Any other schema is still refused.
+            var w6 = new CanonicalWriter(1 << 12);
+            w6.WriteInt32(6);
+            w6.WriteBytes(eight[4..^4]);
+            Assert.Throws<FormatException>(() => MatchResultCodec.Read(new CanonicalReader(w6.ToArray())));
+        }
+
+        [Fact]
         public void A_matchs_lineup_maps_simulation_ids_to_the_worlds_footballers()
         {
             int home = World.Clubs[2].Id, away = World.Clubs[29].Id;
