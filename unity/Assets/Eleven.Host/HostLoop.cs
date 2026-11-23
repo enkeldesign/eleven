@@ -660,6 +660,7 @@ namespace Eleven.Host
                 _home.StartCareer = StartCareer;
                 _home.SlotSummary = slot => _saves.Summary(slot);
                 _home.ContinueSlot = ContinueSlot;
+                _home.CareerSlot = () => _career == null ? -1 : _careerSlot;
                 _home.CareerSaveNow = () => Autosave("manual");
                 _home.CareerPlay = CareerPlay;
                 _home.CareerSimulate = CareerSimulate;

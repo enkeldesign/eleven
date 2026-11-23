@@ -28,6 +28,9 @@ namespace Eleven.Host
         /// <summary>Continue the career in a slot: loaded, at its hub.</summary>
         public Action<int> ContinueSlot = slot => { };
 
+        /// <summary>The slot of the career in play, or −1 with none.</summary>
+        public Func<int> CareerSlot = () => -1;
+
         /// <summary>Save now, on the hub: what happened, in words.</summary>
         public Func<string> CareerSaveNow = () => "";
 
@@ -187,18 +190,16 @@ namespace Eleven.Host
             for (int i = 0; i < Eleven.Career.SaveSlots.Count; i++)
             {
                 Eleven.Career.SlotSummary s = SlotSummary(i);
-                _slotText[i].text = s.Empty
-                    ? FormattableString.Invariant($"{i + 1}. Empty")
-                    : FormattableString.Invariant($"{i + 1}. {s.ClubName} ({s.ClubShort}) · Season {s.Season} · Matchday {s.Matchday}{(s.FromPrevious ? " · its previous save" : "")}");
-                Relabel(_slotAction[i], s.Empty ? "New career" : "Continue");
+                _slotText[i].text = CareerHub.SlotLine(i, s, Career(), CareerSlot());
+                Relabel(_slotAction[i], CareerHub.SlotOffer(i, s, Career(), CareerSlot()) == SlotChoice.New ? "New career" : "Continue");
             }
         }
 
         private void SlotPressed(int slot)
         {
-            Eleven.Career.SlotSummary s = SlotSummary(slot);
-            Log(FormattableString.Invariant($"ELEVEN home slot={slot} {(s.Empty ? "new" : "continue")}"));
-            if (s.Empty) NewCareer(slot);
+            SlotChoice offer = CareerHub.SlotOffer(slot, SlotSummary(slot), Career(), CareerSlot());
+            Log(FormattableString.Invariant($"ELEVEN home slot={slot} {offer.ToString().ToLowerInvariant()}"));
+            if (offer == SlotChoice.New) NewCareer(slot);
             else ContinueSlot(slot);
         }
 
