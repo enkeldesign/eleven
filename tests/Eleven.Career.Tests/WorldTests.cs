@@ -138,6 +138,8 @@ namespace Eleven.Career.Tests
             "Eleven.Simulation.MatchResult", "Eleven.Simulation.ResultGoal", "Eleven.Simulation.Formation",
             "Eleven.Simulation.Randomness.CounterRng", "Eleven.Simulation.Randomness.RandomStream",
             "Eleven.Simulation.Encoding.CanonicalWriter", "Eleven.Simulation.Encoding.CanonicalReader", "Eleven.Simulation.Encoding.Fnv1a64",
+            // #170: the result contract's own codec, for a season's saved results.
+            "Eleven.Simulation.Encoding.MatchResultCodec",
             "Eleven.Simulation.Maths.SimMath",
         };
 
