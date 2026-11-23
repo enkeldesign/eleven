@@ -357,8 +357,25 @@ namespace Eleven.Simulation
             var sent = new bool[n];
             var hurt = new int[n];
             int Pick(int what, int k) => Math.Min(outfield - 1, (int)(Draw(seed, what, side * 1000 + k) * outfield));
-            for (int k = 0; k < cautions; k++) cards[Pick(CautionPickDraw, k)]++;
-            for (int k = 0; k < off; k++) sent[Pick(SendingOffPickDraw, k)] = true;
+
+            // Cards to distinct footballers (Codex on #184): the k-th drawn among those without one,
+            // so the lines total the side's counts and nobody has two cautions without a sending-off.
+            // The first falls where it did before, among all the outfielders. Beyond the outfielders,
+            // none is named.
+            void Distinct(int what, int count, Action<int> give)
+            {
+                var left = new int[outfield];
+                for (int i = 0; i < outfield; i++) left[i] = i;
+                for (int k = 0, size = outfield; k < count && size > 0; k++, size--)
+                {
+                    int at = Math.Min(size - 1, (int)(Draw(seed, what, side * 1000 + k) * size));
+                    give(left[at]);
+                    left[at] = left[size - 1];
+                }
+            }
+
+            Distinct(CautionPickDraw, cautions, i => cards[i]++);
+            Distinct(SendingOffPickDraw, off, i => sent[i] = true);
             for (int k = 0; k < minor; k++)
             {
                 int at = Pick(MinorPickDraw, k);
