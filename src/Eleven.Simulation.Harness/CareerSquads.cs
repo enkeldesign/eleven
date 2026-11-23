@@ -19,11 +19,19 @@ namespace Eleven.Simulation.Harness
         /// <see cref="RatingMap"/>.
         /// </summary>
         public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, bool bothCpu = true,
-            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null)
+            TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
-            Apply(s, Selection(world, homeClub, perSide), perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
-            Apply(s, Selection(world, awayClub, perSide), perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
+            Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));
+            Apply(s, away, perSide, Squads.AwayTeam, i => Squads.AwayOutfielder(perSide, i), Squads.AwayKeeper(perSide), i => Squads.AwayBench(perSide, i));
+
+            // A side with footballers out picks a shorter bench (#176): its places beyond the
+            // substitutes picked go, so nobody unpicked can come on (Codex on #185).
+            var picked = new HashSet<int>();
+            for (int i = 0; i < home.Bench.Count; i++) picked.Add(Squads.HomeBench(perSide, i));
+            for (int i = 0; i < away.Bench.Count; i++) picked.Add(Squads.AwayBench(perSide, i));
+            s.Bench = Array.FindAll(s.Bench, b => picked.Contains(b.Id));
             return s;
         }
 
@@ -32,10 +40,10 @@ namespace Eleven.Simulation.Harness
         /// <see cref="Squads.HomeOutfielder"/> and its keeper) and bench, simulation id to the
         /// world's player id. A result's lines (#172) name footballers by these ids.
         /// </summary>
-        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide)
+        public static Dictionary<int, int> Lineup(World world, int homeClub, int awayClub, int perSide, ISet<int>? homeOut = null, ISet<int>? awayOut = null)
         {
             var lineup = new Dictionary<int, int>();
-            SquadSelection home = Selection(world, homeClub, perSide), away = Selection(world, awayClub, perSide);
+            SquadSelection home = Selection(world, homeClub, perSide, homeOut), away = Selection(world, awayClub, perSide, awayOut);
             for (int i = 0; i < perSide; i++)
             {
                 lineup[Squads.HomeOutfielder(i)] = home.Starters[i].Id;
@@ -110,7 +118,8 @@ namespace Eleven.Simulation.Harness
             PlayerAttributes.Index("keeperReflexes"), PlayerAttributes.Index("keeperHandling"), PlayerAttributes.Index("keeperPositioning"),
         };
 
-        private static double KeeperLevel(Player p)
+        /// <summary>His keeping: the mean of his three keeper attributes.</summary>
+        public static double KeeperLevel(Player p)
         {
             double sum = 0;
             foreach (int i in Keeping) sum += p.Attributes[i];
@@ -136,25 +145,33 @@ namespace Eleven.Simulation.Harness
         /// A basic selection (#159; the real one is M6.08): the best keeper by his keeping, then
         /// for each outfield slot from the back the best unchosen footballer whose first position
         /// is in the slot's line, else whose second is, else the best left; the bench the best of
-        /// the rest. Ties go to the lower id, so it is deterministic.
+        /// the rest. Ties go to the lower id, so it is deterministic. Footballers in
+        /// <paramref name="unavailable"/> (#176: injured or banned) are never picked; with no fit
+        /// keeper, the best of the rest at keeping goes in goal.
         /// </summary>
-        public static SquadSelection Selection(World world, int clubId, int perSide)
+        public static SquadSelection Selection(World world, int clubId, int perSide, ISet<int>? unavailable = null)
         {
             var squad = new List<Player>();
             foreach (Player p in world.Players)
             {
-                if (p.ClubId == clubId) squad.Add(p);
+                if (p.ClubId == clubId && (unavailable == null || !unavailable.Contains(p.Id))) squad.Add(p);
             }
 
             var chosen = new HashSet<int>();
-            Player? keeper = null;
-            foreach (Player p in squad)
+            Player? Keeper(bool keepersOnly)
             {
-                if (p.Positions.Count == 0 || p.Positions[0] != Position.Goalkeeper) continue;
-                if (keeper == null || KeeperLevel(p) > KeeperLevel(keeper) || (KeeperLevel(p) == KeeperLevel(keeper) && p.Id < keeper.Id)) keeper = p;
+                Player? best = null;
+                foreach (Player p in squad)
+                {
+                    if (p.Positions.Count == 0 || (keepersOnly && p.Positions[0] != Position.Goalkeeper)) continue;
+                    if (best == null || KeeperLevel(p) > KeeperLevel(best) || (KeeperLevel(p) == KeeperLevel(best) && p.Id < best.Id)) best = p;
+                }
+
+                return best;
             }
 
-            if (keeper == null) throw new InvalidOperationException($"Club {clubId} has no keeper.");
+            // With no fit keeper (#176), the best of the rest at keeping goes in goal.
+            Player keeper = Keeper(true) ?? Keeper(false) ?? throw new InvalidOperationException($"Club {clubId} has no one to play.");
             chosen.Add(keeper.Id);
 
             Player? Best(Func<Player, bool> fits)

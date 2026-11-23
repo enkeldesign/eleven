@@ -55,6 +55,12 @@ namespace Eleven.Career
         /// <summary>Days out injured; 0 when fit.</summary>
         public int InjuredDays;
 
+        /// <summary>His club's matches he must still sit out (#176): in the league, and in the cup.</summary>
+        public int LeagueBan, CupBan;
+
+        /// <summary>This season's cautions toward a ban (#176), in the league and in the cup.</summary>
+        public int LeagueCautions, CupCautions;
+
         public int Get(string attribute) => Attributes[PlayerAttributes.Index(attribute)];
     }
 

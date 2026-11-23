@@ -70,7 +70,7 @@ A save lives in the page's local storage as base64. The smallest browser's limit
 
 ## Migration
 
-`SaveCodec.Migrations` maps each older format to a step that turns its bytes into the next format's. Decoding an older save applies the steps in turn. Format 1 is the first, so the table is empty. The world (`WorldCodec`) and the result contract carry their own versions too.
+`SaveCodec.Migrations` maps each older format to a step that turns its bytes into the next format's. Decoding an older save applies the steps in turn. Format 1 is the first, so the table is empty. The world (`WorldCodec`) and the result contract carry their own versions too. The world is at format 2 since #176, its bans and cautions; a format-1 world in a save reads with nobody banned, so the save's own format stays 1.
 
 ## Slots
 

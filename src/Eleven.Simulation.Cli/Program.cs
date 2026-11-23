@@ -274,7 +274,47 @@ internal static class Program
                 Eleven.Career.World seasonWorld = Eleven.Career.WorldGenerator.Generate(0x157);
                 Eleven.Career.CompetitionRules seasonRules = Eleven.Career.CompetitionRules.Reference;
                 var seasonWatch = Stopwatch.StartNew();
-                List<Eleven.Career.Season> seasons = CareerSeasons.RollForward(CareerQuickSimCalibration.Config(), seasonWorld, careerSeed, count, seasonRules, 10);
+                // RollForward's own loop, with who was out of each fixture counted (#176).
+                var seasons = new List<Eleven.Career.Season>(count);
+                var outs = new List<(int Injuries, int Serious, int SentOff, int Injured, int Banned)>();
+                Eleven.Career.Season played = Eleven.Career.SeasonEngine.Start(seasonWorld, 1, careerSeed, Eleven.Career.SeasonEngine.FirstRanking(seasonWorld), seasonRules);
+                for (int i = 1; i <= count; i++)
+                {
+                    int injuries = 0, serious = 0, sentOff = 0, injured = 0, banned = 0;
+                    while (!Eleven.Career.SeasonEngine.Finished(played, seasonRules))
+                    {
+                        Eleven.Career.MatchdayKind kind = Eleven.Career.SeasonCalendar.Of(seasonRules)[played.Matchday].Kind;
+                        List<Eleven.Career.Fixture> day = Eleven.Career.SeasonEngine.Next(played, seasonRules);
+                        foreach (Eleven.Career.Fixture f in day)
+                        {
+                            foreach (int club in new[] { f.Home, f.Away })
+                            {
+                                foreach (Eleven.Career.Player p in seasonWorld.Players)
+                                {
+                                    if (p.ClubId != club || !Eleven.Career.Availability.Out(p, kind)) continue;
+                                    if (p.InjuredDays > 0) injured++;
+                                    else banned++;
+                                }
+                            }
+                        }
+
+                        CareerSeasons.PlayMatchday(CareerQuickSimCalibration.Config(), seasonWorld, played, seasonRules, 10);
+                        foreach (Eleven.Career.Fixture f in day)
+                        {
+                            foreach (ResultPlayer line in played.Results[f.Id].Players)
+                            {
+                                if (line.Injury > 0) injuries++;
+                                if (line.Injury == 2) serious++;
+                                if (line.SentOff) sentOff++;
+                            }
+                        }
+                    }
+
+                    seasons.Add(played);
+                    outs.Add((injuries, serious, sentOff, injured, banned));
+                    if (i < count) played = Eleven.Career.SeasonEngine.Rollover(seasonWorld, played, careerSeed, seasonRules);
+                }
+
                 double seasonSeconds = seasonWatch.Elapsed.TotalSeconds;
                 string Short(int id) => seasonWorld.Clubs.Find(c => c.Id == id)!.ShortName;
                 foreach (Eleven.Career.Season s in seasons)
@@ -298,6 +338,10 @@ internal static class Program
                     (List<int> up, List<int> down) = Eleven.Career.SeasonEngine.Movement(s, seasonRules);
                     Console.WriteLine(FormattableString.Invariant(
                         $"season {s.Number} (seed {s.Seed:x16}): {league} league matches, {(double)goals / league:F2} goals a match, {100.0 * level / league:F0} % drawn; cup won by {Short(s.CupWinner)}, {extra} ties to extra time, {shootouts} to penalties; up {string.Join(" ", up.Select(Short))}, down {string.Join(" ", down.Select(Short))}"));
+                    var o = outs[s.Number - 1];
+                    int clubs = seasonWorld.Clubs.Count;
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"  squads: {o.Injuries} injuries ({o.Serious} serious) and {o.SentOff} sendings-off; footballer-matches missed {o.Injured} injured and {o.Banned} banned, {(double)(o.Injured + o.Banned) / clubs:F1} a club"));
                     for (int d = 1; d <= s.Divisions.Count; d++)
                     {
                         var table = Eleven.Career.SeasonEngine.Table(s, (Eleven.Career.CompetitionId)d, seasonRules);

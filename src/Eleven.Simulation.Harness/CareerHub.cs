@@ -133,6 +133,35 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>The season's end: the human's finish, the moves and the cup's winner; empty while it goes on.</summary>
+        /// <summary>
+        /// The human's footballers out of his next match (#176), "Out: A. Name (injured, 12 days),
+        /// B. Name (banned, 1 league match)"; empty with none.
+        /// </summary>
+        public static string OutLine(CareerSession s)
+        {
+            var parts = new List<string>();
+            var squad = new List<Player>();
+            foreach (Player p in s.World.Players)
+            {
+                if (p.ClubId == s.Club && (p.InjuredDays > 0 || p.LeagueBan > 0 || p.CupBan > 0)) squad.Add(p);
+            }
+
+            squad.Sort((a, b) => a.Id.CompareTo(b.Id));
+            foreach (Player p in squad)
+            {
+                var why = new List<string>();
+                if (p.InjuredDays > 0) why.Add($"injured, {p.InjuredDays} day{(p.InjuredDays == 1 ? "" : "s")}");
+                var bans = new List<string>();
+                if (p.LeagueBan > 0) bans.Add($"{p.LeagueBan} league match{(p.LeagueBan == 1 ? "" : "es")}");
+                if (p.CupBan > 0) bans.Add($"{p.CupBan} cup match{(p.CupBan == 1 ? "" : "es")}");
+                if (bans.Count > 0) why.Add("banned, " + string.Join(" and ", bans));
+                string initial = p.FirstName.Length > 0 ? p.FirstName.Substring(0, 1) + ". " : "";
+                parts.Add($"{initial}{p.LastName} ({string.Join("; ", why)})");
+            }
+
+            return parts.Count == 0 ? "" : "Out: " + string.Join(", ", parts);
+        }
+
         public static string Summary(CareerSession s)
         {
             if (!s.SeasonOver) return "";
