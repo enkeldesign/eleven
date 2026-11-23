@@ -214,6 +214,25 @@ namespace Eleven.Simulation.Harness
                 ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, pool)
                 ?? Best(_ => true, pool);
 
+            // With picks, a gap left by a pick who is out is filled from the rest, in its line, before
+            // any pick is moved out of his (Codex on #187): his first position's line, then a reserve
+            // of it, then his second's, then a reserve of that; only then anyone. Nobody out, no gaps:
+            // his eleven placed exactly as before.
+            int gaps = eleven == null ? 0 : perSide - squad.FindAll(p => Mine(p) && !chosen.Contains(p.Id) && p.Positions.Count > 0 && p.Positions[0] != Position.Goalkeeper).Count;
+            Player? Gap(Player? reserve)
+            {
+                if (reserve != null) gaps--;
+                return reserve;
+            }
+
+            Player? Picked(Line line) =>
+                Best(x => LineOf(x.Positions[0]) == line, Mine)
+                ?? (gaps > 0 ? Gap(Best(x => LineOf(x.Positions[0]) == line, Others)) : null)
+                ?? Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, Mine)
+                ?? (gaps > 0 ? Gap(Best(x => x.Positions.Count > 1 && LineOf(x.Positions[1]) == line, Others)) : null)
+                ?? Best(_ => true, Mine)
+                ?? Gap(Best(_ => true, Others));
+
             var bySlot = new Player[perSide];
             // Fill slots from the back, in slot order, so each line takes its best.
             var order = new List<int>();
@@ -221,7 +240,7 @@ namespace Eleven.Simulation.Harness
             foreach (int i in order)
             {
                 Line line = SlotLine(perSide, i);
-                Player p = (eleven == null ? Fill(line, All) : Fill(line, Mine) ?? Fill(line, Others))
+                Player p = (eleven == null ? Fill(line, All) : Picked(line))
                     ?? throw new InvalidOperationException($"Club {clubId} hasn't {perSide} outfielders.");
                 // Rotation (#177): a tired starter rested for a fit footballer of the slot's line within the margin.
                 if (rotation != null && p.Fitness < rotation.RestBelow)
