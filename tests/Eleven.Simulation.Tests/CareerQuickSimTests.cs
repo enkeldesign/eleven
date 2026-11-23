@@ -198,6 +198,31 @@ namespace Eleven.Simulation.Tests
         }
 
         [Fact]
+        public void The_fit_finds_a_strongly_negative_rho_beyond_the_old_grid()
+        {
+            // #182: managed matches draw more than ρ = −0.3 allows; the fit searches every ρ the
+            // matches' rates allow, so a sample drawn at −0.5 is found near −0.5, not at a grid's edge.
+            World w = CareerQuickSimCalibration.World();
+            QuickSimModel e = QuickSimModel.ElevenASide;
+            var tiers = Enumerable.Range(0, QuickSimModel.Tiers).Select(t => e.TierRating(t)).ToArray();
+            var truth = new QuickSimModel(e.BaseRate, e.Home, tiers, e.CapabilityWeight, -0.5, 2, 0.5, 0.06);
+            SimConfig c = CareerQuickSimCalibration.Config();
+            var sample = new List<CareerCalibrationMatch>();
+            for (int round = 0; round < 4; round++)
+            {
+                foreach ((int home, int away, ulong seed) in CareerQuickSimCalibration.Fixtures(w))
+                {
+                    MatchResult m = QuickSim.Play(c, CareerQuickSim.Side(w, home, 10), CareerQuickSim.Side(w, away, 10), seed * 4 + (ulong)round, model: truth);
+                    sample.Add(new CareerCalibrationMatch { Home = home, Away = away, Seed = seed, HomeGoals = m.HomeGoals, AwayGoals = m.AwayGoals });
+                }
+            }
+
+            CareerFitResult fit = CareerQuickSimCalibration.Fit(w, sample);
+            Assert.True(fit.Model.Rho < -0.3, $"rho {fit.Model.Rho} ± {fit.RhoError}");
+            Assert.InRange(fit.Model.Rho, -0.5 - 3 * fit.RhoError, -0.5 + 3 * fit.RhoError);
+        }
+
+        [Fact]
         public void The_fit_recovers_a_model_it_draws_from()
         {
             // A sample drawn from a known eleven-a-side model, the reference's ratings scaled by 0.6,
