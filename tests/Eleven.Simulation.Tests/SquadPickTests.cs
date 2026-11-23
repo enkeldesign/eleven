@@ -33,6 +33,10 @@ namespace Eleven.Simulation.Tests
 
         private static Club Mine(CareerSession s) => s.World.Clubs.Single(c => c.Id == s.Club);
 
+        private static bool Keeper(CareerSession s, int id) => s.World.Players.Single(p => p.Id == id).Positions[0] == Position.Goalkeeper;
+
+        private static int Outfielder(CareerSession s, SquadGroup g, int nth = 0) => Group(s, g).Where(id => !Keeper(s, id)).ElementAt(nth);
+
         [Fact]
         public void The_squad_shows_the_ais_pick_then_everyone_else_by_level()
         {
@@ -57,7 +61,7 @@ namespace Eleven.Simulation.Tests
         {
             CareerSession s = New();
             Assert.Empty(Mine(s).Picks);
-            int starter = Group(s, SquadGroup.Xi)[3], sub = Group(s, SquadGroup.Bench)[0], spare = Group(s, SquadGroup.NotPicked)[0];
+            int starter = Outfielder(s, SquadGroup.Xi, 3), sub = Group(s, SquadGroup.Bench)[0], spare = Outfielder(s, SquadGroup.NotPicked);
             Assert.Contains(sub, CareerHub.SwapCandidates(s, starter).Select(r => r.Player));
             Assert.DoesNotContain(Group(s, SquadGroup.Xi)[4], CareerHub.SwapCandidates(s, starter).Select(r => r.Player));
             Assert.True(s.Swap(starter, sub));
@@ -76,6 +80,24 @@ namespace Eleven.Simulation.Tests
             s.AutoPick();
             Assert.Empty(Mine(s).Picks);
             Assert.Contains(starter, Group(s, SquadGroup.Xi));
+        }
+
+        [Fact]
+        public void A_keepers_place_in_the_xi_is_a_keepers_and_none_sits_on_the_bench()
+        {
+            CareerSession s = New(0x1795);
+            int keeper = Group(s, SquadGroup.Xi).Single(id => Keeper(s, id));
+            int outfielder = Outfielder(s, SquadGroup.Xi), sub = Group(s, SquadGroup.Bench)[0];
+            int spareKeeper = Group(s, SquadGroup.NotPicked).First(id => Keeper(s, id));
+            Assert.All(Group(s, SquadGroup.Bench), id => Assert.False(Keeper(s, id)));
+            Assert.DoesNotContain(spareKeeper, CareerHub.SwapCandidates(s, outfielder).Select(r => r.Player));
+            Assert.DoesNotContain(spareKeeper, CareerHub.SwapCandidates(s, sub).Select(r => r.Player));
+            Assert.Contains(spareKeeper, CareerHub.SwapCandidates(s, keeper).Select(r => r.Player));
+            Assert.False(s.Swap(outfielder, spareKeeper));
+            Assert.False(s.Swap(sub, spareKeeper));
+            Assert.False(s.Swap(keeper, sub));
+            Assert.True(s.Swap(keeper, spareKeeper));
+            Assert.Equal(spareKeeper, CareerSquads.Selection(s.World, s.Club, CareerSession.PerSide).Starters[CareerSession.PerSide].Id);
         }
 
         [Fact]
@@ -107,7 +129,7 @@ namespace Eleven.Simulation.Tests
         public void A_pick_out_by_kick_off_is_replaced_and_the_hub_says_so()
         {
             CareerSession s = New(0x1792);
-            int starter = Group(s, SquadGroup.Xi)[5], sub = Group(s, SquadGroup.Bench)[1];
+            int starter = Outfielder(s, SquadGroup.Xi, 5), sub = Group(s, SquadGroup.Bench)[1];
             Assert.True(s.Swap(starter, sub));
             Assert.Equal("", CareerHub.PickLine(s));
             Player p = s.World.Players.Single(x => x.Id == sub);
@@ -124,7 +146,7 @@ namespace Eleven.Simulation.Tests
             foreach (CareerRole role in new[] { CareerRole.PlayerManager, CareerRole.ManagerOnly })
             {
                 CareerSession s = New(0x1793, role);
-                int starter = Group(s, SquadGroup.Xi)[2], spare = Group(s, SquadGroup.NotPicked)[0];
+                int starter = Outfielder(s, SquadGroup.Xi, 2), spare = Outfielder(s, SquadGroup.NotPicked);
                 Assert.True(s.Swap(starter, spare));
                 var eleven = new HashSet<int>(Mine(s).Picks.Take(11));
                 Assert.Contains(spare, eleven);
@@ -135,7 +157,7 @@ namespace Eleven.Simulation.Tests
 
             // Simulated, the quick-sim's side and lines are the fixture's lineup, his picks among it.
             CareerSession q = New(0x1794);
-            int a = Group(q, SquadGroup.Xi)[1], b = Group(q, SquadGroup.NotPicked)[0];
+            int a = Outfielder(q, SquadGroup.Xi, 1), b = Outfielder(q, SquadGroup.NotPicked);
             Assert.True(q.Swap(a, b));
             Fixture next = q.Next()!;
             var picks = new HashSet<int>(Mine(q).Picks.Take(11));

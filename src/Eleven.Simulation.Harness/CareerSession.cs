@@ -142,12 +142,54 @@ namespace Eleven.Simulation.Harness
         /// the AI's pick. False, and nothing changed, if either isn't his or one who is out would
         /// go into the XI or onto the bench.
         /// </summary>
-        public bool Swap(int a, int b) => false;
+        public bool Swap(int a, int b)
+        {
+            Club mine = World.Clubs.Find(c => c.Id == Club)!;
+            Player? pa = World.Players.Find(p => p.Id == a), pb = World.Players.Find(p => p.Id == b);
+            if (a == b || pa == null || pb == null || pa.ClubId != Club || pb.ClubId != Club) return false;
+            List<int> picks = mine.Picks.Count > 0 ? new List<int>(mine.Picks) : Picked();
+            int ia = picks.IndexOf(a), ib = picks.IndexOf(b);
+            if (ia < 0 && ib < 0) return false;
+            if (!Fits(pb, pa, ia) || !Fits(pa, pb, ib)) return false;
+            if (ia >= 0) picks[ia] = b;
+            if (ib >= 0) picks[ib] = a;
+            mine.Picks.Clear();
+            mine.Picks.AddRange(picks);
+            return true;
+        }
 
         /// <summary>The AI's pick again (#179): the picks cleared.</summary>
-        public void AutoPick()
+        public void AutoPick() => World.Clubs.Find(c => c.Id == Club)!.Picks.Clear();
+
+        /// <summary>The XI and bench as the human's next fixture would pick them now: his eleven, then his bench (#179).</summary>
+        public List<int> Picked()
         {
+            SquadSelection s = CareerSquads.Selection(World, Club, PerSide, OutOfNext(), Squad);
+            var ids = new List<int>();
+            foreach (Player p in s.Starters) ids.Add(p.Id);
+            foreach (Player p in s.Bench) ids.Add(p.Id);
+            return ids;
         }
+
+        /// <summary>The human's footballers out of his next match (#176): of its competition, or the league's with none.</summary>
+        public HashSet<int> OutOfNext()
+        {
+            Fixture? f = Next();
+            MatchdayKind kind = f != null && f.Competition == CompetitionId.Cup ? MatchdayKind.Cup : MatchdayKind.League;
+            return Availability.OutOf(World, Club, kind);
+        }
+
+        // Whether he may take the place of `from` at this index of the picks: anyone may leave the
+        // picks; one out may not come in; in the XI a keeper's place is a keeper's and an
+        // outfielder's an outfielder's; and a keeper may not sit on the bench, as substitutes are outfielders.
+        private bool Fits(Player p, Player from, int index)
+        {
+            if (index < 0) return true;
+            if (OutOfNext().Contains(p.Id)) return false;
+            return index <= PerSide ? IsKeeper(p) == IsKeeper(from) : !IsKeeper(p);
+        }
+
+        private static bool IsKeeper(Player p) => p.Positions.Count > 0 && p.Positions[0] == Eleven.Career.Position.Goalkeeper;
 
         /// <summary>The human's division's table.</summary>
         public List<TableRow> Table() => SeasonEngine.Table(Season, (CompetitionId)Division, Rules);
