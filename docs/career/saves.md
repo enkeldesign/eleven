@@ -35,7 +35,7 @@ A career as bytes, in five slots ([#170](https://github.com/enkeldesign/eleven/i
 - the clubs still in the cup;
 - the cup's winner.
 
-**Results** go through the result contract's own codec, `MatchResultCodec`, in the simulation's encoding (INV-14). That covers every field, the metrics included, with the result's schema version; a result of another schema is refused. ADR 0005's allowlist names the codec as part of the contract.
+**Results** go through the result contract's own codec, `MatchResultCodec`, in the simulation's encoding (INV-14). That covers every field, the metrics included, with the result's schema version. Schema 7, the first it wrote, reads as a result with no footballers' lines (#172), so a career saved before them still loads. A result of any other schema is refused. ADR 0005's allowlist names the codec as part of the contract.
 
 **The saved time** is shown in the slot list, never played on: the career is the same whatever the clock says.
 
