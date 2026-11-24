@@ -3,6 +3,7 @@
 M6.09 (#80): managers as entities, with competence, philosophy, temperament and memory, driving the M5 policies. Its parts so far:
 - **#180, a manager's philosophy:** his formation and his three plans, and an XI picked for his formation.
 - **#182, managers manage:** each by his own profile, in every career match.
+- **#191, his memory of opponents:** each meeting remembered, and his plans for the next shaped by it.
 
 ## Who he is
 
@@ -79,6 +80,58 @@ M5's CPU manager (#127) decides by knobs that are config, the same for both side
 - **About one switch a side a match,** fewer than #127's two a match with both presets. Most career matches are close, and level for long spells.
 - **Managed, career matches draw more:** 48 % of the eleven-a-side sample against 43 % unmanaged, at 1.17 goals a match ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
 
+## His memory of opponents
+
+#80 asks for managers who remember opponent tendencies between fixtures, within the perception boundary. `Manager.Memory` (#191) holds each manager's meetings, the latest `MemoryRules.Depth` (3) with each opponent.
+
+**What he remembers** is only his own club's matches, and only the result contract's facts (`ManagerMemory.Remember`, after each fixture is recorded):
+- the season and matchday;
+- goals for and against, and those of the last quarter (the second half's second half, and extra time);
+- the formation the opponent lined up in, as anyone watching saw;
+- **for a match played in full:** both sides' PPDA and his possession (#128).
+
+Nothing of the opponent's squad, ratings or plans. A quick-simmed match has no metrics, so most memories hold the score and its timing.
+
+**What it does.** Before a meeting, `CareerManagers.Plans(manager, team, opponent)` and `Profile(manager, config, opponent)` shift his own by `ManagerMemory.Shift`, with knobs in `MemoryRules`, all untuned references:
+
+| What he remembers | Shift | Cap |
+| --- | --- | --- |
+| His goal difference over the meetings, g | His line by 0.5 m × g, deeper when beaten | ±2 m |
+| The same | He protects earlier by 0.03 × −g of the match | ±0.1 |
+| They outscored him in the last quarters | He protects 0.05 earlier still | |
+| In the meetings played in full, their PPDA more than 2 below his | His step-up eases by 1 | |
+
+With no memory of an opponent, his plans and profile are exactly #180's and #182's.
+
+**Where it acts:** a manager's plans act only in the full simulation, so in a career it's the CPU manager facing the human who adapts. The quick-sim's sides have no plans.
+
+**The human sees it:** the hub's next-fixture line ends with the last meeting, e.g. "Last met: lost 1–2 (season 1, matchday 7)".
+
+**Saved** with the world at format 5 ([world.md](world.md)), a format-4 world reading with none.
+
+### Measured
+
+`eleven-sim memory 3`: three seasons headless, the human at the first club.
+- **Memories:** 1,758 meetings over 36 managers, 17,842 of the world's 95,841 bytes. A save grows from 111,872 to 126,884 characters.
+- **The human's division's rivals,** each by his head-to-head with the human's club:
+
+  | Rival | Meetings | Goals for–against | Late | Line | Protects earlier |
+  | --- | --- | --- | --- | --- | --- |
+  | QUE | 3 | 1–5 | 0–0 | −2.0 m | 0.10 |
+  | WYS | 3 | 0–4 | 0–0 | −2.0 m | 0.10 |
+  | WYG | 3 | 0–3 | 0–0 | −1.5 m | 0.09 |
+  | JOR | 3 | 1–3 | 0–2 | −1.0 m | 0.11 |
+  | DRA | 3 | 0–2 | 0–0 | −1.0 m | 0.06 |
+  | ROS | 3 | 3–4 | 0–1 | −0.5 m | 0.08 |
+  | NES | 3 | 1–2 | 1–0 | −0.5 m | 0.03 |
+  | ROM | 2 | 3–4 | 0–0 | −0.5 m | 0.03 |
+  | MAR | 3 | 1–1 | 1–1 | 0 | 0 |
+  | GAL | 3 | 1–1 | 0–0 | 0 | 0 |
+  | QUL | 3 | 2–0 | 2–0 | +1.0 m | −0.06 |
+
+- **No step-up shifts:** every match was quick-simmed, so no meeting has metrics. A played career gives them for the human's own fixtures.
+- **The save's size:** 11 three-season saves would come to about 1.40M characters, within iOS Safari's 2.5M but past the half #181 keeps for presets and captures. Without memories it's about 1.23M already. That's for M6's gate (M6.16) to weigh.
+
 ## An XI for his formation
 
 The selection fills each slot from its line (#159). At ten outfielders the lines are now the formation's own, read from the back:
@@ -95,6 +148,15 @@ So a 4-3-3 picks three forwards and a 5-3-2 five defenders. The 4-4-2's lines ar
 - a profile decides for its side whatever the config;
 - a manager's profile by temperament and competences;
 - a career match managed on both sides, a player-manager's own side not.
+
+`ManagerMemoryTests` (#191):
+- a meeting remembered by both managers from its result, quick-simmed or played in full;
+- only his club's meetings, the latest few of each;
+- each shift, its cap, and none without memory;
+- a career match playing the shifted plans;
+- the hub's last meeting.
+
+`MemoryCodecTests` covers the world's bytes at format 5, and a format-4 world read with no memories.
 
 `ManagerPlansTests`:
 - a manager without a philosophy plays the reference, every plan in his formation;
