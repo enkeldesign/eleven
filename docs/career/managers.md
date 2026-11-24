@@ -104,6 +104,7 @@ Nothing of the opponent's squad, ratings or plans. A quick-simmed match has no m
 With no memory of an opponent, his plans and profile are exactly #180's and #182's.
 
 **Where it acts:** a manager's plans act only in the full simulation, so in a career it's the CPU manager facing the human who adapts. The quick-sim's sides have no plans.
+- **The human's own side** plays his manager's plans and profile as they are, whether he plays or watches (`CareerSession.MatchFor` and `ProfilesFor`). What he makes of the last meeting is his, from the hub's line. His manager still remembers, for that line.
 
 **The human sees it:** the hub's next-fixture line ends with the last meeting, e.g. "Last met: lost 1–2 (season 1, matchday 7)".
 
@@ -154,6 +155,7 @@ So a 4-3-3 picks three forwards and a 5-3-2 five defenders. The 4-4-2's lines ar
 - only his club's meetings, the latest few of each;
 - each shift, its cap, and none without memory;
 - a career match playing the shifted plans;
+- in the human's fixture, only his opponent adapting, whether he plays or watches;
 - the hub's last meeting.
 
 `MemoryCodecTests` covers the world's bytes at format 5, and a format-4 world read with no memories.
