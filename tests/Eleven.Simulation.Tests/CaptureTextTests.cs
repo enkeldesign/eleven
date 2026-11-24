@@ -44,9 +44,11 @@ namespace Eleven.Simulation.Tests
         public void A_body_joined_onto_one_line_reads_back_padding_and_all()
         {
             // Codex on #146: a chat that unwraps the body leaves one token ending in base64's `=`
-            // padding (the fixture's length isn't a multiple of 3), which isn't a header field.
-            byte[] capture = Fixture;
-            Assert.NotEqual(0, capture.Length % 3);
+            // padding, which isn't a header field. The text form frames any bytes without reading
+            // them, so the fixture is cut to one past a multiple of 3, its body ending in `==`,
+            // whatever the fixture's own length (#166's made it a multiple).
+            byte[] capture = Fixture.Take(3 * (Fixture.Length / 3) - 2).ToArray();
+            Assert.EndsWith("==", Convert.ToBase64String(capture));
             string[] lines = CaptureText.Encode(capture, "c").Split('\n');
             string joined = lines[0] + "\n" + string.Concat(lines.Skip(1).Where(l => l.Length > 0 && l != "END")) + "\nEND\n";
             Assert.Equal(capture, Read(joined));

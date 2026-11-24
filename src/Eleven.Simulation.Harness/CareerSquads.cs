@@ -68,17 +68,15 @@ namespace Eleven.Simulation.Harness
             byId[keeperId] = keeper;
             for (int i = 0; i < s.Players.Length; i++)
             {
-                if (byId.TryGetValue(s.Players[i].Id, out Player p)) s.Players[i].Capabilities = RatingMap.Capabilities(p);
+                if (!byId.TryGetValue(s.Players[i].Id, out Player p)) continue;
+                s.Players[i].Capabilities = RatingMap.Capabilities(p);
+                // Every outfielder's own CPU skill (#166), whoever controls him.
+                if (s.Players[i].Id != keeperId) s.Players[i].Skill = RatingMap.Skill(p);
             }
 
             for (int i = 0; i < s.Keepers.Length; i++)
             {
                 if (s.Keepers[i].PlayerId == keeperId) s.Keepers[i].Capabilities = RatingMap.Keeper(keeper);
-            }
-
-            for (int i = 0; i < s.Cpus.Length; i++)
-            {
-                if (byId.TryGetValue(s.Cpus[i].PlayerId, out Player p)) s.Cpus[i].Skill = RatingMap.Skill(p);
             }
 
             for (int b = 0; b < s.Bench.Length; b++)

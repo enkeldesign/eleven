@@ -374,10 +374,10 @@ namespace Eleven.Simulation.Tests
             byte[] bytes = w.ToArray();
 
             // The flag is the last player's last byte but their cut cooldown (#75), just before the
-            // challenge (#84: its phase, steps and line) the cards (#108: cautions, sent off), the injury (#109) and the carry (#138), and before the keeper count, the team
+            // challenge (#84: its phase, steps and line) the cards (#108: cautions, sent off), the injury (#109), the carry (#138) and his CPU skill (#166: 32 bytes), and before the keeper count, the team
             // count (#82), the restart (#85: 40 bytes, #99's advantage: 24, #107's offside flags: 8),
             // the match (#86: 13 bytes), the CPU count (#83), the bench count (#110) and the tactical plans' count (#126).
-            int flag = bytes.Length - 1 - (4 + 1 + 4 + 16 + 1 + 1 + 1 + 4) - 4 - 4 - 72 - 13 - 4 - 4 - 4;
+            int flag = bytes.Length - 1 - (4 + 1 + 4 + 16 + 1 + 1 + 1 + 4 + 32) - 4 - 4 - 72 - 13 - 4 - 4 - 4;
             Assert.Equal(1, bytes[flag]);
             bytes[flag] = 2;
             Assert.Throws<FormatException>(() => SimState.Decode(new Encoding.CanonicalReader(bytes)));

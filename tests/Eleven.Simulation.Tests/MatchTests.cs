@@ -228,7 +228,7 @@ namespace Eleven.Simulation.Tests
             new Simulator(C, s);
             Assert.Equal(8.5, s.Players[0].Capabilities.MaxSpeed);
             Assert.Single(s.Cpus);
-            Assert.Equal((OneVOne.AwayPlayer, CpuSkill.Elite.DecisionInterval), (s.Cpus[0].PlayerId, s.Cpus[0].Skill.DecisionInterval));
+            Assert.Equal((OneVOne.AwayPlayer, CpuSkill.Elite.DecisionInterval), (s.Cpus[0].PlayerId, s.SkillOf(s.Cpus[0].PlayerId).DecisionInterval));
             Assert.Equal(MatchPhase.FirstHalf, s.Match.Phase);
         }
 

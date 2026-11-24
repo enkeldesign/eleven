@@ -28,11 +28,10 @@ A plan moves no one. Only the stick, the kick and the quick pass do, and they ar
 
 ## The timers are the simulation's
 
-`CpuState`, one per CPU outfielder, plain data in the state (schema 13):
+`CpuState`, one per CPU outfielder, plain data in the state (schema 13). He plays on his footballer's own `CpuSkill`, `PlayerState.Skill`, the whole of difficulty: since #166 (schema 30) it's the footballer's, whoever controls him, not the CPU's.
 
 | Field | What it is |
 | --- | --- |
-| `Skill` | His `CpuSkill`: the whole of difficulty. |
 | `NextDecisionTick` | The first tick on which he may decide again. |
 | `Plan` | The plan in effect: its mode, stick, kick, quick pass, the tick it was observed on and the tick it took effect. |
 | `HasNext`, `Next` | A plan decided but still waiting out his reaction delay. |

@@ -32,7 +32,8 @@ The world is one fixed seed (`QuickMatch.WorldSeed`), so a club is the same club
 `QuickMatch.Match` builds the kick-off from the world through `CareerSquads` ([ratings.md](ratings.md)):
 - **The human** plays the home club's kick-off taker and switches between his team-mates as in any match.
 - **Every footballer** on both sides plays on his own values from his ratings: the human's, his team-mates', the keepers', the CPU's and the benches'. The bench's player knobs don't apply to a quick match. Its other values (ball, kick, control model and the rest) do.
-- **One exception, until [#166](https://github.com/enkeldesign/eleven/issues/166):** the human's side, bench included, plays on its XI's mean CPU skill. A footballer's CPU skill lives in his side's CPU state, and a switch moves that state to the footballer the human leaves (Codex on #165). With per-footballer skills, each switch would hand one footballer's decisions, reactions and vision to another. The side's mean can't be redistributed. Its footballers' capabilities and keeping stay their own, and so does every opponent's CPU skill, since nobody switches them.
+- **His CPU skill too,** since #166: the human's team-mates, the human's own footballer and his bench each play on their own. A footballer's skill is his state, so a switch leaves it with him ([switching.md](../simulation/switching.md)).
+  - **Until #166** the human's side played on its XI's mean CPU skill. The skill then lived in the CPU's state, and a switch moved it to the footballer the human left (Codex on #165).
 - **Both sides** keep the three stored plans (#126), so the paused dashboard switches them as before.
 
 The seed is the address's `seed=` if it gives one, else the moment of the kick-off. Either way it is logged (`ELEVEN quick started … seed=`). The recording starts from the match's state, so a capture replays it.

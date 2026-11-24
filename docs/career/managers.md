@@ -67,18 +67,18 @@ M5's CPU manager (#127) decides by knobs that are config, the same for both side
 
 ### Measured
 
-`eleven-sim managers career 96`: the eleven-a-side sample's first 96 fixtures, each side by its manager.
+`eleven-sim managers career 96`: the eleven-a-side sample's first 96 fixtures, each side by its manager, a substitute on his own CPU skill (#166).
 
 | Temperament | Sides | Switches a match | To chase | To protect | Substitutions a match |
 | --- | --- | --- | --- | --- | --- |
-| cautious, 1–7 | 58 | 0.79 | 15 | 24 | 2.12 |
-| middle, 8–13 | 65 | 0.74 | 23 | 20 | 1.74 |
-| bold, 14–20 | 69 | 0.77 | 27 | 20 | 1.84 |
-| all | 192 | 0.77 | 65 | 64 | 1.89 |
+| cautious, 1–7 | 58 | 0.78 | 14 | 26 | 1.91 |
+| middle, 8–13 | 65 | 0.74 | 25 | 19 | 1.66 |
+| bold, 14–20 | 69 | 0.84 | 30 | 22 | 1.81 |
+| all | 192 | 0.79 | 69 | 67 | 1.79 |
 
 - **The bold chase more and the cautious protect more:** they reach their plans at different moments of the same matches.
 - **About one switch a side a match,** fewer than #127's two a match with both presets. Most career matches are close, and level for long spells.
-- **Managed, career matches draw more:** 48 % of the eleven-a-side sample against 43 % unmanaged, at 1.17 goals a match ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
+- **Managed, career matches draw more:** 45 % of the eleven-a-side sample, at 1.18 goals a match, against 43 % unmanaged ([quicksim.md](../simulation/quicksim.md#eleven-a-side)). #182's sample, before substitutes played on their own skill, drew 48 %.
 
 ## His memory of opponents
 

@@ -8,7 +8,8 @@ Issue #93, M2's second step: with two outfielders a side, the human controls one
 
 - **It is accepted** when the target is an outfielder of the controller's side, played by the CPU. A keeper, an opponent, his own footballer or an unknown id is refused, as `SwitchRefused`.
 - **It takes effect at the end of the step,** so every command of that step applies to the ownership it was made for. The step after, the human's stick moves the footballer he took over.
-- **The footballer he leaves** goes to the CPU controller of the one he took. His side's brain plays him from the next step, with that controller's skill and fresh timers (#83).
+- **The footballer he leaves** goes to the CPU controller of the one he took. His side's brain plays him from the next step, with fresh timers (#83) and his own CPU skill (#166).
+- **Every footballer keeps his own skill,** whoever controls him (`PlayerState.Skill`, state schema 30). A switch moves a CPU's controller and timers, never a skill. Before #166 the skill was the CPU's, so a switch handed the target's skill to the footballer left, and the human's own footballer had none stored.
 - **Event:** `Switched`. Its subject is the footballer taken over, and `Other` the one left to the CPU.
 - **Recording format 6** adds the switch's target to each command.
 

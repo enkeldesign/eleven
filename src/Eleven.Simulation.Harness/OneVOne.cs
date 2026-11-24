@@ -56,14 +56,14 @@ namespace Eleven.Simulation.Harness
                 },
                 Players = new[]
                 {
-                    new PlayerState { Id = HomePlayer, OwnerControllerId = HomeController, TeamId = HomeTeam, Capabilities = home ?? PlayerCapabilities.Reference, Position = new Vec2(-s * 0.6, 0), Heading = homeFacing },
+                    new PlayerState { Id = HomePlayer, OwnerControllerId = HomeController, TeamId = HomeTeam, Capabilities = home ?? PlayerCapabilities.Reference, Position = new Vec2(-s * 0.6, 0), Heading = homeFacing, Skill = homeCpu ?? CpuSkill.Pro },
                     new PlayerState { Id = HomeKeeper, OwnerControllerId = HomeKeeperController, TeamId = HomeTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(-s * keeperX, 0), Heading = homeFacing },
-                    new PlayerState { Id = AwayPlayer, OwnerControllerId = AwayController, TeamId = AwayTeam, Capabilities = away ?? PlayerCapabilities.Reference, Position = new Vec2(s * OpponentDistance, 0), Heading = awayFacing },
+                    new PlayerState { Id = AwayPlayer, OwnerControllerId = AwayController, TeamId = AwayTeam, Capabilities = away ?? PlayerCapabilities.Reference, Position = new Vec2(s * OpponentDistance, 0), Heading = awayFacing, Skill = awayCpu ?? CpuSkill.Pro },
                     new PlayerState { Id = AwayKeeper, OwnerControllerId = AwayKeeperController, TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(s * keeperX, 0), Heading = awayFacing },
                 },
                 Cpus = homeCpu.HasValue
-                    ? new[] { new CpuState { PlayerId = HomePlayer, Skill = homeCpu.Value }, new CpuState { PlayerId = AwayPlayer, Skill = awayCpu ?? CpuSkill.Pro } }
-                    : new[] { new CpuState { PlayerId = AwayPlayer, Skill = awayCpu ?? CpuSkill.Pro } },
+                    ? new[] { new CpuState { PlayerId = HomePlayer }, new CpuState { PlayerId = AwayPlayer } }
+                    : new[] { new CpuState { PlayerId = AwayPlayer } },
                 Keepers = new[]
                 {
                     new KeeperState { PlayerId = HomeKeeper, Capabilities = homeKeeper ?? KeeperCapabilities.Reference },

@@ -112,8 +112,8 @@ namespace Eleven.Simulation.Tests
 
             KeeperState keeper = s.Keepers.Single(k => k.PlayerId == Squads.HomeKeeper(10));
             Assert.Equal(RatingMap.Keeper(picked.Starters[10]).ReactionTime, keeper.Capabilities.ReactionTime, 12);
-            CpuState cpu = s.Cpus.Single(x => x.PlayerId == Squads.HomeOutfielder(3));
-            Assert.Equal(RatingMap.Skill(picked.Starters[3]).DecisionInterval, cpu.Skill.DecisionInterval, 12);
+            Assert.Contains(s.Cpus, x => x.PlayerId == Squads.HomeOutfielder(3));
+            Assert.Equal(RatingMap.Skill(picked.Starters[3]).DecisionInterval, s.SkillOf(Squads.HomeOutfielder(3)).DecisionInterval, 12);
 
             // Not one value for the whole side.
             Assert.True(s.Players.Where(x => x.TeamId == Squads.HomeTeam).Select(x => x.Capabilities.MaxSpeed).Distinct().Count() > 3);

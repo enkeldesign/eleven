@@ -84,9 +84,18 @@ All future-affecting state is in `SimState`; anything else that affects the next
 
 ## Snapshots
 
-Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, version 3 added player capabilities, version 4 added kick capabilities and the kick's wind-up and aftertouch phases, version 5 added each player's team, pass capabilities and quick-pass target, version 6 added ball control and the touch cooldown (#59), version 7 the ball's attachment (#60), version 8 the ball's goal-line state (#68), version 9 the keepers and the held ball (#69), version 10 each player's turn with the ball (#66), and version 11 each player's cut cooldown (#75)), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
+Magic `ELSN`, state schema version (int32; version 2 dropped the maths backend, version 3 added player capabilities, version 4 added kick capabilities and the kick's wind-up and aftertouch phases, version 5 added each player's team, pass capabilities and quick-pass target, version 6 added ball control and the touch cooldown (#59), version 7 the ball's attachment (#60), version 8 the ball's goal-line state (#68), version 9 the keepers and the held ball (#69), version 10 each player's turn with the ball (#66), version 11 each player's cut cooldown (#75), and so on to version 30, which moved the CPU skill to each footballer (#166); `SimulationInfo.StateSchemaVersion` lists them all), build id (string), tick convention (string), config hash (uint64), seed (uint64), tick (int64), then the canonical state.
 
-Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`, which refuses kick state the config couldn't have produced: a wind-up, window or cooldown longer than the config's, or a pass target outside a wind-up or off the team. Player ids are positive, because a target of 0 means none. The build id is recorded but not enforced: states are meant to migrate (INV-7), and there is no migration yet beyond the schema version. The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
+Restoring checks the schema version, tick convention and config hash, then builds a fresh `Simulator`, which refuses kick state the config couldn't have produced: a wind-up, window or cooldown longer than the config's, or a pass target outside a wind-up or off the team. Player ids are positive, because a target of 0 means none. The build id is recorded but not enforced: states migrate (INV-7).
+
+**Migration (#166).** A snapshot of `SimulationInfo.MigratesFromStateSchema` (29) reads as a schema-30 state, and `Snapshot.SchemaVersion` still says it was 29. Schema 30 moved the CPU skill from each CPU to each footballer:
+- each footballer a CPU played takes his CPU's skill;
+- a footballer none played, the human's, takes his side's CPUs' skill, each value their mean: the one skill every side played on before #165;
+- a keeper's is none.
+
+Any other schema is refused. `tests/Eleven.Simulation.Tests/Fixtures/migration-29.elrc` is a recording made at schema 29 by `eleven-sim migration-fixture`: five a side, the seat switching by itself, 8 switches in 10 s. Its play, every footballer's place, velocity, heading, fatigue and controller, the ball, the score and each CPU's timing on every tick, then its events, is `migration-29.txt`. Migrated, it replays exactly that. Its state hashes can't match: the state it replays into is schema 30's.
+
+A felt-wrong capture checks its state schema and is refused at another (#44): input traces may expire (INV-7). The build id is the simulation assembly's informational version, which the .NET SDK suffixes with the source commit.
 
 ## Command recordings
 
