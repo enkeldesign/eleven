@@ -360,6 +360,12 @@ namespace Eleven.Simulation.Harness
             return mine == null ? "" : FormattableString.Invariant($"Balance {mine.Balance:N0}k. Wages {Finance.WageBill(s.World, mine):N0}k a week of a {Finance.WageBudget(s.World, mine):N0}k budget.");
         }
 
+        /// <summary>
+        /// Your club's board (#200), e.g. "The board: finish 6th or higher, reach the round of 16
+        /// and end the season in the black. Confidence 62: pleased."
+        /// </summary>
+        public static string BoardLine(CareerSession s) => "";
+
         /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
         public static string TrainingLine(CareerSession s) => s.World.Clubs.Find(c => c.Id == s.Club)?.Training switch
         {

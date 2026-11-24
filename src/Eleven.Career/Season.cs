@@ -79,6 +79,9 @@ namespace Eleven.Career
 
             season.CupRanking.AddRange(cupRanking);
             season.CupAlive.AddRange(Cup.FirstRound(cupRanking).Byes);
+
+            // The board's objectives (#200), from each club's wage rank in its division.
+            Board.Objectives(world, rules);
             return season;
         }
 
@@ -256,9 +259,9 @@ namespace Eleven.Career
         }
 
         /// <summary>
-        /// The season's end: the promoted clubs up a division and the relegated down one, in the
-        /// world itself, every footballer a year older (#194), and the next season, its cup ranked
-        /// by this season's final tables.
+        /// The season's end: its money (#198) and the board's verdict (#200), the promoted clubs up
+        /// a division and the relegated down one, in the world itself, every footballer a year
+        /// older (#194), and the next season, its cup ranked by this season's final tables.
         /// </summary>
         public static Season Rollover(World world, Season season, ulong careerSeed, CompetitionRules rules, SquadRules? squad = null, DevelopmentRules? development = null)
         {
@@ -271,6 +274,7 @@ namespace Eleven.Career
 
             (List<int> up, List<int> down) = Movement(season, rules);
             Finance.SeasonEnd(world, season, rules);
+            Board.SeasonEnd(world, season, rules);
             Availability.NewSeason(world, squad ?? SquadRules.Reference);
             Finance.Pass(world, (squad ?? SquadRules.Reference).OffSeasonDays);
             Development.Rollover(world, season.Number + 1, development);

@@ -111,6 +111,8 @@ namespace Eleven.Career
                 }
             }
 
+            // The board (#200): each club's objectives from its wage rank.
+            Board.Objectives(world, CompetitionRules.Reference);
             return world;
         }
 

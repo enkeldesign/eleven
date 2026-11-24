@@ -53,6 +53,9 @@ namespace Eleven.Career
 
         /// <summary>This season's money in and out, and last season's (#198).</summary>
         public Ledger Season = new Ledger(), LastSeason = new Ledger();
+
+        /// <summary>Its board (#200): this season's objectives, its confidence in the manager, last season's verdict.</summary>
+        public BoardState Board = new BoardState();
     }
 
     /// <summary>A club's training (#196). Numeric values are stable and encoded as one byte.</summary>
