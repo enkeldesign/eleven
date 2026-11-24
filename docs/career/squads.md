@@ -56,7 +56,7 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 - **Bench**, up to 9;
 - **Not picked**, by level.
 
-A row: "J. Smith · CB, DM · 14.2 · 96", his name, positions, selection level (the 1–20 mean the AI picks by), condition, and why he's out if he is.
+A row: "J. Smith, 23 · CB, DM · 14.2 · 96", his name and age (#194), positions, selection level (the 1–20 mean the AI picks by), condition, and why he's out if he is.
 
 - **Picking is a swap:** choose a footballer, then one of those who can take his place, best first.
   - **Who can't:** one who's out can't come into the XI or onto the bench.

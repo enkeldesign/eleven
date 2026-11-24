@@ -36,7 +36,7 @@ Saving it is M6.07's.
 
 **`Movement`** gives the season's moves: the top two of divisions 2 and 3 go up, and the bottom two of divisions 1 and 2 go down.
 
-**`Rollover`** applies them to the world's clubs and starts the next season:
+**`Rollover`** applies them to the world's clubs, turns its footballers a year older (#194: the older decline, the oldest retire and youth fill each squad, [development.md](development.md#the-seasons-turn)), and starts the next season:
 - its number is one more;
 - its seed is new;
 - its cup is ranked by the final tables: division 1's, then 2's, then 3's.

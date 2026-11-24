@@ -91,7 +91,7 @@ namespace Eleven.Career
         public int Get(string attribute) => Attributes[PlayerAttributes.Index(attribute)];
     }
 
-    /// <summary>A manager: identity, competences (<see cref="ManagerCompetences"/>), style and temperament. Memory comes in M6.09.</summary>
+    /// <summary>A manager: identity, competences (<see cref="ManagerCompetences"/>), style, temperament and memory (#191).</summary>
     public sealed class Manager
     {
         public int Id;

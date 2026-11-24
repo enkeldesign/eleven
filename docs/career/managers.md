@@ -10,7 +10,7 @@ M6.09 (#80): managers as entities, with competence, philosophy, temperament and 
 Each club has a manager in the world (#157):
 - **his preferred formation:** one of the six (#125);
 - **his temperament:** 1, cautious, to 20, bold;
-- **his reputation**, and **seven competences**, each 1–20: tactics, coaching, development, scouting, recruitment, motivation and adaptability;
+- **his reputation**, and **seven competences**, each 1–20: tactics, coaching, development, scouting, recruitment, motivation and adaptability. Coaching and development set how fast his young footballers grow, and development his youth's level (#194, [development.md](development.md));
 - **his philosophy** (#180), two values of 1–20:
   - `Pressing`, how far up his side presses;
   - `Depth`, how high its line stands.
