@@ -223,7 +223,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_a_managers_philosophy_and_a_format_3_world_reads_it_unset()
         {
             World w = WorldGenerator.Generate(0x180);
-            Assert.Equal(7, WorldCodec.FormatVersion);
+            Assert.Equal(8, WorldCodec.FormatVersion);
             Assert.All(w.Managers, m => Assert.True(m.Pressing >= 1 && m.Depth >= 1));
             World back = WorldCodec.Decode(WorldCodec.Encode(w));
             Assert.Equal(w.Managers.Select(m => (m.Pressing, m.Depth)), back.Managers.Select(m => (m.Pressing, m.Depth)));
@@ -234,7 +234,7 @@ namespace Eleven.Career.Tests
             var three = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             three.WriteBytes(plain[..4]);
             three.WriteInt32(3);
-            three.WriteBytes(plain[8..^24]);
+            three.WriteBytes(plain[8..^(24 + Formats.Money(w))]);
             World old = WorldCodec.Decode(three.ToArray());
             Assert.All(old.Managers, m => Assert.Equal((0, 0), (m.Pressing, m.Depth)));
             Assert.Equal(plain, WorldCodec.Encode(old));
@@ -254,7 +254,7 @@ namespace Eleven.Career.Tests
             var two = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             two.WriteBytes(plain[..4]);
             two.WriteInt32(2);
-            two.WriteBytes(plain[8..^28]);
+            two.WriteBytes(plain[8..^(28 + Formats.Money(w))]);
             Assert.Equal(plain, WorldCodec.Encode(WorldCodec.Decode(two.ToArray())));
 
             Club c = w.Clubs[5];
@@ -276,7 +276,7 @@ namespace Eleven.Career.Tests
             var one = new CanonicalWriter(plain.Length);
             one.WriteBytes(plain[..4]);
             one.WriteInt32(1);
-            one.WriteBytes(plain[8..^32]);
+            one.WriteBytes(plain[8..^(32 + Formats.Money(w))]);
             World old = WorldCodec.Decode(one.ToArray());
             Assert.Equal(plain, WorldCodec.Encode(old));
 

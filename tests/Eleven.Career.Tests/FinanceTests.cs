@@ -130,7 +130,10 @@ namespace Eleven.Career.Tests
             c.LastSeason.Amounts[(int)LedgerLine.Broadcasting] = 3650;
             c.LastSeason.Amounts[(int)LedgerLine.Matchday] = 1000;
             c.LastSeason.Amounts[(int)LedgerLine.Wages] = -2000;
-            Assert.Equal((long)Math.Round(Rules.WageShare * 4650 / 52.0), Finance.WageBudget(w, c));
+            // Over the season's weeks: the days it pays for, over 7.
+            int days = Finance.SeasonDays(CompetitionRules.Reference, SquadRules.Reference);
+            Assert.InRange(days, 150, 400);
+            Assert.Equal((long)Math.Round(Rules.WageShare * 4650 / (days / 7.0)), Finance.WageBudget(w, c));
         }
 
         [Fact]

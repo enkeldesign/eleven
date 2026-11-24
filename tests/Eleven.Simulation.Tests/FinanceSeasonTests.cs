@@ -67,7 +67,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(2 * 3, views.Count);
             foreach (CareerFinances.DivisionSeason v in views)
             {
-                (double low, double high) = v.Division == 1 ? (0.5, 0.8) : v.Division == 2 ? (0.6, 1.0) : (0.7, 1.2);
+                // The research's: about 0.6–0.7 in a top division, above 1.0 in some lower ones.
+                (double low, double high) = v.Division == 1 ? (0.5, 0.8) : v.Division == 2 ? (0.6, 1.1) : (0.7, 1.3);
                 Assert.InRange(v.WagesOverRevenue, low, high);
                 Assert.InRange(v.InDeficit, 0, 3);
             }

@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 7;
+        public const int FormatVersion = 8;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -187,6 +187,19 @@ namespace Eleven.Career
                 w.WriteInt32(c.Id);
                 w.WriteByte((byte)c.Training);
             }
+
+            // Format 8 (#198): each club in order, its balance and this season's and last season's
+            // ledgers; then each footballer in order, his weekly wage in two bytes.
+            w.WriteInt32(world.Clubs.Count);
+            foreach (Club c in world.Clubs)
+            {
+                w.WriteInt32(Money(c.Balance));
+                foreach (long a in c.Season.Amounts) w.WriteInt32(Money(a));
+                foreach (long a in c.LastSeason.Amounts) w.WriteInt32(Money(a));
+            }
+
+            w.WriteInt32(world.Players.Count);
+            foreach (Player p in world.Players) WriteShort(w, p.Wage);
 
             return w.ToArray();
         }
@@ -410,9 +423,42 @@ namespace Eleven.Career
                 }
             }
 
+            if (version >= 8)
+            {
+                if (r.ReadInt32() != world.Clubs.Count) throw new FormatException("The clubs' money doesn't count every club.");
+                foreach (Club c in world.Clubs)
+                {
+                    c.Balance = r.ReadInt32();
+                    for (int i = 0; i < Ledger.Lines; i++) c.Season.Amounts[i] = r.ReadInt32();
+                    for (int i = 0; i < Ledger.Lines; i++) c.LastSeason.Amounts[i] = r.ReadInt32();
+                }
+
+                if (r.ReadInt32() != world.Players.Count) throw new FormatException("The wages don't count every footballer.");
+                foreach (Player p in world.Players)
+                {
+                    p.Wage = ReadShort(r);
+                    if (p.Wage < 0) throw new FormatException($"Footballer {p.Id}'s wage {p.Wage} is negative.");
+                }
+            }
+            else
+            {
+                // A world from before #198: each club's opening balance, each footballer's wage by the rule.
+                var division = new Dictionary<int, int>();
+                foreach (Club c in world.Clubs)
+                {
+                    c.Balance = Finance.StartBalance(c);
+                    division[c.Id] = c.Division;
+                }
+
+                foreach (Player p in world.Players) p.Wage = Finance.Wage(p, division.TryGetValue(p.ClubId, out int d) ? d : 1);
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        // An amount of k in four bytes, at most ±2,147,483,647k.
+        private static int Money(long k) => (int)Math.Clamp(k, int.MinValue, int.MaxValue);
 
         // A signed count in two bytes, high first: points and seasons within ±32,767.
         private static void WriteShort(CanonicalWriter w, int n)

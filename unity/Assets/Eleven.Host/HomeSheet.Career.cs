@@ -72,6 +72,9 @@ namespace Eleven.Host
 
         // Your club's training (#196): its line, and the action that cycles it.
         private Label _hubTraining;
+
+        // Your club's money (#198): its balance, wages and wage budget.
+        private Label _hubFinance;
         private UiKit.Action _hubTrain;
         private Label _hubResults;
         private Label _hubSummary;
@@ -185,6 +188,10 @@ namespace Eleven.Host
             _hubTraining = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
             _hubTraining.style.marginBottom = Spacing.M;
             hub.Add(_hubTraining);
+            // Your club's money (#198), always shown.
+            _hubFinance = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubFinance.style.marginBottom = Spacing.M;
+            hub.Add(_hubFinance);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -344,6 +351,7 @@ namespace Eleven.Host
             _hubReview.text = review;
             _hubReview.style.display = review.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             _hubTraining.text = CareerHub.TrainingLine(s);
+            _hubFinance.text = CareerHub.FinanceLine(s);
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;

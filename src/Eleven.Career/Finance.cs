@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Eleven.Simulation;
+using Eleven.Simulation.Maths;
 
 namespace Eleven.Career
 {
@@ -25,21 +26,21 @@ namespace Eleven.Career
         public double YoungWage = 0.5, NearPeakWage = 0.8;
 
         /// <summary>Broadcasting a day, by division.</summary>
-        public double[] BroadcastPerDay = { 9, 3, 1 };
+        public double[] BroadcastPerDay = { 35, 10, 3 };
 
         /// <summary>A home match's takings by division, then a share more a point of reputation above 10.</summary>
-        public double[] MatchdayBase = { 150, 50, 18 };
+        public double[] MatchdayBase = { 400, 130, 50 };
 
         public double MatchdayPerReputation = 0.06;
 
         /// <summary>The champion's merit payment by division; each place below gets a twelfth less.</summary>
-        public double[] MeritTop = { 1200, 300, 80 };
+        public double[] MeritTop = { 3000, 900, 300 };
 
         /// <summary>The cup's payment a round reached, and the winner's on top.</summary>
         public double CupPerRound = 40, CupWinner = 200;
 
         /// <summary>A club's balance at the world's start, by division.</summary>
-        public double[] StartBalance = { 2000, 600, 200 };
+        public double[] StartBalance = { 5000, 1500, 400 };
 
         /// <summary>The board's wage budget: this share of last season's revenue.</summary>
         public double WageShare = 0.65;
@@ -89,28 +90,98 @@ namespace Eleven.Career
     public static class Finance
     {
         /// <summary>A footballer's weekly wage, by his level, age and his club's division.</summary>
-        public static int Wage(Player p, int division, FinanceRules? rules = null) => 0;
+        public static int Wage(Player p, int division, FinanceRules? rules = null)
+        {
+            rules ??= FinanceRules.Reference;
+            double share = p.Age < 21 ? rules.YoungWage : p.Age < 24 ? rules.NearPeakWage : 1;
+            double wage = rules.WageBase * SimMath.Exp(rules.WageSlope * (Development.Level(p) - 10)) * Division(rules.DivisionWage, division) * share;
+            return Math.Max(1, (int)Math.Round(wage));
+        }
 
         /// <summary>A club's balance at the world's start.</summary>
-        public static long StartBalance(Club club, FinanceRules? rules = null) => 0;
+        public static long StartBalance(Club club, FinanceRules? rules = null) => (long)Math.Round(Division((rules ?? FinanceRules.Reference).StartBalance, club.Division));
 
         /// <summary>The <paramref name="days"/> between matches: each club pays its wages and earns its broadcasting.</summary>
         public static void Pass(World world, int days, FinanceRules? rules = null)
         {
+            rules ??= FinanceRules.Reference;
+            var bills = new Dictionary<int, long>();
+            foreach (Player p in world.Players) bills[p.ClubId] = (bills.TryGetValue(p.ClubId, out long b) ? b : 0) + p.Wage;
+            foreach (Club c in world.Clubs)
+            {
+                Book(c, LedgerLine.Wages, -(long)Math.Round((bills.TryGetValue(c.Id, out long bill) ? bill : 0) * days / 7.0));
+                Book(c, LedgerLine.Broadcasting, (long)Math.Round(Division(rules.BroadcastPerDay, c.Division) * days));
+            }
         }
 
         /// <summary>A matchday's home takings, for each home club of <paramref name="played"/>.</summary>
         public static void Matchday(World world, IEnumerable<Fixture> played, FinanceRules? rules = null)
         {
+            rules ??= FinanceRules.Reference;
+            foreach (Fixture f in played)
+            {
+                Club? home = world.Clubs.Find(c => c.Id == f.Home);
+                if (home != null) Book(home, LedgerLine.Matchday, Takings(home, rules));
+            }
         }
+
+        // A home match's takings: the division's, a share more a point of reputation above 10.
+        private static long Takings(Club home, FinanceRules rules) =>
+            Math.Max(0, (long)Math.Round(Division(rules.MatchdayBase, home.Division) * (1 + rules.MatchdayPerReputation * (home.Reputation - 10))));
 
         /// <summary>The season's end: each club's merit by league place and its cup payment by the round reached; then its season's ledger becomes last season's.</summary>
         public static void SeasonEnd(World world, Season season, CompetitionRules competition, FinanceRules? rules = null)
         {
+            rules ??= FinanceRules.Reference;
+            foreach (Club c in world.Clubs)
+            {
+                List<TableRow> table = SeasonEngine.Table(season, (CompetitionId)c.Division, competition);
+                int place = table.FindIndex(r => r.Club == c.Id) + 1;
+                if (place > 0) Book(c, LedgerLine.Merit, (long)Math.Round(Division(rules.MeritTop, c.Division) * (table.Count + 1 - place) / table.Count));
+                int reached = 0;
+                foreach (Fixture f in season.Fixtures)
+                {
+                    if (f.Competition == CompetitionId.Cup && (f.Home == c.Id || f.Away == c.Id)) reached = Math.Max(reached, f.Round);
+                }
+
+                long cup = (long)Math.Round(rules.CupPerRound * reached + (season.CupWinner == c.Id ? rules.CupWinner : 0));
+                if (cup > 0) Book(c, LedgerLine.Cup, cup);
+                c.LastSeason = c.Season;
+                c.Season = new Ledger();
+            }
         }
 
-        /// <summary>The board's weekly wage budget: its share of last season's revenue, or of a season's expected in the first.</summary>
-        public static long WageBudget(World world, Club club, FinanceRules? rules = null) => 0;
+        /// <summary>
+        /// The board's weekly wage budget: its share of last season's revenue, or of a season's
+        /// expected in the first, over the season's weeks: its days over 7.
+        /// </summary>
+        public static long WageBudget(World world, Club club, FinanceRules? rules = null, CompetitionRules? competition = null, SquadRules? squad = null)
+        {
+            rules ??= FinanceRules.Reference;
+            int days = SeasonDays(competition ?? CompetitionRules.Reference, squad ?? SquadRules.Reference);
+            double revenue = club.LastSeason.Revenue > 0 ? club.LastSeason.Revenue : Expected(club, rules, days);
+            return (long)Math.Round(rules.WageShare * revenue / (days / 7.0));
+        }
+
+        /// <summary>The days a season pays wages and broadcasting for: its calendar's, from its first matchday past its last, and the off-season's.</summary>
+        public static int SeasonDays(CompetitionRules competition, SquadRules squad)
+        {
+            List<Matchday> calendar = SeasonCalendar.Of(competition);
+            return calendar[calendar.Count - 1].Day - calendar[0].Day + Availability.GapAfter(competition, calendar.Count - 1) + squad.OffSeasonDays;
+        }
+
+        // A first season's expected revenue: its days' broadcasting, eleven home matches, a mid-table merit and two rounds of the cup.
+        private static double Expected(Club club, FinanceRules rules, int days) =>
+            Division(rules.BroadcastPerDay, club.Division) * days + 11 * Takings(club, rules) + Division(rules.MeritTop, club.Division) * 6.5 / 12 + 2 * rules.CupPerRound;
+
+        // Money in or out, onto the club's balance and its season's line.
+        private static void Book(Club c, LedgerLine line, long amount)
+        {
+            c.Balance += amount;
+            c.Season.Amounts[(int)line] += amount;
+        }
+
+        private static double Division(double[] row, int division) => row[Math.Clamp(division, 1, row.Length) - 1];
 
         /// <summary>A club's weekly wage bill.</summary>
         public static long WageBill(World world, Club club)
