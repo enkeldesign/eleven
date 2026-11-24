@@ -148,19 +148,8 @@ namespace Eleven.Career
 
                 ending.Sort((a, b) => Development.Level(a) != Development.Level(b) ? Development.Level(b).CompareTo(Development.Level(a)) : a.Id.CompareTo(b.Id));
                 var gone = new HashSet<int>();
-                foreach (Player p in ending)
+                void Release(Player p)
                 {
-                    int wage = Finance.Wage(p, d);
-                    bool fits = wage <= p.Wage || bill - p.Wage + wage <= budget;
-                    if (fits && Wanted(world, c, p, d, rules, development))
-                    {
-                        bill += wage - p.Wage;
-                        p.Wage = wage;
-                        p.ContractYears = RenewYears(p.Age, rules);
-                        turn.Renewed.Add(p);
-                        continue;
-                    }
-
                     bill -= p.Wage;
                     p.ClubId = 0;
                     p.FreeSince = season;
@@ -169,6 +158,28 @@ namespace Eleven.Career
                     releasedBy[p.Id] = c.Id;
                     turn.Released.Add(p);
                     world.LastMoves.Add(new ContractMove { PlayerId = p.Id, From = c.Id, To = 0, FirstName = p.FirstName, LastName = p.LastName });
+                }
+
+                // The unwanted go first, so their wages are off the bill before any renewal is budgeted (Codex on #204).
+                var wanted = new List<Player>();
+                foreach (Player p in ending)
+                {
+                    if (Wanted(world, c, p, d, rules, development)) wanted.Add(p);
+                    else Release(p);
+                }
+
+                // Then the wanted, the best first: renewed while the budget holds.
+                foreach (Player p in wanted)
+                {
+                    int wage = Finance.Wage(p, d);
+                    if (wage <= p.Wage || bill - p.Wage + wage <= budget)
+                    {
+                        bill += wage - p.Wage;
+                        p.Wage = wage;
+                        p.ContractYears = RenewYears(p.Age, rules);
+                        turn.Renewed.Add(p);
+                    }
+                    else Release(p);
                 }
 
                 Development.Leave(c, gone);
