@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 5;
+        public const int FormatVersion = 6;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -150,6 +150,33 @@ namespace Eleven.Career
                         w.WriteDouble(x.Possession, "possession");
                     }
                 }
+            }
+
+            // Format 6 (#194): the next footballer's id; each footballer with development, his id,
+            // his progress, starts, this season's and last season's points and the season he
+            // joined; then those who retired at the last season's turn.
+            w.WriteInt32(world.NextPlayerId);
+            var developing = world.Players.FindAll(p => p.Progress != 0 || p.Starts != 0 || p.SeasonPoints != 0 || p.LastSeasonPoints != 0 || p.Joined != 0);
+            w.WriteInt32(developing.Count);
+            foreach (Player p in developing)
+            {
+                w.WriteInt32(p.Id);
+                w.WriteDouble(p.Progress, "progress");
+                w.WriteByte(Small(p.Starts));
+                WriteShort(w, p.SeasonPoints);
+                WriteShort(w, p.LastSeasonPoints);
+                WriteShort(w, p.Joined);
+            }
+
+            w.WriteInt32(world.LastRetired.Count);
+            foreach (Retired x in world.LastRetired)
+            {
+                w.WriteInt32(x.Id);
+                w.WriteInt32(x.ClubId);
+                w.WriteByte(Small(x.Age));
+                w.WriteString(x.FirstName);
+                w.WriteString(x.LastName);
+                w.WriteByte((byte)x.Position);
             }
 
             return w.ToArray();
@@ -321,9 +348,59 @@ namespace Eleven.Career
                 }
             }
 
+            int highest = 0;
+            foreach (Player p in world.Players) highest = Math.Max(highest, p.Id);
+            if (version >= 6)
+            {
+                world.NextPlayerId = r.ReadInt32();
+                if (world.NextPlayerId <= highest) throw new FormatException($"The next footballer's id {world.NextPlayerId} isn't past every footballer's.");
+                var byId = new Dictionary<int, Player>(world.Players.Count);
+                foreach (Player p in world.Players) byId[p.Id] = p;
+                int developing = Count(r.ReadInt32());
+                for (int i = 0; i < developing; i++)
+                {
+                    int id = r.ReadInt32();
+                    if (!byId.TryGetValue(id, out Player? p)) throw new FormatException($"Development for footballer {id}, who isn't in the world.");
+                    p.Progress = r.ReadDouble("progress");
+                    if (p.Progress < 0 || p.Progress >= 1) throw new FormatException($"Footballer {id}'s progress {p.Progress} isn't in [0, 1).");
+                    p.Starts = r.ReadByte();
+                    p.SeasonPoints = ReadShort(r);
+                    p.LastSeasonPoints = ReadShort(r);
+                    p.Joined = ReadShort(r);
+                }
+
+                int retired = Count(r.ReadInt32());
+                var clubIds = new HashSet<int>();
+                foreach (Club c in world.Clubs) clubIds.Add(c.Id);
+                for (int i = 0; i < retired; i++)
+                {
+                    var x = new Retired { Id = r.ReadInt32(), ClubId = r.ReadInt32(), Age = r.ReadByte(), FirstName = r.ReadString(), LastName = r.ReadString() };
+                    byte position = r.ReadByte();
+                    if (!clubIds.Contains(x.ClubId)) throw new FormatException($"Retired footballer {x.Id}'s club {x.ClubId} isn't in the world.");
+                    if (!Enum.IsDefined(typeof(Position), (Position)position)) throw new FormatException($"Retired footballer {x.Id}'s position {position} is unknown.");
+                    x.Position = (Position)position;
+                    world.LastRetired.Add(x);
+                }
+            }
+            else
+            {
+                // A world from before #194: the next id is past the highest.
+                world.NextPlayerId = highest + 1;
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        // A signed count in two bytes, high first: points and seasons within ±32,767.
+        private static void WriteShort(CanonicalWriter w, int n)
+        {
+            int v = Math.Clamp(n, short.MinValue, short.MaxValue) & 0xFFFF;
+            w.WriteByte((byte)(v >> 8));
+            w.WriteByte((byte)v);
+        }
+
+        private static int ReadShort(CanonicalReader r) => (short)((r.ReadByte() << 8) | r.ReadByte());
 
         // A remembered meeting's formation byte: its high bit says the match was played in full.
         private const byte FullMatch = 0x80;

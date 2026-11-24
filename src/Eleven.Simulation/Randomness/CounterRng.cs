@@ -46,6 +46,9 @@ namespace Eleven.Simulation.Randomness
 
         /// <summary>The career's squads (#176): an injury's layoff, per fixture and footballer.</summary>
         Squad = 14,
+
+        /// <summary>The career's development and ageing (#194): which attribute a point goes to, decline, retirement and youth.</summary>
+        Development = 15,
     }
 
     /// <summary>

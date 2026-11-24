@@ -99,6 +99,8 @@ namespace Eleven.Simulation.Tests
                 lineups[f.Id] = CareerSquads.Lineup(w, f.Home, f.Away, 10, Availability.OutOf(w, f.Home, MatchdayKind.League), Availability.OutOf(w, f.Away, MatchdayKind.League), Squad);
             int gap = Availability.GapAfter(Rules, s.Matchday);
             Assert.Equal(Rules.CupGapDays, gap);
+            // Each footballer's attributes at kick-off: the matchday's development (#194) may grow his stamina after his match is costed.
+            Dictionary<int, int[]> atKickOff = w.Players.ToDictionary(p => p.Id, p => p.Attributes.ToArray());
             List<Fixture> day = CareerSeasons.PlayMatchday(Config, w, s, Rules, 10);
             double perDay = Squad.ConditionCostPerMatch / Squad.RecoveryDays;
             int tiredCount = 0;
@@ -108,7 +110,7 @@ namespace Eleven.Simulation.Tests
                 foreach (ResultPlayer line in r.Players)
                 {
                     Player p = w.Players.Single(x => x.Id == lineups[f.Id][line.Player]);
-                    int after = 100 - (int)Math.Round(Availability.ConditionCost(p, line.Seconds, 2 * r.HalfSeconds, Squad));
+                    int after = 100 - (int)Math.Round(Availability.ConditionCost(new Player { Attributes = atKickOff[p.Id] }, line.Seconds, 2 * r.HalfSeconds, Squad));
                     Assert.Equal(Math.Min(100, after + (int)Math.Round(gap * perDay)), p.Fitness);
                     if (p.Fitness < 100) tiredCount++;
                 }

@@ -257,9 +257,10 @@ namespace Eleven.Career
 
         /// <summary>
         /// The season's end: the promoted clubs up a division and the relegated down one, in the
-        /// world itself, and the next season, its cup ranked by this season's final tables.
+        /// world itself, every footballer a year older (#194), and the next season, its cup ranked
+        /// by this season's final tables.
         /// </summary>
-        public static Season Rollover(World world, Season season, ulong careerSeed, CompetitionRules rules, SquadRules? squad = null)
+        public static Season Rollover(World world, Season season, ulong careerSeed, CompetitionRules rules, SquadRules? squad = null, DevelopmentRules? development = null)
         {
             if (!Finished(season, rules)) throw new InvalidOperationException($"Season {season.Number} isn't over.");
             var ranking = new List<int>();
@@ -270,6 +271,7 @@ namespace Eleven.Career
 
             (List<int> up, List<int> down) = Movement(season, rules);
             Availability.NewSeason(world, squad ?? SquadRules.Reference);
+            Development.Rollover(world, season.Number + 1, development);
             foreach (Club c in world.Clubs)
             {
                 if (up.Contains(c.Id)) c.Division--;

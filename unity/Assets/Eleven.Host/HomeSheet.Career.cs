@@ -66,6 +66,9 @@ namespace Eleven.Host
         private readonly List<(int Player, UiKit.Action Row)> _squadRows = new List<(int, UiKit.Action)>();
         private int _squadSelected;
         private Label _hubCondition;
+
+        // The season's review (#194), until your club's first match of the new season.
+        private Label _hubReview;
         private Label _hubResults;
         private Label _hubSummary;
         private VisualElement _hubTable;
@@ -169,6 +172,11 @@ namespace Eleven.Host
             _hubCondition.style.marginBottom = Spacing.M;
             _hubCondition.style.display = DisplayStyle.None;
             hub.Add(_hubCondition);
+            // The season's review (#194): your risers, retirements and youth, until your first match.
+            _hubReview = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubReview.style.marginBottom = Spacing.M;
+            _hubReview.style.display = DisplayStyle.None;
+            hub.Add(_hubReview);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -322,6 +330,9 @@ namespace Eleven.Host
             string condition = CareerHub.ConditionLine(s);
             _hubCondition.text = condition;
             _hubCondition.style.display = condition.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            string review = CareerHub.ReviewLine(s);
+            _hubReview.text = review;
+            _hubReview.style.display = review.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
