@@ -49,7 +49,7 @@ The parts:
 2. **Ageing:** every footballer is a year older. His season's points become `LastSeasonPoints`, and his starts start again.
 3. **Retirement,** by his new age: from `RetireFrom` 34, or `KeeperRetireFrom` 37 for a keeper.
    - **The chance:** `RetireChance` (25 %) at the first age, rising as much each year, so certain by 37, or 40 for a keeper.
-   - **Gone:** a retired footballer leaves the world, his squad and his club's picks.
+   - **Gone:** a retired footballer leaves the world, his squad and his club's picks. If he was in your picked XI, your picks go back to the AI's, so nobody from the bench slides into the XI in his place (Codex on #195). A retired bench pick just leaves the bench.
    - **Remembered:** `World.LastRetired` keeps who retired at the last turn, for its review.
 4. **Youth:** each club fills its squad back to 23.
    - **Position:** each youth takes the position its squad lacks most against the generator's template, so a keeper replaces a keeper.
