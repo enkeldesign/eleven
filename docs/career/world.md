@@ -22,6 +22,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
   - **Development** (#194): his progress toward his next point, starts this season, points this season and last, and the season he joined from his club's youth ([development.md](development.md)).
 - **A club's picks** (#179): the human's XI and bench, empty for every club the AI picks for.
 - **The world's next footballer id** (#194), for a youth, and those who retired at the last season's turn.
+- **A club's training** (#196): Auto, Light, Normal or Hard ([training.md](training.md)).
 - **A manager:**
   - id, name, age, club;
   - #80's seven competences, each 1–20: tactics, coaching, development, scouting, recruitment, motivation, adaptability;
@@ -61,7 +62,7 @@ The world is **wholly fictional** (#80): names are invented from syllable tables
 ## The codec
 
 `WorldCodec` encodes a world to canonical, versioned bytes and back.
-- **The layout:** magic `ELWD`, format 6, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176), then each club's picks (#179), then each manager's philosophy (#180), then each manager's memories (#191), grouped by opponent, then the next footballer id, each footballer with development and those who retired at the last turn (#194). An older world reads with what it lacks empty: nobody banned or cautioned, no picks, no philosophy, no memories, no development, and its next id past its highest.
+- **The layout:** magic `ELWD`, format 7, the seed, then the clubs, footballers and managers in order, then each footballer with a ban or caution (#176), then each club's picks (#179), then each manager's philosophy (#180), then each manager's memories (#191), grouped by opponent, then the next footballer id, each footballer with development and those who retired at the last turn (#194), then each club not on Auto with its training (#196). An older world reads with what it lacks empty: nobody banned or cautioned, no picks, no philosophy, no memories, no development, its next id past its highest, and every club on Auto.
 - **Migration:** the attribute and competence counts are written, so a later format can migrate a world (INV-7).
 - **Refusals:** a cut, padded or foreign buffer is a `FormatException`.
 - **Saves:** M6.07's saves build on it.

@@ -353,6 +353,15 @@ namespace Eleven.Simulation.Harness
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
 
+        /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
+        public static string TrainingLine(CareerSession s) => s.World.Clubs.Find(c => c.Id == s.Club)?.Training switch
+        {
+            TrainingIntensity.Light => "Training: Light. Slower development, faster recovery, fewer injuries.",
+            TrainingIntensity.Normal => "Training: Normal.",
+            TrainingIntensity.Hard => "Training: Hard. Faster development, slower recovery, more injuries.",
+            _ => "Training: Auto, your manager's choice by your XI's condition and the days to your next match.",
+        };
+
         /// <summary>
         /// The season's review (#194), from the season's turn until your club's first match of the
         /// new one: your club's biggest risers last season, its retirements and its youth. Empty

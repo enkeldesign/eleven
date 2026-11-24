@@ -21,6 +21,7 @@ using Eleven.Simulation.Harness;
 /// eleven-sim kicks &lt;dir&gt; [name=value ...]
 ///                              characterise the manual kick and aftertouch (#37) under the default config
 ///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
+/// eleven-sim training [seasons] training's intensities over a headless career (#196): growth, condition, training injuries, drift
 /// eleven-sim development [seasons] development and ageing over a headless career (#194): levels by age band, drift, retirements and youth
 /// eleven-sim migration-fixture &lt;dir&gt; a recording under this state schema and its play, for a later schema's migration test (#166)
 /// eleven-sim replay &lt;capture.elfc&gt; replay a "this felt wrong" capture (#44) and compare every tick; exit 1 on any mismatch
@@ -279,6 +280,14 @@ internal static class Program
                 string play = MigrationFixture.Play(fixture, fixtureConfig);
                 File.WriteAllText(Path.Combine(args[1], name + ".txt"), play);
                 Console.Write(play);
+                return 0;
+            }
+
+            case "training":
+            {
+                // #196: training's intensities against each other over a headless career.
+                int trainSeasons = args.Length >= 2 && int.TryParse(args[1], out int ts) && ts > 0 ? ts : 3;
+                Console.Write(CareerTraining.Report(0x196, trainSeasons));
                 return 0;
             }
 

@@ -20,7 +20,7 @@ namespace Eleven.Career
         public int PeakFrom = 24;
 
         /// <summary>Level points a season at the fastest, for an average club's footballer who never starts.</summary>
-        public double GrowthYoung = 1.0;
+        public double GrowthYoung = 0.85;
 
         /// <summary>His club manager's coaching and development move growth by up to this share either way.</summary>
         public double CompetenceSpread = 0.3;
@@ -133,9 +133,9 @@ namespace Eleven.Career
         /// One matchday's development: <paramref name="starters"/> each start counted, and every
         /// footballer short of his peak and potential grown by his season's growth over the
         /// season's <paramref name="matchdays"/>. His share of starts is of his club's matches
-        /// with a result so far.
+        /// with a result so far; <paramref name="clubGrowth"/> sets each club's pace (#196's training).
         /// </summary>
-        public static void Matchday(World world, Season season, IReadOnlyCollection<int> starters, int matchdays, DevelopmentRules? rules = null)
+        public static void Matchday(World world, Season season, IReadOnlyCollection<int> starters, int matchdays, DevelopmentRules? rules = null, IReadOnlyDictionary<int, double>? clubGrowth = null)
         {
             rules ??= DevelopmentRules.Reference;
             var started = new HashSet<int>(starters);
@@ -156,6 +156,7 @@ namespace Eleven.Career
                 if (started.Contains(p.Id)) p.Starts++;
                 double share = played.TryGetValue(p.ClubId, out int n) && n > 0 ? (double)p.Starts / n : 0;
                 double growth = SeasonGrowth(p, managers.TryGetValue(p.ClubId, out Manager? m) ? m : null, share, rules) * LevelCount(p) / Math.Max(1, matchdays);
+                if (clubGrowth != null && clubGrowth.TryGetValue(p.ClubId, out double pace)) growth *= pace;
                 if (growth <= 0) continue;
                 p.Progress += growth;
                 while (p.Progress >= 1)

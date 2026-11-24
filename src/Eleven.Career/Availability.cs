@@ -74,11 +74,15 @@ namespace Eleven.Career
         }
 
         /// <summary>An injury's days out: its band drawn by its level, then its day within the band, on the squad stream.</summary>
-        public static int Layoff(ulong seed, int fixtureId, int player, int injury, SquadRules rules)
+        public static int Layoff(ulong seed, int fixtureId, int player, int injury, SquadRules rules) =>
+            injury <= 0 ? 0 : LayoffFrom(CounterRng.Uniform(seed, fixtureId, RandomStream.Squad, player, 0), CounterRng.Uniform(seed, fixtureId, RandomStream.Squad, player, 1), injury, rules);
+
+        /// <summary>An injury's layoff from two draws (#196): the first picks its band by the injury's shares, the second its day in the band.</summary>
+        public static int LayoffFrom(double u, double v, int injury, SquadRules rules)
         {
             if (injury <= 0) return 0;
             double[] shares = injury >= 2 ? rules.SeriousShares : rules.MinorShares;
-            double u = CounterRng.Uniform(seed, fixtureId, RandomStream.Squad, player, 0), sum = 0;
+            double sum = 0;
             int band = shares.Length - 1;
             for (int b = 0; b < shares.Length; b++)
             {
@@ -93,7 +97,7 @@ namespace Eleven.Career
             // Past every share (they sum to 1 but for rounding): the last band with a share.
             while (band > 0 && shares[band] <= 0) band--;
             int first = rules.BandDays[band][0], last = rules.BandDays[band][1];
-            int day = first + (int)(CounterRng.Uniform(seed, fixtureId, RandomStream.Squad, player, 1) * (last - first + 1));
+            int day = first + (int)(v * (last - first + 1));
             return Math.Min(last, day);
         }
 
