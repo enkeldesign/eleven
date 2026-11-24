@@ -49,7 +49,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(3, seasons.Count);
             double start = seasons[0].MeanLevel;
             Assert.All(seasons, v => Assert.InRange(v.MeanLevel, start - 0.3, start + 0.3));
-            Assert.All(seasons.Skip(1), v => Assert.True(v.Retired > 0 && v.Intake == v.Retired, $"season {v.Season}: {v.Retired} retired, {v.Intake} joined"));
+            // The youth replace those the clubs lost: retired, and since #201 released less those signed free.
+            Assert.All(seasons.Skip(1), v => Assert.True(v.Retired > 0 && v.Intake == v.Retired + v.Released - v.Signed, $"season {v.Season}: {v.Retired} retired, {v.Released} released, {v.Signed} signed, {v.Intake} joined"));
             Assert.All(seasons, v => Assert.Equal((WorldGenerator.SquadSize, WorldGenerator.SquadSize), (v.SmallestSquad, v.LargestSquad)));
             Assert.Contains(seasons[0].Bands, b => b.Band.StartsWith("16", StringComparison.Ordinal) || b.Band.StartsWith("17", StringComparison.Ordinal));
             Assert.Contains(seasons[2].Bands, b => b.Count > 0);

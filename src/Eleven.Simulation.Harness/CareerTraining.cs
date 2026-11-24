@@ -45,13 +45,14 @@ namespace Eleven.Simulation.Harness
             World w = CareerSession.NewWorld(seed);
             CareerSession s = CareerSession.Start(w, seed, w.Clubs[0].Id, CareerRole.ManagerOnly, SpikeScenario.Config());
             foreach (Club c in w.Clubs) c.Training = intensity;
-            double start = w.Players.Average(Development.Level), last = start;
+            // The clubs' footballers: the free agents (#201) are no club's and don't train.
+            double start = w.Players.Where(p => p.ClubId != 0).Average(Development.Level), last = start;
             double growth = 0, condition = 0;
             int conditions = 0, injuries = 0, days = 0;
             for (int i = 1; i <= seasons; i++)
             {
-                last = w.Players.Average(Development.Level);
-                Dictionary<int, double> young = w.Players.Where(p => p.Age < 24).ToDictionary(p => p.Id, Development.Level);
+                last = w.Players.Where(p => p.ClubId != 0).Average(Development.Level);
+                Dictionary<int, double> young = w.Players.Where(p => p.ClubId != 0 && p.Age < 24).ToDictionary(p => p.Id, Development.Level);
                 while (!s.SeasonOver)
                 {
                     List<Matchday> calendar = SeasonCalendar.Of(s.Rules);
@@ -68,7 +69,7 @@ namespace Eleven.Simulation.Harness
                     });
                 }
 
-                List<double> gains = w.Players.Where(p => young.ContainsKey(p.Id)).Select(p => Development.Level(p) - young[p.Id]).ToList();
+                List<double> gains = w.Players.Where(p => p.ClubId != 0 && young.ContainsKey(p.Id)).Select(p => Development.Level(p) - young[p.Id]).ToList();
                 growth += gains.Count > 0 ? gains.Average() : 0;
                 if (i < seasons) s.NextSeason();
             }

@@ -76,6 +76,7 @@ namespace Eleven.Host
         // Your club's money (#198): its balance, wages and wage budget.
         private Label _hubFinance;
         private Label _hubBoard;
+        private Label _hubContracts;
         private UiKit.Action _hubTrain;
         private Label _hubResults;
         private Label _hubSummary;
@@ -197,6 +198,11 @@ namespace Eleven.Host
             _hubBoard = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
             _hubBoard.style.marginBottom = Spacing.M;
             hub.Add(_hubBoard);
+            // Your club's contracts ending this season (#201), when any are.
+            _hubContracts = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubContracts.style.marginBottom = Spacing.M;
+            _hubContracts.style.display = DisplayStyle.None;
+            hub.Add(_hubContracts);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -358,6 +364,9 @@ namespace Eleven.Host
             _hubTraining.text = CareerHub.TrainingLine(s);
             _hubFinance.text = CareerHub.FinanceLine(s);
             _hubBoard.text = CareerHub.BoardLine(s);
+            string contracts = CareerHub.ContractLine(s);
+            _hubContracts.text = contracts;
+            _hubContracts.style.display = contracts.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;

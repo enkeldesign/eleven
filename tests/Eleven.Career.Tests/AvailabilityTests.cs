@@ -223,7 +223,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_a_managers_philosophy_and_a_format_3_world_reads_it_unset()
         {
             World w = WorldGenerator.Generate(0x180);
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             Assert.All(w.Managers, m => Assert.True(m.Pressing >= 1 && m.Depth >= 1));
             World back = WorldCodec.Decode(WorldCodec.Encode(w));
             Assert.Equal(w.Managers.Select(m => (m.Pressing, m.Depth)), back.Managers.Select(m => (m.Pressing, m.Depth)));

@@ -236,7 +236,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_development_and_a_format_5_world_reads_with_none()
         {
             (World w, Season s) = New();
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 5 is format 7 with no development or training, less those sections: the next id and three empty counts (#196).

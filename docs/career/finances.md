@@ -44,10 +44,11 @@ The currency is fictional, in whole thousands, "k", with no exchange rate. Its s
 
 ## The wage budget
 
-`Finance.WageBudget`, the board's weekly wage budget: `WageShare` (0.65) of last season's revenue.
+`Finance.WageBudget`, the board's weekly wage budget: `WageShare` of last season's revenue, by division 0.70, 0.85 and 0.95 (#201; 0.65 everywhere in #198).
+- **By division:** the top's is UEFA's squad-cost cap, and lower divisions run higher wage ratios. At 0.65 everywhere the lower divisions began a third over budget ([contracts.md](contracts.md#two-changes-to-the-money-198)).
 - **The first season:** a season's expected revenue, its broadcasting, eleven home matches, a mid-table merit and two cup rounds.
-- **Its weeks are the season's:** the days it pays for over 7 (`Finance.SeasonDays`: 217 days, 31 weeks), not a year's 52. The calendar and the off-season pay fewer days than a year.
-- **Shown, not enforced:** a club over its budget can't take on wages in M6.12. Here it's only shown.
+- **Over the weeks it was earned in:** `Ledger.Days` counts the days a ledger's wages and broadcasting were paid for, and the budget divides by them over 7. A season is 217 days, 31 weeks (`Finance.SeasonDays`), not a year's 52. A first season has no off-season before it, so it's 157 days. #198 divided it by 217, and the second season's budget read 28 % low.
+- **Enforced by contracts (#201):** a renewal or a free signing must keep the wage bill within it.
 
 ## The hub
 
@@ -64,24 +65,24 @@ A format-7 world reads each club's opening balance and each footballer's wage by
 
 ## Measured
 
-`eleven-sim finances 3`: a headless career from seed `0x198`, every match quick-simmed, each season turned so its merit is paid. Since #200 a club's reputation moves at each turn, and its takings with it, so seasons 2 and 3 are the board's. Balances are at each season's start, the ledger the season's own, by the division each club played it in.
+`eleven-sim finances 3`: a headless career from seed `0x198`, every match quick-simmed, each season turned so its merit is paid. Since #200 a club's reputation moves at each turn, and its takings with it; since #201 contracts renew and release at each turn, and a relegated club's wages fall. Seasons 2 and 3 are theirs. Balances are at each season's start, the ledger the season's own, by the division each club played it in.
 
 | Season | Division | Balance at its start | In deficit | Wages over revenue | Broadcasting | Matchday | Merit | Cup |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 1 | 5,000k ± 0k | 0 | 0.67 | 58 % | 28 % | 12 % | 1 % |
 | 1 | 2 | 1,500k ± 0k | 0 | 0.80 | 42 % | 42 % | 13 % | 3 % |
 | 1 | 3 | 400k ± 0k | 0 | 0.89 | 36 % | 44 % | 13 % | 7 % |
-| 2 | 1 | 7,455k ± 3,688k | 1 | 0.72 | 65 % | 23 % | 11 % | 1 % |
-| 2 | 2 | 2,903k ± 3,178k | 1 | 0.98 | 52 % | 35 % | 10 % | 2 % |
-| 2 | 3 | 533k ± 594k | 2 | 1.25 | 47 % | 37 % | 11 % | 5 % |
-| 3 | 1 | 10,144k ± 4,456k | 0 | 0.76 | 65 % | 24 % | 10 % | 1 % |
-| 3 | 2 | 4,124k ± 6,001k | 2 | 0.78 | 53 % | 34 % | 10 % | 2 % |
-| 3 | 3 | 676k ± 1,387k | 3 | 1.25 | 47 % | 37 % | 11 % | 5 % |
+| 2 | 1 | 7,551k ± 3,550k | 0 | 0.70 | 65 % | 23 % | 11 % | 1 % |
+| 2 | 2 | 3,081k ± 3,522k | 0 | 0.84 | 52 % | 35 % | 10 % | 2 % |
+| 2 | 3 | 587k ± 728k | 2 | 1.12 | 47 % | 37 % | 11 % | 5 % |
+| 3 | 1 | 11,406k ± 3,292k | 0 | 0.68 | 65 % | 24 % | 10 % | 1 % |
+| 3 | 2 | 4,256k ± 6,023k | 2 | 0.72 | 53 % | 34 % | 10 % | 2 % |
+| 3 | 3 | 955k ± 1,267k | 2 | 1.07 | 48 % | 37 % | 11 % | 5 % |
 
-- **Near the research:** the top division's wages are 0.67–0.76 of its revenue, its broadcasting 58–65 %. The second division's are 0.78–0.98, and the third's 0.89–1.25.
-- **The lower divisions' high ratios come from movement:** a relegated club keeps its higher division's wages and earns its new division's revenue. M6.12's contracts and sales are its way out.
-- **Most clubs stay solvent:** at most 3 of a division's 12 are in deficit by the third season.
-- **The top division banks its surplus,** about 2,500k a club a season. M6.12's transfers will spend it.
+- **Near the research:** the top division's wages are 0.67–0.70 of its revenue, its broadcasting 58–65 %. The second division's are 0.72–0.84, and the third's 0.89–1.12.
+- **The lower divisions' high ratios come from movement:** a relegated club keeps its higher division's wages and earns its new division's revenue. Contracts' relegation clause (#201) brings them down, from #198's 1.24–1.25 in the third; M6.12b's sales are the rest of the way out.
+- **Most clubs stay solvent:** at most 2 of a division's 12 are in deficit by the third season.
+- **The top division banks its surplus,** about 3,200k a club a season. M6.12b's transfers will spend it.
 - **The references were chosen by it.** With 35k a day and 400k a home match, the top division earned 38–45 % on matchdays, against the research's broadcasting-led revenue.
 - **The save grows:** after three seasons the world is 112,853 bytes and a save about 143,000 characters, from 138,000 (#194). Eleven saves would come to about 1.58M.
 

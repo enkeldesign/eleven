@@ -259,7 +259,7 @@ namespace Eleven.Career
         }
 
         /// <summary>
-        /// The season's end: its money (#198) and the board's verdict (#200), the promoted clubs up
+        /// The season's end: its money (#198), the board's verdict (#200) and the contracts ending (#201), the promoted clubs up
         /// a division and the relegated down one, in the world itself, every footballer a year
         /// older (#194), and the next season, its cup ranked by this season's final tables.
         /// </summary>
@@ -275,6 +275,11 @@ namespace Eleven.Career
             (List<int> up, List<int> down) = Movement(season, rules);
             Finance.SeasonEnd(world, season, rules);
             Board.SeasonEnd(world, season, rules);
+
+            // Contracts (#201): those ending renewed or released, the free agents signed, by each club's next division.
+            var next = new Dictionary<int, int>();
+            foreach (Club c in world.Clubs) next[c.Id] = up.Contains(c.Id) ? c.Division - 1 : down.Contains(c.Id) ? c.Division + 1 : c.Division;
+            Contracts.Turn(world, season.Number + 1, next);
             Availability.NewSeason(world, squad ?? SquadRules.Reference);
             Finance.Pass(world, (squad ?? SquadRules.Reference).OffSeasonDays);
             Development.Rollover(world, season.Number + 1, development);

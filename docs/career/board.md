@@ -77,24 +77,24 @@ A format-8 world reads its objectives by the rules, with confidence at its start
 
 ## Measured
 
-`eleven-sim board 3`: a headless career from seed `0x200`, every match quick-simmed, each season turned.
+`eleven-sim board 3`: a headless career from seed `0x200`, every match quick-simmed, each season turned, its contracts renewed and released at each turn (#201).
 
 **Points a match by expected place**, every division's clubs together:
 
 | Season | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 1.45 | 1.53 | 1.29 | 1.39 | 1.18 | 1.30 | 1.17 | 0.95 | 1.05 | 1.44 | 1.02 | 1.02 |
-| 2 | 1.42 | 1.42 | 1.65 | 1.24 | 1.26 | 1.36 | 1.14 | 1.17 | 1.36 | 1.09 | 1.14 | 0.95 |
-| 3 | 1.42 | 1.27 | 1.61 | 1.20 | 1.56 | 1.47 | 1.39 | 1.15 | 0.98 | 1.17 | 1.00 | 0.97 |
-| All | 1.43 | 1.41 | 1.52 | 1.28 | 1.33 | 1.38 | 1.23 | 1.09 | 1.13 | 1.23 | 1.05 | 0.98 |
+| 2 | 1.45 | 1.67 | 1.41 | 1.20 | 1.27 | 1.35 | 1.00 | 1.23 | 1.20 | 1.20 | 1.26 | 0.98 |
+| 3 | 1.24 | 1.70 | 1.41 | 1.59 | 1.42 | 1.23 | 1.32 | 1.11 | 1.09 | 0.95 | 1.23 | 0.86 |
+| All | 1.38 | 1.63 | 1.37 | 1.39 | 1.29 | 1.29 | 1.16 | 1.10 | 1.11 | 1.20 | 1.17 | 0.95 |
 
 **The board's verdicts,** and confidence at each season's end:
 
 | Season | Met their league objective | Division 1 | Division 2 | Division 3 | Confidence | Below 20 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 25 of 36 | 7 | 8 | 10 | 61 ± 24 | 6 % |
-| 2 | 24 of 36 | 9 | 8 | 7 | 62 ± 28 | 11 % |
-| 3 | 26 of 36 | 9 | 8 | 9 | 62 ± 27 | 8 % |
+| 2 | 27 of 36 | 9 | 8 | 10 | 63 ± 27 | 8 % |
+| 3 | 24 of 36 | 8 | 8 | 8 | 63 ± 25 | 6 % |
 
 **Mean reputation by division** at each season's start:
 
@@ -102,14 +102,15 @@ A format-8 world reads its objectives by the rules, with confidence at its start
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 12.75 | 10.67 | 9.08 | 12.67 | 10.92 | 8.42 |
 | 2 | 12.83 | 10.75 | 9.08 | 13.08 | 10.58 | 8.67 |
-| 3 | 13.00 | 10.67 | 9.17 | 13.08 | 11.00 | 8.75 |
-| After 3 | 12.92 | 11.00 | 9.00 | 13.25 | 10.75 | 8.83 |
-| Drift | 0.17 | 0.33 | −0.08 | 0.58 | −0.17 | 0.42 |
+| 3 | 13.00 | 10.67 | 9.17 | 13.00 | 10.92 | 8.75 |
+| After 3 | 13.00 | 10.83 | 9.00 | 13.00 | 10.58 | 9.08 |
+| Drift | 0.25 | 0.17 | −0.08 | 0.33 | −0.33 | 0.67 |
 
-- **The table is flatter than football's.** The best paid take about 1.5 points a match and the least about 1.0; in football it's more like 2.2 and 0.8. The career's matches score 1.18 goals and draw 45 % ([managers.md](managers.md)), so places are closer. `TopPoints` and `BottomPoints` are this measurement's line, from six seasons (`eleven-sim board 6`), not football's. The first references, 2.0 and 0.9, judged every top club short and every bottom club ahead: confidence ended at 50 ± 27, with up to 31 % below 20.
-- **Neither easy nor impossible:** two-thirds to three-quarters of clubs meet their league objective each season, a quarter don't. Confidence ends near 62 ± 27, and 6–11 % of clubs end below 20, M6.15's reference for a board that has lost patience.
-- **Clubs' reputations hold:** their drift by division is within half a point over three seasons, and within 0.33 over six.
-- **Managers' reputations drift up in the top division:** 0.58 over three seasons, 0.92 over six. It's selection: the managers of promoted clubs beat their expectation and rose, and the relegated clubs' fell and left. Until M6.15 moves managers between clubs, a manager rises and falls with his club.
+- **The table is flatter than football's.** The best paid take about 1.5 points a match and the least about 1.0; in football it's more like 2.2 and 0.8. The career's matches score 1.18 goals and draw 45 % ([managers.md](managers.md)), so places are closer. `TopPoints` and `BottomPoints` are this measurement's line, from six seasons (`eleven-sim board 6`), not football's. The first references, 2.0 and 0.9, judged every top club short and every bottom club ahead: confidence ended at 50 ± 27, with up to 31 % below 20 (before contracts).
+- **Neither easy nor impossible:** two-thirds to three-quarters of clubs meet their league objective each season, a quarter don't. Confidence ends near 63 ± 26, and 3–8 % of clubs end below 20 over six seasons, M6.15's reference for a board that has lost patience.
+- **Clubs' reputations hold:** their drift by division is within half a point over three seasons, and within a third of a point over six.
+- **Managers' reputations drift up in the top and bottom divisions:** in the top, 0.33 over three seasons and 0.75 over six; in the third, 0.67 and 0.67. It's selection: the managers of promoted clubs beat their expectation and rose, and the relegated clubs' fell and left. Until M6.15 moves managers between clubs, a manager rises and falls with his club.
+- **Contracts (#201) leave the expected points where they were:** six seasons with them give the same line, 1.50 and 1.02.
 
 ## Tests
 

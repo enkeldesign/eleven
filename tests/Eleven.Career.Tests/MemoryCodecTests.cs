@@ -12,7 +12,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_the_managers_memories_and_a_format_4_world_reads_with_none()
         {
             World w = WorldGenerator.Generate(0x191);
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 4 is format 7 with no memories, development or training, less those sections' empty counts and the next id (#194, #196).

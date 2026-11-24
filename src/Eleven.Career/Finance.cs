@@ -42,8 +42,12 @@ namespace Eleven.Career
         /// <summary>A club's balance at the world's start, by division.</summary>
         public double[] StartBalance = { 5000, 1500, 400 };
 
-        /// <summary>The board's wage budget: this share of last season's revenue.</summary>
-        public double WageShare = 0.65;
+        /// <summary>
+        /// The board's wage budget: this share of last season's revenue, by division (#201). The
+        /// top's is UEFA's squad-cost cap; lower divisions run higher wage ratios (Deloitte), and
+        /// their boards allow for it.
+        /// </summary>
+        public double[] WageShare = { 0.70, 0.85, 0.95 };
 
         public static FinanceRules Reference => new FinanceRules();
     }
@@ -64,6 +68,15 @@ namespace Eleven.Career
         public const int Lines = 5;
 
         public long[] Amounts = new long[Lines];
+
+        /// <summary>
+        /// The days its wages and broadcasting were paid for (#201): a season's calendar and the
+        /// off-season before it, a first season's only its calendar.
+        /// </summary>
+        public int Days;
+
+        /// <summary>A ledger from a world before #201 with money already booked: its days aren't known (Codex on #204).</summary>
+        public const int UnknownDays = -1;
 
         public long this[LedgerLine line] => Amounts[(int)line];
 
@@ -109,6 +122,7 @@ namespace Eleven.Career
             foreach (Player p in world.Players) bills[p.ClubId] = (bills.TryGetValue(p.ClubId, out long b) ? b : 0) + p.Wage;
             foreach (Club c in world.Clubs)
             {
+                if (c.Season.Days != Ledger.UnknownDays) c.Season.Days += days;
                 Book(c, LedgerLine.Wages, -(long)Math.Round((bills.TryGetValue(c.Id, out long bill) ? bill : 0) * days / 7.0));
                 Book(c, LedgerLine.Broadcasting, (long)Math.Round(Division(rules.BroadcastPerDay, c.Division) * days));
             }
@@ -156,15 +170,21 @@ namespace Eleven.Career
         }
 
         /// <summary>
-        /// The board's weekly wage budget: its share of last season's revenue, or of a season's
-        /// expected in the first, over the season's weeks: its days over 7.
+        /// The board's weekly wage budget: its share of last season's revenue over the weeks it was
+        /// earned in, or of a season's expected over the season's weeks in the first. A first
+        /// season's ledger has no off-season before it, so its weeks are fewer (#201). At the
+        /// season's turn, a promoted or relegated club's share is its next <paramref name="division"/>'s
+        /// (Codex on #204); 0 is its own.
         /// </summary>
-        public static long WageBudget(World world, Club club, FinanceRules? rules = null, CompetitionRules? competition = null, SquadRules? squad = null)
+        public static long WageBudget(World world, Club club, FinanceRules? rules = null, CompetitionRules? competition = null, SquadRules? squad = null, int division = 0)
         {
             rules ??= FinanceRules.Reference;
+            int shareOf = division > 0 ? division : club.Division;
             int days = SeasonDays(competition ?? CompetitionRules.Reference, squad ?? SquadRules.Reference);
-            double revenue = club.LastSeason.Revenue > 0 ? club.LastSeason.Revenue : Expected(club, rules, days);
-            return (long)Math.Round(rules.WageShare * revenue / (days / 7.0));
+            bool earned = club.LastSeason.Revenue > 0;
+            double revenue = earned ? club.LastSeason.Revenue : Expected(club, rules, days);
+            int weeksOf = earned && club.LastSeason.Days > 0 ? club.LastSeason.Days : days;
+            return (long)Math.Round(Division(rules.WageShare, shareOf) * revenue / (weeksOf / 7.0));
         }
 
         /// <summary>The days a season pays wages and broadcasting for: its calendar's, from its first matchday past its last, and the off-season's.</summary>

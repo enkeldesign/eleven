@@ -111,6 +111,9 @@ namespace Eleven.Career
                 }
             }
 
+            // Contracts (#201): each footballer's first, by his age.
+            foreach (Player p in world.Players) p.ContractYears = Contracts.FirstContract(seed, p.Id, p.Age);
+
             // The board (#200): each club's objectives from its wage rank.
             Board.Objectives(world, CompetitionRules.Reference);
             return world;
