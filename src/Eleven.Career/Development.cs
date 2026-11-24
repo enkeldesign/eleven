@@ -282,6 +282,7 @@ namespace Eleven.Career
                     int age = rules.YouthMin + (int)(CounterRng.Uniform(world.Seed, youth, RandomStream.Development, id, 0) * (rules.YouthMax - rules.YouthMin + 1));
                     Player y = WorldGenerator.Youth(world.Seed, id, c.Id, Lacking(world, c), level, Math.Min(age, rules.YouthMax));
                     y.Joined = season;
+                    y.Wage = Finance.Wage(y, c.Division);
                     world.Players.Add(y);
                     c.Squad.Add(y.Id);
                 }

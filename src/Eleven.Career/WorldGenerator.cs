@@ -100,6 +100,17 @@ namespace Eleven.Career
             }
 
             world.NextPlayerId = nextPlayer;
+
+            // Money (#198): each club's opening balance, each footballer's wage.
+            foreach (Club c in world.Clubs)
+            {
+                c.Balance = Finance.StartBalance(c);
+                foreach (Player p in world.Players)
+                {
+                    if (p.ClubId == c.Id) p.Wage = Finance.Wage(p, c.Division);
+                }
+            }
+
             return world;
         }
 

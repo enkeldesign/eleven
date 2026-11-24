@@ -270,7 +270,9 @@ namespace Eleven.Career
             }
 
             (List<int> up, List<int> down) = Movement(season, rules);
+            Finance.SeasonEnd(world, season, rules);
             Availability.NewSeason(world, squad ?? SquadRules.Reference);
+            Finance.Pass(world, (squad ?? SquadRules.Reference).OffSeasonDays);
             Development.Rollover(world, season.Number + 1, development);
             foreach (Club c in world.Clubs)
             {

@@ -47,6 +47,12 @@ namespace Eleven.Career
 
         /// <summary>How hard the club trains (#196): Auto is its manager's choice, matchday by matchday.</summary>
         public TrainingIntensity Training;
+
+        /// <summary>Its money (#198), in k; it may go negative.</summary>
+        public long Balance;
+
+        /// <summary>This season's money in and out, and last season's (#198).</summary>
+        public Ledger Season = new Ledger(), LastSeason = new Ledger();
     }
 
     /// <summary>A club's training (#196). Numeric values are stable and encoded as one byte.</summary>
@@ -101,6 +107,9 @@ namespace Eleven.Career
 
         /// <summary>The season he joined from his club's youth (#194); 0 for one from the world's start.</summary>
         public int Joined;
+
+        /// <summary>His weekly wage (#198), in k.</summary>
+        public int Wage;
 
         public int Get(string attribute) => Attributes[PlayerAttributes.Index(attribute)];
     }

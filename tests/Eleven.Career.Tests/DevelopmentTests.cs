@@ -236,14 +236,14 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_development_and_a_format_5_world_reads_with_none()
         {
             (World w, Season s) = New();
-            Assert.Equal(7, WorldCodec.FormatVersion);
+            Assert.Equal(8, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 5 is format 7 with no development or training, less those sections: the next id and three empty counts (#196).
             var five = new CanonicalWriter(plain.Length);
             five.WriteBytes(plain[..4]);
             five.WriteInt32(5);
-            five.WriteBytes(plain[8..^16]);
+            five.WriteBytes(plain[8..^(16 + Formats.Money(w))]);
             World old = WorldCodec.Decode(five.ToArray());
             Assert.All(old.Players, p => Assert.Equal((0.0, 0, 0, 0, 0), (p.Progress, p.Starts, p.SeasonPoints, p.LastSeasonPoints, p.Joined)));
             Assert.Equal(w.Players.Max(p => p.Id) + 1, old.NextPlayerId);

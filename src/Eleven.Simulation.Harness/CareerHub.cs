@@ -353,6 +353,13 @@ namespace Eleven.Simulation.Harness
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
 
+        /// <summary>Your club's money (#198), e.g. "Balance 1,240k. Wages 41k a week of a 45k budget."</summary>
+        public static string FinanceLine(CareerSession s)
+        {
+            Club? mine = s.World.Clubs.Find(c => c.Id == s.Club);
+            return mine == null ? "" : FormattableString.Invariant($"Balance {mine.Balance:N0}k. Wages {Finance.WageBill(s.World, mine):N0}k a week of a {Finance.WageBudget(s.World, mine):N0}k budget.");
+        }
+
         /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
         public static string TrainingLine(CareerSession s) => s.World.Clubs.Find(c => c.Id == s.Club)?.Training switch
         {
@@ -390,6 +397,11 @@ namespace Eleven.Simulation.Harness
             if (retired.Count > 0) parts.Add("Retired: " + string.Join("; ", retired));
             List<string> youth = mine.Where(p => p.Joined == s.Season.Number).OrderBy(p => p.Id).Select(p => $"{Short(p.FirstName, p.LastName)}, {p.Age}").ToList();
             if (youth.Count > 0) parts.Add("From the youth: " + string.Join("; ", youth));
+            Club? club = s.World.Clubs.Find(c => c.Id == s.Club);
+            if (club != null && club.LastSeason.Revenue > 0)
+            {
+                parts.Add(FormattableString.Invariant($"Revenue {club.LastSeason.Revenue:N0}k, wages {-club.LastSeason[LedgerLine.Wages]:N0}k"));
+            }
             return parts.Count == 0 ? "" : "Last season: " + string.Join(". ", parts) + ".";
         }
     }
