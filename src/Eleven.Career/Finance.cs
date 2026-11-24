@@ -26,10 +26,10 @@ namespace Eleven.Career
         public double YoungWage = 0.5, NearPeakWage = 0.8;
 
         /// <summary>Broadcasting a day, by division.</summary>
-        public double[] BroadcastPerDay = { 35, 10, 3 };
+        public double[] BroadcastPerDay = { 48, 10, 3 };
 
         /// <summary>A home match's takings by division, then a share more a point of reputation above 10.</summary>
-        public double[] MatchdayBase = { 400, 130, 50 };
+        public double[] MatchdayBase = { 250, 130, 50 };
 
         public double MatchdayPerReputation = 0.06;
 
