@@ -22,6 +22,9 @@ namespace Eleven.Career
 
         /// <summary>Those who retired at the last season's turn (#194), for its review.</summary>
         public List<Retired> LastRetired = new List<Retired>();
+
+        /// <summary>The last turn's releases and free signings (#201), for its review.</summary>
+        public List<ContractMove> LastMoves = new List<ContractMove>();
     }
 
     /// <summary>A club: its identity, division and squad (the ids of its players).</summary>
@@ -113,6 +116,12 @@ namespace Eleven.Career
 
         /// <summary>His weekly wage (#198), in k.</summary>
         public int Wage;
+
+        /// <summary>His contract's seasons left (#201), this one included.</summary>
+        public int ContractYears;
+
+        /// <summary>The season he was released into the free agents (#201); 0 at a club. <see cref="ClubId"/> is 0 while he's free.</summary>
+        public int FreeSince;
 
         public int Get(string attribute) => Attributes[PlayerAttributes.Index(attribute)];
     }
