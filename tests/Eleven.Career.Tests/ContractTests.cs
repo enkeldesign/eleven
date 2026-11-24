@@ -249,6 +249,42 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_world_from_before_the_ledgers_days_marks_a_ledger_with_money_unknown_and_budgets_it_as_a_whole_season()
+        {
+            (World w, _) = New();
+            Club c = w.Clubs[4];
+            Finance.Pass(w, 30);
+            c.LastSeason.Amounts[(int)LedgerLine.Broadcasting] = 3650;
+            c.LastSeason.Days = 120;
+
+            // A format-9 world, mid-season: its ledgers' days aren't in it (Codex on #204).
+            byte[] plain = WorldCodec.Encode(w);
+            var nine = new CanonicalWriter(plain.Length);
+            nine.WriteBytes(plain[..4]);
+            nine.WriteInt32(9);
+            nine.WriteBytes(plain[8..^Formats.Contracts(w)]);
+            World old = WorldCodec.Decode(nine.ToArray());
+            Club o = old.Clubs[4];
+            Assert.Equal((Ledger.UnknownDays, Ledger.UnknownDays), (o.Season.Days, o.LastSeason.Days));
+
+            // Unknown, it stays so as days pass, and the budget takes a whole season's weeks.
+            Finance.Pass(old, 7);
+            Assert.Equal(Ledger.UnknownDays, o.Season.Days);
+            int days = Finance.SeasonDays(Competition, SquadRules.Reference);
+            Assert.Equal((long)Math.Round(FinanceRules.Reference.WageShare[o.Division - 1] * o.LastSeason.Revenue / (days / 7.0)), Finance.WageBudget(old, o));
+            Assert.Equal(Ledger.UnknownDays, WorldCodec.Decode(WorldCodec.Encode(old)).Clubs[4].Season.Days);
+
+            // A world with no money booked yet counts from 0.
+            (World fresh, _) = New();
+            plain = WorldCodec.Encode(fresh);
+            nine = new CanonicalWriter(plain.Length);
+            nine.WriteBytes(plain[..4]);
+            nine.WriteInt32(9);
+            nine.WriteBytes(plain[8..^Formats.Contracts(fresh)]);
+            Assert.All(WorldCodec.Decode(nine.ToArray()).Clubs, x => Assert.Equal((0, 0), (x.Season.Days, x.LastSeason.Days)));
+        }
+
+        [Fact]
         public void The_worlds_bytes_keep_contracts_free_agents_and_the_turns_moves_and_a_format_9_world_reads_them_by_the_rules()
         {
             (World w, _) = New();

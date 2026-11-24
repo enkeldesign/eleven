@@ -75,6 +75,9 @@ namespace Eleven.Career
         /// </summary>
         public int Days;
 
+        /// <summary>A ledger from a world before #201 with money already booked: its days aren't known (Codex on #204).</summary>
+        public const int UnknownDays = -1;
+
         public long this[LedgerLine line] => Amounts[(int)line];
 
         /// <summary>The season's net: every line's sum.</summary>
