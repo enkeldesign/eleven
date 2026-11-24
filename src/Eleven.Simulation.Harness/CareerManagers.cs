@@ -47,7 +47,19 @@ namespace Eleven.Simulation.Harness
         /// His three plans for meeting <paramref name="opponent"/> (#191): his own, shifted by what
         /// he remembers of them (<see cref="ManagerMemory.Shift"/>). No memory of them, his own.
         /// </summary>
-        public static TeamTactic[] Plans(Manager manager, int team, int opponent, MemoryRules? rules = null) => Plans(manager, team);
+        public static TeamTactic[] Plans(Manager manager, int team, int opponent, MemoryRules? rules = null)
+        {
+            TeamTactic[] plans = Plans(manager, team);
+            (double line, double step, _) = ManagerMemory.Shift(manager, opponent, rules);
+            if (line == 0 && step == 0) return plans;
+            for (int i = 0; i < plans.Length; i++)
+            {
+                plans[i].Line = Math.Clamp(plans[i].Line + line, -TeamTactic.LineMax, TeamTactic.LineMax);
+                plans[i].StepUp = Math.Clamp(plans[i].StepUp + step, 0, TeamTactic.StepUpMax);
+            }
+
+            return plans;
+        }
 
         /// <summary>The plans of the club's manager for meeting <paramref name="opponent"/> (0: anyone), or the reference plans if it has none.</summary>
         public static TeamTactic[] Plans(World world, int club, int team, int opponent = 0)
@@ -79,7 +91,13 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
         /// <summary>His profile for meeting <paramref name="opponent"/> (#191): his own, protecting earlier by what he remembers of them.</summary>
-        public static ManagerProfile Profile(Manager manager, SimConfig config, int opponent, MemoryRules? rules = null) => Profile(manager, config);
+        public static ManagerProfile Profile(Manager manager, SimConfig config, int opponent, MemoryRules? rules = null)
+        {
+            ManagerProfile p = Profile(manager, config);
+            (_, _, double earlier) = ManagerMemory.Shift(manager, opponent, rules);
+            if (earlier == 0) return p;
+            return new ManagerProfile(p.Tactics, p.ChaseFrom, p.ChaseMargin, Math.Clamp(p.ProtectFrom - earlier, 0, 1), p.Spread, p.SubAfter, p.SubFatigue);
+        }
 
         public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config)
         {

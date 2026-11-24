@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 4;
+        public const int FormatVersion = 5;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -111,6 +111,32 @@ namespace Eleven.Career
                 w.WriteInt32(m.Id);
                 w.WriteByte((byte)m.Pressing);
                 w.WriteByte((byte)m.Depth);
+            }
+
+            // Format 5 (#191): each manager with memories, his id, then each meeting he keeps, small
+            // fields as bytes and the metrics only for a match played in full.
+            var remembering = world.Managers.FindAll(m => m.Memory.Count > 0);
+            w.WriteInt32(remembering.Count);
+            foreach (Manager m in remembering)
+            {
+                w.WriteInt32(m.Id);
+                w.WriteInt32(m.Memory.Count);
+                foreach (Meeting x in m.Memory)
+                {
+                    w.WriteInt32(x.Opponent);
+                    w.WriteInt32(x.Season);
+                    w.WriteByte(Small(x.Matchday));
+                    w.WriteByte(Small(x.GoalsFor));
+                    w.WriteByte(Small(x.GoalsAgainst));
+                    w.WriteByte(Small(x.LateFor));
+                    w.WriteByte(Small(x.LateAgainst));
+                    w.WriteByte((byte)x.OpponentFormation);
+                    w.WriteBool(x.Full);
+                    if (!x.Full) continue;
+                    w.WriteDouble(x.Ppda, "ppda");
+                    w.WriteDouble(x.OpponentPpda, "opponentPpda");
+                    w.WriteDouble(x.Possession, "possession");
+                }
             }
 
             return w.ToArray();
@@ -245,9 +271,43 @@ namespace Eleven.Career
                 }
             }
 
+            if (version >= 5)
+            {
+                int remembering = Count(r.ReadInt32());
+                var clubIds = new HashSet<int>();
+                foreach (Club c in world.Clubs) clubIds.Add(c.Id);
+                for (int i = 0; i < remembering; i++)
+                {
+                    int id = r.ReadInt32();
+                    Manager m = world.Managers.Find(x => x.Id == id) ?? throw new FormatException($"Memories for manager {id}, who isn't in the world.");
+                    int meetings = Count(r.ReadInt32());
+                    for (int k = 0; k < meetings; k++)
+                    {
+                        var x = new Meeting { Opponent = r.ReadInt32(), Season = r.ReadInt32(), Matchday = r.ReadByte(), GoalsFor = r.ReadByte(), GoalsAgainst = r.ReadByte(), LateFor = r.ReadByte(), LateAgainst = r.ReadByte() };
+                        if (!clubIds.Contains(x.Opponent)) throw new FormatException($"Manager {id} remembers club {x.Opponent}, which isn't in the world.");
+                        byte formation = r.ReadByte();
+                        if (!Enum.IsDefined(typeof(Formation), (Formation)formation)) throw new FormatException($"Manager {id} remembers an unknown formation {formation}.");
+                        x.OpponentFormation = (Formation)formation;
+                        x.Full = r.ReadBool();
+                        if (x.Full)
+                        {
+                            x.Ppda = r.ReadDouble("ppda");
+                            x.OpponentPpda = r.ReadDouble("opponentPpda");
+                            x.Possession = r.ReadDouble("possession");
+                            if (x.Ppda < 0 || x.OpponentPpda < 0 || x.Possession < 0 || x.Possession > 1) throw new FormatException($"Manager {id}'s memory has metrics out of range.");
+                        }
+
+                        m.Memory.Add(x);
+                    }
+                }
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        // A small count as a byte, at most 255.
+        private static byte Small(int n) => (byte)Math.Clamp(n, 0, 255);
 
         // A count read from the bytes, refused when it can't be one.
         private static int Count(int n) => n < 0 || n > 1_000_000 ? throw new FormatException($"Invalid count {n}.") : n;
