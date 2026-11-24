@@ -218,14 +218,14 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_each_clubs_board_and_a_format_8_world_reads_it_by_the_rules()
         {
             (World w, _) = New();
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
-            // Format 8 is format 9 less its section: each club's objectives, confidence and last season's verdict.
+            // Format 8 is format 10 less format 9's section, each club's objectives, confidence and last season's verdict, and format 10's, the contracts (#201).
             var eight = new CanonicalWriter(plain.Length);
             eight.WriteBytes(plain[..4]);
             eight.WriteInt32(8);
-            eight.WriteBytes(plain[8..^Formats.Board(w)]);
+            eight.WriteBytes(plain[8..^Formats.From9(w)]);
             World old = WorldCodec.Decode(eight.ToArray());
             Assert.Equal(w.Clubs.Select(c => (c.Board.ExpectedPlace, c.Board.LeagueTarget, c.Board.CupTarget)), old.Clubs.Select(c => (c.Board.ExpectedPlace, c.Board.LeagueTarget, c.Board.CupTarget)));
             Assert.All(old.Clubs, c => Assert.Equal((Rules.StartConfidence, 0), (c.Board.Confidence, c.Board.LastPlace)));

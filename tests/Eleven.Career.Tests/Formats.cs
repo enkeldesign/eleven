@@ -15,11 +15,15 @@ namespace Eleven.Career.Tests
 
         /// <summary>
         /// Format 10's section (#201) for a world with no moves: each footballer's contract in a
-        /// byte and his free season in two, then the turn's moves, none.
+        /// byte and his free season in two, each club's two ledgers' days in two bytes each, then
+        /// the turn's moves, none.
         /// </summary>
-        public static int Contracts(World w) => 4 + w.Players.Count * 3 + 4;
+        public static int Contracts(World w) => 4 + w.Players.Count * 3 + 4 + w.Clubs.Count * 4 + 4;
 
         /// <summary>Every section from format 8 on: format 7's world is the rest.</summary>
-        public static int From8(World w) => Money(w) + Board(w);
+        public static int From8(World w) => Money(w) + From9(w);
+
+        /// <summary>Every section from format 9 on: format 8's world is the rest.</summary>
+        public static int From9(World w) => Board(w) + Contracts(w);
     }
 }

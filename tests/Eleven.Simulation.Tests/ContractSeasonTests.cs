@@ -91,7 +91,9 @@ namespace Eleven.Simulation.Tests
                 for (int d = 0; d < 3; d++)
                 {
                     Assert.InRange(t.BillOverBudget[d], 0.5, 1.15);
-                    Assert.InRange(t.HighestOverBudget[d], 0.5, 1.6);
+                    // The highest: a club relegated from the top, two seasons down, its better footballers
+                    // at the second division's rate yet above its budget. M6.12b's sales are its way out.
+                    Assert.InRange(t.HighestOverBudget[d], 0.5, 1.75);
                 }
             }
 

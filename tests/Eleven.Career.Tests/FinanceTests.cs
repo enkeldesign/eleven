@@ -139,18 +139,18 @@ namespace Eleven.Career.Tests
             // Over the season's weeks: the days it pays for, over 7.
             int days = Finance.SeasonDays(CompetitionRules.Reference, SquadRules.Reference);
             Assert.InRange(days, 150, 400);
-            Assert.Equal((long)Math.Round(Rules.WageShare * 4650 / (days / 7.0)), Finance.WageBudget(w, c));
+            Assert.Equal((long)Math.Round(Rules.WageShare[c.Division - 1] * 4650 / (days / 7.0)), Finance.WageBudget(w, c));
         }
 
         [Fact]
         public void The_worlds_bytes_keep_each_clubs_money_and_each_wage_and_a_format_7_world_reads_them_by_the_rules()
         {
             (World w, _) = New();
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
-            // Format 7 is format 9 less format 8's section, each club's balance and two ledgers and
-            // each footballer's wage, and format 9's, the boards (#200).
+            // Format 7 is format 10 less format 8's section, each club's balance and two ledgers and
+            // each footballer's wage, and those after it: the boards (#200) and the contracts (#201).
             Assert.Equal(4 + w.Clubs.Count * (4 + 2 * Ledger.Lines * 4) + 4 + w.Players.Count * 2, Formats.Money(w));
             int section = Formats.From8(w);
             var seven = new CanonicalWriter(plain.Length);

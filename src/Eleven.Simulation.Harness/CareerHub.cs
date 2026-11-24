@@ -361,7 +361,14 @@ namespace Eleven.Simulation.Harness
         }
 
         /// <summary>Your club's contracts ending this season (#201), e.g. "Out of contract this season: A. Name, B. Name."; empty when none.</summary>
-        public static string ContractLine(CareerSession s) => "";
+        public static string ContractLine(CareerSession s)
+        {
+            List<string> ending = s.World.Players.Where(p => p.ClubId == s.Club && p.ContractYears == 1).OrderBy(p => p.Id).Select(p => Initial(p.FirstName, p.LastName)).ToList();
+            return ending.Count == 0 ? "" : "Out of contract this season: " + string.Join(", ", ending) + ".";
+        }
+
+        // "A. Name".
+        private static string Initial(string first, string last) => (first.Length > 0 ? first.Substring(0, 1) + ". " : "") + last;
 
         /// <summary>
         /// Your club's board (#200), e.g. "The board: finish 6th or higher, reach the round of 16
@@ -389,7 +396,8 @@ namespace Eleven.Simulation.Harness
         /// <summary>
         /// The season's review (#194), from the season's turn until your club's first match of the
         /// new one: your club's biggest risers last season, its retirements and its youth, its
-        /// money (#198) and the board's verdict (#200). Empty in a first season.
+        /// releases and free signings (#201), its money (#198) and the board's verdict (#200).
+        /// Empty in a first season.
         /// </summary>
         public static string ReviewLine(CareerSession s)
         {
@@ -414,6 +422,12 @@ namespace Eleven.Simulation.Harness
             if (retired.Count > 0) parts.Add("Retired: " + string.Join("; ", retired));
             List<string> youth = mine.Where(p => p.Joined == s.Season.Number).OrderBy(p => p.Id).Select(p => $"{Short(p.FirstName, p.LastName)}, {p.Age}").ToList();
             if (youth.Count > 0) parts.Add("From the youth: " + string.Join("; ", youth));
+
+            // Contracts (#201): whom your club let go, and whom it signed free.
+            List<string> released = s.World.LastMoves.Where(m => m.From == s.Club && m.To == 0).Select(m => Short(m.FirstName, m.LastName)).ToList();
+            if (released.Count > 0) parts.Add("Released: " + string.Join(", ", released));
+            List<string> signed = s.World.LastMoves.Where(m => m.From == 0 && m.To == s.Club).Select(m => Short(m.FirstName, m.LastName)).ToList();
+            if (signed.Count > 0) parts.Add("Signed: " + string.Join(", ", signed));
             Club? club = s.World.Clubs.Find(c => c.Id == s.Club);
             if (club != null && club.LastSeason.Revenue > 0)
             {

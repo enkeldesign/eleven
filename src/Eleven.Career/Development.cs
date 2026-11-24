@@ -153,6 +153,8 @@ namespace Eleven.Career
             long tick = (long)season.Number * 8 + GrowDraw;
             foreach (Player p in world.Players)
             {
+                // A free agent (#201) trains with no club, and doesn't grow.
+                if (p.ClubId == 0) continue;
                 if (started.Contains(p.Id)) p.Starts++;
                 double share = played.TryGetValue(p.ClubId, out int n) && n > 0 ? (double)p.Starts / n : 0;
                 double growth = SeasonGrowth(p, managers.TryGetValue(p.ClubId, out Manager? m) ? m : null, share, rules) * LevelCount(p) / Math.Max(1, matchdays);
@@ -240,30 +242,45 @@ namespace Eleven.Career
             var gone = new HashSet<int>();
             foreach (Player p in world.Players)
             {
+                // A free agent unsigned since an earlier turn (#201) retires.
+                bool unsigned = p.ClubId == 0 && p.FreeSince > 0 && p.FreeSince < season;
                 int from = IsKeeper(p) ? rules.KeeperRetireFrom : rules.RetireFrom;
-                if (p.Age < from) continue;
+                if (!unsigned && p.Age < from) continue;
                 double chance = rules.RetireChance * (p.Age - from + 1);
-                if (CounterRng.Uniform(world.Seed, retire, RandomStream.Development, p.Id, 0) >= chance) continue;
+                if (!unsigned && CounterRng.Uniform(world.Seed, retire, RandomStream.Development, p.Id, 0) >= chance) continue;
                 gone.Add(p.Id);
                 world.LastRetired.Add(new Retired { Id = p.Id, ClubId = p.ClubId, Age = p.Age, FirstName = p.FirstName, LastName = p.LastName, Position = p.Positions.Count > 0 ? p.Positions[0] : Position.CentralMidfield });
             }
 
             world.LastRetired.Sort((x, y) => x.Age != y.Age ? y.Age.CompareTo(x.Age) : x.Id.CompareTo(y.Id));
             world.Players.RemoveAll(p => gone.Contains(p.Id));
-            foreach (Club c in world.Clubs)
-            {
-                c.Squad.RemoveAll(gone.Contains);
-
-                // A club's picks are its XI's 11, then its bench (#179). A retired XI pick would move
-                // the bench's first into the XI, an outfielder in goal for a keeper: its picks go back
-                // to the AI's. One on the bench, at the end, just leaves it (Codex on #195).
-                bool inXi = false;
-                for (int i = 0; i < Math.Min(PickedEleven, c.Picks.Count); i++) inXi |= gone.Contains(c.Picks[i]);
-                if (inXi) c.Picks.Clear();
-                else c.Picks.RemoveAll(gone.Contains);
-            }
-
+            foreach (Club c in world.Clubs) Leave(c, gone);
             Youth(world, season, rules);
+        }
+
+        /// <summary>
+        /// Those <paramref name="gone"/> out of a club's squad and picks: retired (#194), or
+        /// released (#201). A club's picks are its XI's 11, then its bench (#179). One gone from the
+        /// XI would move the bench's first into it, an outfielder in goal for a keeper, so its picks
+        /// go back to the AI's. One on the bench, at the end, just leaves it (Codex on #195).
+        /// </summary>
+        internal static void Leave(Club c, HashSet<int> gone)
+        {
+            if (gone.Count == 0) return;
+            c.Squad.RemoveAll(gone.Contains);
+            bool inXi = false;
+            for (int i = 0; i < Math.Min(PickedEleven, c.Picks.Count); i++) inXi |= gone.Contains(c.Picks[i]);
+            if (inXi) c.Picks.Clear();
+            else c.Picks.RemoveAll(gone.Contains);
+        }
+
+        /// <summary>The level a club's youth join at in <paramref name="division"/>: the division's, less YouthBelow, by its manager's development.</summary>
+        public static double YouthLevel(World world, Club club, int division, DevelopmentRules? rules = null)
+        {
+            rules ??= DevelopmentRules.Reference;
+            Manager? m = world.Managers.Find(x => x.Id == club.ManagerId);
+            double development = m == null ? 0 : (m.Competences[ManagerCompetences.Ids.IndexOf("development")] - 10.5) / 9.5;
+            return WorldGenerator.DivisionLevel[Math.Clamp(division, 1, WorldGenerator.DivisionLevel.Length) - 1] - rules.YouthBelow + development;
         }
 
         // Each club's squad filled to its size from its youth: each in the position its squad lacks
@@ -273,9 +290,7 @@ namespace Eleven.Career
             long youth = (long)season * 8 + YouthDraw;
             foreach (Club c in world.Clubs)
             {
-                Manager? m = world.Managers.Find(x => x.Id == c.ManagerId);
-                double development = m == null ? 0 : (m.Competences[ManagerCompetences.Ids.IndexOf("development")] - 10.5) / 9.5;
-                double level = WorldGenerator.DivisionLevel[Math.Clamp(c.Division, 1, WorldGenerator.DivisionLevel.Length) - 1] - rules.YouthBelow + development;
+                double level = YouthLevel(world, c, c.Division, rules);
                 while (world.Players.FindAll(x => x.ClubId == c.Id).Count < WorldGenerator.SquadSize)
                 {
                     int id = world.NextPlayerId++;
@@ -283,6 +298,7 @@ namespace Eleven.Career
                     Player y = WorldGenerator.Youth(world.Seed, id, c.Id, Lacking(world, c), level, Math.Min(age, rules.YouthMax));
                     y.Joined = season;
                     y.Wage = Finance.Wage(y, c.Division);
+                    y.ContractYears = ContractRules.Reference.YouthYears;
                     world.Players.Add(y);
                     c.Squad.Add(y.Id);
                 }
@@ -290,7 +306,7 @@ namespace Eleven.Career
         }
 
         // The position a club's squad lacks most against the template: the first whose count is short.
-        private static Position Lacking(World world, Club c)
+        internal static Position Lacking(World world, Club c)
         {
             var have = new Dictionary<Position, int>();
             foreach (Player p in world.Players)

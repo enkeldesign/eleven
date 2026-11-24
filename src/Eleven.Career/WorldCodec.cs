@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 9;
+        public const int FormatVersion = 10;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -219,6 +219,35 @@ namespace Eleven.Career
                 w.WriteByte(Small(b.LastReputation));
             }
 
+            // Format 10 (#201): each footballer in order, his contract's seasons left in a byte and
+            // the season he went free in two; each club in order, the days of its two ledgers; then
+            // the last turn's moves, each footballer's id, the club he left and joined (0 the free
+            // agents) and his name.
+            w.WriteInt32(world.Players.Count);
+            foreach (Player p in world.Players)
+            {
+                w.WriteByte(Small(p.ContractYears));
+                WriteShort(w, p.FreeSince);
+            }
+
+            // Each club in order, the days its two ledgers were paid for.
+            w.WriteInt32(world.Clubs.Count);
+            foreach (Club c in world.Clubs)
+            {
+                WriteShort(w, c.Season.Days);
+                WriteShort(w, c.LastSeason.Days);
+            }
+
+            w.WriteInt32(world.LastMoves.Count);
+            foreach (ContractMove m in world.LastMoves)
+            {
+                w.WriteInt32(m.PlayerId);
+                w.WriteInt32(m.From);
+                w.WriteInt32(m.To);
+                w.WriteString(m.FirstName);
+                w.WriteString(m.LastName);
+            }
+
             return w.ToArray();
         }
 
@@ -416,7 +445,7 @@ namespace Eleven.Career
                 {
                     var x = new Retired { Id = r.ReadInt32(), ClubId = r.ReadInt32(), Age = r.ReadByte(), FirstName = r.ReadString(), LastName = r.ReadString() };
                     byte position = r.ReadByte();
-                    if (!clubIds.Contains(x.ClubId)) throw new FormatException($"Retired footballer {x.Id}'s club {x.ClubId} isn't in the world.");
+                    if (x.ClubId != 0 && !clubIds.Contains(x.ClubId)) throw new FormatException($"Retired footballer {x.Id}'s club {x.ClubId} isn't in the world.");
                     if (!Enum.IsDefined(typeof(Position), (Position)position)) throw new FormatException($"Retired footballer {x.Id}'s position {position} is unknown.");
                     x.Position = (Position)position;
                     world.LastRetired.Add(x);
@@ -492,6 +521,36 @@ namespace Eleven.Career
             {
                 // A world from before #200: its objectives by the rules, its confidence at its start.
                 Board.Objectives(world, CompetitionRules.Reference);
+            }
+
+            if (version >= 10)
+            {
+                if (r.ReadInt32() != world.Players.Count) throw new FormatException("The contracts don't count every footballer.");
+                foreach (Player p in world.Players)
+                {
+                    p.ContractYears = r.ReadByte();
+                    p.FreeSince = ReadShort(r);
+                    if (p.FreeSince < 0 || (p.ClubId == 0) != (p.FreeSince > 0)) throw new FormatException($"Footballer {p.Id} is free since {p.FreeSince} at club {p.ClubId}.");
+                }
+
+                if (r.ReadInt32() != world.Clubs.Count) throw new FormatException("The ledgers' days don't count every club.");
+                foreach (Club c in world.Clubs)
+                {
+                    c.Season.Days = ReadShort(r);
+                    c.LastSeason.Days = ReadShort(r);
+                    if (c.Season.Days < 0 || c.LastSeason.Days < 0) throw new FormatException($"Club {c.Id}'s ledger days are negative.");
+                }
+
+                int moves = Count(r.ReadInt32());
+                for (int i = 0; i < moves; i++)
+                {
+                    world.LastMoves.Add(new ContractMove { PlayerId = r.ReadInt32(), From = r.ReadInt32(), To = r.ReadInt32(), FirstName = r.ReadString(), LastName = r.ReadString() });
+                }
+            }
+            else
+            {
+                // A world from before #201: each footballer's contract by the generator's rule, nobody free.
+                foreach (Player p in world.Players) p.ContractYears = Contracts.FirstContract(world.Seed, p.Id, p.Age);
             }
 
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");

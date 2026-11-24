@@ -110,7 +110,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_each_clubs_training_and_a_format_6_world_reads_auto()
         {
             (World w, _) = New();
-            Assert.Equal(9, WorldCodec.FormatVersion);
+            Assert.Equal(10, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 6 is format 7 with every club on Auto, less its section's empty count.
