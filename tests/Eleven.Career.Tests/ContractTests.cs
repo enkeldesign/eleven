@@ -284,7 +284,7 @@ namespace Eleven.Career.Tests
             var nine = new CanonicalWriter(plain.Length);
             nine.WriteBytes(plain[..4]);
             nine.WriteInt32(9);
-            nine.WriteBytes(plain[8..^Formats.Contracts(w)]);
+            nine.WriteBytes(plain[8..^Formats.From10(w)]);
             World old = WorldCodec.Decode(nine.ToArray());
             Club o = old.Clubs[4];
             Assert.Equal((Ledger.UnknownDays, Ledger.UnknownDays), (o.Season.Days, o.LastSeason.Days));
@@ -302,7 +302,7 @@ namespace Eleven.Career.Tests
             nine = new CanonicalWriter(plain.Length);
             nine.WriteBytes(plain[..4]);
             nine.WriteInt32(9);
-            nine.WriteBytes(plain[8..^Formats.Contracts(fresh)]);
+            nine.WriteBytes(plain[8..^Formats.From10(fresh)]);
             Assert.All(WorldCodec.Decode(nine.ToArray()).Clubs, x => Assert.Equal((0, 0), (x.Season.Days, x.LastSeason.Days)));
         }
 
