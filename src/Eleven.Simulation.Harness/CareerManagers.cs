@@ -98,17 +98,21 @@ namespace Eleven.Simulation.Harness
             return new ManagerProfile(p.Tactics, p.ChaseFrom, p.ChaseMargin, Math.Clamp(p.ProtectFrom - earlier, 0, 1), p.Spread, p.SubAfter, p.SubFatigue);
         }
 
-        /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
-        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config)
+        /// <summary>
+        /// Both sides' managers' profiles for a career match, by team id: a club without a manager
+        /// has the config's. With <paramref name="humanHome"/>, the home side is the human's and
+        /// its manager's profile is his own, unshifted by memory (#191).
+        /// </summary>
+        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config, bool humanHome = false)
         {
-            ManagerProfile Of(int club, int opponent)
+            ManagerProfile Of(int club, int opponent, bool remembers)
             {
                 Club? c = world.Clubs.Find(x => x.Id == club);
                 Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
-                return m == null ? ManagerProfile.From(config) : Profile(m, config, opponent);
+                return m == null ? ManagerProfile.From(config) : remembers ? Profile(m, config, opponent) : Profile(m, config);
             }
 
-            return new Dictionary<int, ManagerProfile> { [Squads.HomeTeam] = Of(homeClub, awayClub), [Squads.AwayTeam] = Of(awayClub, homeClub) };
+            return new Dictionary<int, ManagerProfile> { [Squads.HomeTeam] = Of(homeClub, awayClub, !humanHome), [Squads.AwayTeam] = Of(awayClub, homeClub, true) };
         }
 
         /// <summary>The club's formation: its manager's preferred one, or the 4-4-2.</summary>
