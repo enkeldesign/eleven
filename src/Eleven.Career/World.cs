@@ -16,6 +16,12 @@ namespace Eleven.Career
         public List<Club> Clubs = new List<Club>();
         public List<Player> Players = new List<Player>();
         public List<Manager> Managers = new List<Manager>();
+
+        /// <summary>The next footballer's id (#194): a youth's, never one a retired footballer had.</summary>
+        public int NextPlayerId;
+
+        /// <summary>Those who retired at the last season's turn (#194), for its review.</summary>
+        public List<Retired> LastRetired = new List<Retired>();
     }
 
     /// <summary>A club: its identity, division and squad (the ids of its players).</summary>
@@ -66,6 +72,21 @@ namespace Eleven.Career
 
         /// <summary>This season's cautions toward a ban (#176), in the league and in the cup.</summary>
         public int LeagueCautions, CupCautions;
+
+        /// <summary>
+        /// Development (#194): attribute points accrued toward his next, 0 to under 1, so no growth
+        /// is lost to rounding.
+        /// </summary>
+        public double Progress;
+
+        /// <summary>His starts for his club this season (#194).</summary>
+        public int Starts;
+
+        /// <summary>His attribute points gained, less those lost, this season and last (#194).</summary>
+        public int SeasonPoints, LastSeasonPoints;
+
+        /// <summary>The season he joined from his club's youth (#194); 0 for one from the world's start.</summary>
+        public int Joined;
 
         public int Get(string attribute) => Attributes[PlayerAttributes.Index(attribute)];
     }

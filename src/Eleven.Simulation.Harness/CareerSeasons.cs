@@ -83,6 +83,18 @@ namespace Eleven.Simulation.Harness
             // count from its own day, and the days to the next matchday pass.
             Availability.Serve(world, day, kind, sr);
             foreach ((Fixture f, MatchResult r, IReadOnlyDictionary<int, int> lineup) in played) Availability.Apply(world, season, f, r, lineup, sr);
+
+            // Development (#194): each starter's start counted, and the young grown by a matchday.
+            var starters = new List<int>();
+            foreach ((_, _, IReadOnlyDictionary<int, int> lineup) in played)
+            {
+                foreach (KeyValuePair<int, int> kv in lineup)
+                {
+                    if (kv.Key <= Squads.AwayKeeper(perSide)) starters.Add(kv.Value);
+                }
+            }
+
+            Development.Matchday(world, season, starters, SeasonCalendar.Of(rules).Count);
             Availability.Pass(world, Availability.GapAfter(rules, season.Matchday), sr);
             SeasonEngine.Advance(season, rules);
             return day;

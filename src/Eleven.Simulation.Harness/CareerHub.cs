@@ -350,6 +350,13 @@ namespace Eleven.Simulation.Harness
             s.SeasonOver ? HubAction.NextSeason
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
+
+        /// <summary>
+        /// The season's review (#194), from the season's turn until your club's first match of the
+        /// new one: your club's biggest risers last season, its retirements and its youth. Empty
+        /// in a first season.
+        /// </summary>
+        public static string ReviewLine(CareerSession s) => "";
     }
 
     /// <summary>Where a footballer is in your squad (#179).</summary>

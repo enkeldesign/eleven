@@ -206,6 +206,12 @@ namespace Eleven.Career
             _ => 0,
         };
 
+        /// <summary>
+        /// A youth for a club (#194): footballer <paramref name="id"/>, aged <paramref name="age"/>,
+        /// drawn like the generator's own at <paramref name="level"/>, his potential above it.
+        /// </summary>
+        public static Player Youth(ulong seed, int id, int clubId, Position position, double level, int age) => MakePlayer(seed, id, clubId, position, level);
+
         private static Player MakePlayer(ulong seed, int id, int clubId, Position position, double clubLevel)
         {
             // His level: the club's, spread by the sum of three draws (about ±3, most near 0).
