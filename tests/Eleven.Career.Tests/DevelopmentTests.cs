@@ -177,6 +177,32 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_retired_pick_in_the_xi_sends_his_clubs_picks_back_to_the_ais_and_one_on_the_bench_just_leaves_it()
+        {
+            // Codex on #195: a club's picks are its XI's 11, then its bench, so dropping a retired
+            // XI pick would move the first bench footballer into the XI, an outfielder in goal for a keeper.
+            (World w, _) = New();
+            foreach (Player p in w.Players)
+            {
+                if (p.Age >= 30) p.Age = 25;
+            }
+
+            Club a = w.Clubs[1], b = w.Clubs[2];
+            List<int> Picked(Club c) => w.Players.Where(p => p.ClubId == c.Id).OrderBy(p => p.Positions[0] == Position.Goalkeeper ? 0 : 1).ThenBy(p => p.Id).Take(18).Select(p => p.Id).ToList();
+            a.Picks.AddRange(Picked(a));
+            b.Picks.AddRange(Picked(b));
+            w.Players.Single(p => p.Id == a.Picks[0]).Age = 45;
+            int benched = b.Picks[15];
+            w.Players.Single(p => p.Id == benched).Age = 45;
+            List<int> before = b.Picks.ToList();
+            Development.Rollover(w, 2);
+
+            Assert.Empty(a.Picks);
+            Assert.Equal(before.Where(id => id != benched), b.Picks);
+            Assert.Equal(before.Take(11), b.Picks.Take(11));
+        }
+
+        [Fact]
         public void Retirement_is_more_likely_each_year_from_the_age_it_starts()
         {
             (World w, _) = New();
