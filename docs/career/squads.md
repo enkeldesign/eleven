@@ -43,7 +43,7 @@ SvFF's rule for Allsvenskan, counted per competition. The league is one competit
 
 `Player.Fitness`, 0–100 (#177). Recovery from a match takes 72–96 hours (Nédélec et al. 2012, *Recovery in soccer, part I*), so a week's gap recovers it and a midweek tie's three days nearly do.
 - **A match's cost** is `ConditionCostPerMatch` (30) for a whole match at reference stamina. It scales by the share of the match he played (his #172 line's seconds over two halves, so extra time costs more) and by his stamina: ± `StaminaWeight` (0.4) of it at stamina 1 and 20.
-- **Recovery** is the cost of a whole match over `RecoveryDays` (3.5) days, per day passed, to 100.
+- **Recovery** is the cost of a whole match over `RecoveryDays` (3.5) days, per day passed, to 100, at the pace of his club's training (#196, [training.md](training.md)).
 - **A tired start:** in a career match on the full simulation, each footballer starts at fatigue (100 − condition) / 100 × `ConditionFatigue` (1.0) (#100). A fresh side plays exactly as before. Fatigue is already state, so no schema changes. A substitute still comes on fresh.
 - **Measured, it costs nothing.** In-match fatigue clears within a minute or so, so a side starting at fatigue 0.6 scores as a fresh one does ([quicksim.md](../simulation/quicksim.md#condition)). The quick-sim's weight for it is fitted at 0. For condition to tell in a match it would have to act on something that lasts the match, such as his stamina for it. That is open.
 - **Rotation:** a starter below `RestBelow` (70) is rested for a footballer of the slot's line at or above it, within `RotationMargin` (1.5) of his selection level. With none, he plays tired. Every club is picked this way, the human's too until M6.08d. Keepers aren't rotated.
@@ -77,7 +77,7 @@ A row: "J. Smith, 23 · CB, DM · 14.2 · 96", his name and age (#194), position
 3. **The fixtures are played** and recorded, each with its lineup: simulation id to the world's footballer. The human's fixture brings its own lineup (`CareerSession.LineupFor`). His club is the simulation's home side whatever the ground (#167), so the lineup is his club's first.
 4. **Bans are served** by those who sat it out (`Availability.Serve`).
 5. **The matchday's injuries and cards** are applied (`Availability.Apply`), so a ban it brings is served from the next.
-6. **The days to the next matchday pass** (`Availability.Pass`): the injured heal and everyone recovers, so an injury's days count from its own matchday.
+6. **The days to the next matchday pass** (`Training.Pass`, #196): the injured heal, everyone recovers at his club's training pace, and the fit may be injured in training, so an injury's days count from its own matchday.
 
 **At the season's turn** (`SeasonEngine.Rollover`), cautions start again. Bans still to serve carry into the same competition. The off-season's `OffSeasonDays` (60) pass for the injured.
 
