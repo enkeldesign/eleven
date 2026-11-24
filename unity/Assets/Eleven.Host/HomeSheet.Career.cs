@@ -69,6 +69,10 @@ namespace Eleven.Host
 
         // The season's review (#194), until your club's first match of the new season.
         private Label _hubReview;
+
+        // Your club's training (#196): its line, and the action that cycles it.
+        private Label _hubTraining;
+        private UiKit.Action _hubTrain;
         private Label _hubResults;
         private Label _hubSummary;
         private VisualElement _hubTable;
@@ -177,6 +181,10 @@ namespace Eleven.Host
             _hubReview.style.marginBottom = Spacing.M;
             _hubReview.style.display = DisplayStyle.None;
             hub.Add(_hubReview);
+            // Your club's training (#196), always shown.
+            _hubTraining = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubTraining.style.marginBottom = Spacing.M;
+            hub.Add(_hubTraining);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -195,10 +203,12 @@ namespace Eleven.Host
             _hubSave = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Save", HubSave);
             _hubSimulate = UiKit.MakeAction(_ui, _theme, ActionRole.Supporting, "Simulate", HubSimulate);
             _hubSquad = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Squad", ShowSquad);
+            _hubTrain = UiKit.MakeAction(_ui, _theme, ActionRole.Utility, "Training", HubTraining);
             _hubPrimary = UiKit.MakeAction(_ui, _theme, ActionRole.Primary, "Play", HubPrimary);
             _hubPage.Actions.Add(_hubHome.Element);
             _hubPage.Actions.Add(_hubSave.Element);
             _hubPage.Actions.Add(_hubSquad.Element);
+            _hubPage.Actions.Add(_hubTrain.Element);
             _hubPage.Actions.Add(_hubSimulate.Element);
             _hubPage.Actions.Add(_hubPrimary.Element);
             _hubPage.Actions.style.flexWrap = Wrap.Wrap;
@@ -333,6 +343,7 @@ namespace Eleven.Host
             string review = CareerHub.ReviewLine(s);
             _hubReview.text = review;
             _hubReview.style.display = review.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _hubTraining.text = CareerHub.TrainingLine(s);
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
@@ -427,6 +438,15 @@ namespace Eleven.Host
         }
 
         // SQUAD on the hub (#179): your squad's rows, nobody chosen.
+        // Training (#196): Auto, Light, Normal, Hard and round again; the line says what it does.
+        private void HubTraining()
+        {
+            CareerSession s = Career();
+            if (s == null) return;
+            Log(FormattableString.Invariant($"ELEVEN hub action Training to={s.CycleTraining()}"));
+            RefreshHub();
+        }
+
         private void ShowSquad()
         {
             if (Career() == null) return;
@@ -547,6 +567,7 @@ namespace Eleven.Host
             order.Add(_hubHome.Element);
             order.Add(_hubSave.Element);
             order.Add(_hubSquad.Element);
+            order.Add(_hubTrain.Element);
             if (_hubSimulate.Element.resolvedStyle.display != DisplayStyle.None) order.Add(_hubSimulate.Element);
             order.Add(_hubPrimary.Element);
             return order;

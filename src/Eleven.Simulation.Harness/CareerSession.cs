@@ -152,7 +152,12 @@ namespace Eleven.Simulation.Harness
         public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, (Func<Fixture, PlayedFixture?>?)null, Squad);
 
         /// <summary>Your club's training (#196): Auto, then Light, Normal and Hard, and round again. Returns the new one.</summary>
-        public TrainingIntensity CycleTraining() => TrainingIntensity.Auto;
+        public TrainingIntensity CycleTraining()
+        {
+            Club mine = World.Clubs.Find(c => c.Id == Club)!;
+            mine.Training = (TrainingIntensity)(((int)mine.Training + 1) % 4);
+            return mine.Training;
+        }
 
         /// <summary>
         /// Two footballers change places in the human's picks (#179); the first swap starts from

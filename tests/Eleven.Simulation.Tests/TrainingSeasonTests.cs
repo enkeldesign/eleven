@@ -28,6 +28,13 @@ namespace Eleven.Simulation.Tests
             int club = light.World.Clubs[4].Id;
             light.World.Clubs[4].Training = TrainingIntensity.Light;
             hard.World.Clubs[4].Training = TrainingIntensity.Hard;
+
+            // Tired before it, so a week's recovery can't bring either back to full.
+            foreach (CareerSession s in new[] { light, hard })
+            {
+                foreach (Player p in s.World.Players.Where(p => p.ClubId == club)) p.Fitness = 30;
+            }
+
             light.Simulate();
             hard.Simulate();
             List<Player> Mine(CareerSession s) => s.World.Players.Where(p => p.ClubId == club).OrderBy(p => p.Id).ToList();

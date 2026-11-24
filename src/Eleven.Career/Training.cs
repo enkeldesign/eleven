@@ -52,10 +52,16 @@ namespace Eleven.Career
     public static class Training
     {
         /// <summary>The intensity a manager chooses on Auto: by his XI's mean condition at its last kick-off and the days to his next match.</summary>
-        public static TrainingIntensity Choose(double xiCondition, int gapDays, TrainingRules? rules = null) => TrainingIntensity.Normal;
+        public static TrainingIntensity Choose(double xiCondition, int gapDays, TrainingRules? rules = null)
+        {
+            rules ??= TrainingRules.Reference;
+            if (xiCondition < rules.LightBelow) return TrainingIntensity.Light;
+            return xiCondition >= rules.HardFrom && gapDays >= rules.HardGapDays ? TrainingIntensity.Hard : TrainingIntensity.Normal;
+        }
 
         /// <summary>An intensity's row of a knob: Light, Normal or Hard; Auto reads as Normal.</summary>
-        public static double Of(double[] row, TrainingIntensity intensity) => 1;
+        public static double Of(double[] row, TrainingIntensity intensity) =>
+            intensity == TrainingIntensity.Light ? row[0] : intensity == TrainingIntensity.Hard ? row[2] : row[1];
 
         /// <summary>
         /// The <paramref name="days"/> to the next matchday: each club's footballers recover by its
@@ -64,8 +70,35 @@ namespace Eleven.Career
         /// </summary>
         public static List<TrainingInjury> Pass(World world, Season season, int days, IReadOnlyDictionary<int, TrainingIntensity> intensity, SquadRules squad, TrainingRules? rules = null)
         {
-            Availability.Pass(world, days, squad);
-            return new List<TrainingInjury>();
+            rules ??= TrainingRules.Reference;
+            var injuries = new List<TrainingInjury>();
+            long tick = (long)season.Number * 1024 + season.Matchday;
+            foreach (Player p in world.Players)
+            {
+                TrainingIntensity t = intensity.TryGetValue(p.ClubId, out TrainingIntensity x) ? x : TrainingIntensity.Normal;
+                bool fit = p.InjuredDays == 0;
+
+                // The injured heal and everyone recovers, as Availability.Pass, at the intensity's pace.
+                if (p.InjuredDays > 0) p.InjuredDays = Math.Max(0, p.InjuredDays - days);
+                int recovered = squad.RecoveryDays > 0 ? (int)Math.Round(days * squad.ConditionCostPerMatch / squad.RecoveryDays * Of(rules.Recovery, t)) : 100;
+                if (p.Fitness < 100) p.Fitness = Math.Min(100, p.Fitness + recovered);
+                if (!fit) continue;
+
+                // A fit footballer may be injured in training on any of the days; he heals over the rest.
+                double chance = rules.InjuryPerDay * Of(rules.Injury, t);
+                for (int d = 0; d < days; d++)
+                {
+                    if (CounterRng.Uniform(world.Seed, tick, RandomStream.Training, p.Id, 3 * d) >= chance) continue;
+                    int layoff = Availability.LayoffFrom(
+                        CounterRng.Uniform(world.Seed, tick, RandomStream.Training, p.Id, 3 * d + 1),
+                        CounterRng.Uniform(world.Seed, tick, RandomStream.Training, p.Id, 3 * d + 2), 1, squad);
+                    injuries.Add(new TrainingInjury(p.Id, layoff));
+                    p.InjuredDays = Math.Max(0, layoff - (days - d - 1));
+                    break;
+                }
+            }
+
+            return injuries;
         }
     }
 }

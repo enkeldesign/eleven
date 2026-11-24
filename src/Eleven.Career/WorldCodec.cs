@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 6;
+        public const int FormatVersion = 7;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -177,6 +177,15 @@ namespace Eleven.Career
                 w.WriteString(x.FirstName);
                 w.WriteString(x.LastName);
                 w.WriteByte((byte)x.Position);
+            }
+
+            // Format 7 (#196): each club not on Auto, its id and its training.
+            var training = world.Clubs.FindAll(c => c.Training != TrainingIntensity.Auto);
+            w.WriteInt32(training.Count);
+            foreach (Club c in training)
+            {
+                w.WriteInt32(c.Id);
+                w.WriteByte((byte)c.Training);
             }
 
             return w.ToArray();
@@ -386,6 +395,19 @@ namespace Eleven.Career
             {
                 // A world from before #194: the next id is past the highest.
                 world.NextPlayerId = highest + 1;
+            }
+
+            if (version >= 7)
+            {
+                int training = Count(r.ReadInt32());
+                for (int i = 0; i < training; i++)
+                {
+                    int id = r.ReadInt32();
+                    Club c = world.Clubs.Find(x => x.Id == id) ?? throw new FormatException($"Training for club {id}, which isn't in the world.");
+                    byte t = r.ReadByte();
+                    if (!Enum.IsDefined(typeof(TrainingIntensity), (TrainingIntensity)t)) throw new FormatException($"Club {id}'s training {t} is unknown.");
+                    c.Training = (TrainingIntensity)t;
+                }
             }
 
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
