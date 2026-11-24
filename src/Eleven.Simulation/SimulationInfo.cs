@@ -18,9 +18,15 @@ namespace Eleven.Simulation
         /// version 13 the CPU outfielders, their plans and their timers (#83),
         /// version 14 the standing challenge: each player's tackling, phase and line, and who last played the ball (#84),
         /// version 15 the restart sequencer (#85), version 16 the match's clock, halves and score (#86),
-        /// version 17 each player's heading (#94), and version 18 each player's place in his side's shape (#96), version 19 each player's strength (#97), version 20 the restart's advantage (#99), and version 21 each player's stamina and fatigue (#100), version 27 each side's formation (#125), version 28 each side's tactical plans and its switching between them (#126), and version 29 each player's carry after a switch (#138).
+        /// version 17 each player's heading (#94), and version 18 each player's place in his side's shape (#96), version 19 each player's strength (#97), version 20 the restart's advantage (#99), and version 21 each player's stamina and fatigue (#100), version 27 each side's formation (#125), version 28 each side's tactical plans and its switching between them (#126), version 29 each player's carry after a switch (#138), and version 30 moved the CPU skill from each CPU to each footballer, his own whoever controls him (#166).
         /// </summary>
-        public const int StateSchemaVersion = 29;
+        public const int StateSchemaVersion = 30;
+
+        /// <summary>
+        /// The older state schema this build migrates (INV-7, #166): a snapshot of it reads as a
+        /// state of <see cref="StateSchemaVersion"/>. Any other is refused.
+        /// </summary>
+        public const int MigratesFromStateSchema = 29;
 
         /// <summary>
         /// How ticks, commands and hashes line up. Recorded in snapshots and hash logs so evidence

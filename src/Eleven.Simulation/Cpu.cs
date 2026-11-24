@@ -168,15 +168,14 @@ namespace Eleven.Simulation
 
     /// <summary>
     /// A CPU outfielder (#83): the player <see cref="PlayerId"/>, owned by an AI controller, with
-    /// his skill, the plan he is acting on and the one he has decided but not yet reacted to.
-    /// Plain data (INV-3). The simulation times his decisions and his reaction (INV-12): his brain
-    /// can ask for a plan, never for when.
+    /// the plan he is acting on and the one he has decided but not yet reacted to. He plays on his
+    /// footballer's own skill, <see cref="PlayerState.Skill"/> (#166). Plain data (INV-3). The
+    /// simulation times his decisions and his reaction (INV-12): his brain can ask for a plan,
+    /// never for when.
     /// </summary>
     public struct CpuState
     {
         public int PlayerId;
-
-        public CpuSkill Skill;
 
         /// <summary>The first tick on which he may decide again.</summary>
         public long NextDecisionTick;

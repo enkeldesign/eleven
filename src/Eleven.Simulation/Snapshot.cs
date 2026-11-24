@@ -12,7 +12,9 @@ namespace Eleven.Simulation
     ///
     /// Restoring checks the schema version, tick convention and config hash, so a snapshot can only
     /// continue under the config that produced it. The build id is recorded but not enforced:
-    /// states are meant to migrate across versions (INV-7), and there is no migration yet.
+    /// states migrate across versions (INV-7). A snapshot of
+    /// <see cref="SimulationInfo.MigratesFromStateSchema"/> reads as this build's state (#166),
+    /// <see cref="SchemaVersion"/> still saying which it was written in.
     /// </summary>
     public sealed class Snapshot
     {
@@ -59,9 +61,9 @@ namespace Eleven.Simulation
             }
 
             int schema = r.ReadInt32();
-            if (schema != SimulationInfo.StateSchemaVersion)
+            if (schema != SimulationInfo.StateSchemaVersion && schema != SimulationInfo.MigratesFromStateSchema)
             {
-                throw new FormatException($"Snapshot schema {schema}; this build reads {SimulationInfo.StateSchemaVersion}.");
+                throw new FormatException($"Snapshot schema {schema}; this build reads {SimulationInfo.MigratesFromStateSchema} and {SimulationInfo.StateSchemaVersion}.");
             }
 
             string buildId = r.ReadString();
@@ -69,7 +71,7 @@ namespace Eleven.Simulation
             ulong configHash = r.ReadUInt64();
             ulong seed = r.ReadUInt64();
             long tick = r.ReadInt64();
-            SimState state = SimState.Decode(r);
+            SimState state = SimState.Decode(r, schema);
 
             if (!r.AtEnd) throw new FormatException("Trailing bytes after snapshot state.");
             if (state.Seed != seed || state.Tick != tick) throw new FormatException("Snapshot header disagrees with its state.");

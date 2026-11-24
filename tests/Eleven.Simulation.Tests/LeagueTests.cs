@@ -26,7 +26,7 @@ namespace Eleven.Simulation.Tests
             SimState s = Squads.Match(Short, 1, League.PerSide, bothCpu: true, awayCpu: strong.Skill, awaySide: strong.Capabilities);
             int[] away = Enumerable.Range(0, League.PerSide).Select(i => Squads.AwayOutfielder(League.PerSide, i)).ToArray();
             Assert.All(s.Players.Where(p => away.Contains(p.Id)), p => Assert.Equal(strong.Capabilities.Strength, p.Capabilities.Strength));
-            Assert.All(s.Cpus.Where(c => away.Contains(c.PlayerId)), c => Assert.Equal(strong.Skill.DecisionInterval, c.Skill.DecisionInterval));
+            Assert.All(s.Cpus.Where(c => away.Contains(c.PlayerId)), c => Assert.Equal(strong.Skill.DecisionInterval, s.SkillOf(c.PlayerId).DecisionInterval));
             Assert.All(s.Players.Where(p => !away.Contains(p.Id) && p.TeamId == Squads.AwayTeam), p => Assert.Equal(PlayerCapabilities.Reference.Strength, p.Capabilities.Strength));
         }
 

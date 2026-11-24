@@ -55,12 +55,6 @@ namespace Eleven.Simulation
         /// <summary>The skill a CPU plays footballer <paramref name="playerId"/> with (#166): his own.</summary>
         public CpuSkill SkillOf(int playerId)
         {
-            // Plumbing: still his CPU's, where he has one.
-            foreach (CpuState c in Cpus)
-            {
-                if (c.PlayerId == playerId) return c.Skill;
-            }
-
             foreach (PlayerState p in Players)
             {
                 if (p.Id == playerId) return p.Skill;
@@ -141,6 +135,7 @@ namespace Eleven.Simulation
                 w.WriteByte(player.SentOff ? (byte)1 : (byte)0);
                 w.WriteByte((byte)player.Injury);
                 w.WriteInt32(player.CarryTicks);
+                WriteSkill(w, player.Skill, "Player.Skill");
             }
 
             w.WriteInt32(Keepers.Length);
@@ -202,10 +197,6 @@ namespace Eleven.Simulation
             foreach (CpuState cpu in Cpus)
             {
                 w.WriteInt32(cpu.PlayerId);
-                w.WriteDouble(cpu.Skill.DecisionInterval, "Cpu.Skill.DecisionInterval");
-                w.WriteDouble(cpu.Skill.ReactionDelay, "Cpu.Skill.ReactionDelay");
-                w.WriteDouble(cpu.Skill.PerceptionError, "Cpu.Skill.PerceptionError");
-                w.WriteDouble(cpu.Skill.VisionRange, "Cpu.Skill.VisionRange");
                 w.WriteInt64(cpu.NextDecisionTick);
                 WritePlan(w, cpu.Plan);
                 w.WriteByte(cpu.HasNext ? (byte)1 : (byte)0);
@@ -228,10 +219,7 @@ namespace Eleven.Simulation
                 w.WriteDouble(b.Capabilities.Heading, "Bench.Capabilities.Heading");
                 w.WriteDouble(b.Capabilities.Strength, "Bench.Capabilities.Strength");
                 w.WriteDouble(b.Capabilities.Stamina, "Bench.Capabilities.Stamina");
-                w.WriteDouble(b.Skill.DecisionInterval, "Bench.Skill.DecisionInterval");
-                w.WriteDouble(b.Skill.ReactionDelay, "Bench.Skill.ReactionDelay");
-                w.WriteDouble(b.Skill.PerceptionError, "Bench.Skill.PerceptionError");
-                w.WriteDouble(b.Skill.VisionRange, "Bench.Skill.VisionRange");
+                WriteSkill(w, b.Skill, "Bench.Skill");
                 w.WriteByte(b.Used ? (byte)1 : (byte)0);
             }
 
@@ -246,6 +234,22 @@ namespace Eleven.Simulation
                 w.WriteDouble(t.Press, "Tactic.Press");
             }
         }
+
+        private static void WriteSkill(CanonicalWriter w, CpuSkill skill, string field)
+        {
+            w.WriteDouble(skill.DecisionInterval, field + ".DecisionInterval");
+            w.WriteDouble(skill.ReactionDelay, field + ".ReactionDelay");
+            w.WriteDouble(skill.PerceptionError, field + ".PerceptionError");
+            w.WriteDouble(skill.VisionRange, field + ".VisionRange");
+        }
+
+        private static CpuSkill ReadSkill(CanonicalReader r, string field) => new CpuSkill
+        {
+            DecisionInterval = r.ReadDouble(field + ".DecisionInterval"),
+            ReactionDelay = r.ReadDouble(field + ".ReactionDelay"),
+            PerceptionError = r.ReadDouble(field + ".PerceptionError"),
+            VisionRange = r.ReadDouble(field + ".VisionRange"),
+        };
 
         private static void WritePlan(CanonicalWriter w, CpuPlanState plan)
         {
@@ -278,8 +282,19 @@ namespace Eleven.Simulation
             };
         }
 
-        public static SimState Decode(CanonicalReader r)
+        /// <summary>
+        /// Decodes a state of this build's schema, or of an older one it migrates (INV-7): from
+        /// schema 29, each footballer's own CPU skill (#166) is his CPU's, and a footballer no CPU
+        /// played, the human's, takes his side's CPUs', value by value; a keeper's is none.
+        /// </summary>
+        public static SimState Decode(CanonicalReader r, int schema = SimulationInfo.StateSchemaVersion)
         {
+            if (schema != SimulationInfo.StateSchemaVersion && schema != SimulationInfo.MigratesFromStateSchema)
+            {
+                throw new FormatException($"State schema {schema}; this build reads {SimulationInfo.MigratesFromStateSchema} and {SimulationInfo.StateSchemaVersion}.");
+            }
+
+            bool old = schema == SimulationInfo.MigratesFromStateSchema;
             var state = new SimState
             {
                 Tick = r.ReadInt64(),
@@ -342,6 +357,7 @@ namespace Eleven.Simulation
                     SentOff = ReadFlag(r.ReadByte(), "Player.SentOff"),
                     Injury = r.ReadByte() is byte injury && injury <= (byte)InjuryLevel.Serious ? (InjuryLevel)injury : throw new FormatException("Unknown injury."),
                     CarryTicks = r.ReadInt32(),
+                    Skill = old ? default : ReadSkill(r, "Player.Skill"),
                 };
             }
 
@@ -412,24 +428,18 @@ namespace Eleven.Simulation
             int cpus = r.ReadInt32();
             if (cpus < 0 || cpus > count) throw new FormatException($"Implausible CPU count {cpus}.");
             state.Cpus = new CpuState[cpus];
+            var cpuSkills = new CpuSkill[cpus];
             for (int i = 0; i < cpus; i++)
             {
-                state.Cpus[i] = new CpuState
-                {
-                    PlayerId = r.ReadInt32(),
-                    Skill = new CpuSkill
-                    {
-                        DecisionInterval = r.ReadDouble("Cpu.Skill.DecisionInterval"),
-                        ReactionDelay = r.ReadDouble("Cpu.Skill.ReactionDelay"),
-                        PerceptionError = r.ReadDouble("Cpu.Skill.PerceptionError"),
-                        VisionRange = r.ReadDouble("Cpu.Skill.VisionRange"),
-                    },
-                    NextDecisionTick = r.ReadInt64(),
-                    Plan = ReadPlan(r),
-                    HasNext = ReadFlag(r.ReadByte(), "Cpu.HasNext"),
-                    Next = ReadPlan(r),
-                };
+                state.Cpus[i].PlayerId = r.ReadInt32();
+                if (old) cpuSkills[i] = ReadSkill(r, "Cpu.Skill");
+                state.Cpus[i].NextDecisionTick = r.ReadInt64();
+                state.Cpus[i].Plan = ReadPlan(r);
+                state.Cpus[i].HasNext = ReadFlag(r.ReadByte(), "Cpu.HasNext");
+                state.Cpus[i].Next = ReadPlan(r);
             }
+
+            if (old) MigrateSkills(state, cpuSkills);
 
             int bench = r.ReadInt32();
             if (bench < 0 || bench > 1024) throw new FormatException($"Implausible bench count {bench}.");
@@ -454,13 +464,7 @@ namespace Eleven.Simulation
                         Strength = r.ReadDouble("Bench.Capabilities.Strength"),
                         Stamina = r.ReadDouble("Bench.Capabilities.Stamina"),
                     },
-                    Skill = new CpuSkill
-                    {
-                        DecisionInterval = r.ReadDouble("Bench.Skill.DecisionInterval"),
-                        ReactionDelay = r.ReadDouble("Bench.Skill.ReactionDelay"),
-                        PerceptionError = r.ReadDouble("Bench.Skill.PerceptionError"),
-                        VisionRange = r.ReadDouble("Bench.Skill.VisionRange"),
-                    },
+                    Skill = ReadSkill(r, "Bench.Skill"),
                     Used = ReadFlag(r.ReadByte(), "Bench.Used"),
                 };
             }
@@ -482,6 +486,38 @@ namespace Eleven.Simulation
             }
 
             return state;
+        }
+
+        // Schema 29 to 30 (#166): each CPU's skill becomes his footballer's own. A footballer no
+        // CPU played was a human's; he takes his side's CPUs' skill, the mean of each value, which
+        // is the one skill every side played on before #166 gave a career's footballers their own.
+        private static void MigrateSkills(SimState state, CpuSkill[] cpuSkills)
+        {
+            for (int i = 0; i < state.Cpus.Length; i++)
+            {
+                int at = Array.FindIndex(state.Players, p => p.Id == state.Cpus[i].PlayerId);
+                if (at < 0) throw new FormatException($"CPU outfielder {state.Cpus[i].PlayerId} isn't a player in the state.");
+                state.Players[at].Skill = cpuSkills[i];
+            }
+
+            for (int i = 0; i < state.Players.Length; i++)
+            {
+                PlayerState p = state.Players[i];
+                if (Array.FindIndex(state.Keepers, k => k.PlayerId == p.Id) >= 0 || Array.FindIndex(state.Cpus, c => c.PlayerId == p.Id) >= 0) continue;
+                double interval = 0, reaction = 0, error = 0, vision = 0;
+                int n = 0;
+                for (int c = 0; c < state.Cpus.Length; c++)
+                {
+                    if (state.Players[Array.FindIndex(state.Players, q => q.Id == state.Cpus[c].PlayerId)].TeamId != p.TeamId) continue;
+                    interval += cpuSkills[c].DecisionInterval;
+                    reaction += cpuSkills[c].ReactionDelay;
+                    error += cpuSkills[c].PerceptionError;
+                    vision += cpuSkills[c].VisionRange;
+                    n++;
+                }
+
+                if (n > 0) state.Players[i].Skill = new CpuSkill { DecisionInterval = interval / n, ReactionDelay = reaction / n, PerceptionError = error / n, VisionRange = vision / n };
+            }
         }
 
         private static ChallengePhase ReadChallenge(byte value) =>

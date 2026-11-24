@@ -85,7 +85,7 @@ namespace Eleven.Simulation
             var on = new PlayerState
             {
                 Id = sub.Id, OwnerControllerId = off.OwnerControllerId, TeamId = off.TeamId, Slot = off.Slot,
-                Capabilities = sub.Capabilities, Position = off.Position, Heading = off.Heading,
+                Capabilities = sub.Capabilities, Position = off.Position, Heading = off.Heading, Skill = sub.Skill,
             };
 
             if (off.Off)
@@ -107,7 +107,7 @@ namespace Eleven.Simulation
                     on.Slot = slots > 0 ? slots + 1 : 0;
                     var cpus = new CpuState[_state.Cpus.Length + 1];
                     Array.Copy(_state.Cpus, cpus, _state.Cpus.Length);
-                    cpus[cpus.Length - 1] = new CpuState { PlayerId = sub.Id, Skill = sub.Skill, NextDecisionTick = tick + 1 };
+                    cpus[cpus.Length - 1] = new CpuState { PlayerId = sub.Id, NextDecisionTick = tick + 1 };
                     _state.Cpus = cpus;
                 }
             }

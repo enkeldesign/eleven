@@ -322,7 +322,7 @@ namespace Eleven.Simulation
                 // Off by up to the error times the distance, each way, in his own frame: so he
                 // misplaces things alike whichever way his side attacks.
                 Vec2 away = at - body.Position;
-                double reach = Maths.SimMath.Sqrt(away.LengthSquared) * c.Skill.PerceptionError * (turned ? -1 : 1);
+                double reach = Maths.SimMath.Sqrt(away.LengthSquared) * body.Skill.PerceptionError * (turned ? -1 : 1);
                 double dx = (2 * draws.NextUniform() - 1) * reach, dy = (2 * draws.NextUniform() - 1) * reach;
                 return new Vec2(at.X + dx, at.Y + dy);
             }
@@ -343,7 +343,7 @@ namespace Eleven.Simulation
                 // Always two draws for each footballer, seen or not, so no one's error depends on who else is in sight.
                 Vec2 at = Seen(other.Position);
                 if (other.Off) continue; // off the pitch (#108, #109)
-                if ((other.Position - body.Position).LengthSquared > c.Skill.VisionRange * c.Skill.VisionRange) continue;
+                if ((other.Position - body.Position).LengthSquared > body.Skill.VisionRange * body.Skill.VisionRange) continue;
                 others.Add(new SeenPlayer(turned ? Turn(at) : at, turned ? Turn(other.Velocity) : other.Velocity, teammate, keeper, teammate ? other.Fatigue : 0));
             }
 
@@ -352,9 +352,9 @@ namespace Eleven.Simulation
             foreach (PlayerState p in state.Players) if (p.TeamId == body.TeamId && p.Slot > 0) side++;
             return turned
                 ? new OutfieldObservation(state.Tick, Turn(body.Position), Turn(body.Velocity), body.Heading > 0 ? body.Heading - Math.PI : body.Heading + Math.PI,
-                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId))
+                    body.Capabilities.MaxSpeed, kicking, Turn(ballSeen), Turn(ball.Velocity), Turn(ball.Spin), holder, state.Teams.Length == 2, others.ToArray(), body.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId))
                 : new OutfieldObservation(state.Tick, body.Position, body.Velocity, body.Heading, body.Capabilities.MaxSpeed, kicking,
-                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), c.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId));
+                    ballSeen, ball.Velocity, ball.Spin, holder, state.Teams.Length == 2, others.ToArray(), body.Skill.ReactionDelay, body.Slot, side, body.Fatigue, body.Injury == InjuryLevel.Minor, FormationOf(state, body.TeamId), TacticOf(state, body.TeamId));
         }
 
         /// <summary>A side's tactical plan (#126) as its footballers see it: their own side's, settling.</summary>

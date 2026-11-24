@@ -14,6 +14,9 @@ namespace Eleven.Simulation.Tests
     /// </summary>
     public class CpuTests
     {
+        // The footballer the CPU at `cpu` plays, whose own skill he plays on (#166).
+        private static ref PlayerState Body(SimState s, int cpu) => ref s.Players[Array.FindIndex(s.Players, p => p.Id == s.Cpus[cpu].PlayerId)];
+
         private static readonly SimConfig C = SpikeScenario.Config();
 
         private const int Home = OneVOne.HomePlayer, Away = OneVOne.AwayPlayer;
@@ -99,7 +102,7 @@ namespace Eleven.Simulation.Tests
             Assert.False(seen.Others[0].Teammate || seen.Others[0].Keeper);
 
             // With no error he places everything where it is, and a longer sight shows the keepers.
-            s.Cpus[0].Skill = CpuSkill.Elite.With("perceptionError", 0);
+            Body(s, 0).Skill = CpuSkill.Elite.With("perceptionError", 0);
             OutfieldObservation exact = Perception.OfOutfielder(s, 0);
             Assert.Equal(new Vec3(20, -12, C.BallRadius), exact.BallPosition);
             Assert.Equal(3, exact.Others.Count);
@@ -184,8 +187,8 @@ namespace Eleven.Simulation.Tests
             Simulator restored = Snapshot.Restore(Snapshot.Capture(sim), C);
             Assert.Equal(sim.StateHash(), restored.StateHash());
             CpuState a = Cpu(sim, Away), b = Cpu(restored, Away);
-            Assert.Equal((a.NextDecisionTick, a.Plan.Mode, a.Plan.Move, a.Plan.ActsTick, a.HasNext, a.Next.ObservedTick, a.Skill.DecisionInterval),
-                (b.NextDecisionTick, b.Plan.Mode, b.Plan.Move, b.Plan.ActsTick, b.HasNext, b.Next.ObservedTick, b.Skill.DecisionInterval));
+            Assert.Equal((a.NextDecisionTick, a.Plan.Mode, a.Plan.Move, a.Plan.ActsTick, a.HasNext, a.Next.ObservedTick, sim.PeekState().SkillOf(Away).DecisionInterval),
+                (b.NextDecisionTick, b.Plan.Mode, b.Plan.Move, b.Plan.ActsTick, b.HasNext, b.Next.ObservedTick, restored.PeekState().SkillOf(Away).DecisionInterval));
 
             SimState With(Action<SimState> change)
             {
@@ -197,8 +200,8 @@ namespace Eleven.Simulation.Tests
             Assert.Throws<ArgumentException>(() => new Simulator(C, With(s => s.Cpus[0].PlayerId = 99)));
             Assert.Throws<ArgumentException>(() => new Simulator(C, With(s => s.Cpus[0].PlayerId = OneVOne.AwayKeeper)));
             Assert.Throws<ArgumentException>(() => new Simulator(C, With(s => s.Cpus = new[] { s.Cpus[0], s.Cpus[0] })));
-            Assert.Throws<ArgumentOutOfRangeException>(() => new Simulator(C, With(s => s.Cpus[0].Skill.DecisionInterval = 0)));
-            Assert.ThrowsAny<Exception>(() => new Simulator(C, With(s => s.Cpus[0].Skill.PerceptionError = double.NaN)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Simulator(C, With(s => Body(s, 0).Skill.DecisionInterval = 0)));
+            Assert.ThrowsAny<Exception>(() => new Simulator(C, With(s => Body(s, 0).Skill.PerceptionError = double.NaN)));
             Assert.Throws<ArgumentOutOfRangeException>(() => new Simulator(C, With(s => s.Cpus[0].Plan.Move = new Vec2(3, 0))));
         }
 

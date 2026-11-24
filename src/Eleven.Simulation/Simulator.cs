@@ -264,7 +264,8 @@ namespace Eleven.Simulation
                     cpu.Next = default;
                 }
 
-                Command? command = FindAccepted(_state.Players[IndexOfPlayer(cpu.PlayerId)].OwnerControllerId);
+                PlayerState body = _state.Players[IndexOfPlayer(cpu.PlayerId)];
+                Command? command = FindAccepted(body.OwnerControllerId);
                 if (!command.HasValue || !command.Value.Plan.HasValue) continue;
 
                 CpuPlan plan = command.Value.Plan.Value;
@@ -278,10 +279,10 @@ namespace Eleven.Simulation
                     KickLoft = plan.Kick.HasValue ? plan.Kick.Value.Loft : 0,
                     QuickPass = plan.QuickPass,
                     ObservedTick = tick,
-                    ActsTick = tick + ReactionTicksFor(cpu.Skill, Config),
+                    ActsTick = tick + ReactionTicksFor(body.Skill, Config),
                 };
                 cpu.HasNext = true;
-                cpu.NextDecisionTick = tick + DecisionTicksFor(cpu.Skill, Config);
+                cpu.NextDecisionTick = tick + DecisionTicksFor(body.Skill, Config);
             }
         }
 
@@ -2292,14 +2293,13 @@ namespace Eleven.Simulation
             }
 
             // CPU outfielders (#83): each a player who isn't a keeper, once, in ascending id order,
-            // with a skill in range and plans this encoding knows.
+            // with plans this encoding knows.
             for (int i = 0; i < state.Cpus.Length; i++)
             {
                 CpuState c = state.Cpus[i];
                 if (i > 0 && c.PlayerId <= state.Cpus[i - 1].PlayerId) throw new ArgumentException("CPU outfielders must be in strictly ascending player id order.", nameof(state));
                 if (Array.FindIndex(state.Players, p => p.Id == c.PlayerId) < 0) throw new ArgumentException($"CPU outfielder {c.PlayerId} isn't a player in the state.", nameof(state));
                 if (Array.FindIndex(state.Keepers, k => k.PlayerId == c.PlayerId) >= 0) throw new ArgumentException($"Player {c.PlayerId} is a keeper, and can't be a CPU outfielder too.", nameof(state));
-                c.Skill.CheckRanges($"CPU outfielder {c.PlayerId}");
                 foreach (CpuPlanState plan in new[] { c.Plan, c.Next })
                 {
                     if (plan.Mode < CpuMode.None || plan.Mode > CpuMode.Support) throw new ArgumentException($"CPU outfielder {c.PlayerId}: unknown mode {(int)plan.Mode}.", nameof(state));
@@ -2308,6 +2308,17 @@ namespace Eleven.Simulation
                         throw new ArgumentOutOfRangeException(nameof(state), $"CPU outfielder {c.PlayerId}: a plan's stick is at most 1 long, and its kick's strength and loft within [0, 1].");
                     }
                 }
+            }
+
+            // Each footballer's own CPU skill (#166): in range for every outfielder of a side a CPU
+            // can play, one with a CPU or a bench, since a switch or a substitution can hand any of
+            // them to a CPU; none, all zeros, or in range for anyone else.
+            foreach (PlayerState p in state.Players)
+            {
+                if (Array.FindIndex(state.Keepers, k => k.PlayerId == p.Id) >= 0) continue;
+                bool cpuSide = Array.Exists(state.Cpus, c => Array.Find(state.Players, q => q.Id == c.PlayerId).TeamId == p.TeamId)
+                    || Array.Exists(state.Bench, b => b.TeamId == p.TeamId);
+                if (cpuSide || !p.Skill.Equals(default(CpuSkill))) p.Skill.CheckRanges($"Footballer {p.Id}'s CPU skill");
             }
 
             // The bench (#110): each a substitute of one of the two sides, once, in ascending id

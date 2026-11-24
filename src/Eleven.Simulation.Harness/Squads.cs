@@ -53,8 +53,6 @@ namespace Eleven.Simulation.Harness
                 if (Array.FindIndex(s.Keepers, k => k.PlayerId == s.Players[i].Id) < 0) s.Players[i].Skill = skillOf(s.Players[i].Id);
             }
 
-            // Plumbing: and his CPU's, which still plays him with its own.
-            for (int i = 0; i < s.Cpus.Length; i++) s.Cpus[i].Skill = skillOf(s.Cpus[i].PlayerId);
             return s;
         }
 
@@ -126,8 +124,8 @@ namespace Eleven.Simulation.Harness
             {
                 int id = HomeOutfielder(i);
                 Vec2 at = i == 0 ? new Vec2(-Simulator.TakerBehind, 0) : StartAt(perSide, i, homeFormation);
-                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : homeSide ?? PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i) });
-                if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id, Skill = homeCpu ?? CpuSkill.Pro });
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = HomeTeam, Capabilities = i == 0 && home.HasValue ? home.Value : homeSide ?? PlayerCapabilities.Reference, Position = at, Heading = 0, Slot = SlotOf(perSide, i), Skill = homeCpu ?? CpuSkill.Pro });
+                if (i > 0 || bothCpu) cpus.Add(new CpuState { PlayerId = id });
             }
 
             players.Add(new PlayerState { Id = HomeKeeper(perSide), OwnerControllerId = HomeKeeper(perSide), TeamId = HomeTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(-keeperX, 0) });
@@ -135,8 +133,8 @@ namespace Eleven.Simulation.Harness
             {
                 int id = AwayOutfielder(perSide, i);
                 Vec2 at = i == 0 ? new Vec2(OneVOne.OpponentDistance, 0) : Away(StartAt(perSide, i, awayFormation), perSide);
-                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i) });
-                cpus.Add(new CpuState { PlayerId = id, Skill = awayCpu ?? CpuSkill.Pro });
+                players.Add(new PlayerState { Id = id, OwnerControllerId = id, TeamId = AwayTeam, Capabilities = awaySide ?? PlayerCapabilities.Reference, Position = at, Heading = Math.PI, Slot = SlotOf(perSide, i), Skill = awayCpu ?? CpuSkill.Pro });
+                cpus.Add(new CpuState { PlayerId = id });
             }
 
             players.Add(new PlayerState { Id = AwayKeeper(perSide), OwnerControllerId = AwayKeeper(perSide), TeamId = AwayTeam, Capabilities = PlayerCapabilities.Reference, Position = new Vec2(keeperX, 0), Heading = Math.PI });
