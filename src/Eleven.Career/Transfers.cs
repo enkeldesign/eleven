@@ -174,7 +174,7 @@ namespace Eleven.Career
             var listed = new HashSet<int>();
             foreach (Club c in world.Clubs)
             {
-                if (Out(c.Id) || Finance.WageBill(world, c) <= Finance.WageBudget(world, c)) continue;
+                if (Out(c.Id) || Finance.WageBill(world, c) <= Finance.WageBudget(world, c, division: Div(c))) continue;
                 List<Player> xi = Eleven(world, c);
                 List<Player> outside = world.Players.FindAll(p => p.ClubId == c.Id && !xi.Contains(p));
                 outside.Sort((a, b) => a.Wage != b.Wage ? b.Wage.CompareTo(a.Wage) : a.Id.CompareTo(b.Id));
@@ -214,7 +214,7 @@ namespace Eleven.Career
                         if (leaving == null) break;
                     }
 
-                    long bill = Finance.WageBill(world, buyer) - (leaving?.Wage ?? 0), budget = Finance.WageBudget(world, buyer);
+                    long bill = Finance.WageBill(world, buyer) - (leaving?.Wage ?? 0), budget = Finance.WageBudget(world, buyer, division: d);
                     double purse = buyer.Balance * rules.SpendShare;
                     Player? best = null;
                     long bestFee = 0;
