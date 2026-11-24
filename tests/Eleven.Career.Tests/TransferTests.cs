@@ -187,9 +187,10 @@ namespace Eleven.Career.Tests
             Assert.Empty(Transfers.Window(w, 2, TransferWindow.PreSeason, null, new[] { buyer.Id }));
             Assert.Empty(Transfers.Window(w, 2, TransferWindow.PreSeason, null, new[] { seller.Id }));
 
-            // A full squad has no room before the season.
+            // A full squad has room only by letting an unwanted footballer of the place go in his contract's last season.
             w.Players.Add(gone);
             buyer.Squad.Add(gone.Id);
+            foreach (Player p in SquadOf(w, buyer)) p.ContractYears = 2;
             Assert.Empty(Transfers.Window(w, 2, TransferWindow.PreSeason));
             Assert.Equal(buyer.Id, gone.ClubId);
             Assert.Equal(seller.Id, star.ClubId);
@@ -202,7 +203,8 @@ namespace Eleven.Career.Tests
             foreach (Club c in w.Clubs)
             {
                 c.Balance *= 4;
-                foreach (Player p in SquadOf(w, c).Where(p => p.ContractYears == 1).Take(2).ToList())
+                // Room: two outfielders out of contract gone (the squad lists its keepers first).
+                foreach (Player p in SquadOf(w, c).Where(p => p.ContractYears == 1 && p.Positions[0] != Position.Goalkeeper).Take(2).ToList())
                 {
                     w.Players.Remove(p);
                     c.Squad.Remove(p.Id);

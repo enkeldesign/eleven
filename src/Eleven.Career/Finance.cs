@@ -97,8 +97,8 @@ namespace Eleven.Career
             }
         }
 
-        /// <summary>Revenue: every line but wages.</summary>
-        public long Revenue => Net - this[LedgerLine.Wages];
+        /// <summary>Revenue: every line but wages and transfers (#203), which football's accounts keep apart.</summary>
+        public long Revenue => Net - this[LedgerLine.Wages] - this[LedgerLine.Transfers];
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ namespace Eleven.Career
             Division(rules.BroadcastPerDay, club.Division) * days + 11 * Takings(club, rules) + Division(rules.MeritTop, club.Division) * 6.5 / 12 + 2 * rules.CupPerRound;
 
         // Money in or out, onto the club's balance and its season's line.
-        private static void Book(Club c, LedgerLine line, long amount)
+        internal static void Book(Club c, LedgerLine line, long amount)
         {
             c.Balance += amount;
             c.Season.Amounts[(int)line] += amount;

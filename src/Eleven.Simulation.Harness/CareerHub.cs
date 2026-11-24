@@ -364,7 +364,13 @@ namespace Eleven.Simulation.Harness
         /// The last window's transfers (#203), the dearest first, e.g. "Transfers: A. Name, ROV to
         /// WYS, 1,240k; B. Name, QUE to DRA, 380k." Empty when the window made none.
         /// </summary>
-        public static string TransferLine(CareerSession s, int most = 5) => "";
+        public static string TransferLine(CareerSession s, int most = 5)
+        {
+            string Short(int club) => s.World.Clubs.Find(c => c.Id == club)?.ShortName ?? "?";
+            List<string> made = s.World.LastTransfers.OrderByDescending(t => t.Fee).ThenBy(t => t.PlayerId).Take(most)
+                .Select(t => FormattableString.Invariant($"{Initial(t.FirstName, t.LastName)}, {Short(t.From)} to {Short(t.To)}, {t.Fee:N0}k")).ToList();
+            return made.Count == 0 ? "" : "Transfers: " + string.Join("; ", made) + ".";
+        }
 
         /// <summary>Your club's contracts ending this season (#201), e.g. "Out of contract this season: A. Name, B. Name."; empty when none.</summary>
         public static string ContractLine(CareerSession s)

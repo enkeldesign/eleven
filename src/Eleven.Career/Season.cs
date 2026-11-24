@@ -279,10 +279,8 @@ namespace Eleven.Career
             // Contracts (#201): those ending renewed or released, the free agents signed, by each club's next division.
             var next = new Dictionary<int, int>();
             foreach (Club c in world.Clubs) next[c.Id] = up.Contains(c.Id) ? c.Division - 1 : down.Contains(c.Id) ? c.Division + 1 : c.Division;
-            Contracts.Turn(world, season.Number + 1, next);
-
-            // The pre-season window (#203), the human's club out of it until M6.12c.
-            Transfers.Window(world, season.Number + 1, TransferWindow.PreSeason, next, excluded);
+            // The pre-season window (#203) between the releases and the free signings, the human's club out of it until M6.12c.
+            Contracts.Turn(world, season.Number + 1, next, between: () => Transfers.Window(world, season.Number + 1, TransferWindow.PreSeason, next, excluded));
             Availability.NewSeason(world, squad ?? SquadRules.Reference);
             Finance.Pass(world, (squad ?? SquadRules.Reference).OffSeasonDays);
             Development.Rollover(world, season.Number + 1, development);
