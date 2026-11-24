@@ -265,6 +265,46 @@ internal static class Program
                 return 0;
             }
 
+            case "memory":
+            {
+                // #191: a career's managers' memories after seasons rolled forward headless, their
+                // size in a save, and what they do to the human's rivals' plans for meeting him:
+                // `memory [seasons]`.
+                int memorySeasons = args.Length >= 2 && int.TryParse(args[1], out int msn) && msn > 0 ? msn : 3;
+                SimConfig memoryConfig = SpikeScenario.Config().With("halfLength", 180);
+                Eleven.Career.World memoryWorld = CareerSession.NewWorld(0x191);
+                CareerSession career = CareerSession.Start(memoryWorld, 0x191, memoryWorld.Clubs[0].Id, CareerRole.ManagerOnly, memoryConfig);
+                for (int i = 1; i <= memorySeasons; i++)
+                {
+                    while (!career.SeasonOver) career.Simulate();
+                    if (i < memorySeasons) career.NextSeason();
+                }
+
+                int meetings = memoryWorld.Managers.Sum(m => m.Memory.Count);
+                byte[] withMemory = Eleven.Career.WorldCodec.Encode(memoryWorld);
+                var kept = memoryWorld.Managers.Select(m => m.Memory).ToList();
+                foreach (Eleven.Career.Manager m in memoryWorld.Managers) m.Memory = new List<Eleven.Career.Meeting>();
+                byte[] withoutMemory = Eleven.Career.WorldCodec.Encode(memoryWorld);
+                int plainChars = Convert.ToBase64String(Eleven.Career.SaveCodec.Encode(career.ToSave(0))).Length;
+                for (int i = 0; i < kept.Count; i++) memoryWorld.Managers[i].Memory = kept[i];
+                int savedChars = Convert.ToBase64String(Eleven.Career.SaveCodec.Encode(career.ToSave(0))).Length;
+                Console.WriteLine(FormattableString.Invariant(
+                    $"memory: {meetings} meetings over {memoryWorld.Managers.Count} managers after {memorySeasons} seasons; {withMemory.Length - withoutMemory.Length} of the world's {withMemory.Length} bytes; a save of {savedChars} characters, {plainChars} without them"));
+
+                // The human's division: each rival's head-to-head with his club, and what it does to the rival's plans.
+                int human = career.Club, division = memoryWorld.Clubs.Single(c => c.Id == human).Division;
+                foreach (Eleven.Career.Club rival in memoryWorld.Clubs.Where(c => c.Division == division && c.Id != human))
+                {
+                    Eleven.Career.Manager m = memoryWorld.Managers.Single(x => x.Id == rival.ManagerId);
+                    List<Eleven.Career.Meeting> met = ManagerMemory.With(m, human);
+                    (double line, double step, double earlier) = ManagerMemory.Shift(m, human);
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"  {rival.ShortName}: {met.Count} meetings, {met.Sum(x => x.GoalsFor)}-{met.Sum(x => x.GoalsAgainst)}, late {met.Sum(x => x.LateFor)}-{met.Sum(x => x.LateAgainst)}: line {line:+0.0;-0.0;0.0} m, step-up {step:+0;-0;0}, protects {earlier:+0.00;-0.00;0.00} earlier"));
+                }
+
+                return 0;
+            }
+
             case "seasons":
             {
                 // #164: a new career's seasons rolled forward headless, every fixture quick-simmed:

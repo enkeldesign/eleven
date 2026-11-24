@@ -91,7 +91,7 @@ namespace Eleven.Career
         /// <summary>1–20.</summary>
         public int Reputation;
 
-        /// <summary>His meetings with other clubs (#191), the latest of each kept, most recent last.</summary>
+        /// <summary>His meetings with other clubs (#191), the latest few with each kept, oldest first within each.</summary>
         public List<Meeting> Memory = new List<Meeting>();
     }
 }
