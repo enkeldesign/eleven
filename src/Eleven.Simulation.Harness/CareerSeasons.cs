@@ -62,7 +62,7 @@ namespace Eleven.Simulation.Harness
         /// the matchday's bans served and days passed, its cards and injuries applied, and on.
         /// </summary>
         public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, PlayedFixture?>? hook, SquadRules? squad = null,
-            Action<TrainingInjury>? trained = null, TrainingRules? training = null)
+            Action<TrainingInjury>? trained = null, TrainingRules? training = null, ICollection<int>? excluded = null)
         {
             SquadRules sr = squad ?? SquadRules.Reference;
             List<Fixture> day = SeasonEngine.Next(season, rules);
@@ -124,6 +124,9 @@ namespace Eleven.Simulation.Harness
             foreach ((Fixture f, MatchResult r, _) in played) results.Add((f, r));
             Board.Matchday(world, results);
             SeasonEngine.Advance(season, rules);
+
+            // The mid-season window (#203), after its league round, the human's club out of it.
+            if (Transfers.MidSeasonAfter(season, rules)) Transfers.Window(world, season.Number, TransferWindow.MidSeason, null, excluded);
             return day;
         }
 

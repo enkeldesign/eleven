@@ -360,6 +360,12 @@ namespace Eleven.Simulation.Harness
             return mine == null ? "" : FormattableString.Invariant($"Balance {mine.Balance:N0}k. Wages {Finance.WageBill(s.World, mine):N0}k a week of a {Finance.WageBudget(s.World, mine):N0}k budget.");
         }
 
+        /// <summary>
+        /// The last window's transfers (#203), the dearest first, e.g. "Transfers: A. Name, ROV to
+        /// WYS, 1,240k; B. Name, QUE to DRA, 380k." Empty when the window made none.
+        /// </summary>
+        public static string TransferLine(CareerSession s, int most = 5) => "";
+
         /// <summary>Your club's contracts ending this season (#201), e.g. "Out of contract this season: A. Name, B. Name."; empty when none.</summary>
         public static string ContractLine(CareerSession s)
         {

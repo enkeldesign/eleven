@@ -24,6 +24,7 @@ using Eleven.Simulation.Harness;
 /// eleven-sim finances [seasons] a club's money over a headless career (#198): balances, wages over revenue, the ledger's lines
 /// eleven-sim board [seasons]    the board over a headless career (#200): points by wage rank, objectives met, confidence, reputation's drift
 /// eleven-sim contracts [seasons] contracts over a headless career (#201): renewals, releases, free signings, wage bills against budgets, squads
+/// eleven-sim transfers [seasons] the transfer market over a headless career (#203): transfers and fees by window and division, fees against value, budgets
 /// eleven-sim training [seasons] training's intensities over a headless career (#196): growth, condition, training injuries, drift
 /// eleven-sim development [seasons] development and ageing over a headless career (#194): levels by age band, drift, retirements and youth
 /// eleven-sim migration-fixture &lt;dir&gt; a recording under this state schema and its play, for a later schema's migration test (#166)
@@ -291,6 +292,14 @@ internal static class Program
                 // #198: a club's money over a headless career.
                 int moneySeasons = args.Length >= 2 && int.TryParse(args[1], out int fs) && fs > 0 ? fs : 3;
                 Console.Write(CareerFinances.Report(0x198, moneySeasons));
+                return 0;
+            }
+
+            case "transfers":
+            {
+                // #203: the transfer market over a headless career.
+                int transferSeasons = args.Length >= 2 && int.TryParse(args[1], out int ts) && ts > 0 ? ts : 3;
+                Console.Write(CareerTransfers.Report(0x203, transferSeasons));
                 return 0;
             }
 

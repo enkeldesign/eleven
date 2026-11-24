@@ -60,12 +60,18 @@ namespace Eleven.Career
         Matchday = 2,
         Merit = 3,
         Cup = 4,
+
+        /// <summary>Fees paid out and received (#203): not revenue.</summary>
+        Transfers = 5,
     }
 
     /// <summary>A season's money in and out (#198), each k on one line: wages negative, revenue positive.</summary>
     public sealed class Ledger
     {
-        public const int Lines = 5;
+        public const int Lines = 6;
+
+        /// <summary>The lines format 8 saves (#198); format 11 saves the transfers line (#203).</summary>
+        public const int FirstLines = 5;
 
         public long[] Amounts = new long[Lines];
 

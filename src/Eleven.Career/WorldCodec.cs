@@ -194,8 +194,8 @@ namespace Eleven.Career
             foreach (Club c in world.Clubs)
             {
                 w.WriteInt32(Money(c.Balance));
-                foreach (long a in c.Season.Amounts) w.WriteInt32(Money(a));
-                foreach (long a in c.LastSeason.Amounts) w.WriteInt32(Money(a));
+                for (int i = 0; i < Ledger.FirstLines; i++) w.WriteInt32(Money(c.Season.Amounts[i]));
+                for (int i = 0; i < Ledger.FirstLines; i++) w.WriteInt32(Money(c.LastSeason.Amounts[i]));
             }
 
             w.WriteInt32(world.Players.Count);
@@ -476,8 +476,8 @@ namespace Eleven.Career
                 foreach (Club c in world.Clubs)
                 {
                     c.Balance = r.ReadInt32();
-                    for (int i = 0; i < Ledger.Lines; i++) c.Season.Amounts[i] = r.ReadInt32();
-                    for (int i = 0; i < Ledger.Lines; i++) c.LastSeason.Amounts[i] = r.ReadInt32();
+                    for (int i = 0; i < Ledger.FirstLines; i++) c.Season.Amounts[i] = r.ReadInt32();
+                    for (int i = 0; i < Ledger.FirstLines; i++) c.LastSeason.Amounts[i] = r.ReadInt32();
                 }
 
                 if (r.ReadInt32() != world.Players.Count) throw new FormatException("The wages don't count every footballer.");
