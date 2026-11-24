@@ -60,12 +60,18 @@ namespace Eleven.Career
         Matchday = 2,
         Merit = 3,
         Cup = 4,
+
+        /// <summary>Fees paid out and received (#203): not revenue.</summary>
+        Transfers = 5,
     }
 
     /// <summary>A season's money in and out (#198), each k on one line: wages negative, revenue positive.</summary>
     public sealed class Ledger
     {
-        public const int Lines = 5;
+        public const int Lines = 6;
+
+        /// <summary>The lines format 8 saves (#198); format 11 saves the transfers line (#203).</summary>
+        public const int FirstLines = 5;
 
         public long[] Amounts = new long[Lines];
 
@@ -91,8 +97,8 @@ namespace Eleven.Career
             }
         }
 
-        /// <summary>Revenue: every line but wages.</summary>
-        public long Revenue => Net - this[LedgerLine.Wages];
+        /// <summary>Revenue: every line but wages and transfers (#203), which football's accounts keep apart.</summary>
+        public long Revenue => Net - this[LedgerLine.Wages] - this[LedgerLine.Transfers];
     }
 
     /// <summary>
@@ -199,7 +205,7 @@ namespace Eleven.Career
             Division(rules.BroadcastPerDay, club.Division) * days + 11 * Takings(club, rules) + Division(rules.MeritTop, club.Division) * 6.5 / 12 + 2 * rules.CupPerRound;
 
         // Money in or out, onto the club's balance and its season's line.
-        private static void Book(Club c, LedgerLine line, long amount)
+        internal static void Book(Club c, LedgerLine line, long amount)
         {
             c.Balance += amount;
             c.Season.Amounts[(int)line] += amount;

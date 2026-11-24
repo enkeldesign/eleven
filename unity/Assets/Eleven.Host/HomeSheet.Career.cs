@@ -77,6 +77,7 @@ namespace Eleven.Host
         private Label _hubFinance;
         private Label _hubBoard;
         private Label _hubContracts;
+        private Label _hubTransfers;
         private UiKit.Action _hubTrain;
         private Label _hubResults;
         private Label _hubSummary;
@@ -203,6 +204,11 @@ namespace Eleven.Host
             _hubContracts.style.marginBottom = Spacing.M;
             _hubContracts.style.display = DisplayStyle.None;
             hub.Add(_hubContracts);
+            // The last window's transfers (#203), when it made any.
+            _hubTransfers = UiKit.Text(_theme, TypeScale.Small, "", Role.Text);
+            _hubTransfers.style.marginBottom = Spacing.M;
+            _hubTransfers.style.display = DisplayStyle.None;
+            hub.Add(_hubTransfers);
             _hubSummary = UiKit.Text(_theme, TypeScale.Body, "", Role.Text);
             _hubSummary.style.marginBottom = Spacing.M;
             _hubSummary.style.display = DisplayStyle.None;
@@ -367,6 +373,9 @@ namespace Eleven.Host
             string contracts = CareerHub.ContractLine(s);
             _hubContracts.text = contracts;
             _hubContracts.style.display = contracts.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            string transfers = CareerHub.TransferLine(s);
+            _hubTransfers.text = transfers;
+            _hubTransfers.style.display = transfers.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             string summary = CareerHub.Summary(s);
             _hubSummary.text = summary;
             _hubSummary.style.display = summary.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;

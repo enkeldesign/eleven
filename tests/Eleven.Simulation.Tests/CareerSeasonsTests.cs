@@ -71,10 +71,12 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(8, moved);
             }
 
-            // The world conserved: its clubs, squads, players and managers. The free agents (#201) are no club's.
+            // The world conserved: its clubs, squads, players and managers. The free agents (#201) are no
+            // club's, and a squad can end a season short by its mid-season sales (#203), to be filled at the turn.
             Assert.Equal(36, a.Clubs.Count);
-            Assert.Equal(players, a.Players.Count(p => p.ClubId != 0));
-            Assert.All(a.Clubs, c => Assert.Equal(WorldGenerator.SquadSize, c.Squad.Count));
+            Assert.InRange(a.Players.Count(p => p.ClubId != 0), players - 36 * (WorldGenerator.SquadSize - TransferRules.Reference.SquadMinimum), players);
+            Assert.All(a.Clubs, c => Assert.InRange(c.Squad.Count, TransferRules.Reference.SquadMinimum, WorldGenerator.SquadSize));
+            Assert.All(a.Clubs, c => Assert.Equal(c.Squad.OrderBy(i => i), a.Players.Where(p => p.ClubId == c.Id).Select(p => p.Id).OrderBy(i => i)));
             for (int d = 1; d <= 3; d++) Assert.Equal(12, a.Clubs.Count(c => c.Division == d));
             Assert.Equal(x[2].Divisions[0].OrderBy(i => i), a.Clubs.Where(c => c.Division == 1).Select(c => c.Id).OrderBy(i => i));
             Assert.Equal(WorldCodec.Encode(a), WorldCodec.Encode(WorldCodec.Decode(WorldCodec.Encode(a))));

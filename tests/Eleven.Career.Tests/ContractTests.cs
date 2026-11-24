@@ -284,7 +284,7 @@ namespace Eleven.Career.Tests
             var nine = new CanonicalWriter(plain.Length);
             nine.WriteBytes(plain[..4]);
             nine.WriteInt32(9);
-            nine.WriteBytes(plain[8..^Formats.Contracts(w)]);
+            nine.WriteBytes(plain[8..^Formats.From10(w)]);
             World old = WorldCodec.Decode(nine.ToArray());
             Club o = old.Clubs[4];
             Assert.Equal((Ledger.UnknownDays, Ledger.UnknownDays), (o.Season.Days, o.LastSeason.Days));
@@ -302,7 +302,7 @@ namespace Eleven.Career.Tests
             nine = new CanonicalWriter(plain.Length);
             nine.WriteBytes(plain[..4]);
             nine.WriteInt32(9);
-            nine.WriteBytes(plain[8..^Formats.Contracts(fresh)]);
+            nine.WriteBytes(plain[8..^Formats.From10(fresh)]);
             Assert.All(WorldCodec.Decode(nine.ToArray()).Clubs, x => Assert.Equal((0, 0), (x.Season.Days, x.LastSeason.Days)));
         }
 
@@ -310,14 +310,14 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_contracts_free_agents_and_the_turns_moves_and_a_format_9_world_reads_them_by_the_rules()
         {
             (World w, _) = New();
-            Assert.Equal(10, WorldCodec.FormatVersion);
+            Assert.Equal(11, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 9 is format 10 less its section: each footballer's contract and free season, and the turn's moves.
             var nine = new CanonicalWriter(plain.Length);
             nine.WriteBytes(plain[..4]);
             nine.WriteInt32(9);
-            nine.WriteBytes(plain[8..^Formats.Contracts(w)]);
+            nine.WriteBytes(plain[8..^Formats.From10(w)]);
             World old = WorldCodec.Decode(nine.ToArray());
             Assert.Equal(w.Players.Select(p => (p.ContractYears, p.FreeSince)), old.Players.Select(p => (p.ContractYears, p.FreeSince)));
             Assert.Empty(old.LastMoves);

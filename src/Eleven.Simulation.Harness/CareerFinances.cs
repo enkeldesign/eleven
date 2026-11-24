@@ -57,7 +57,7 @@ namespace Eleven.Simulation.Harness
                         for (int l = 0; l < Ledger.Lines; l++) v.Lines[l] += c.LastSeason.Amounts[l];
                     }
 
-                    long revenue = v.Lines.Sum() - v.Lines[(int)LedgerLine.Wages];
+                    long revenue = v.Lines.Sum() - v.Lines[(int)LedgerLine.Wages] - v.Lines[(int)LedgerLine.Transfers];
                     v.WagesOverRevenue = revenue > 0 ? -(double)v.Lines[(int)LedgerLine.Wages] / revenue : 0;
                     views.Add(v);
                 }
@@ -77,7 +77,7 @@ namespace Eleven.Simulation.Harness
             t.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (DivisionSeason v in views)
             {
-                double revenue = v.Lines.Sum() - v.Lines[(int)LedgerLine.Wages];
+                double revenue = v.Lines.Sum() - v.Lines[(int)LedgerLine.Wages] - v.Lines[(int)LedgerLine.Transfers];
                 string Share(LedgerLine line) => revenue > 0 ? FormattableString.Invariant($"{100 * v.Lines[(int)line] / revenue:F0} %") : "—";
                 t.AppendLine(FormattableString.Invariant($"| {v.Season} | {v.Division} | {v.MeanBalance:N0}k ± {v.BalanceSpread:N0}k | {v.InDeficit} | {v.WagesOverRevenue:F2} | {Share(LedgerLine.Broadcasting)} | {Share(LedgerLine.Matchday)} | {Share(LedgerLine.Merit)} | {Share(LedgerLine.Cup)} |"));
             }

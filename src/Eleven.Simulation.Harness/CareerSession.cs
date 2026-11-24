@@ -145,11 +145,11 @@ namespace Eleven.Simulation.Harness
             MatchResult result = fixture.Home == Club ? played : played.Mirrored();
             // Its footballers by the lineup it was played with: his club the simulation's home side, whatever the ground.
             var mine = new PlayedFixture(result, LineupFor(fixture));
-            CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, f => f.Id == fixture.Id ? mine : null, Squad);
+            CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, f => f.Id == fixture.Id ? mine : null, Squad, excluded: new[] { Club });
         }
 
         /// <summary>The whole matchday quick-simmed, the human's fixture too.</summary>
-        public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, (Func<Fixture, PlayedFixture?>?)null, Squad);
+        public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, (Func<Fixture, PlayedFixture?>?)null, Squad, excluded: new[] { Club });
 
         /// <summary>Your club's training (#196): Auto, then Light, Normal and Hard, and round again. Returns the new one.</summary>
         public TrainingIntensity CycleTraining()
@@ -245,6 +245,6 @@ namespace Eleven.Simulation.Harness
             new CareerSession { Seed = save.Seed, Club = save.Club, Role = (CareerRole)save.Role, Config = config, World = save.World, Season = save.Season };
 
         /// <summary>On to the next season, once this one is over.</summary>
-        public void NextSeason() => Season = SeasonEngine.Rollover(World, Season, Seed, Rules, Squad);
+        public void NextSeason() => Season = SeasonEngine.Rollover(World, Season, Seed, Rules, Squad, null, new[] { Club });
     }
 }

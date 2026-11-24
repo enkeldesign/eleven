@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 10;
+        public const int FormatVersion = 11;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -194,8 +194,8 @@ namespace Eleven.Career
             foreach (Club c in world.Clubs)
             {
                 w.WriteInt32(Money(c.Balance));
-                foreach (long a in c.Season.Amounts) w.WriteInt32(Money(a));
-                foreach (long a in c.LastSeason.Amounts) w.WriteInt32(Money(a));
+                for (int i = 0; i < Ledger.FirstLines; i++) w.WriteInt32(Money(c.Season.Amounts[i]));
+                for (int i = 0; i < Ledger.FirstLines; i++) w.WriteInt32(Money(c.LastSeason.Amounts[i]));
             }
 
             w.WriteInt32(world.Players.Count);
@@ -246,6 +246,30 @@ namespace Eleven.Career
                 w.WriteInt32(m.To);
                 w.WriteString(m.FirstName);
                 w.WriteString(m.LastName);
+            }
+
+            // Format 11 (#203): each club in order, its two ledgers' transfers lines; then the last
+            // window's transfers, each footballer's id, the clubs from and to, the season, the fee
+            // and his value then, the window, and his name.
+            w.WriteInt32(world.Clubs.Count);
+            foreach (Club c in world.Clubs)
+            {
+                w.WriteInt32(Money(c.Season.Amounts[(int)LedgerLine.Transfers]));
+                w.WriteInt32(Money(c.LastSeason.Amounts[(int)LedgerLine.Transfers]));
+            }
+
+            w.WriteInt32(world.LastTransfers.Count);
+            foreach (Transfer t in world.LastTransfers)
+            {
+                w.WriteInt32(t.PlayerId);
+                w.WriteInt32(t.From);
+                w.WriteInt32(t.To);
+                w.WriteInt32(t.Season);
+                w.WriteInt32(Money(t.Fee));
+                w.WriteInt32(Money(t.Value));
+                w.WriteByte((byte)t.Window);
+                w.WriteString(t.FirstName);
+                w.WriteString(t.LastName);
             }
 
             return w.ToArray();
@@ -476,8 +500,8 @@ namespace Eleven.Career
                 foreach (Club c in world.Clubs)
                 {
                     c.Balance = r.ReadInt32();
-                    for (int i = 0; i < Ledger.Lines; i++) c.Season.Amounts[i] = r.ReadInt32();
-                    for (int i = 0; i < Ledger.Lines; i++) c.LastSeason.Amounts[i] = r.ReadInt32();
+                    for (int i = 0; i < Ledger.FirstLines; i++) c.Season.Amounts[i] = r.ReadInt32();
+                    for (int i = 0; i < Ledger.FirstLines; i++) c.LastSeason.Amounts[i] = r.ReadInt32();
                 }
 
                 if (r.ReadInt32() != world.Players.Count) throw new FormatException("The wages don't count every footballer.");
@@ -558,6 +582,28 @@ namespace Eleven.Career
                 {
                     c.Season.Days = Booked(c.Season) ? Ledger.UnknownDays : 0;
                     c.LastSeason.Days = Booked(c.LastSeason) ? Ledger.UnknownDays : 0;
+                }
+            }
+
+            if (version >= 11)
+            {
+                if (r.ReadInt32() != world.Clubs.Count) throw new FormatException("The transfers lines don't count every club.");
+                foreach (Club c in world.Clubs)
+                {
+                    c.Season.Amounts[(int)LedgerLine.Transfers] = r.ReadInt32();
+                    c.LastSeason.Amounts[(int)LedgerLine.Transfers] = r.ReadInt32();
+                }
+
+                int transfers = Count(r.ReadInt32());
+                for (int i = 0; i < transfers; i++)
+                {
+                    var t = new Transfer { PlayerId = r.ReadInt32(), From = r.ReadInt32(), To = r.ReadInt32(), Season = r.ReadInt32(), Fee = r.ReadInt32(), Value = r.ReadInt32() };
+                    byte window = r.ReadByte();
+                    if (!Enum.IsDefined(typeof(TransferWindow), (TransferWindow)window)) throw new FormatException($"Transfer window {window} is unknown.");
+                    t.Window = (TransferWindow)window;
+                    t.FirstName = r.ReadString();
+                    t.LastName = r.ReadString();
+                    world.LastTransfers.Add(t);
                 }
             }
 

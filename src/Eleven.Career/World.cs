@@ -25,6 +25,9 @@ namespace Eleven.Career
 
         /// <summary>The last turn's releases and free signings (#201), for its review.</summary>
         public List<ContractMove> LastMoves = new List<ContractMove>();
+
+        /// <summary>The last window's transfers (#203), for the hub.</summary>
+        public List<Transfer> LastTransfers = new List<Transfer>();
     }
 
     /// <summary>A club: its identity, division and squad (the ids of its players).</summary>

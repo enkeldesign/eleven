@@ -112,8 +112,10 @@ namespace Eleven.Career
         /// The season's turn into <paramref name="season"/>, before the youth fill: each contract a
         /// season down, those ending renewed or released, then the free agents signed by the clubs
         /// short of a position. <paramref name="division"/> is each club's next division.
+        /// <paramref name="between"/> runs after the releases, before the free agents are signed:
+        /// the pre-season transfer window (#203), with the room the releases left.
         /// </summary>
-        public static ContractTurn Turn(World world, int season, IReadOnlyDictionary<int, int> division, ContractRules? rules = null, DevelopmentRules? development = null)
+        public static ContractTurn Turn(World world, int season, IReadOnlyDictionary<int, int> division, ContractRules? rules = null, DevelopmentRules? development = null, Action? between = null)
         {
             rules ??= ContractRules.Reference;
             world.LastMoves.Clear();
@@ -184,6 +186,8 @@ namespace Eleven.Career
 
                 Development.Leave(c, gone);
             }
+
+            between?.Invoke();
 
             // The free agents signed: the clubs by their next division, then reputation, each short
             // squad taking the best it wants and can afford in the position it lacks most.
