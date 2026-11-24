@@ -72,6 +72,9 @@ namespace Eleven.Career
     /// </summary>
     public static class Development
     {
+        // A club's picked XI: the first 11 of its picks (#179).
+        private const int PickedEleven = 11;
+
         // What each draw is for: the key's tick, beside the season and matchday.
         private const long GrowDraw = 1, DeclineDraw = 2, RetireDraw = 3, YouthDraw = 4;
 
@@ -249,7 +252,14 @@ namespace Eleven.Career
             foreach (Club c in world.Clubs)
             {
                 c.Squad.RemoveAll(gone.Contains);
-                c.Picks.RemoveAll(gone.Contains);
+
+                // A club's picks are its XI's 11, then its bench (#179). A retired XI pick would move
+                // the bench's first into the XI, an outfielder in goal for a keeper: its picks go back
+                // to the AI's. One on the bench, at the end, just leaves it (Codex on #195).
+                bool inXi = false;
+                for (int i = 0; i < Math.Min(PickedEleven, c.Picks.Count); i++) inXi |= gone.Contains(c.Picks[i]);
+                if (inXi) c.Picks.Clear();
+                else c.Picks.RemoveAll(gone.Contains);
             }
 
             Youth(world, season, rules);
