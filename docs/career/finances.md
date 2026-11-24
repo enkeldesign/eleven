@@ -72,17 +72,17 @@ A format-7 world reads each club's opening balance and each footballer's wage by
 | 1 | 1 | 5,000k ± 0k | 0 | 0.67 | 58 % | 28 % | 12 % | 1 % |
 | 1 | 2 | 1,500k ± 0k | 0 | 0.80 | 42 % | 42 % | 13 % | 3 % |
 | 1 | 3 | 400k ± 0k | 0 | 0.89 | 36 % | 44 % | 13 % | 7 % |
-| 2 | 1 | 7,534k ± 3,583k | 0 | 0.71 | 65 % | 23 % | 11 % | 1 % |
-| 2 | 2 | 3,079k ± 3,526k | 1 | 0.85 | 52 % | 35 % | 10 % | 2 % |
-| 2 | 3 | 588k ± 728k | 2 | 1.12 | 47 % | 37 % | 11 % | 5 % |
-| 3 | 1 | 11,316k ± 3,368k | 0 | 0.69 | 65 % | 24 % | 10 % | 1 % |
-| 3 | 2 | 4,218k ± 5,995k | 2 | 0.73 | 53 % | 34 % | 10 % | 3 % |
-| 3 | 3 | 958k ± 1,267k | 2 | 1.06 | 48 % | 37 % | 11 % | 5 % |
+| 2 | 1 | 7,553k ± 3,547k | 0 | 0.70 | 65 % | 23 % | 11 % | 1 % |
+| 2 | 2 | 3,081k ± 3,522k | 0 | 0.84 | 52 % | 35 % | 10 % | 2 % |
+| 2 | 3 | 587k ± 728k | 2 | 1.12 | 47 % | 37 % | 11 % | 5 % |
+| 3 | 1 | 11,404k ± 3,290k | 0 | 0.68 | 65 % | 24 % | 10 % | 1 % |
+| 3 | 2 | 4,266k ± 6,035k | 2 | 0.72 | 53 % | 34 % | 10 % | 2 % |
+| 3 | 3 | 955k ± 1,267k | 2 | 1.07 | 48 % | 37 % | 11 % | 5 % |
 
-- **Near the research:** the top division's wages are 0.67–0.76 of its revenue, its broadcasting 58–65 %. The second division's are 0.78–0.98, and the third's 0.89–1.25.
-- **The lower divisions' high ratios come from movement:** a relegated club keeps its higher division's wages and earns its new division's revenue. M6.12's contracts and sales are its way out.
-- **Most clubs stay solvent:** at most 3 of a division's 12 are in deficit by the third season.
-- **The top division banks its surplus,** about 2,500k a club a season. M6.12's transfers will spend it.
+- **Near the research:** the top division's wages are 0.67–0.70 of its revenue, its broadcasting 58–65 %. The second division's are 0.72–0.84, and the third's 0.89–1.12.
+- **The lower divisions' high ratios come from movement:** a relegated club keeps its higher division's wages and earns its new division's revenue. Contracts' relegation clause (#201) brings them down, from #198's 1.24–1.25 in the third; M6.12b's sales are the rest of the way out.
+- **Most clubs stay solvent:** at most 2 of a division's 12 are in deficit by the third season.
+- **The top division banks its surplus,** about 3,200k a club a season. M6.12b's transfers will spend it.
 - **The references were chosen by it.** With 35k a day and 400k a home match, the top division earned 38–45 % on matchdays, against the research's broadcasting-led revenue.
 - **The save grows:** after three seasons the world is 112,853 bytes and a save about 143,000 characters, from 138,000 (#194). Eleven saves would come to about 1.58M.
 

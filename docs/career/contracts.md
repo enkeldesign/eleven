@@ -42,8 +42,8 @@ The generator draws each length on the footballer's own counter, the world strea
 2. **Each contract a season down.** Those ending, each club's best first, are:
    - **renewed** if the club wants him and the board's budget holds. He's paid #198's rule wage for his level, age and new division, for `RenewYears` by his age;
    - **released** otherwise, into the free agents. He leaves the squad, and a club's picks (#179) go back to the AI's if he was in its XI.
-3. **The budget holds:** a renewal must keep the weekly wage bill within `Finance.WageBudget`, or be for no more than he was paid.
-4. **The free agents signed:** the clubs in order of their next division, then reputation. Each club short of the squad's 23 signs, for the position its squad lacks most, the best free agent it wants and can afford, on the rule wage for `RenewYears`. A club doesn't re-sign one it released this turn.
+3. **The budget holds:** a renewal must keep the weekly wage bill within `Finance.WageBudget` at the club's next division's share (Codex on #204), or be for no more than he was paid.
+4. **The free agents signed:** the clubs in order of their next division, then reputation. Each club short of the squad's 23 signs the best free agent it wants and can afford, on the rule wage for `RenewYears`. It looks for the position its squad lacks most first, then each other it's short of (Codex on #204). A club doesn't re-sign one it released this turn.
 5. **The rest stay free:** `ClubId` 0 and `FreeSince` the season. A free agent doesn't grow (#194), and at the next turn's development, still unsigned, he retires.
 
 Then development's turn (#194) ages and retires, and the youth fill each squad to 23.
@@ -82,41 +82,43 @@ A format-9 world reads each footballer's contract by the generator's rule at his
 
 | Turn | Division | Renewed under 24 | Renewed 24–29 | Renewed 30 and over | Released under 24 | Released 24–29 | Released 30 and over | Signed free |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 0 | 15 | 19 | 0 | 3 | 10 | 2 |
-| 1 | 2 | 0 | 21 | 26 | 0 | 5 | 7 | 2 |
+| 1 | 1 | 0 | 15 | 17 | 0 | 3 | 12 | 3 |
+| 1 | 2 | 0 | 21 | 25 | 0 | 5 | 8 | 3 |
 | 1 | 3 | 0 | 19 | 24 | 0 | 0 | 4 | 3 |
-| 2 | 1 | 10 | 25 | 40 | 13 | 5 | 19 | 16 |
-| 2 | 2 | 17 | 21 | 39 | 9 | 5 | 10 | 7 |
-| 2 | 3 | 12 | 17 | 33 | 7 | 2 | 14 | 2 |
-| 3 | 1 | 12 | 18 | 36 | 9 | 5 | 16 | 11 |
-| 3 | 2 | 8 | 22 | 33 | 8 | 4 | 23 | 9 |
-| 3 | 3 | 9 | 19 | 32 | 10 | 3 | 11 | 7 |
+| 2 | 1 | 11 | 23 | 40 | 12 | 7 | 21 | 17 |
+| 2 | 2 | 10 | 21 | 37 | 11 | 4 | 9 | 6 |
+| 2 | 3 | 17 | 18 | 34 | 7 | 2 | 15 | 3 |
+| 3 | 1 | 13 | 16 | 36 | 8 | 7 | 16 | 10 |
+| 3 | 2 | 8 | 17 | 34 | 6 | 2 | 18 | 7 |
+| 3 | 3 | 10 | 23 | 36 | 11 | 6 | 9 | 4 |
 
 **After each turn:**
 
 | Turn | Free agents | Retired unsigned | Wage bill over budget, division 1: mean, highest | Division 2 | Division 3 | Squads |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 20 | 2 | 0.97, 1.24 | 0.89, 1.24 | 0.87, 1.18 | 23–23 |
-| 2 | 57 | 22 | 1.03, 1.23 | 0.97, 1.28 | 1.01, 1.30 | 23–23 |
-| 3 | 59 | 60 | 1.00, 1.28 | 0.95, 1.67 | 0.96, 1.13 | 23–23 |
+| 1 | 21 | 2 | 0.96, 1.18 | 0.89, 1.24 | 0.87, 1.18 | 23–23 |
+| 2 | 59 | 24 | 1.00, 1.17 | 0.96, 1.28 | 1.01, 1.27 | 23–23 |
+| 3 | 58 | 63 | 0.97, 1.12 | 0.92, 1.67 | 0.96, 1.29 | 23–23 |
 
-- **Most contracts ending are renewed:** seven to eight in ten. The released are mostly the oldest and the least, and the young without room to grow: 29 at the first turn, then 84 and 89.
+- **Most contracts ending are renewed:** seven to eight in ten. The released are mostly the oldest and the least, and the young without room to grow: 32 at the first turn, then 88 and 83.
 - **Squads stay whole:** 23 at every club, the youth filling what releases and retirements leave.
-- **Wage bills sit at their budgets:** a division's mean is 0.87–1.03 of its budget, and over six seasons 0.87–1.04.
+- **Wage bills sit at their budgets:** a division's mean is 0.87–1.01 of its budget, over three seasons and over six.
 - **The highest is a relegated club's:** 1.67 at the third turn is club 9's, two seasons after relegation from the top. The relegation clause put its wages at the second division's rate, but its footballers are better than that division's and its revenue is the division's. M6.12b's sales are its way out.
-- **Free agents:** 20 after the first turn, then 55–60. Of those unsigned a season, 22 and then 60 retire. Clubs sign only those above their youth, and the budget holds them back.
-- **The world's level holds:** development's drift by the third season is +0.12 (#194, [development.md](development.md)), and training's on Auto is +0.12 ([training.md](training.md)).
+- **Free agents:** 21 after the first turn, then 58–59. Of those unsigned a season, 24 and then 63 retire. Clubs sign only those above their youth, and the budget holds them back.
+- **The world's level holds:** development's drift by the third season is +0.09 (#194, [development.md](development.md)), and training's on Auto is +0.11 ([training.md](training.md)).
 
 ## Tests
 
-`ContractTests` (career), 7:
+`ContractTests` (career), 9:
 - the generator's lengths by age, a renewal's by age, and a youth's first;
 - a contract run down, and one ending renewed or released, its move kept;
 - whom a club wants: its prospects, those above their replacement, its veterans only at its level;
 - the budget holding: a renewal over it releases him, and one for less is kept;
 - free agents signed by a club short of a position within budget, and one unsigned since an earlier turn retiring;
 - every footballer at one club, a free agent or retired, every squad whole;
-- format 10, and format 9 read by the rules.
+- format 10, and format 9 read by the rules;
+- a promoted club's renewals held to its new division's budget (Codex on #204);
+- a club short of two places signing for the second when the first has nobody (Codex on #204).
 
 `ContractSeasonTests` (harness), 4:
 - a career's turn releasing a poor footballer out of contract, every squad whole, and the hub's and review's lines;
