@@ -23,8 +23,14 @@ namespace Eleven.Career
         /// <summary>The cup's round to reach by division, a <see cref="Fixture.Round"/>: the quarter-finals, the round of 16, the round of 32.</summary>
         public int[] CupTarget = { 4, 3, 2 };
 
-        /// <summary>A match's expected points, the expected place's: the top's, falling evenly to the bottom's.</summary>
-        public double TopPoints = 2.0, BottomPoints = 0.9;
+        /// <summary>
+        /// A match's expected points, the expected place's: the top's, falling evenly to the
+        /// bottom's. Measured, not football's: `eleven-sim board 6` from seed 0x200 gives 1.54 a
+        /// match to the best paid and 1.02 to the least, and a straight line through every place
+        /// 1.50 and 1.02. The career's matches score 1.18 goals and draw 45 % (managers.md), so
+        /// its table is flatter than football's.
+        /// </summary>
+        public double TopPoints = 1.50, BottomPoints = 1.02;
 
         /// <summary>A new manager's confidence, 0–100.</summary>
         public double StartConfidence = FreshStart;
