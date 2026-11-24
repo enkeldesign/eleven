@@ -218,7 +218,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_each_clubs_board_and_a_format_8_world_reads_it_by_the_rules()
         {
             (World w, _) = New();
-            Assert.Equal(10, WorldCodec.FormatVersion);
+            Assert.Equal(11, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 8 is format 10 less format 9's section, each club's objectives, confidence and last season's verdict, and format 10's, the contracts (#201).

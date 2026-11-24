@@ -27,6 +27,9 @@ namespace Eleven.Career.Tests
         public static int From8(World w) => Money(w) + From9(w);
 
         /// <summary>Every section from format 9 on: format 8's world is the rest.</summary>
-        public static int From9(World w) => Board(w) + Contracts(w);
+        public static int From9(World w) => Board(w) + From10(w);
+
+        /// <summary>Every section from format 10 on: format 9's world is the rest.</summary>
+        public static int From10(World w) => Contracts(w) + Transfers(w);
     }
 }

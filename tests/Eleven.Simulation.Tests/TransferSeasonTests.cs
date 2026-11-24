@@ -77,7 +77,8 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(0, m.FeesNet);
             Assert.All(m.Windows.Where(v => v.Window == TransferWindow.PreSeason), v => Assert.True(v.Count.Cast<int>().Sum() > 0, $"season {v.Season}'s pre-season window"));
             Assert.Contains(m.Windows, v => v.Window == TransferWindow.MidSeason && v.Count.Cast<int>().Sum() > 0);
-            foreach (CareerTransfers.WindowView v in m.Windows.Where(v => v.Count.Cast<int>().Sum() > 0)) Assert.InRange(v.FeeOverValue, 1.0, Math.Max(1.0, TransferRules.Reference.WantedMarkup));
+            // A fee is its value or the markup on it, rounded to the k.
+            foreach (CareerTransfers.WindowView v in m.Windows.Where(v => v.Count.Cast<int>().Sum() > 0)) Assert.InRange(v.FeeOverValue, 0.99, TransferRules.Reference.WantedMarkup + 0.01);
 
             // Footballers up: more bought from a lower division than sold to one.
             int up = 0, down = 0;

@@ -25,6 +25,9 @@ namespace Eleven.Simulation.Harness
             /// <summary>The turn's releases and free signings (#201): with the clubs' retirements, what the youth replace.</summary>
             public int Released, Signed;
 
+            /// <summary>The squads' places short of 23 at the last season's end (#203): mid-season sales the youth replace too.</summary>
+            public int ShortAtEnd;
+
             /// <summary>The followed footballers' levels this season, by id; absent once retired.</summary>
             public Dictionary<int, (int Age, double Level)> Followed = new Dictionary<int, (int, double)>();
         }
@@ -43,10 +46,14 @@ namespace Eleven.Simulation.Harness
             CareerSession s = CareerSession.Start(w, seed, w.Clubs[0].Id, CareerRole.ManagerOnly, SpikeScenario.Config());
             followed = Follow(w);
             var views = new List<SeasonView>(seasons);
+            int shortAtEnd = 0;
             for (int i = 1; i <= seasons; i++)
             {
-                views.Add(View(w, s.Season.Number, followed));
+                SeasonView view = View(w, s.Season.Number, followed);
+                view.ShortAtEnd = shortAtEnd;
+                views.Add(view);
                 while (!s.SeasonOver) s.Simulate();
+                shortAtEnd = w.Clubs.Sum(c => WorldGenerator.SquadSize - w.Players.Count(p => p.ClubId == c.Id));
                 if (i < seasons) s.NextSeason();
             }
 

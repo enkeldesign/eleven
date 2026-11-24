@@ -146,7 +146,7 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_each_clubs_money_and_each_wage_and_a_format_7_world_reads_them_by_the_rules()
         {
             (World w, _) = New();
-            Assert.Equal(10, WorldCodec.FormatVersion);
+            Assert.Equal(11, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 7 is format 10 less format 8's section, each club's balance and two ledgers and
