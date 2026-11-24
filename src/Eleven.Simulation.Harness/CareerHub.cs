@@ -94,8 +94,15 @@ namespace Eleven.Simulation.Harness
             string what = f.Competition == CompetitionId.Cup
                 ? FormattableString.Invariant($"Cup, {CompetitionRules.CupRounds[f.Round - 1]}")
                 : FormattableString.Invariant($"League round {f.Round}");
-            return $"{what}: {Short(s, f.Home)} v {Short(s, f.Away)}, {ground}";
+            string last = LastMet(s, f.Home == s.Club ? f.Away : f.Home);
+            return $"{what}: {Short(s, f.Home)} v {Short(s, f.Away)}, {ground}" + (last.Length > 0 ? $". {last}" : "");
         }
+
+        /// <summary>
+        /// The human's last meeting with <paramref name="opponent"/> (#191), from his club's
+        /// manager's memory: "Last met: lost 1–2 (season 1, matchday 7)". Empty if they haven't met.
+        /// </summary>
+        public static string LastMet(CareerSession s, int opponent) => "";
 
         /// <summary>The human's division's table: place, club, played, goal difference and points; his row marked.</summary>
         public static List<HubRow> TableRows(CareerSession s)

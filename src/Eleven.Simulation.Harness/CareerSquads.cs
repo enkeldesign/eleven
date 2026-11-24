@@ -22,8 +22,8 @@ namespace Eleven.Simulation.Harness
             TeamTactic[]? homeTactics = null, TeamTactic[]? awayTactics = null, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
         {
             // Each side's plans and formation are its manager's (#180), unless given.
-            homeTactics ??= CareerManagers.Plans(world, homeClub, Squads.HomeTeam);
-            awayTactics ??= CareerManagers.Plans(world, awayClub, Squads.AwayTeam);
+            homeTactics ??= CareerManagers.Plans(world, homeClub, Squads.HomeTeam, awayClub);
+            awayTactics ??= CareerManagers.Plans(world, awayClub, Squads.AwayTeam, homeClub);
             SimState s = Squads.Match(config, seed, perSide, bothCpu: bothCpu, homeTactics: homeTactics, awayTactics: awayTactics);
             SquadSelection home = Selection(world, homeClub, perSide, homeOut, rotation), away = Selection(world, awayClub, perSide, awayOut, rotation);
             Apply(s, home, perSide, Squads.HomeTeam, Squads.HomeOutfielder, Squads.HomeKeeper(perSide), i => Squads.HomeBench(perSide, i));

@@ -75,6 +75,7 @@ namespace Eleven.Simulation.Harness
                 MatchResult r = other?.Result ?? Quick(config, world, season, f, perSide, homeOut, awayOut, sr);
                 IReadOnlyDictionary<int, int> lineup = other?.Lineup ?? CareerSquads.Lineup(world, f.Home, f.Away, perSide, homeOut, awayOut, sr);
                 SeasonEngine.Record(season, rules, f.Id, r);
+                ManagerMemory.Remember(world, season, f, r);
                 played.Add((f, r, lineup));
             }
 
