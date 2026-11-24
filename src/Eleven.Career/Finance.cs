@@ -114,12 +114,16 @@ namespace Eleven.Career
             }
         }
 
-        /// <summary>A matchday's home takings, for each home club of <paramref name="played"/>.</summary>
+        /// <summary>
+        /// A matchday's home takings, for each home club of <paramref name="played"/>. A match at a
+        /// neutral ground, the cup final, has no home side and brings none: its money is the cup's.
+        /// </summary>
         public static void Matchday(World world, IEnumerable<Fixture> played, FinanceRules? rules = null)
         {
             rules ??= FinanceRules.Reference;
             foreach (Fixture f in played)
             {
+                if (f.Neutral) continue;
                 Club? home = world.Clubs.Find(c => c.Id == f.Home);
                 if (home != null) Book(home, LedgerLine.Matchday, Takings(home, rules));
             }
