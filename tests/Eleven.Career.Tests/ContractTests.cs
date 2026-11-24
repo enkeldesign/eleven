@@ -170,6 +170,51 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_promoted_clubs_renewals_are_held_to_its_new_divisions_budget()
+        {
+            (World w, _) = New();
+            Club club = w.Clubs.First(c => c.Division == 2);
+            List<Player> squad = w.Players.Where(p => p.ClubId == club.Id).ToList();
+            foreach (Player p in squad) p.ContractYears = 3;
+            Player raise = Set(squad[8], 25, 15, 1);
+            raise.Wage = 1;
+
+            // Last season's revenue puts the raise within the second division's share, not the first's (Codex on #204).
+            long bill = Finance.WageBill(w, club) - raise.Wage + Finance.Wage(raise, 1);
+            club.LastSeason.Amounts[(int)LedgerLine.Broadcasting] = (long)Math.Round(bill * 31 / ((FinanceRules.Reference.WageShare[0] + FinanceRules.Reference.WageShare[1]) / 2));
+            club.LastSeason.Days = 217;
+            Assert.True(bill <= Finance.WageBudget(w, club));
+            Dictionary<int, int> next = Divisions(w);
+            next[club.Id] = 1;
+            Contracts.Turn(w, 2, next);
+            Assert.NotEqual(club.Id, raise.ClubId);
+            Assert.Contains(w.LastMoves, m => m.PlayerId == raise.Id && m.From == club.Id && m.To == 0);
+        }
+
+        [Fact]
+        public void A_club_short_of_two_places_signs_for_the_second_when_the_first_has_nobody()
+        {
+            (World w, _) = New();
+            Rich(w);
+            foreach (Player p in w.Players) p.ContractYears = Math.Max(p.ContractYears, 2);
+            Club club = w.Clubs.First(c => c.Division == 2);
+
+            // Short of a keeper, whom no free agent is, and of a striker, whom one is (Codex on #204).
+            Player keeper = w.Players.First(p => p.ClubId == club.Id && p.Positions[0] == Position.Goalkeeper);
+            w.Players.Remove(keeper);
+            club.Squad.Remove(keeper.Id);
+            Player striker = Set(w.Players.First(p => p.ClubId == club.Id && p.Positions[0] == Position.Striker), 26, 14, 0);
+            club.Squad.Remove(striker.Id);
+            striker.ClubId = 0;
+            striker.FreeSince = 2;
+            // The template lists its keepers first, so the keeper is the place it lacks most.
+            Assert.Equal(Position.Goalkeeper, WorldGenerator.SquadTemplate[0]);
+
+            Contracts.Turn(w, 2, Divisions(w));
+            Assert.Equal(club.Id, striker.ClubId);
+        }
+
+        [Fact]
         public void Every_footballer_is_at_one_club_a_free_agent_or_retired_and_every_squad_stays_whole()
         {
             (World w, Season s) = New();
