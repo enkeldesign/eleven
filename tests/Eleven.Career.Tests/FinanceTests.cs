@@ -84,6 +84,12 @@ namespace Eleven.Career.Tests
             Assert.Equal(takings, home.Season[LedgerLine.Matchday]);
             Assert.Equal(0, away.Season[LedgerLine.Matchday]);
             Assert.Equal(Finance.StartBalance(home) + takings, home.Balance);
+
+            // At a neutral ground, the cup final, neither side is at home: no takings (Codex on #199).
+            var final = new Fixture { Id = f.Id + 1, Competition = CompetitionId.Cup, Round = CompetitionRules.CupRounds.Count, Home = home.Id, Away = away.Id, Neutral = true };
+            Finance.Matchday(w, new[] { final });
+            Assert.Equal((takings, 0L), (home.Season[LedgerLine.Matchday], away.Season[LedgerLine.Matchday]));
+            Assert.Equal(Finance.StartBalance(home) + takings, home.Balance);
         }
 
         [Fact]
