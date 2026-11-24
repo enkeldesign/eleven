@@ -118,6 +118,11 @@ namespace Eleven.Simulation.Harness
             foreach ((Fixture f, _, _) in played) fixtures.Add(f);
             Finance.Matchday(world, fixtures);
             Finance.Pass(world, gap);
+
+            // The board (#200): each result against its club's expected.
+            var results = new List<(Fixture, MatchResult)>(played.Count);
+            foreach ((Fixture f, MatchResult r, _) in played) results.Add((f, r));
+            Board.Matchday(world, results);
             SeasonEngine.Advance(season, rules);
             return day;
         }

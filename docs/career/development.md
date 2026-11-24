@@ -78,7 +78,7 @@ A format-5 world reads with none accrued, and its next id past its highest.
 ## The hub
 
 - **Squad's rows** show his age: "J. Smith, 23 · CB, DM · 14.2 · 96" ([squads.md](squads.md#your-squad)).
-- **The season's review** (`CareerHub.ReviewLine`), from the season's turn until your club's first match of the new one: "Last season: most improved A. Name +1.3, B. Name +0.9. Retired: C. Name, 35. From the youth: D. Name, 17. Revenue 9,800k, wages 6,900k." The money is #198's ([finances.md](finances.md)).
+- **The season's review** (`CareerHub.ReviewLine`), from the season's turn until your club's first match of the new one: "Last season: most improved A. Name +1.3, B. Name +0.9. Retired: C. Name, 35. From the youth: D. Name, 17. Revenue 9,800k, wages 6,900k. 4th, 6th expected: objective met. Confidence 74. Reputation 13, up 1." The money is #198's ([finances.md](finances.md)), the board's verdict #200's ([board.md](board.md)).
   - **Most improved** are your three with the most points last season, decline included, as levels.
 
 ## Measured

@@ -12,14 +12,14 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_the_managers_memories_and_a_format_4_world_reads_with_none()
         {
             World w = WorldGenerator.Generate(0x191);
-            Assert.Equal(8, WorldCodec.FormatVersion);
+            Assert.Equal(9, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 4 is format 7 with no memories, development or training, less those sections' empty counts and the next id (#194, #196).
             var four = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             four.WriteBytes(plain[..4]);
             four.WriteInt32(4);
-            four.WriteBytes(plain[8..^(20 + Formats.Money(w))]);
+            four.WriteBytes(plain[8..^(20 + Formats.From8(w))]);
             World old = WorldCodec.Decode(four.ToArray());
             Assert.All(old.Managers, m => Assert.Empty(m.Memory));
             Assert.Equal(plain, WorldCodec.Encode(old));

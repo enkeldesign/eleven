@@ -110,14 +110,14 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_each_clubs_training_and_a_format_6_world_reads_auto()
         {
             (World w, _) = New();
-            Assert.Equal(8, WorldCodec.FormatVersion);
+            Assert.Equal(9, WorldCodec.FormatVersion);
             byte[] plain = WorldCodec.Encode(w);
 
             // Format 6 is format 7 with every club on Auto, less its section's empty count.
             var six = new CanonicalWriter(plain.Length);
             six.WriteBytes(plain[..4]);
             six.WriteInt32(6);
-            six.WriteBytes(plain[8..^(4 + Formats.Money(w))]);
+            six.WriteBytes(plain[8..^(4 + Formats.From8(w))]);
             World old = WorldCodec.Decode(six.ToArray());
             Assert.All(old.Clubs, c => Assert.Equal(TrainingIntensity.Auto, c.Training));
             Assert.Equal(plain, WorldCodec.Encode(old));
