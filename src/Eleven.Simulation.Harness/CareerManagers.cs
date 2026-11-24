@@ -89,7 +89,6 @@ namespace Eleven.Simulation.Harness
 
         private static int Competence(Manager m, string id) => m.Competences[ManagerCompetences.Ids.IndexOf(id)];
 
-        /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
         /// <summary>His profile for meeting <paramref name="opponent"/> (#191): his own, protecting earlier by what he remembers of them.</summary>
         public static ManagerProfile Profile(Manager manager, SimConfig config, int opponent, MemoryRules? rules = null)
         {
@@ -99,6 +98,7 @@ namespace Eleven.Simulation.Harness
             return new ManagerProfile(p.Tactics, p.ChaseFrom, p.ChaseMargin, Math.Clamp(p.ProtectFrom - earlier, 0, 1), p.Spread, p.SubAfter, p.SubFatigue);
         }
 
+        /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
         public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config)
         {
             ManagerProfile Of(int club, int opponent)

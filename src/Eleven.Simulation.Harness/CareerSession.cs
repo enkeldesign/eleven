@@ -102,6 +102,16 @@ namespace Eleven.Simulation.Harness
             return state;
         }
 
+        /// <summary>
+        /// Each side's manager's profile for the human's fixture (#182), by team id, his club the
+        /// simulation's home side (#191).
+        /// </summary>
+        public Dictionary<int, ManagerProfile> ProfilesFor(Fixture fixture, SimConfig config)
+        {
+            (int opponent, _, _) = Sides(fixture);
+            return CareerManagers.Profiles(World, Club, opponent, config);
+        }
+
         // The human's opponent, and each side's footballers out of the fixture (#176).
         private (int Opponent, HashSet<int> Mine, HashSet<int> Theirs) Sides(Fixture fixture)
         {

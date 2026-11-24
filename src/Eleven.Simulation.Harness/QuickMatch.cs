@@ -74,9 +74,10 @@ namespace Eleven.Simulation.Harness
         /// stay each footballer's own, and so does every opponent's skill.
         /// </para>
         /// </summary>
-        public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null)
+        public static SimState Match(SimConfig config, World world, int homeClub, int awayClub, int perSide, ulong seed, ISet<int>? homeOut = null, ISet<int>? awayOut = null, SquadRules? rotation = null,
+            TeamTactic[]? homeTactics = null)
         {
-            SimState s = CareerSquads.Match(config, world, homeClub, awayClub, perSide, seed, bothCpu: false, homeOut: homeOut, awayOut: awayOut, rotation: rotation);
+            SimState s = CareerSquads.Match(config, world, homeClub, awayClub, perSide, seed, bothCpu: false, homeTactics: homeTactics, homeOut: homeOut, awayOut: awayOut, rotation: rotation);
             CpuSkill side = SideSkill(CareerSquads.Selection(world, homeClub, perSide, homeOut, rotation), perSide);
             for (int i = 0; i < s.Cpus.Length; i++)
             {
