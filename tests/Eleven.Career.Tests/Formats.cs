@@ -20,6 +20,9 @@ namespace Eleven.Career.Tests
         /// </summary>
         public static int Contracts(World w) => 4 + w.Players.Count * 3 + 4 + w.Clubs.Count * 4 + 4;
 
+        /// <summary>Format 11's section (#203) for a world with no transfers: each club's two transfers lines, then the window's transfers, none.</summary>
+        public static int Transfers(World w) => 4 + w.Clubs.Count * 8 + 4;
+
         /// <summary>Every section from format 8 on: format 7's world is the rest.</summary>
         public static int From8(World w) => Money(w) + From9(w);
 
