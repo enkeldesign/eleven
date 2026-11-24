@@ -71,9 +71,9 @@ namespace Eleven.Simulation.Tests
                 Assert.Equal(8, moved);
             }
 
-            // The world conserved: its clubs, squads, players and managers.
+            // The world conserved: its clubs, squads, players and managers. The free agents (#201) are no club's.
             Assert.Equal(36, a.Clubs.Count);
-            Assert.Equal(players, a.Players.Count);
+            Assert.Equal(players, a.Players.Count(p => p.ClubId != 0));
             Assert.All(a.Clubs, c => Assert.Equal(WorldGenerator.SquadSize, c.Squad.Count));
             for (int d = 1; d <= 3; d++) Assert.Equal(12, a.Clubs.Count(c => c.Division == d));
             Assert.Equal(x[2].Divisions[0].OrderBy(i => i), a.Clubs.Where(c => c.Division == 1).Select(c => c.Id).OrderBy(i => i));

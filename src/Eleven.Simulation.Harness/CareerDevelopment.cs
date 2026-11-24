@@ -22,6 +22,9 @@ namespace Eleven.Simulation.Harness
             public List<(string Band, int Count, double Mean, double Spread)> Bands = new List<(string, int, double, double)>();
             public int Retired, Intake, SmallestSquad, LargestSquad;
 
+            /// <summary>The turn's releases and free signings (#201): with the clubs' retirements, what the youth replace.</summary>
+            public int Released, Signed;
+
             /// <summary>The followed footballers' levels this season, by id; absent once retired.</summary>
             public Dictionary<int, (int Age, double Level)> Followed = new Dictionary<int, (int, double)>();
         }
@@ -69,17 +72,21 @@ namespace Eleven.Simulation.Harness
 
         private static SeasonView View(World w, int season, List<(int Id, string Who)> followed)
         {
-            var v = new SeasonView { Season = season, MeanLevel = w.Players.Average(Development.Level) };
+            // The clubs' footballers: the free agents (#201) are no club's.
+            List<Player> at = w.Players.Where(p => p.ClubId != 0).ToList();
+            var v = new SeasonView { Season = season, MeanLevel = at.Average(Development.Level) };
             foreach ((string name, int from, int to) in AgeBands)
             {
-                List<double> levels = w.Players.Where(p => p.Age >= from && p.Age <= to).Select(Development.Level).ToList();
+                List<double> levels = at.Where(p => p.Age >= from && p.Age <= to).Select(Development.Level).ToList();
                 double mean = levels.Count > 0 ? levels.Average() : 0;
                 double spread = levels.Count > 1 ? Eleven.Simulation.Maths.SimMath.Sqrt(levels.Sum(x => (x - mean) * (x - mean)) / (levels.Count - 1)) : 0;
                 v.Bands.Add((name, levels.Count, mean, spread));
             }
 
-            v.Retired = w.LastRetired.Count;
+            v.Retired = w.LastRetired.Count(r => r.ClubId != 0);
             v.Intake = w.Players.Count(p => p.Joined == season);
+            v.Released = w.LastMoves.Count(m => m.To == 0);
+            v.Signed = w.LastMoves.Count(m => m.From == 0);
             List<int> sizes = w.Clubs.Select(c => w.Players.Count(p => p.ClubId == c.Id)).ToList();
             v.SmallestSquad = sizes.Min();
             v.LargestSquad = sizes.Max();
