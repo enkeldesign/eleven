@@ -81,28 +81,28 @@ A format-10 world reads with no transfers.
 | Season | Window | 1→1 | 2→1 | 3→1 | 2→2 | 3→2 | 1→2 | 3→3 | 1→3 | 2→3 | Fees | Fee over value |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | mid-season | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 2,490k | 1.25 |
-| 2 | pre-season | 6 | 1 | 0 | 3 | 0 | 0 | 6 | 1 | 0 | 7,996k | 1.24 |
-| 2 | mid-season | 5 | 0 | 0 | 3 | 0 | 0 | 1 | 0 | 0 | 7,747k | 1.25 |
-| 3 | pre-season | 11 | 3 | 1 | 7 | 6 | 0 | 10 | 0 | 0 | 30,179k | 1.25 |
-| 3 | mid-season | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 1,093k | 1.25 |
-| 4 | pre-season | 12 | 3 | 1 | 9 | 2 | 0 | 10 | 0 | 0 | 31,391k | 1.25 |
+| 2 | pre-season | 6 | 0 | 0 | 3 | 1 | 0 | 6 | 1 | 0 | 7,871k | 1.24 |
+| 2 | mid-season | 5 | 0 | 0 | 4 | 0 | 0 | 1 | 0 | 0 | 8,405k | 1.25 |
+| 3 | pre-season | 8 | 2 | 2 | 8 | 2 | 0 | 7 | 0 | 0 | 23,680k | 1.25 |
+| 3 | mid-season | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 2,934k | 1.25 |
+| 4 | pre-season | 9 | 2 | 1 | 6 | 3 | 0 | 10 | 0 | 0 | 23,082k | 1.25 |
 
 **Each division's mean wage bill over budget,** before the window's matchday or turn, and after:
 
 | Season | Window | Division 1 | Division 2 | Division 3 |
 | --- | --- | --- | --- | --- |
 | 1 | mid-season | 0.97 → 0.97 | 1.22 → 1.21 | 1.18 → 1.18 |
-| 2 | pre-season | 0.97 → 0.92 | 1.21 → 0.88 | 1.18 → 0.85 |
-| 2 | mid-season | 0.92 → 0.92 | 0.88 → 0.88 | 0.85 → 0.85 |
-| 3 | pre-season | 0.92 → 0.97 | 0.88 → 0.92 | 0.85 → 1.02 |
-| 3 | mid-season | 0.97 → 0.97 | 0.92 → 0.93 | 1.02 → 1.01 |
-| 4 | pre-season | 0.97 → 0.95 | 0.93 → 0.92 | 1.01 → 0.99 |
+| 2 | pre-season | 0.97 → 0.91 | 1.21 → 0.86 | 1.18 → 0.85 |
+| 2 | mid-season | 0.91 → 0.90 | 0.86 → 0.86 | 0.85 → 0.85 |
+| 3 | pre-season | 0.90 → 0.94 | 0.86 → 0.90 | 0.85 → 1.02 |
+| 3 | mid-season | 0.94 → 0.94 | 0.90 → 0.90 | 1.02 → 1.01 |
+| 4 | pre-season | 0.94 → 0.93 | 0.90 → 0.92 | 1.01 → 0.97 |
 
 - **Money is conserved:** every fee paid is received, 0k over three seasons and over six.
-- **The pre-season windows carry the trade:** 17, 38 and 37 transfers before seasons 2, 3 and 4, against 3, 9 and 2 mid-season. A club has room at the turn, where its releases left it. Mid-season it has room only by letting go a footballer it doesn't want in his contract's last season.
+- **The pre-season windows carry the trade:** 17, 29 and 31 transfers before seasons 2, 3 and 4, against 3, 10 and 3 mid-season. A club has room at the turn, where its releases left it. Mid-season it has room only by letting go a footballer it doesn't want in his contract's last season.
 - **Fees are mostly asked at the markup:** 1.24–1.25 of value. A club rarely sells a footballer it doesn't want, since the buyer wants an upgrade.
 - **Footballers go up, money comes down:**
-  - **over three seasons:** 20 transfers to a higher division and 1 to a lower;
+  - **over three seasons:** 17 transfers to a higher division and 1 to a lower;
   - **the top division's footballers bought from below:** 3 % after three seasons, 7 % after six;
   - **within a division:** most trade, the top division's dearest.
 - **The price weight was chosen by it** (`LevelsPerK`). The table is three seasons, measured before the windows' order changed (below): the second season's windows' fees, and the top division's footballers bought from below:

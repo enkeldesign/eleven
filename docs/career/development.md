@@ -88,34 +88,34 @@ A format-5 world reads with none accrued, and its next id past its highest.
 | Season | Mean level | Its drift from the start | Retired at its turn | Youth | Squads |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 11.56 | 0.00 | 0 | 0 | 23–23 |
-| 2 | 11.73 | +0.17 | 6 | 32 | 23–23 |
-| 3 | 11.71 | +0.15 | 14 | 74 | 23–23 |
+| 2 | 11.73 | +0.17 | 6 | 30 | 23–23 |
+| 3 | 11.68 | +0.12 | 14 | 76 | 23–23 |
 
 By age band at each season's start, count, then mean level ± spread:
 
 | Age | Season 1 | Season 2 | Season 3 |
 | --- | --- | --- | --- |
-| 16–18 | 88: 11.6 ± 2.6 | 71: 10.6 ± 3.0 | 101: 8.9 ± 2.4 |
-| 19–21 | 141: 11.7 ± 2.7 | 147: 12.9 ± 2.5 | 142: 13.3 ± 2.8 |
-| 22–24 | 140: 11.3 ± 2.5 | 145: 11.7 ± 2.5 | 143: 12.4 ± 2.7 |
-| 25–27 | 148: 10.9 ± 2.4 | 130: 11.0 ± 2.6 | 131: 11.5 ± 2.6 |
-| 28–30 | 148: 11.8 ± 2.4 | 144: 11.5 ± 2.2 | 142: 11.2 ± 2.2 |
-| 31–33 | 143: 11.5 ± 2.5 | 138: 11.4 ± 2.4 | 111: 11.8 ± 2.5 |
-| 34+ | 20: 15.6 ± 2.9 | 53: 13.0 ± 3.4 | 58: 12.7 ± 2.8 |
+| 16–18 | 88: 11.6 ± 2.6 | 69: 10.6 ± 3.0 | 102: 8.6 ± 2.3 |
+| 19–21 | 141: 11.7 ± 2.7 | 147: 12.9 ± 2.5 | 141: 13.3 ± 2.7 |
+| 22–24 | 140: 11.3 ± 2.5 | 145: 11.7 ± 2.5 | 142: 12.4 ± 2.7 |
+| 25–27 | 148: 10.9 ± 2.4 | 130: 11.0 ± 2.6 | 135: 11.5 ± 2.5 |
+| 28–30 | 148: 11.8 ± 2.4 | 143: 11.5 ± 2.2 | 140: 11.2 ± 2.2 |
+| 31–33 | 143: 11.5 ± 2.5 | 139: 11.4 ± 2.4 | 112: 11.8 ± 2.6 |
+| 34+ | 20: 15.6 ± 2.9 | 55: 12.9 ± 3.3 | 56: 12.8 ± 2.7 |
 
 Five footballers followed, age then level:
 
 | Followed | Season 1 | Season 2 | Season 3 |
 | --- | --- | --- | --- |
-| W. Ulvström, wide midfield | 17: 12.74 | 18: 13.70 | 19: 14.70 |
-| D. Ostard, centre back | 23: 13.96 | 24: 14.22 | 25: 14.22 |
-| W. Froquist, centre back | 29: 13.17 | 30: 13.17 | 31: 12.87 |
-| P. Dalenko, full back | 33: 12.22 | 34: 11.65 | retired |
+| W. Ulvström, WideMidfield | 17: 12.74 | 18: 13.70 | 19: 14.70 |
+| D. Ostard, CentreBack | 23: 13.96 | 24: 14.22 | 25: 14.22 |
+| W. Froquist, CentreBack | 29: 13.17 | 30: 13.17 | 31: 12.87 |
+| P. Dalenko, FullBack | 33: 12.22 | 34: 11.65 | retired |
 | Z. Wesström, keeper | 34: 18.67 | 35: 18.33 | 36: 17.67 |
 
-- **The world holds its level.** Over six seasons its mean drifts at most +0.17 (+0.17, +0.15, +0.07, −0.01, −0.04). The generator's world is young-heavy, so it rises first.
+- **The world holds its level.** Over six seasons its mean drifts at most +0.17 (+0.17, +0.12, +0.04, −0.03, −0.01). The generator's world is young-heavy, so it rises first.
   - **Before contracts (#201),** it drifted +0.18, +0.20, +0.11, +0.03, −0.03, and retirements built to about 50 a season, the youth coming in at 9 or so.
-  - **With contracts,** the clubs release about 30 at the first turn and 80–90 at the next, mostly the old and the least ([contracts.md](contracts.md)). So fewer retire from a club, 14–30 a turn after the first, and the youth replace both: 63–77 a turn after the first, and the places mid-season sales left (#203). The released are replaced by youth below them, so the level eases.
+  - **With contracts,** the clubs release 33 at the first turn and 75–91 at the next, mostly the old and the least ([contracts.md](contracts.md)). So fewer retire from a club, 14–28 a turn after the first, and the youth replace both: 69–81 a turn after the first, and the places mid-season sales left (#203). The released are replaced by youth below them, so the level eases.
 - **The references were chosen by it.**
   - **In #194,** without training, growth 1.2 and decline 0.8 drifted +0.32 by the third season, past the issue's ±0.3, and growth 1.0 and decline 1.0 stayed within it.
   - **With training (#196),** CPU managers train Hard in most full weeks, and growth 1.0 drifted +0.34. At 0.85 the world stays within it, as above.

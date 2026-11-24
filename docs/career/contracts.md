@@ -83,30 +83,30 @@ A format-9 world reads each footballer's contract by the generator's rule at his
 
 | Turn | Division | Renewed under 24 | Renewed 24–29 | Renewed 30 and over | Released under 24 | Released 24–29 | Released 30 and over | Signed free |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 0 | 14 | 19 | 0 | 3 | 10 | 0 |
-| 1 | 2 | 0 | 21 | 23 | 0 | 6 | 7 | 4 |
+| 1 | 1 | 0 | 14 | 17 | 0 | 3 | 12 | 2 |
+| 1 | 2 | 0 | 22 | 22 | 0 | 5 | 9 | 3 |
 | 1 | 3 | 0 | 19 | 23 | 0 | 0 | 4 | 3 |
-| 2 | 1 | 11 | 21 | 37 | 11 | 7 | 23 | 10 |
-| 2 | 2 | 10 | 22 | 37 | 11 | 4 | 7 | 5 |
-| 2 | 3 | 16 | 18 | 34 | 6 | 2 | 13 | 2 |
-| 3 | 1 | 10 | 13 | 34 | 6 | 6 | 19 | 5 |
-| 3 | 2 | 12 | 28 | 27 | 6 | 2 | 15 | 1 |
-| 3 | 3 | 7 | 17 | 37 | 8 | 5 | 10 | 9 |
+| 2 | 1 | 11 | 22 | 37 | 11 | 6 | 24 | 11 |
+| 2 | 2 | 9 | 21 | 34 | 12 | 5 | 6 | 3 |
+| 2 | 3 | 17 | 18 | 34 | 5 | 2 | 13 | 1 |
+| 3 | 1 | 9 | 13 | 34 | 6 | 6 | 20 | 2 |
+| 3 | 2 | 10 | 27 | 28 | 9 | 1 | 15 | 3 |
+| 3 | 3 | 10 | 18 | 38 | 4 | 6 | 9 | 7 |
 
 **After each turn:**
 
 | Turn | Free agents | Retired unsigned | Wage bill over budget, division 1: mean, highest | Division 2 | Division 3 | Squads |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 22 | 1 | 0.97, 1.19 | 0.90, 1.20 | 0.86, 1.18 | 23–23 |
-| 2 | 63 | 29 | 1.01, 1.27 | 0.98, 1.21 | 1.01, 1.21 | 23–23 |
-| 3 | 60 | 66 | 0.99, 1.49 | 0.91, 1.21 | 0.99, 1.24 | 23–23 |
+| 1 | 23 | 2 | 0.96, 1.13 | 0.89, 1.19 | 0.86, 1.18 | 23–23 |
+| 2 | 64 | 31 | 0.99, 1.17 | 0.96, 1.22 | 1.01, 1.21 | 23–23 |
+| 3 | 61 | 68 | 0.96, 1.39 | 0.88, 1.18 | 0.98, 1.27 | 23–23 |
 
-- **Most contracts ending are renewed:** seven to eight in ten. The released are mostly the oldest and the least, and the young without room to grow: 30 at the first turn, then 84 and 77.
+- **Most contracts ending are renewed:** seven to eight in ten. The released are mostly the oldest and the least, and the young without room to grow: 33 at the first turn, then 84 and 76.
 - **Squads stay whole:** 23 at every club, the youth filling what releases and retirements leave.
-- **Wage bills sit at their budgets:** a division's mean is 0.86–1.01 of its budget over three seasons, and 0.86–1.04 over six.
-- **The highest:** before the transfer market (#203), 1.67 at the third turn was club 9's, two seasons after relegation from the top. The relegation clause put its wages at the second division's rate, but its footballers were better than that division's and its revenue was the division's. With the market it sells: the highest is 1.49 over three seasons, and 1.72 over six.
-- **Free agents:** 22 after the first turn, then 59–64. Of those unsigned a season, 29, then 58–66, retire. Clubs sign only those above their youth, and the budget holds them back.
-- **The world's level holds:** development's drift by the third season is +0.15 (#194, [development.md](development.md)), and training's on Auto is +0.16 ([training.md](training.md)).
+- **Wage bills sit at their budgets:** a division's mean is 0.86–1.01 of its budget, over three seasons and over six.
+- **The highest:** before the transfer market (#203), 1.68 at the third turn was club 9's, two seasons after relegation from the top. The relegation clause put its wages at the second division's rate, but its footballers were better than that division's and its revenue was the division's. With the market it sells: the highest is 1.39 over three seasons, and 1.63 over six.
+- **Free agents:** 23 after the first turn, then 57–66. Of those unsigned a season, 31, then 63–68, retire. Clubs sign only those above their youth, and the budget holds them back.
+- **The world's level holds:** development's drift by the third season is +0.12 (#194, [development.md](development.md)), and training's on Auto is +0.13 ([training.md](training.md)).
 
 ## Tests
 

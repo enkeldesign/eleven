@@ -57,10 +57,10 @@ Each club not on Auto, with its training, at world format 7 ([world.md](world.md
 
 | Training | Under-24s' level a season | XI's condition at kick-off | Training injuries a club a season | Days lost a club a season | Drift by the last season |
 | --- | --- | --- | --- | --- | --- |
-| Light | +0.51 | 100.0 | 8.6 | 47 | +0.02 |
-| Normal | +0.61 | 99.7 | 14.1 | 77 | +0.11 |
-| Hard | +0.71 | 98.9 | 20.9 | 119 | +0.18 |
-| Auto | +0.67 | 99.7 | 19.2 | 108 | +0.16 |
+| Light | +0.51 | 100.0 | 8.6 | 47 | +0.03 |
+| Normal | +0.60 | 99.7 | 14.1 | 77 | +0.08 |
+| Hard | +0.71 | 98.9 | 20.9 | 119 | +0.15 |
+| Auto | +0.66 | 99.7 | 19.1 | 108 | +0.13 |
 
 - **The trade-off holds:** Hard develops the young a third faster than Light, at two and a half times the training injuries.
 - **Condition hardly separates them at kick-off.** A match's cost is recovered in 3.5 days, and most gaps are longer. The cost shows in a cup week's three days, and in a squad thinned by injuries.
@@ -68,7 +68,7 @@ Each club not on Auto, with its training, at world format 7 ([world.md](world.md
 - **Auto trains Hard in most full weeks,** since a rested XI is rarely below 97. So #194's reference growth of 1.0 drifted +0.34 by the third season, past ±0.3.
   - **The fix:** `GrowthYoung` is 0.85.
   - **The result:** Auto drifted +0.26 by the third season, and Hard everywhere +0.30.
-  - **With contracts (#201),** the released are replaced by youth below them: Auto drifts +0.16 and Hard +0.18 with transfers (#203), as in the table. The table counts the clubs' footballers, the free agents left out.
+  - **With contracts (#201),** the released are replaced by youth below them: Auto drifts +0.13 and Hard +0.15 with transfers (#203), as in the table. The table counts the clubs' footballers, the free agents left out.
 
 ## Tests
 
