@@ -43,12 +43,30 @@ namespace Eleven.Simulation.Harness
             Press = Math.Clamp(from.Press + (to.Press - from.Press) * share, TeamTactic.PressMin, TeamTactic.PressMax),
         };
 
-        /// <summary>The plans of the club's manager, or the reference plans if it has none.</summary>
-        public static TeamTactic[] Plans(World world, int club, int team)
+        /// <summary>
+        /// His three plans for meeting <paramref name="opponent"/> (#191): his own, shifted by what
+        /// he remembers of them (<see cref="ManagerMemory.Shift"/>). No memory of them, his own.
+        /// </summary>
+        public static TeamTactic[] Plans(Manager manager, int team, int opponent, MemoryRules? rules = null)
+        {
+            TeamTactic[] plans = Plans(manager, team);
+            (double line, double step, _) = ManagerMemory.Shift(manager, opponent, rules);
+            if (line == 0 && step == 0) return plans;
+            for (int i = 0; i < plans.Length; i++)
+            {
+                plans[i].Line = Math.Clamp(plans[i].Line + line, -TeamTactic.LineMax, TeamTactic.LineMax);
+                plans[i].StepUp = Math.Clamp(plans[i].StepUp + step, 0, TeamTactic.StepUpMax);
+            }
+
+            return plans;
+        }
+
+        /// <summary>The plans of the club's manager for meeting <paramref name="opponent"/> (0: anyone), or the reference plans if it has none.</summary>
+        public static TeamTactic[] Plans(World world, int club, int team, int opponent = 0)
         {
             Club? c = world.Clubs.Find(x => x.Id == club);
             Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
-            return m == null ? new[] { TeamTactic.Reference(team), TeamTactic.Reference(team), TeamTactic.Reference(team) } : Plans(m, team);
+            return m == null ? new[] { TeamTactic.Reference(team), TeamTactic.Reference(team), TeamTactic.Reference(team) } : Plans(m, team, opponent);
         }
 
         /// <summary>His profile in a match (#182): managing tactics, by his temperament and competences.</summary>
@@ -71,17 +89,30 @@ namespace Eleven.Simulation.Harness
 
         private static int Competence(Manager m, string id) => m.Competences[ManagerCompetences.Ids.IndexOf(id)];
 
-        /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
-        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config)
+        /// <summary>His profile for meeting <paramref name="opponent"/> (#191): his own, protecting earlier by what he remembers of them.</summary>
+        public static ManagerProfile Profile(Manager manager, SimConfig config, int opponent, MemoryRules? rules = null)
         {
-            ManagerProfile Of(int club)
+            ManagerProfile p = Profile(manager, config);
+            (_, _, double earlier) = ManagerMemory.Shift(manager, opponent, rules);
+            if (earlier == 0) return p;
+            return new ManagerProfile(p.Tactics, p.ChaseFrom, p.ChaseMargin, Math.Clamp(p.ProtectFrom - earlier, 0, 1), p.Spread, p.SubAfter, p.SubFatigue);
+        }
+
+        /// <summary>
+        /// Both sides' managers' profiles for a career match, by team id: a club without a manager
+        /// has the config's. With <paramref name="humanHome"/>, the home side is the human's and
+        /// its manager's profile is his own, unshifted by memory (#191).
+        /// </summary>
+        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config, bool humanHome = false)
+        {
+            ManagerProfile Of(int club, int opponent, bool remembers)
             {
                 Club? c = world.Clubs.Find(x => x.Id == club);
                 Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
-                return m == null ? ManagerProfile.From(config) : Profile(m, config);
+                return m == null ? ManagerProfile.From(config) : remembers ? Profile(m, config, opponent) : Profile(m, config);
             }
 
-            return new Dictionary<int, ManagerProfile> { [Squads.HomeTeam] = Of(homeClub), [Squads.AwayTeam] = Of(awayClub) };
+            return new Dictionary<int, ManagerProfile> { [Squads.HomeTeam] = Of(homeClub, awayClub, !humanHome), [Squads.AwayTeam] = Of(awayClub, homeClub, true) };
         }
 
         /// <summary>The club's formation: its manager's preferred one, or the 4-4-2.</summary>

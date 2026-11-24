@@ -294,8 +294,7 @@ namespace Eleven.Host
                 : _perSide == 1
                 ? OneVOne.Match(_config, _matchSeed, home: _bench.Capabilities, awayCpu: _opponentSkill)
                 : Squads.Match(_config, _matchSeed, _perSide, awayCpu: _opponentSkill, home: _bench.Capabilities, homeTactics: MatchPlans.Plans, awayTactics: MatchPlans.Plans));
-            int opponent = _careerMatch ? (_careerFixture.Home == _career.Club ? _careerFixture.Away : _careerFixture.Home) : 0;
-            _matchProfiles = _careerMatch ? CareerManagers.Profiles(_career.World, _career.Club, opponent, _config)
+            _matchProfiles = _careerMatch ? _career.ProfilesFor(_careerFixture, _config)
                 : _quick ? CareerManagers.Profiles(QuickMatch.World, _quickHome.Id, _quickAway.Id, _config)
                 : null;
             _switcher = new SwitchController(OneVOne.HomeController, _switchMode);

@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 4;
+        public const int FormatVersion = 5;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -111,6 +111,45 @@ namespace Eleven.Career
                 w.WriteInt32(m.Id);
                 w.WriteByte((byte)m.Pressing);
                 w.WriteByte((byte)m.Depth);
+            }
+
+            // Format 5 (#191): each manager with memories, his id, then his meetings grouped by
+            // opponent: its id and count, then each meeting in a few bytes, the season in two, the
+            // formation and whether it was played in full in one, and its metrics only if it was.
+            var remembering = world.Managers.FindAll(m => m.Memory.Count > 0);
+            w.WriteInt32(remembering.Count);
+            foreach (Manager m in remembering)
+            {
+                w.WriteInt32(m.Id);
+                var opponents = new List<int>();
+                foreach (Meeting x in m.Memory)
+                {
+                    if (!opponents.Contains(x.Opponent)) opponents.Add(x.Opponent);
+                }
+
+                w.WriteInt32(opponents.Count);
+                foreach (int opponent in opponents)
+                {
+                    List<Meeting> met = m.Memory.FindAll(x => x.Opponent == opponent);
+                    w.WriteInt32(opponent);
+                    w.WriteByte(Small(met.Count));
+                    foreach (Meeting x in met)
+                    {
+                        int season = Math.Clamp(x.Season, 0, ushort.MaxValue);
+                        w.WriteByte((byte)(season >> 8));
+                        w.WriteByte((byte)season);
+                        w.WriteByte(Small(x.Matchday));
+                        w.WriteByte(Small(x.GoalsFor));
+                        w.WriteByte(Small(x.GoalsAgainst));
+                        w.WriteByte(Small(x.LateFor));
+                        w.WriteByte(Small(x.LateAgainst));
+                        w.WriteByte((byte)((byte)x.OpponentFormation | (x.Full ? FullMatch : 0)));
+                        if (!x.Full) continue;
+                        w.WriteDouble(x.Ppda, "ppda");
+                        w.WriteDouble(x.OpponentPpda, "opponentPpda");
+                        w.WriteDouble(x.Possession, "possession");
+                    }
+                }
             }
 
             return w.ToArray();
@@ -245,9 +284,52 @@ namespace Eleven.Career
                 }
             }
 
+            if (version >= 5)
+            {
+                int remembering = Count(r.ReadInt32());
+                var clubIds = new HashSet<int>();
+                foreach (Club c in world.Clubs) clubIds.Add(c.Id);
+                for (int i = 0; i < remembering; i++)
+                {
+                    int id = r.ReadInt32();
+                    Manager m = world.Managers.Find(x => x.Id == id) ?? throw new FormatException($"Memories for manager {id}, who isn't in the world.");
+                    int opponents = Count(r.ReadInt32());
+                    for (int o = 0; o < opponents; o++)
+                    {
+                        int opponent = r.ReadInt32();
+                        if (!clubIds.Contains(opponent)) throw new FormatException($"Manager {id} remembers club {opponent}, which isn't in the world.");
+                        int meetings = r.ReadByte();
+                        for (int k = 0; k < meetings; k++)
+                        {
+                            var x = new Meeting { Opponent = opponent, Season = (r.ReadByte() << 8) | r.ReadByte(), Matchday = r.ReadByte(), GoalsFor = r.ReadByte(), GoalsAgainst = r.ReadByte(), LateFor = r.ReadByte(), LateAgainst = r.ReadByte() };
+                            byte packed = r.ReadByte();
+                            var formation = (Formation)(packed & ~FullMatch);
+                            if (!Enum.IsDefined(typeof(Formation), formation)) throw new FormatException($"Manager {id} remembers an unknown formation {(int)formation}.");
+                            x.OpponentFormation = formation;
+                            x.Full = (packed & FullMatch) != 0;
+                            if (x.Full)
+                            {
+                                x.Ppda = r.ReadDouble("ppda");
+                                x.OpponentPpda = r.ReadDouble("opponentPpda");
+                                x.Possession = r.ReadDouble("possession");
+                                if (x.Ppda < 0 || x.OpponentPpda < 0 || x.Possession < 0 || x.Possession > 1) throw new FormatException($"Manager {id}'s memory has metrics out of range.");
+                            }
+
+                            m.Memory.Add(x);
+                        }
+                    }
+                }
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        // A remembered meeting's formation byte: its high bit says the match was played in full.
+        private const byte FullMatch = 0x80;
+
+        // A small count as a byte, at most 255.
+        private static byte Small(int n) => (byte)Math.Clamp(n, 0, 255);
 
         // A count read from the bytes, refused when it can't be one.
         private static int Count(int n) => n < 0 || n > 1_000_000 ? throw new FormatException($"Invalid count {n}.") : n;

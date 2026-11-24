@@ -94,7 +94,22 @@ namespace Eleven.Simulation.Harness
             string what = f.Competition == CompetitionId.Cup
                 ? FormattableString.Invariant($"Cup, {CompetitionRules.CupRounds[f.Round - 1]}")
                 : FormattableString.Invariant($"League round {f.Round}");
-            return $"{what}: {Short(s, f.Home)} v {Short(s, f.Away)}, {ground}";
+            string last = LastMet(s, f.Home == s.Club ? f.Away : f.Home);
+            return $"{what}: {Short(s, f.Home)} v {Short(s, f.Away)}, {ground}" + (last.Length > 0 ? $". {last}" : "");
+        }
+
+        /// <summary>
+        /// The human's last meeting with <paramref name="opponent"/> (#191), from his club's
+        /// manager's memory: "Last met: lost 1–2 (season 1, matchday 7)". Empty if they haven't met.
+        /// </summary>
+        public static string LastMet(CareerSession s, int opponent)
+        {
+            Club? c = s.World.Clubs.Find(x => x.Id == s.Club);
+            Manager? m = c == null ? null : s.World.Managers.Find(x => x.Id == c.ManagerId);
+            Meeting? last = m?.Memory.FindLast(x => x.Opponent == opponent);
+            if (last == null) return "";
+            string how = last.GoalsFor > last.GoalsAgainst ? "won" : last.GoalsFor < last.GoalsAgainst ? "lost" : "drew";
+            return FormattableString.Invariant($"Last met: {how} {last.GoalsFor}–{last.GoalsAgainst} (season {last.Season}, matchday {last.Matchday})");
         }
 
         /// <summary>The human's division's table: place, club, played, goal difference and points; his row marked.</summary>

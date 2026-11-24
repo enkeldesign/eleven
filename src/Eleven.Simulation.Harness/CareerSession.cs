@@ -88,18 +88,32 @@ namespace Eleven.Simulation.Harness
         /// the fixture's ground, since the human's controller is the home side's (#93); the full
         /// simulation has no home advantage (#163). A player-manager plays his club's footballer
         /// (<see cref="QuickMatch.Match"/>); a manager-only career's sides are both CPU, on their
-        /// footballers' own values. Both sides keep their stored plans.
+        /// footballers' own values. Both sides keep their stored plans: the opponent's manager's
+        /// shifted by what he remembers of the human's club, the human's own his manager's as
+        /// they are, since what he makes of the last meeting is his (#191).
         /// </summary>
         public SimState MatchFor(Fixture fixture, ulong seed)
         {
             (int opponent, HashSet<int> mine, HashSet<int> theirs) = Sides(fixture);
             SimConfig c = MatchConfig(fixture);
+            TeamTactic[] own = CareerManagers.Plans(World, Club, Squads.HomeTeam);
             SimState state = Role == CareerRole.PlayerManager
-                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs, Squad)
-                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeOut: mine, awayOut: theirs, rotation: Squad);
+                ? QuickMatch.Match(c, World, Club, opponent, PerSide, seed, mine, theirs, Squad, homeTactics: own)
+                : CareerSquads.Match(c, World, Club, opponent, PerSide, seed, bothCpu: true, homeTactics: own, homeOut: mine, awayOut: theirs, rotation: Squad);
             // #177: each footballer starts at his own fatigue from his condition.
             CareerSquads.TiredStart(state, World, LineupFor(fixture), Squad);
             return state;
+        }
+
+        /// <summary>
+        /// Each side's manager's profile for the human's fixture (#182), by team id, his club the
+        /// simulation's home side: the opponent's shifted by what he remembers, the human's
+        /// manager's his own (#191).
+        /// </summary>
+        public Dictionary<int, ManagerProfile> ProfilesFor(Fixture fixture, SimConfig config)
+        {
+            (int opponent, _, _) = Sides(fixture);
+            return CareerManagers.Profiles(World, Club, opponent, config, humanHome: true);
         }
 
         // The human's opponent, and each side's footballers out of the fixture (#176).
