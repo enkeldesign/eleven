@@ -151,6 +151,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>The whole matchday quick-simmed, the human's fixture too.</summary>
         public void Simulate() => CareerSeasons.PlayMatchday(Config, World, Season, Rules, PerSide, (Func<Fixture, PlayedFixture?>?)null, Squad);
 
+        /// <summary>Your club's training (#196): Auto, then Light, Normal and Hard, and round again. Returns the new one.</summary>
+        public TrainingIntensity CycleTraining() => TrainingIntensity.Auto;
+
         /// <summary>
         /// Two footballers change places in the human's picks (#179); the first swap starts from
         /// the AI's pick. False, and nothing changed, if either isn't his or one who is out would

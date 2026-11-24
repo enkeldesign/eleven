@@ -135,7 +135,7 @@ namespace Eleven.Career
         /// season's <paramref name="matchdays"/>. His share of starts is of his club's matches
         /// with a result so far.
         /// </summary>
-        public static void Matchday(World world, Season season, IReadOnlyCollection<int> starters, int matchdays, DevelopmentRules? rules = null)
+        public static void Matchday(World world, Season season, IReadOnlyCollection<int> starters, int matchdays, DevelopmentRules? rules = null, IReadOnlyDictionary<int, double>? clubGrowth = null)
         {
             rules ??= DevelopmentRules.Reference;
             var started = new HashSet<int>(starters);

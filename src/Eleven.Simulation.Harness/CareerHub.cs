@@ -353,6 +353,9 @@ namespace Eleven.Simulation.Harness
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
 
+        /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
+        public static string TrainingLine(CareerSession s) => "";
+
         /// <summary>
         /// The season's review (#194), from the season's turn until your club's first match of the
         /// new one: your club's biggest risers last season, its retirements and its youth. Empty

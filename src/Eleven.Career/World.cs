@@ -44,6 +44,20 @@ namespace Eleven.Career
         /// picks, as it does for every other club.
         /// </summary>
         public List<int> Picks = new List<int>();
+
+        /// <summary>How hard the club trains (#196): Auto is its manager's choice, matchday by matchday.</summary>
+        public TrainingIntensity Training;
+    }
+
+    /// <summary>A club's training (#196). Numeric values are stable and encoded as one byte.</summary>
+    public enum TrainingIntensity : byte
+    {
+        /// <summary>The manager chooses, matchday by matchday (<see cref="Training.Choose"/>).</summary>
+        Auto = 0,
+
+        Light = 1,
+        Normal = 2,
+        Hard = 3,
     }
 
     /// <summary>A footballer: identity, positions, attributes (<see cref="PlayerAttributes"/>) and condition.</summary>

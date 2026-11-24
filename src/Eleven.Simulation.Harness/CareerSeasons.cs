@@ -61,11 +61,16 @@ namespace Eleven.Simulation.Harness
         /// left out of its XI; each fixture by the hook if it gives one, else the quick-sim; then
         /// the matchday's bans served and days passed, its cards and injuries applied, and on.
         /// </summary>
-        public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, PlayedFixture?>? hook, SquadRules? squad = null)
+        public static List<Fixture> PlayMatchday(SimConfig config, World world, Season season, CompetitionRules rules, int perSide, Func<Fixture, PlayedFixture?>? hook, SquadRules? squad = null,
+            Action<TrainingInjury>? trained = null, TrainingRules? training = null)
         {
             SquadRules sr = squad ?? SquadRules.Reference;
             List<Fixture> day = SeasonEngine.Next(season, rules);
             MatchdayKind kind = SeasonCalendar.Of(rules)[season.Matchday].Kind;
+
+            // Each club's XI's condition at this kick-off (#196), for its manager's training after it.
+            var kickOff = new Dictionary<int, double>();
+            foreach (Club c in world.Clubs) kickOff[c.Id] = XiCondition(world, c.Id, perSide, kind, sr);
             var played = new List<(Fixture Fixture, MatchResult Result, IReadOnlyDictionary<int, int> Lineup)>(day.Count);
             foreach (Fixture f in day)
             {
@@ -94,10 +99,31 @@ namespace Eleven.Simulation.Harness
                 }
             }
 
-            Development.Matchday(world, season, starters, SeasonCalendar.Of(rules).Count);
-            Availability.Pass(world, Availability.GapAfter(rules, season.Matchday), sr);
+            // Training (#196): each club's intensity for the days to the next matchday, its own or its manager's.
+            int gap = Availability.GapAfter(rules, season.Matchday);
+            var intensity = new Dictionary<int, TrainingIntensity>();
+            var growth = new Dictionary<int, double>();
+            foreach (Club c in world.Clubs)
+            {
+                TrainingIntensity t = c.Training != TrainingIntensity.Auto ? c.Training : Training.Choose(kickOff[c.Id], gap, training);
+                intensity[c.Id] = t;
+                growth[c.Id] = Training.Of((training ?? TrainingRules.Reference).Growth, t);
+            }
+
+            Development.Matchday(world, season, starters, SeasonCalendar.Of(rules).Count, null, growth);
+            foreach (TrainingInjury injury in Training.Pass(world, season, gap, intensity, sr, training)) trained?.Invoke(injury);
             SeasonEngine.Advance(season, rules);
             return day;
+        }
+
+        /// <summary>A club's XI's mean condition (#196): its starters for a match of this kind, as the AI picks them.</summary>
+        public static double XiCondition(World world, int club, int perSide, MatchdayKind kind, SquadRules? squad = null)
+        {
+            SquadSelection xi = CareerSquads.Selection(world, club, perSide, Availability.OutOf(world, club, kind), squad);
+            if (xi.Starters.Count == 0) return 100;
+            double sum = 0;
+            foreach (Player p in xi.Starters) sum += p.Fitness;
+            return sum / xi.Starters.Count;
         }
 
         /// <summary>Plays the season to its end.</summary>
