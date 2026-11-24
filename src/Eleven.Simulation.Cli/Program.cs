@@ -484,6 +484,44 @@ internal static class Program
                 return plans.All(t => t.Finished) ? 0 : 1;
             }
 
+            case "managers" when args.Length >= 2 && args[1] == "career":
+            {
+                // #182: the world's managers managing career matches: each side's plan switches and
+                // substitutions a match, by its manager's temperament. `managers career [count]`.
+                int mcount = args.Length >= 3 && int.TryParse(args[2], out int mc) && mc > 0 ? mc : 96;
+                SimConfig mconfig = CareerQuickSimCalibration.Config();
+                Eleven.Career.World mworld = CareerQuickSimCalibration.World();
+                var mfixtures = CareerQuickSimCalibration.Fixtures(mworld).Take(mcount).ToList();
+                var tallies = new (int Temperament, int Switches, int Chase, int Protect, int Subs)[mfixtures.Count * 2];
+                System.Threading.Tasks.Parallel.For(0, mfixtures.Count, i =>
+                {
+                    (int home, int away, ulong seed) = mfixtures[i];
+                    int hs = 0, asw = 0, hc = 0, ac = 0, hp = 0, ap = 0;
+                    MatchResult r = CareerSquads.Play(mconfig, mworld, home, away, 10, seed, observe: e =>
+                    {
+                        if (e.Kind != SimEventKind.TacticSwitched) return;
+                        bool h = e.Subject == Squads.HomeTeam;
+                        if (h) hs++; else asw++;
+                        if (e.Other == 1) { if (h) hc++; else ac++; }
+                        if (e.Other == 2) { if (h) hp++; else ap++; }
+                    });
+                    int T(int club) => mworld.Managers.Single(m => m.Id == mworld.Clubs.Single(c => c.Id == club).ManagerId).Temperament;
+                    tallies[2 * i] = (T(home), hs, hc, hp, r.HomeSubstitutions);
+                    tallies[2 * i + 1] = (T(away), asw, ac, ap, r.AwaySubstitutions);
+                });
+                Console.WriteLine("| Temperament | Sides | Switches a match | To chase | To protect | Substitutions a match |");
+                Console.WriteLine("| --- | --- | --- | --- | --- | --- |");
+                foreach ((string name, int lo, int hi) in new[] { ("cautious, 1–7", 1, 7), ("middle, 8–13", 8, 13), ("bold, 14–20", 14, 20) })
+                {
+                    var at = tallies.Where(t => t.Temperament >= lo && t.Temperament <= hi).ToList();
+                    if (at.Count == 0) continue;
+                    Console.WriteLine(FormattableString.Invariant($"| {name} | {at.Count} | {at.Average(t => t.Switches):F2} | {at.Sum(t => t.Chase)} | {at.Sum(t => t.Protect)} | {at.Average(t => t.Subs):F2} |"));
+                }
+
+                Console.WriteLine(FormattableString.Invariant($"| all | {tallies.Length} | {tallies.Average(t => t.Switches):F2} | {tallies.Sum(t => t.Chase)} | {tallies.Sum(t => t.Protect)} | {tallies.Average(t => t.Subs):F2} |"));
+                return 0;
+            }
+
             case "managers" when args.Length >= 2:
             {
                 // #127: the CPU managers' decision distributions under each policy preset, and the scripted seat against them.

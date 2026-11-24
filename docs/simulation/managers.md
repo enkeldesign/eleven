@@ -35,7 +35,9 @@ His plans are, by convention, **balanced** (the first), **chase** and **protect*
 | `cpuProtectFrom` | 0–1 | 0.67 | 0.67 | 0.83 |
 | `cpuTacticSpread` | 0–0.25 | 0.05 | 0.05 | 0.05 |
 
-**Off by default.** With it on, his tactical substitutions change matches even when a side's three plans are the same. Every reference stays as it was with it off. Whether CPU sides manage by default, and with which preset, is for M5's gate (#130).
+**Off by default.** With it on, his tactical substitutions change matches even when a side's three plans are the same. Every reference stays as it was with it off.
+
+**A side's own knobs** (#182): `ManagerControllers.Append(simulator, commands, profiles)` takes a `ManagerProfile` for each side, by team id, overriding these knobs for that side alone. It is his controller's input, not state or config: his decisions are recorded commands (INV-10), so a replay needs none. Without one, a side has the config's. The career's managers manage every career match this way ([managers.md](../career/managers.md#his-profile)).
 
 ## Measured
 

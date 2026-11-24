@@ -2,6 +2,7 @@
 
 M6.09 (#80): managers as entities, with competence, philosophy, temperament and memory, driving the M5 policies. Its parts so far:
 - **#180, a manager's philosophy:** his formation and his three plans, and an XI picked for his formation.
+- **#182, managers manage:** each by his own profile, in every career match.
 
 ## Who he is
 
@@ -40,7 +41,43 @@ Each field stays within `TeamTactic`'s ranges.
 
 `CareerSquads.Match` stores each side's plans and formation from its manager, unless a caller gives others. That holds for the human's fixture, played or watched, and for a quick match from Home. The quick-sim plays its sample's model, now fitted to matches played this way ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
 
-M5's CPU managers switch plans only with `cpuTactics` on, which is off by default. So in a career match today, each side plays its balanced plan, and the chase and protect plans wait for M6.09b's managers to use them.
+Since #182 each side's manager uses them ([his profile](#his-profile)).
+
+## His profile
+
+M5's CPU manager (#127) decides by knobs that are config, the same for both sides, and off by default (`cpuTactics`). `ManagerProfile` gives each side its own knobs (#182).
+- **They're his controller's input, not state or config.** His decisions are recorded commands (INV-10), so a replay needs no profile, and no state hash, config hash or simulation reference moves.
+- **Without a profile** a side has the config's, as before.
+
+`CareerManagers.Profile(manager, config)` manages tactics always. Its anchors are #127's two presets, and its values are untuned references:
+
+| Knob | From | Cautious or least | Bold or most |
+| --- | --- | --- | --- |
+| `ChaseFrom` | temperament | 0.67 | 0.5 |
+| `ProtectFrom` | temperament | 0.67 | 0.83 |
+| `ChaseMargin` | — | 1 | 1 |
+| `Spread` | tactics competence | 0.1 | 0.02 |
+| `SubAfter` | adaptability | 0.75 | 0.6 |
+| `SubFatigue` | adaptability | 0.25 | 0.15 |
+
+**Every career match is managed:** the human's fixture in the host, a quick match from Home, and every career match the harness plays, the quick-sim's samples included.
+- **A player-manager manages his own side,** as before: no CPU manager reads a side a human plays in.
+- **Watching,** his club's manager manages it.
+
+### Measured
+
+`eleven-sim managers career 96`: the eleven-a-side sample's first 96 fixtures, each side by its manager.
+
+| Temperament | Sides | Switches a match | To chase | To protect | Substitutions a match |
+| --- | --- | --- | --- | --- | --- |
+| cautious, 1–7 | 58 | 0.79 | 15 | 24 | 2.12 |
+| middle, 8–13 | 65 | 0.74 | 23 | 20 | 1.74 |
+| bold, 14–20 | 69 | 0.77 | 27 | 20 | 1.84 |
+| all | 192 | 0.77 | 65 | 64 | 1.89 |
+
+- **The bold chase more and the cautious protect more:** they reach their plans at different moments of the same matches.
+- **About one switch a side a match,** fewer than #127's two a match with both presets. Most career matches are close, and level for long spells.
+- **Managed, career matches draw more:** 48 % of the eleven-a-side sample against 43 % unmanaged, at 1.17 goals a match ([quicksim.md](../simulation/quicksim.md#eleven-a-side)).
 
 ## An XI for his formation
 
@@ -52,6 +89,12 @@ The selection fills each slot from its line (#159). At ten outfielders the lines
 So a 4-3-3 picks three forwards and a 5-3-2 five defenders. The 4-4-2's lines are the old fixed rule's, so a 4-4-2 club picks as before. Below ten outfielders, the old rule stands.
 
 ## Tests
+
+`ManagerProfileTests`:
+- with no profiles, the managers' commands are as before;
+- a profile decides for its side whatever the config;
+- a manager's profile by temperament and competences;
+- a career match managed on both sides, a player-manager's own side not.
 
 `ManagerPlansTests`:
 - a manager without a philosophy plays the reference, every plan in his formation;

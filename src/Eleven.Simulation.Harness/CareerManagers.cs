@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Eleven.Career;
 using Eleven.Simulation;
 
@@ -48,6 +49,39 @@ namespace Eleven.Simulation.Harness
             Club? c = world.Clubs.Find(x => x.Id == club);
             Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
             return m == null ? new[] { TeamTactic.Reference(team), TeamTactic.Reference(team), TeamTactic.Reference(team) } : Plans(m, team);
+        }
+
+        /// <summary>His profile in a match (#182): managing tactics, by his temperament and competences.</summary>
+        public static ManagerProfile Profile(Manager manager, SimConfig config)
+        {
+            // #127's presets are the anchors: cautious chases and protects from 0.67, bold chases
+            // from 0.5 and protects from 0.83. The able read the moment nearer; the adaptable change earlier.
+            double bold = Share(manager.Temperament), tactics = Share(Competence(manager, "tactics")), adapt = Share(Competence(manager, "adaptability"));
+            return new ManagerProfile(
+                tactics: true,
+                chaseFrom: (1 - bold) * 0.67 + bold * 0.5,
+                chaseMargin: 1,
+                protectFrom: (1 - bold) * 0.67 + bold * 0.83,
+                spread: (1 - tactics) * 0.1 + tactics * 0.02,
+                subAfter: (1 - adapt) * 0.75 + adapt * 0.6,
+                subFatigue: (1 - adapt) * 0.25 + adapt * 0.15);
+        }
+
+        private static double Share(int value) => (Math.Clamp(value, 1, 20) - 1) / 19.0;
+
+        private static int Competence(Manager m, string id) => m.Competences[ManagerCompetences.Ids.IndexOf(id)];
+
+        /// <summary>Both sides' managers' profiles for a career match, by team id: a club without a manager has the config's.</summary>
+        public static Dictionary<int, ManagerProfile> Profiles(World world, int homeClub, int awayClub, SimConfig config)
+        {
+            ManagerProfile Of(int club)
+            {
+                Club? c = world.Clubs.Find(x => x.Id == club);
+                Manager? m = c == null ? null : world.Managers.Find(x => x.Id == c.ManagerId);
+                return m == null ? ManagerProfile.From(config) : Profile(m, config);
+            }
+
+            return new Dictionary<int, ManagerProfile> { [Squads.HomeTeam] = Of(homeClub), [Squads.AwayTeam] = Of(awayClub) };
         }
 
         /// <summary>The club's formation: its manager's preferred one, or the 4-4-2.</summary>
