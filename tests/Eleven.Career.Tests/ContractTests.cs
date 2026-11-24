@@ -192,6 +192,28 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void A_club_releases_its_unwanted_before_it_budgets_its_renewals()
+        {
+            (World w, _) = New();
+            Club club = w.Clubs.First(c => c.Division == 2);
+            List<Player> squad = w.Players.Where(p => p.ClubId == club.Id).ToList();
+            foreach (Player p in squad) p.ContractYears = 3;
+            Player good = Set(squad[8], 25, 15, 1), poor = Set(squad[9], 29, 4, 1);
+            good.Wage = 1;
+            int raise = Finance.Wage(good, 2);
+            poor.Wage = raise + 50;
+
+            // The budget holds the bill as it is: the raise fits once the unwanted's wage is gone, not before (Codex on #204).
+            long bill = Finance.WageBill(w, club);
+            club.LastSeason.Amounts[(int)LedgerLine.Broadcasting] = (long)Math.Round(bill * 31 / FinanceRules.Reference.WageShare[1]);
+            club.LastSeason.Days = 217;
+            Assert.InRange(Finance.WageBudget(w, club), bill - 1, bill + 1);
+            Contracts.Turn(w, 2, Divisions(w));
+            Assert.Equal((club.Id, raise), (good.ClubId, good.Wage));
+            Assert.Equal(0, poor.ClubId);
+        }
+
+        [Fact]
         public void A_club_short_of_two_places_signs_for_the_second_when_the_first_has_nobody()
         {
             (World w, _) = New();
