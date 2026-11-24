@@ -133,7 +133,7 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 
 **The sample:** `eleven-sim quicksim career <dir> [count]` plays the full simulation over 480 fixtures between the reference world's clubs (seed `0x157`).
 - **Fixtures:** every 17th of all 1,260 ordered pairs, so every club plays 10 to 20 times at home and away, and every gap between divisions is covered both ways round.
-- **Conditions:** 180 s halves, every brain running, each fixture on its own seed. Since #180 each club plays its manager's formation and plans, with its XI picked for the formation, and since #182 each side's manager manages it.
+- **Conditions:** 180 s halves, every brain running, each fixture on its own seed. Since #180 each club plays its manager's formation and plans, with its XI picked for the formation; since #182 each side's manager manages it; and since #166 a substitute plays on his own CPU skill, where before he took the skill of the man he replaced.
 - **Cost:** about 25 minutes on four cores.
 - **The record:** `quicksim-career-reference.csv`, with a hash of each result's text, so any change in a match shows, and each side's footballers injured, minor and serious. CI plays the first 8 fixtures and diffs them against its first rows.
 
@@ -146,29 +146,29 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 
 | | Eleven a side | Reference (5v5) |
 | --- | --- | --- |
-| μ | −0.693 ± 0.064 | 0.157 |
-| h | −0.003 ± 0.084 | 0.026 |
-| s | 0.978 ± 0.075 | 1 |
-| ρ | −0.369 ± 0.096 | −0.014 |
-| Fouls, cautions, sendings-off a side | 2.04, 0.52, 0.070 | 1.85, 0.44, 0.075 |
-| Minor, serious injuries a side | 0.0115, 0.0031 | 0, 0 |
+| μ | −0.725 ± 0.065 | 0.157 |
+| h | 0.123 ± 0.085 | 0.026 |
+| s | 0.880 ± 0.075 | 1 |
+| ρ | −0.304 ± 0.101 | −0.014 |
+| Fouls, cautions, sendings-off a side | 2.02, 0.49, 0.068 | 1.85, 0.44, 0.075 |
+| Minor, serious injuries a side | 0.0094, 0.0031 | 0, 0 |
 
 **What the fit says:**
-- **Scoring:** the world's clubs score at well under half the 5v5 rate (exp(−0.85) ≈ 0.43). Before #180, all in the reference 4-4-2, they scored at about half (μ −0.569).
+- **Scoring:** the world's clubs score at well under half the 5v5 rate (exp(−0.88) ≈ 0.41). Before #180, all in the reference 4-4-2, they scored at about half (μ −0.569).
 - **Draws:** managed matches draw more than independent Poisson goals predict, so ρ is well below 0. Behind late, a side chases and the side ahead protects, and level sides stay level.
-- **Separation:** they separate exactly as the reference predicts, with s within its error of 1.
-- **Home advantage:** h is within its error of none, as the full simulation has no home advantage.
+- **Separation:** they separate a little less than the reference predicts, s within two of its errors of 1.
+- **Home advantage:** h is within two of its errors of none. The full simulation has no home advantage, so it's the sample's noise: #182's fit gave −0.003.
 
 **Against the sample**, the quick-sim drawn 100 times per fixture, by the gap between the clubs' divisions (away's less home's):
 
 | Gap | Matches | Full: goals | Full: home W/D | Quick: goals | Quick: home W/D |
 | --- | --- | --- | --- | --- | --- |
-| −2 | 48 | 0.23–1.27 | 12 %/33 % | 0.21–1.21 | 4 %/36 % |
-| −1 | 108 | 0.31–0.84 | 11 %/48 % | 0.33–0.80 | 13 %/46 % |
-| 0 | 149 | 0.49–0.45 | 23 %/54 % | 0.53–0.52 | 24 %/51 % |
-| +1 | 117 | 0.80–0.33 | 37 %/54 % | 0.79–0.33 | 40 %/47 % |
-| +2 | 58 | 1.31–0.29 | 60 %/33 % | 1.23–0.22 | 60 %/34 % |
-| All | 480 | 0.60–0.57 | 27 %/48 % | 0.60–0.57 | 28 %/46 % |
+| −2 | 48 | 0.29–1.17 | 10 %/42 % | 0.25–1.06 | 7 %/39 % |
+| −1 | 108 | 0.35–0.78 | 14 %/48 % | 0.38–0.73 | 15 %/47 % |
+| 0 | 149 | 0.57–0.47 | 30 %/48 % | 0.58–0.50 | 27 %/50 % |
+| +1 | 117 | 0.83–0.29 | 42 %/49 % | 0.82–0.34 | 42 %/45 % |
+| +2 | 58 | 1.24–0.26 | 64 %/29 % | 1.23–0.24 | 60 %/34 % |
+| All | 480 | 0.64–0.54 | 31 %/45 % | 0.64–0.54 | 30 %/45 % |
 
 **How the sample has moved:**
 
@@ -177,6 +177,7 @@ The reference was fitted at 5v5, the calibration league's size. The world's club
 | Every club in the reference 4-4-2 | 1.29 | 36 % |
 | The managers' formations and plans (#180) | 1.15 | 43 % |
 | Managed too (#182) | 1.17 | 48 % |
+| Substitutes on their own skill (#166) | 1.18 | 45 % |
 
 **The tests** (`CareerQuickSimTests`):
 - mean home and away goals within 2 standard errors of the sample's;
@@ -197,11 +198,11 @@ A career side's footballers may start a match tired (#177, [squads.md](../career
 
 | Home fatigue | Matches | Full: goals | Full: home W/D | Quick at the fit: goals | Home W/D |
 | --- | --- | --- | --- | --- | --- |
-| 0.0 | 160 | 0.65–0.56 | 26 %/49 % | 0.60–0.57 | 28 %/45 % |
-| 0.3 | 160 | 0.64–0.60 | 28 %/48 % | 0.57–0.59 | 27 %/46 % |
-| 0.6 | 160 | 0.47–0.59 | 28 %/40 % | 0.54–0.62 | 25 %/45 % |
+| 0.0 | 160 | 0.68–0.53 | 31 %/46 % | 0.63–0.53 | 31 %/45 % |
+| 0.3 | 160 | 0.68–0.59 | 30 %/46 % | 0.59–0.58 | 28 %/45 % |
+| 0.6 | 160 | 0.51–0.62 | 28 %/42 % | 0.55–0.62 | 26 %/45 % |
 
-- **Managed, a small cost:** w = 0.150 ± 0.109, so `ElevenASide`'s weight is 0.150. A side starting at fatigue 0.6 scores 0.47 goals against 0.65 fresh.
+- **Managed, a small cost:** w = 0.243 ± 0.109, so `ElevenASide`'s weight is 0.243. A side starting at fatigue 0.6 scores 0.51 goals against 0.68 fresh. #182's sample gave 0.150, within its error.
 - **Unmanaged,** before #182, the estimate was within noise of none: −0.07 ± 0.10 with #180's formations, −0.17 ± 0.10 before them.
 - **Why:** the full simulation's fatigue is in-match fatigue. A footballer running easy sheds it at about 0.02 a second (#100), and half-time halves what is left, so a tired start is gone within a minute or so of a 3-minute half.
 - **What would carry:** condition only through something that lasts the match, such as his stamina for it. That's open, and it would need its own measurement.

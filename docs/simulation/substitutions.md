@@ -24,10 +24,10 @@ It is refused, with the reason as the command's rejection. When two of a side's 
 ## What a substitution does
 
 - **The substitute takes the slot, the place and the controller** of the man he replaces. He comes on fresh: no fatigue, no cautions, no injury, with his own capabilities.
-- **The CPU that played the man replaced plays him,** deciding afresh. A human's own footballer replaced leaves the human controlling the substitute.
+- **The CPU that played the man replaced plays him,** deciding afresh, on the substitute's own CPU skill (#166). A human's own footballer replaced leaves the human controlling the substitute. Before #166 the CPU kept the skill of the man replaced.
 - **A keeper replaced hands over his goal;** a restart's taker replaced hands over the kick.
 - **The man replaced takes no further part:** he leaves the state, and his substitute's place on the bench is marked used.
-- **A footballer taken off injured (#109) is replaced too.** The substitute comes on at the touchline where he left, in a slot behind his side's last, with his own controller and the bench's CPU skill. A footballer sent off is never replaced.
+- **A footballer taken off injured (#109) is replaced too.** The substitute comes on at the touchline where he left, in a slot behind his side's last, with his own controller and CPU skill. A footballer sent off is never replaced.
 - **The state stays ordered.** Players stay in ascending id order, so the substitute's place in the array moves; the offside flags, kept by place, follow their footballers.
 
 `Substituted` is an event: the substitute, and the man replaced. The match result's schema 5 counts each side's substitutions (INV-14).
