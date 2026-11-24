@@ -49,6 +49,9 @@ namespace Eleven.Simulation.Harness
         /// <summary>Steps recorded so far; the replay ends at tick <see cref="StartTick"/> + this.</summary>
         public int StepCount => _steps.Count;
 
+        /// <summary>The commands of recorded step <paramref name="index"/>, from 0.</summary>
+        public IReadOnlyList<Command> Step(int index) => _steps[index];
+
         /// <summary>Records one step's commands. Call with the same list, just before passing it to <see cref="Simulator.Step"/>.</summary>
         public void Record(IReadOnlyList<Command> commands)
         {

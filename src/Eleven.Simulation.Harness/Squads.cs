@@ -43,6 +43,22 @@ namespace Eleven.Simulation.Harness
         public const int ShapeFrom = 3;
 
         /// <summary>
+        /// Gives each outfielder his own CPU skill (#166), by id, the way a career's ratings do
+        /// (#159). Returns <paramref name="s"/>.
+        /// </summary>
+        public static SimState WithSkills(SimState s, Func<int, CpuSkill> skillOf)
+        {
+            for (int i = 0; i < s.Players.Length; i++)
+            {
+                if (Array.FindIndex(s.Keepers, k => k.PlayerId == s.Players[i].Id) < 0) s.Players[i].Skill = skillOf(s.Players[i].Id);
+            }
+
+            // Plumbing: and his CPU's, which still plays him with its own.
+            for (int i = 0; i < s.Cpus.Length; i++) s.Cpus[i].Skill = skillOf(s.Cpus[i].PlayerId);
+            return s;
+        }
+
+        /// <summary>
         /// An outfielder's place in his side's shape (#96), numbered from the back: the kick-off's
         /// taker, the first, is the furthest forward. 0 for a side smaller than <see cref="ShapeFrom"/>.
         /// </summary>

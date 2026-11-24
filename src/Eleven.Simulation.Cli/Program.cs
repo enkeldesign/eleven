@@ -21,6 +21,7 @@ using Eleven.Simulation.Harness;
 /// eleven-sim kicks &lt;dir&gt; [name=value ...]
 ///                              characterise the manual kick and aftertouch (#37) under the default config
 ///                              and the reference profile, either overridden by name, e.g. kicks out kickPower=0.8 aftertouchBend=0
+/// eleven-sim migration-fixture &lt;dir&gt; a recording under this state schema and its play, for a later schema's migration test (#166)
 /// eleven-sim replay &lt;capture.elfc&gt; replay a "this felt wrong" capture (#44) and compare every tick; exit 1 on any mismatch
 /// eleven-sim cpu &lt;dir&gt;         CPU against CPU in the 1v1 world (#83): how each tier's trials end, kicks, recoveries, idle stretches
 /// eleven-sim challenge &lt;dir&gt;   the standing challenge (#84): approach angles, dribbler speeds and tackling profiles
@@ -262,6 +263,21 @@ internal static class Program
                 double quickSeconds = watch.Elapsed.TotalSeconds;
                 Console.WriteLine(FormattableString.Invariant(
                     $"full simulation: {full} matches in {fullSeconds:F1} s, {full / fullSeconds:F3} matches/s, {1000 * fullSeconds / steps:F3} ms a step; quick-sim: {Quick / quickSeconds:F0} matches/s ({goals} home goals)"));
+                return 0;
+            }
+
+            case "migration-fixture" when args.Length >= 2:
+            {
+                // #166: a recording under this build's state schema and its play, for a later
+                // schema's migration to replay (tests/Eleven.Simulation.Tests/Fixtures).
+                SimConfig fixtureConfig = SpikeScenario.Config();
+                CommandRecording fixture = MigrationFixture.Record(fixtureConfig);
+                Directory.CreateDirectory(args[1]);
+                string name = $"migration-{SimulationInfo.StateSchemaVersion}";
+                File.WriteAllBytes(Path.Combine(args[1], name + ".elrc"), fixture.Encode());
+                string play = MigrationFixture.Play(fixture, fixtureConfig);
+                File.WriteAllText(Path.Combine(args[1], name + ".txt"), play);
+                Console.Write(play);
                 return 0;
             }
 

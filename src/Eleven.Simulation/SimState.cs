@@ -52,6 +52,23 @@ namespace Eleven.Simulation
         /// </summary>
         public TeamTactic[] Tactics = Array.Empty<TeamTactic>();
 
+        /// <summary>The skill a CPU plays footballer <paramref name="playerId"/> with (#166): his own.</summary>
+        public CpuSkill SkillOf(int playerId)
+        {
+            // Plumbing: still his CPU's, where he has one.
+            foreach (CpuState c in Cpus)
+            {
+                if (c.PlayerId == playerId) return c.Skill;
+            }
+
+            foreach (PlayerState p in Players)
+            {
+                if (p.Id == playerId) return p.Skill;
+            }
+
+            throw new ArgumentException($"No footballer {playerId}.", nameof(playerId));
+        }
+
         public SimState Clone()
         {
             var copy = (SimState)MemberwiseClone();
@@ -905,6 +922,13 @@ namespace Eleven.Simulation
         /// his run until it moves or this runs out.
         /// </summary>
         public int CarryTicks;
+
+        /// <summary>
+        /// His own CPU skill (#166): how a CPU plays him, whoever controls him now, so a switch
+        /// leaves it with him. A keeper's, and a footballer's in a side no CPU can play, may be
+        /// none: all zeros.
+        /// </summary>
+        public CpuSkill Skill;
 
         /// <summary>Out of play for the rest of the match: sent off (#108) or seriously injured (#109).</summary>
         public bool Off => SentOff || Injury == InjuryLevel.Serious;
