@@ -88,20 +88,20 @@ A format-5 world reads with none accrued, and its next id past its highest.
 | Season | Mean level | Its drift from the start | Retired at its turn | Youth | Squads |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 11.56 | 0.00 | 0 | 0 | 23–23 |
-| 2 | 11.74 | +0.18 | 6 | 28 | 23–23 |
-| 3 | 11.66 | +0.10 | 18 | 80 | 23–23 |
+| 2 | 11.73 | +0.17 | 6 | 32 | 23–23 |
+| 3 | 11.71 | +0.15 | 14 | 74 | 23–23 |
 
 By age band at each season's start, count, then mean level ± spread:
 
 | Age | Season 1 | Season 2 | Season 3 |
 | --- | --- | --- | --- |
-| 16–18 | 88: 11.6 ± 2.6 | 67: 10.7 ± 2.9 | 105: 8.5 ± 2.3 |
-| 19–21 | 141: 11.7 ± 2.7 | 147: 12.9 ± 2.5 | 140: 13.4 ± 2.7 |
+| 16–18 | 88: 11.6 ± 2.6 | 71: 10.6 ± 3.0 | 101: 8.9 ± 2.4 |
+| 19–21 | 141: 11.7 ± 2.7 | 147: 12.9 ± 2.5 | 142: 13.3 ± 2.8 |
 | 22–24 | 140: 11.3 ± 2.5 | 145: 11.7 ± 2.5 | 143: 12.4 ± 2.7 |
-| 25–27 | 148: 10.9 ± 2.4 | 131: 11.0 ± 2.6 | 132: 11.4 ± 2.5 |
-| 28–30 | 148: 11.8 ± 2.4 | 143: 11.5 ± 2.2 | 141: 11.2 ± 2.2 |
-| 31–33 | 143: 11.5 ± 2.5 | 139: 11.4 ± 2.4 | 112: 11.8 ± 2.5 |
-| 34+ | 20: 15.6 ± 2.9 | 56: 12.9 ± 3.3 | 55: 12.9 ± 2.8 |
+| 25–27 | 148: 10.9 ± 2.4 | 130: 11.0 ± 2.6 | 131: 11.5 ± 2.6 |
+| 28–30 | 148: 11.8 ± 2.4 | 144: 11.5 ± 2.2 | 142: 11.2 ± 2.2 |
+| 31–33 | 143: 11.5 ± 2.5 | 138: 11.4 ± 2.4 | 111: 11.8 ± 2.5 |
+| 34+ | 20: 15.6 ± 2.9 | 53: 13.0 ± 3.4 | 58: 12.7 ± 2.8 |
 
 Five footballers followed, age then level:
 
@@ -113,9 +113,9 @@ Five footballers followed, age then level:
 | P. Dalenko, full back | 33: 12.22 | 34: 11.65 | retired |
 | Z. Wesström, keeper | 34: 18.67 | 35: 18.33 | 36: 17.67 |
 
-- **The world holds its level.** Over six seasons its mean drifts at most +0.18 (+0.18, +0.10, +0.03, −0.09, −0.04). The generator's world is young-heavy, so it rises first.
+- **The world holds its level.** Over six seasons its mean drifts at most +0.17 (+0.17, +0.15, +0.07, −0.01, −0.04). The generator's world is young-heavy, so it rises first.
   - **Before contracts (#201),** it drifted +0.18, +0.20, +0.11, +0.03, −0.03, and retirements built to about 50 a season, the youth coming in at 9 or so.
-  - **With contracts,** the clubs release 32 at the first turn and 76–81 at the next, mostly the old and the least ([contracts.md](contracts.md)). So fewer retire from a club, 12–25 a turn after the first, and the youth replace both: 60–80 a turn after the first. The released are replaced by youth below them, so the level eases.
+  - **With contracts,** the clubs release about 30 at the first turn and 80–90 at the next, mostly the old and the least ([contracts.md](contracts.md)). So fewer retire from a club, 14–30 a turn after the first, and the youth replace both: 63–77 a turn after the first, and the places mid-season sales left (#203). The released are replaced by youth below them, so the level eases.
 - **The references were chosen by it.**
   - **In #194,** without training, growth 1.2 and decline 0.8 drifted +0.32 by the third season, past the issue's ±0.3, and growth 1.0 and decline 1.0 stayed within it.
   - **With training (#196),** CPU managers train Hard in most full weeks, and growth 1.0 drifted +0.34. At 0.85 the world stays within it, as above.

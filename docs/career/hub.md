@@ -21,6 +21,7 @@ The career is saved into its slot on Start, after every fixture and on the next 
 - **Who's out** (#176), when anyone is: "Out: A. Name (injured, 12 days), B. Name (banned, 1 league match)" ([squads.md](squads.md)).
 - **Your money** (#198): "Balance 1,240k. Wages 41k a week of a 45k budget." ([finances.md](finances.md)).
 - **Your contracts ending** (#201), when any do: "Out of contract this season: A. Name, B. Name." ([contracts.md](contracts.md)).
+- **The window's transfers** (#203), after a window that made any: "Transfers: A. Name, ROV to WYS, 1,240k; B. Name, QUE to DRA, 380k." ([transfers.md](transfers.md)).
 - **Your board** (#200): "The board: finish 6th or higher, reach the round of 16 and end the season in the black. Confidence 62: pleased." ([board.md](board.md)).
 - **Your training** (#196): "Training: Hard. Faster development, slower recovery, more injuries." ([training.md](training.md)).
 - **The season's review** (#194), from the season's turn until your club's first match of the new one: "Last season: most improved A. Name +1.3, B. Name +0.9. Retired: C. Name, 35. From the youth: D. Name, 17." ([development.md](development.md#the-hub)).
