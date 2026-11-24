@@ -353,6 +353,9 @@ namespace Eleven.Simulation.Harness
             : s.Next() == null ? HubAction.NextMatchday
             : s.Role == CareerRole.PlayerManager ? HubAction.Play : HubAction.Watch;
 
+        /// <summary>Your club's money (#198), e.g. "Balance 1,240k. Wages 41k a week of a 45k budget."</summary>
+        public static string FinanceLine(CareerSession s) => "";
+
         /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
         public static string TrainingLine(CareerSession s) => s.World.Clubs.Find(c => c.Id == s.Club)?.Training switch
         {

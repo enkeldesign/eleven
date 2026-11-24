@@ -112,6 +112,12 @@ namespace Eleven.Simulation.Harness
 
             Development.Matchday(world, season, starters, SeasonCalendar.Of(rules).Count, null, growth);
             foreach (TrainingInjury injury in Training.Pass(world, season, gap, intensity, sr, training)) trained?.Invoke(injury);
+
+            // Money (#198): the matchday's home takings, then the days' wages and broadcasting.
+            var fixtures = new List<Fixture>(played.Count);
+            foreach ((Fixture f, _, _) in played) fixtures.Add(f);
+            Finance.Matchday(world, fixtures);
+            Finance.Pass(world, gap);
             SeasonEngine.Advance(season, rules);
             return day;
         }
