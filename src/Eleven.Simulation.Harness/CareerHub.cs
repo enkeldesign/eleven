@@ -364,7 +364,15 @@ namespace Eleven.Simulation.Harness
         /// Your club's board (#200), e.g. "The board: finish 6th or higher, reach the round of 16
         /// and end the season in the black. Confidence 62: pleased."
         /// </summary>
-        public static string BoardLine(CareerSession s) => "";
+        public static string BoardLine(CareerSession s)
+        {
+            Club? mine = s.World.Clubs.Find(c => c.Id == s.Club);
+            if (mine == null) return "";
+            int divisions = s.World.Clubs.Max(c => c.Division);
+            string league = Board.League(mine, divisions, s.Rules);
+            int confidence = (int)Math.Round(mine.Board.Confidence, MidpointRounding.AwayFromZero);
+            return FormattableString.Invariant($"The board: {char.ToLowerInvariant(league[0])}{league.Substring(1)}, {Board.Cup(mine)} and end the season in the black. Confidence {confidence}: {Board.Words(confidence)}.");
+        }
 
         /// <summary>Your club's training (#196) and what it does, e.g. "Training: Hard. Faster development, slower recovery, more injuries."</summary>
         public static string TrainingLine(CareerSession s) => s.World.Clubs.Find(c => c.Id == s.Club)?.Training switch
@@ -377,8 +385,8 @@ namespace Eleven.Simulation.Harness
 
         /// <summary>
         /// The season's review (#194), from the season's turn until your club's first match of the
-        /// new one: your club's biggest risers last season, its retirements and its youth. Empty
-        /// in a first season.
+        /// new one: your club's biggest risers last season, its retirements and its youth, its
+        /// money (#198) and the board's verdict (#200). Empty in a first season.
         /// </summary>
         public static string ReviewLine(CareerSession s)
         {
@@ -407,6 +415,15 @@ namespace Eleven.Simulation.Harness
             if (club != null && club.LastSeason.Revenue > 0)
             {
                 parts.Add(FormattableString.Invariant($"Revenue {club.LastSeason.Revenue:N0}k, wages {-club.LastSeason[LedgerLine.Wages]:N0}k"));
+            }
+
+            // The board's verdict (#200): the place against the expected, confidence then, the reputation's move.
+            if (club != null && club.Board.LastPlace > 0)
+            {
+                BoardState b = club.Board;
+                int change = club.Reputation - b.LastReputation;
+                string moved = change > 0 ? FormattableString.Invariant($", up {change}") : change < 0 ? FormattableString.Invariant($", down {-change}") : "";
+                parts.Add(FormattableString.Invariant($"{Ordinal(b.LastPlace)}, {Ordinal(b.LastExpected)} expected: objective {(b.LastPlace <= b.LastTarget ? "met" : "missed")}. Confidence {b.LastConfidence:F0}. Reputation {club.Reputation}{moved}"));
             }
             return parts.Count == 0 ? "" : "Last season: " + string.Join(". ", parts) + ".";
         }

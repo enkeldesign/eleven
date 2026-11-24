@@ -12,5 +12,8 @@ namespace Eleven.Career.Tests
         /// then and its reputation before the turn.
         /// </summary>
         public static int Board(World w) => 4 + w.Clubs.Count * (3 + 8 + 3 + 8 + 1);
+
+        /// <summary>Every section from format 8 on: format 7's world is the rest.</summary>
+        public static int From8(World w) => Money(w) + Board(w);
     }
 }

@@ -15,7 +15,7 @@ namespace Eleven.Career
     public static class WorldCodec
     {
         public const int Magic = 0x454C5744; // "ELWD"
-        public const int FormatVersion = 8;
+        public const int FormatVersion = 9;
 
         /// <summary>Format 1 (#157), read as format 2 with nobody banned or cautioned.</summary>
         public const int FirstFormat = 1;
@@ -200,6 +200,24 @@ namespace Eleven.Career
 
             w.WriteInt32(world.Players.Count);
             foreach (Player p in world.Players) WriteShort(w, p.Wage);
+
+            // Format 9 (#200): each club in order, its board: its expected place, league and cup
+            // targets in a byte each, its confidence; last season's place, expected place and
+            // target, its confidence then and the club's reputation before the turn.
+            w.WriteInt32(world.Clubs.Count);
+            foreach (Club c in world.Clubs)
+            {
+                BoardState b = c.Board;
+                w.WriteByte(Small(b.ExpectedPlace));
+                w.WriteByte(Small(b.LeagueTarget));
+                w.WriteByte(Small(b.CupTarget));
+                w.WriteDouble(b.Confidence, "confidence");
+                w.WriteByte(Small(b.LastPlace));
+                w.WriteByte(Small(b.LastExpected));
+                w.WriteByte(Small(b.LastTarget));
+                w.WriteDouble(b.LastConfidence, "last confidence");
+                w.WriteByte(Small(b.LastReputation));
+            }
 
             return w.ToArray();
         }
@@ -453,9 +471,35 @@ namespace Eleven.Career
                 foreach (Player p in world.Players) p.Wage = Finance.Wage(p, division.TryGetValue(p.ClubId, out int d) ? d : 1);
             }
 
+            if (version >= 9)
+            {
+                if (r.ReadInt32() != world.Clubs.Count) throw new FormatException("The boards don't count every club.");
+                foreach (Club c in world.Clubs)
+                {
+                    BoardState b = c.Board;
+                    b.ExpectedPlace = r.ReadByte();
+                    b.LeagueTarget = r.ReadByte();
+                    b.CupTarget = r.ReadByte();
+                    b.Confidence = Confidence(r.ReadDouble("confidence"), c.Id);
+                    b.LastPlace = r.ReadByte();
+                    b.LastExpected = r.ReadByte();
+                    b.LastTarget = r.ReadByte();
+                    b.LastConfidence = Confidence(r.ReadDouble("last confidence"), c.Id);
+                    b.LastReputation = r.ReadByte();
+                }
+            }
+            else
+            {
+                // A world from before #200: its objectives by the rules, its confidence at its start.
+                Board.Objectives(world, CompetitionRules.Reference);
+            }
+
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        private static double Confidence(double c, int club) =>
+            c >= 0 && c <= 100 ? c : throw new FormatException($"Club {club}'s board confidence {c} isn't in [0, 100].");
 
         // An amount of k in four bytes, at most ±2,147,483,647k.
         private static int Money(long k) => (int)Math.Clamp(k, int.MinValue, int.MaxValue);
