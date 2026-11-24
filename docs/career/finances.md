@@ -34,7 +34,7 @@ The currency is fictional, in whole thousands, "k", with no exchange rate. Its s
 | --- | --- | --- |
 | Wages | each day between matchdays, and the off-season's | each footballer's weekly wage over 7 |
 | Broadcasting | each day | 48, 10 and 3k a day |
-| Matchday | each home match, league or cup; none at the final's neutral ground | 250, 130 and 50k, 6 % more a point of the club's reputation above 10 |
+| Matchday | each home match, league or cup; none at the final's neutral ground | 250, 130 and 50k, 6 % more a point of the club's reputation above 10, which moves at each season's turn (#200) |
 | Merit | the season's end | 3,000, 900 and 300k for the champion, a twelfth less a place below |
 | Cup | the season's end | 40k a round reached, and 200k more for the winner |
 
@@ -64,7 +64,7 @@ A format-7 world reads each club's opening balance and each footballer's wage by
 
 ## Measured
 
-`eleven-sim finances 3`: a headless career from seed `0x198`, every match quick-simmed, each season turned so its merit is paid. Balances are at each season's start, the ledger the season's own, by the division each club played it in.
+`eleven-sim finances 3`: a headless career from seed `0x198`, every match quick-simmed, each season turned so its merit is paid. Since #200 a club's reputation moves at each turn, and its takings with it, so seasons 2 and 3 are the board's. Balances are at each season's start, the ledger the season's own, by the division each club played it in.
 
 | Season | Division | Balance at its start | In deficit | Wages over revenue | Broadcasting | Matchday | Merit | Cup |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -72,11 +72,11 @@ A format-7 world reads each club's opening balance and each footballer's wage by
 | 1 | 2 | 1,500k ± 0k | 0 | 0.80 | 42 % | 42 % | 13 % | 3 % |
 | 1 | 3 | 400k ± 0k | 0 | 0.89 | 36 % | 44 % | 13 % | 7 % |
 | 2 | 1 | 7,455k ± 3,688k | 1 | 0.72 | 65 % | 23 % | 11 % | 1 % |
-| 2 | 2 | 2,903k ± 3,178k | 1 | 0.98 | 53 % | 35 % | 10 % | 2 % |
-| 2 | 3 | 533k ± 594k | 2 | 1.24 | 47 % | 37 % | 11 % | 5 % |
-| 3 | 1 | 10,129k ± 4,463k | 0 | 0.76 | 65 % | 24 % | 10 % | 1 % |
-| 3 | 2 | 4,112k ± 6,002k | 2 | 0.78 | 53 % | 34 % | 10 % | 2 % |
-| 3 | 3 | 681k ± 1,380k | 3 | 1.25 | 47 % | 37 % | 11 % | 5 % |
+| 2 | 2 | 2,903k ± 3,178k | 1 | 0.98 | 52 % | 35 % | 10 % | 2 % |
+| 2 | 3 | 533k ± 594k | 2 | 1.25 | 47 % | 37 % | 11 % | 5 % |
+| 3 | 1 | 10,144k ± 4,456k | 0 | 0.76 | 65 % | 24 % | 10 % | 1 % |
+| 3 | 2 | 4,124k ± 6,001k | 2 | 0.78 | 53 % | 34 % | 10 % | 2 % |
+| 3 | 3 | 676k ± 1,387k | 3 | 1.25 | 47 % | 37 % | 11 % | 5 % |
 
 - **Near the research:** the top division's wages are 0.67–0.76 of its revenue, its broadcasting 58–65 %. The second division's are 0.78–0.98, and the third's 0.89–1.25.
 - **The lower divisions' high ratios come from movement:** a relegated club keeps its higher division's wages and earns its new division's revenue. M6.12's contracts and sales are its way out.
