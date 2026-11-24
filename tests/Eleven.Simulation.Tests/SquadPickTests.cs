@@ -52,7 +52,7 @@ namespace Eleven.Simulation.Tests
             Player p = s.World.Players.Single(x => x.Id == first.Player);
             Assert.Equal(CareerSquads.Level(p), first.Level, 9);
             Assert.True(first.Level >= 1 && first.Level <= 20);
-            Assert.StartsWith($"{p.FirstName[0]}. {p.LastName} · ", first.Text);
+            Assert.StartsWith($"{p.FirstName[0]}. {p.LastName}, {p.Age} · ", first.Text);
             Assert.Contains(FormattableString.Invariant($"{first.Level:F1}"), first.Text);
         }
 
