@@ -268,6 +268,9 @@ namespace Eleven.Career
                 PreferredFormation = FormationChoices[Pick(seed, ManagerDraw, id, 1, FormationChoices.Length)],
                 Temperament = 1 + Pick(seed, ManagerDraw, id, 2, 20),
                 Reputation = Clamp(clubLevel + (Draw(seed, ManagerDraw, id, 3) * 2 - 1) * 2, 1, 20),
+                // #180: his philosophy, on counters of its own so that no other draw moves.
+                Pressing = 1 + Pick(seed, ManagerDraw, id, 20, 20),
+                Depth = 1 + Pick(seed, ManagerDraw, id, 21, 20),
             };
             for (int c = 0; c < ManagerCompetences.Count; c++)
             {

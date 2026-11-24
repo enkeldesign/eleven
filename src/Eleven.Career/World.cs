@@ -82,6 +82,12 @@ namespace Eleven.Career
         public Formation PreferredFormation = Formation.FourFourTwo;
         /// <summary>1 (cautious) – 20 (bold).</summary>
         public int Temperament = 10;
+
+        /// <summary>
+        /// His philosophy (#180), 1–20 each: how far up his side presses, and how high its line
+        /// stands. 0 in a world from before it: he plays the reference plan.
+        /// </summary>
+        public int Pressing, Depth;
         /// <summary>1–20.</summary>
         public int Reputation;
     }

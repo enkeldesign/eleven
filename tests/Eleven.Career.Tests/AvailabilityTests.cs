@@ -220,17 +220,41 @@ namespace Eleven.Career.Tests
         }
 
         [Fact]
+        public void The_worlds_bytes_keep_a_managers_philosophy_and_a_format_3_world_reads_it_unset()
+        {
+            World w = WorldGenerator.Generate(0x180);
+            Assert.Equal(4, WorldCodec.FormatVersion);
+            Assert.All(w.Managers, m => Assert.True(m.Pressing >= 1 && m.Depth >= 1));
+            World back = WorldCodec.Decode(WorldCodec.Encode(w));
+            Assert.Equal(w.Managers.Select(m => (m.Pressing, m.Depth)), back.Managers.Select(m => (m.Pressing, m.Depth)));
+
+            // Format 3 is format 4 with no philosophy, less that section's empty count: read unset.
+            foreach (Manager m in w.Managers) m.Pressing = m.Depth = 0;
+            byte[] plain = WorldCodec.Encode(w);
+            var three = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
+            three.WriteBytes(plain[..4]);
+            three.WriteInt32(3);
+            three.WriteBytes(plain[8..^4]);
+            World old = WorldCodec.Decode(three.ToArray());
+            Assert.All(old.Managers, m => Assert.Equal((0, 0), (m.Pressing, m.Depth)));
+            Assert.Equal(plain, WorldCodec.Encode(old));
+
+            w.Managers[0].Pressing = 21;
+            Assert.Throws<FormatException>(() => WorldCodec.Decode(WorldCodec.Encode(w)));
+        }
+
+        [Fact]
         public void The_worlds_bytes_keep_a_clubs_picks_and_a_format_2_world_reads_with_none()
         {
             World w = WorldGenerator.Generate(0x179);
+            foreach (Manager m in w.Managers) m.Pressing = m.Depth = 0;
             byte[] plain = WorldCodec.Encode(w);
-            Assert.Equal(3, WorldCodec.FormatVersion);
 
-            // Format 2 is format 3 with no club's picks, less that section's empty count.
+            // Format 2 is today's with no club's picks and no philosophy, less those sections' empty counts.
             var two = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             two.WriteBytes(plain[..4]);
             two.WriteInt32(2);
-            two.WriteBytes(plain[8..^4]);
+            two.WriteBytes(plain[8..^8]);
             Assert.Equal(plain, WorldCodec.Encode(WorldCodec.Decode(two.ToArray())));
 
             Club c = w.Clubs[5];
@@ -246,12 +270,13 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_the_bans_and_a_world_from_before_them_reads_with_none()
         {
             World w = WorldGenerator.Generate(0x176);
+            foreach (Manager m in w.Managers) m.Pressing = m.Depth = 0;
             byte[] plain = WorldCodec.Encode(w);
-            // Format 1 is today's with nobody banned or cautioned and no picks, less those sections' empty counts.
+            // Format 1 is today's with nobody banned or cautioned, no picks and no philosophy, less those sections' empty counts.
             var one = new CanonicalWriter(plain.Length);
             one.WriteBytes(plain[..4]);
             one.WriteInt32(1);
-            one.WriteBytes(plain[8..^8]);
+            one.WriteBytes(plain[8..^12]);
             World old = WorldCodec.Decode(one.ToArray());
             Assert.Equal(plain, WorldCodec.Encode(old));
 
