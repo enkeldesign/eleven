@@ -56,7 +56,7 @@ Contracts measured the budget, and two things in it were wrong:
   - **Before:** at 0.65 everywhere, the lower divisions began a third over budget. Then they released their young for want of raises: 87 free agents retired unsigned by the third turn.
 - **A ledger counts its days** (`Ledger.Days`), and the budget divides last season's revenue by them.
   - **Why:** a first season has no off-season before it, so it's 157 days, not 217, and the second season's budget read 28 % low.
-  - **The effect:** in the first turn's measurement, wage bills went from 1.24–1.32 times their budgets to 0.87–0.97.
+  - **The effect:** in the first turn's measurement, wage bills went from 1.24–1.32 times their budgets to 0.91–0.97.
 
 ## The hub
 
@@ -100,7 +100,7 @@ A format-9 world reads each footballer's contract by the generator's rule at his
 | 2 | 57 | 22 | 1.03, 1.23 | 0.97, 1.28 | 1.01, 1.30 | 23–23 |
 | 3 | 59 | 60 | 1.00, 1.28 | 0.95, 1.67 | 0.96, 1.13 | 23–23 |
 
-- **Most contracts ending are renewed:** about three in four. The released are mostly the oldest and the least, and the young without room to grow: 29 at the first turn, then 84 and 89.
+- **Most contracts ending are renewed:** seven to eight in ten. The released are mostly the oldest and the least, and the young without room to grow: 29 at the first turn, then 84 and 89.
 - **Squads stay whole:** 23 at every club, the youth filling what releases and retirements leave.
 - **Wage bills sit at their budgets:** a division's mean is 0.87–1.03 of its budget, and over six seasons 0.87–1.04.
 - **The highest is a relegated club's:** 1.67 at the third turn is club 9's, two seasons after relegation from the top. The relegation clause put its wages at the second division's rate, but its footballers are better than that division's and its revenue is the division's. M6.12b's sales are its way out.
