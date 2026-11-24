@@ -165,6 +165,31 @@ namespace Eleven.Simulation.Tests
             Assert.Equal(CareerManagers.Profile(theirs, Config, home).ProtectFrom, CareerManagers.Profiles(w, home, away, Config)[Squads.AwayTeam].ProtectFrom);
         }
 
+        [Theory]
+        [InlineData(CareerRole.PlayerManager)]
+        [InlineData(CareerRole.ManagerOnly)]
+        public void In_the_humans_fixture_only_his_opponent_adapts_his_own_side_plays_his_managers_own_plans(CareerRole role)
+        {
+            // #191's scope: what the human makes of the last meeting is his, from the hub's line.
+            World w = CareerSession.NewWorld(0x1913);
+            CareerSession s = CareerSession.Start(w, 0x1913, w.Clubs[5].Id, role, Config);
+            Fixture f = s.Next()!;
+            int opponent = f.Home == s.Club ? f.Away : f.Home;
+            Manager mine = ManagerOf(w, s.Club), theirs = ManagerOf(w, opponent);
+            mine.Memory.Add(new Meeting { Opponent = opponent, Season = 1, Matchday = 1, GoalsFor = 0, GoalsAgainst = 3 });
+            theirs.Memory.Add(new Meeting { Opponent = s.Club, Season = 1, Matchday = 1, GoalsFor = 0, GoalsAgainst = 3 });
+
+            SimState st = s.MatchFor(f, 0x1913);
+            double[] Lines(int team) => st.Tactics.Where(t => t.TeamId == team).Select(t => t.Line).ToArray();
+            Assert.Equal(CareerManagers.Plans(mine, Squads.HomeTeam).Select(t => t.Line), Lines(Squads.HomeTeam));
+            Assert.Equal(CareerManagers.Plans(theirs, Squads.AwayTeam, s.Club).Select(t => t.Line), Lines(Squads.AwayTeam));
+            Assert.NotEqual(CareerManagers.Plans(theirs, Squads.AwayTeam).Select(t => t.Line), Lines(Squads.AwayTeam));
+
+            Dictionary<int, ManagerProfile> profiles = s.ProfilesFor(f, s.MatchConfig(f));
+            Assert.Equal(CareerManagers.Profile(mine, Config).ProtectFrom, profiles[Squads.HomeTeam].ProtectFrom);
+            Assert.Equal(CareerManagers.Profile(theirs, Config, s.Club).ProtectFrom, profiles[Squads.AwayTeam].ProtectFrom);
+        }
+
         [Fact]
         public void The_hub_names_the_last_meeting_with_the_next_opponent()
         {
