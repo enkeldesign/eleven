@@ -538,7 +538,7 @@ namespace Eleven.Career
                 {
                     c.Season.Days = ReadShort(r);
                     c.LastSeason.Days = ReadShort(r);
-                    if (c.Season.Days < 0 || c.LastSeason.Days < 0) throw new FormatException($"Club {c.Id}'s ledger days are negative.");
+                    if (c.Season.Days < Ledger.UnknownDays || c.LastSeason.Days < Ledger.UnknownDays) throw new FormatException($"Club {c.Id}'s ledger days are negative.");
                 }
 
                 int moves = Count(r.ReadInt32());
@@ -551,11 +551,21 @@ namespace Eleven.Career
             {
                 // A world from before #201: each footballer's contract by the generator's rule, nobody free.
                 foreach (Player p in world.Players) p.ContractYears = Contracts.FirstContract(world.Seed, p.Id, p.Age);
+
+                // Its ledgers' days aren't in it: one with money booked has days unknown, budgeted as a
+                // whole season's until a new one counts its own; an empty one has none (Codex on #204).
+                foreach (Club c in world.Clubs)
+                {
+                    c.Season.Days = Booked(c.Season) ? Ledger.UnknownDays : 0;
+                    c.LastSeason.Days = Booked(c.LastSeason) ? Ledger.UnknownDays : 0;
+                }
             }
 
             if (!r.AtEnd) throw new FormatException("Bytes after the world.");
             return world;
         }
+
+        private static bool Booked(Ledger l) => Array.Exists(l.Amounts, a => a != 0);
 
         private static double Confidence(double c, int club) =>
             c >= 0 && c <= 100 ? c : throw new FormatException($"Club {club}'s board confidence {c} isn't in [0, 100].");

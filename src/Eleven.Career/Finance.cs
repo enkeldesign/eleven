@@ -122,7 +122,7 @@ namespace Eleven.Career
             foreach (Player p in world.Players) bills[p.ClubId] = (bills.TryGetValue(p.ClubId, out long b) ? b : 0) + p.Wage;
             foreach (Club c in world.Clubs)
             {
-                c.Season.Days += days;
+                if (c.Season.Days != Ledger.UnknownDays) c.Season.Days += days;
                 Book(c, LedgerLine.Wages, -(long)Math.Round((bills.TryGetValue(c.Id, out long bill) ? bill : 0) * days / 7.0));
                 Book(c, LedgerLine.Broadcasting, (long)Math.Round(Division(rules.BroadcastPerDay, c.Division) * days));
             }
