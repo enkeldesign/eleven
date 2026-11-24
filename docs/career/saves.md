@@ -55,7 +55,7 @@ A save lives in the page's local storage as base64. The smallest browser's limit
 - **The world** is 72,725 bytes, and LZ77 shrinks it by only a third, because its attributes are near-random values from 1 to 20.
 - **A season's results** repeat their layout, and shrink many times over.
 - **Eleven saves of a season's end** come to about 913,000 characters. `CareerSaveTests` holds them under half of iOS's limit, leaving the other half for the bench's presets and captures.
-- **Later seasons save more:** managers' memories (#191) and development (#194) grow the world. After three seasons a save is about 138,000 characters, and eleven come to about 1.52M, within iOS's 2.5M but past that half. That's for M6's gate (M6.16) to weigh.
+- **Later seasons save more:** managers' memories (#191), development (#194) and money (#198) grow the world. After three seasons a save is about 143,000 characters, and eleven come to about 1.58M, within iOS's 2.5M but past that half. That's for M6's gate (M6.16) to weigh.
 
 ## Refusals
 

@@ -19,6 +19,7 @@ The career is saved into its slot on Start, after every fixture and on the next 
 - **Your next fixture:** "League round 4: LIN v ROV, at home", or "Cup, Round of 16: ROV v LIN, away". If there is none, why: "No match for you: a bye into the round of 32", or "out of the cup". If your manager remembers the opponent, the line ends with your last meeting, "Last met: lost 1–2 (season 1, matchday 7)" (#191, [managers.md](managers.md#his-memory-of-opponents)).
 - **Your picks out** (#179), when any is: "Picked but out: A. Name; the AI's pick takes his place."
 - **Who's out** (#176), when anyone is: "Out: A. Name (injured, 12 days), B. Name (banned, 1 league match)" ([squads.md](squads.md)).
+- **Your money** (#198): "Balance 1,240k. Wages 41k a week of a 45k budget." ([finances.md](finances.md)).
 - **Your training** (#196): "Training: Hard. Faster development, slower recovery, more injuries." ([training.md](training.md)).
 - **The season's review** (#194), from the season's turn until your club's first match of the new one: "Last season: most improved A. Name +1.3, B. Name +0.9. Retired: C. Name, 35. From the youth: D. Name, 17." ([development.md](development.md#the-hub)).
 - **The table:** your division's place, club, played, goal difference and points. Your row is bold and marked by a dot, not only coloured.
