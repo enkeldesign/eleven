@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Eleven.Career;
 using Eleven.Simulation;
 
@@ -244,6 +245,7 @@ namespace Eleven.Simulation.Harness
             {
                 Player = id,
                 Name = $"{(p.FirstName.Length > 0 ? p.FirstName.Substring(0, 1) + ". " : "")}{p.LastName}",
+                Age = p.Age,
                 Positions = string.Join(", ", positions),
                 Level = CareerSquads.Level(p),
                 Condition = p.Fitness,
@@ -356,7 +358,31 @@ namespace Eleven.Simulation.Harness
         /// new one: your club's biggest risers last season, its retirements and its youth. Empty
         /// in a first season.
         /// </summary>
-        public static string ReviewLine(CareerSession s) => "";
+        public static string ReviewLine(CareerSession s)
+        {
+            if (s.Season.Number <= 1) return "";
+            foreach (Fixture f in s.Season.Fixtures)
+            {
+                if ((f.Home == s.Club || f.Away == s.Club) && s.Season.Results.ContainsKey(f.Id)) return "";
+            }
+
+            string Short(string first, string last) => (first.Length > 0 ? first.Substring(0, 1) + ". " : "") + last;
+            List<Player> mine = s.World.Players.FindAll(p => p.ClubId == s.Club);
+            var risers = new List<string>();
+            foreach (Player p in mine.Where(p => p.Joined < s.Season.Number && p.LastSeasonPoints > 0).OrderByDescending(p => p.LastSeasonPoints).ThenBy(p => p.Id).Take(3))
+            {
+                int counted = p.Positions.Count > 0 && p.Positions[0] == Position.Goalkeeper ? 3 : PlayerAttributes.Count - 3;
+                risers.Add(FormattableString.Invariant($"{Short(p.FirstName, p.LastName)} +{(double)p.LastSeasonPoints / counted:F1}"));
+            }
+
+            var parts = new List<string>();
+            if (risers.Count > 0) parts.Add("most improved " + string.Join(", ", risers));
+            List<string> retired = s.World.LastRetired.Where(r => r.ClubId == s.Club).Select(r => $"{Short(r.FirstName, r.LastName)}, {r.Age}").ToList();
+            if (retired.Count > 0) parts.Add("Retired: " + string.Join("; ", retired));
+            List<string> youth = mine.Where(p => p.Joined == s.Season.Number).OrderBy(p => p.Id).Select(p => $"{Short(p.FirstName, p.LastName)}, {p.Age}").ToList();
+            if (youth.Count > 0) parts.Add("From the youth: " + string.Join("; ", youth));
+            return parts.Count == 0 ? "" : "Last season: " + string.Join(". ", parts) + ".";
+        }
     }
 
     /// <summary>Where a footballer is in your squad (#179).</summary>
@@ -372,11 +398,12 @@ namespace Eleven.Simulation.Harness
     {
         public int Player;
         public string Name = "", Positions = "", Out = "";
+        public int Age;
         public double Level;
         public int Condition;
         public SquadGroup Group;
 
-        /// <summary>The row's text: "J. Smith · CB, DM · 14.2 · 96" with the reason he's out after.</summary>
-        public string Text => FormattableString.Invariant($"{Name} · {Positions} · {Level:F1} · {Condition}") + (Out.Length > 0 ? $" · out: {Out}" : "");
+        /// <summary>The row's text: "J. Smith, 23 · CB, DM · 14.2 · 96" with the reason he's out after; his age since #194.</summary>
+        public string Text => FormattableString.Invariant($"{Name}, {Age} · {Positions} · {Level:F1} · {Condition}") + (Out.Length > 0 ? $" · out: {Out}" : "");
     }
 }

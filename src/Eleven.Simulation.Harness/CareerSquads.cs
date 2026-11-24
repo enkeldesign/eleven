@@ -147,7 +147,7 @@ namespace Eleven.Simulation.Harness
         };
 
         /// <summary>His selection level (#179): his keeping for a keeper, else his outfield level, on the 1–20 scale.</summary>
-        public static double Level(Player p) => p.Positions.Count > 0 && p.Positions[0] == Position.Goalkeeper ? KeeperLevel(p) : OutfieldLevel(p);
+        public static double Level(Player p) => Development.Level(p);
 
         /// <summary>His keeping: the mean of his three keeper attributes.</summary>
         public static double KeeperLevel(Player p)

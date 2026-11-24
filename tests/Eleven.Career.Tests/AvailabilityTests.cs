@@ -223,18 +223,18 @@ namespace Eleven.Career.Tests
         public void The_worlds_bytes_keep_a_managers_philosophy_and_a_format_3_world_reads_it_unset()
         {
             World w = WorldGenerator.Generate(0x180);
-            Assert.Equal(5, WorldCodec.FormatVersion);
+            Assert.Equal(6, WorldCodec.FormatVersion);
             Assert.All(w.Managers, m => Assert.True(m.Pressing >= 1 && m.Depth >= 1));
             World back = WorldCodec.Decode(WorldCodec.Encode(w));
             Assert.Equal(w.Managers.Select(m => (m.Pressing, m.Depth)), back.Managers.Select(m => (m.Pressing, m.Depth)));
 
-            // Format 3 is format 5 with no philosophy and no memories, less those sections' empty counts: read unset.
+            // Format 3 is format 6 with no philosophy, memories or development, less those sections' empty counts and the next id (#194): read unset.
             foreach (Manager m in w.Managers) m.Pressing = m.Depth = 0;
             byte[] plain = WorldCodec.Encode(w);
             var three = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             three.WriteBytes(plain[..4]);
             three.WriteInt32(3);
-            three.WriteBytes(plain[8..^8]);
+            three.WriteBytes(plain[8..^20]);
             World old = WorldCodec.Decode(three.ToArray());
             Assert.All(old.Managers, m => Assert.Equal((0, 0), (m.Pressing, m.Depth)));
             Assert.Equal(plain, WorldCodec.Encode(old));
@@ -254,7 +254,7 @@ namespace Eleven.Career.Tests
             var two = new Eleven.Simulation.Encoding.CanonicalWriter(plain.Length);
             two.WriteBytes(plain[..4]);
             two.WriteInt32(2);
-            two.WriteBytes(plain[8..^12]);
+            two.WriteBytes(plain[8..^24]);
             Assert.Equal(plain, WorldCodec.Encode(WorldCodec.Decode(two.ToArray())));
 
             Club c = w.Clubs[5];
@@ -276,7 +276,7 @@ namespace Eleven.Career.Tests
             var one = new CanonicalWriter(plain.Length);
             one.WriteBytes(plain[..4]);
             one.WriteInt32(1);
-            one.WriteBytes(plain[8..^16]);
+            one.WriteBytes(plain[8..^28]);
             World old = WorldCodec.Decode(one.ToArray());
             Assert.Equal(plain, WorldCodec.Encode(old));
 

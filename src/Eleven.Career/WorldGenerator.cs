@@ -99,6 +99,7 @@ namespace Eleven.Career
                 }
             }
 
+            world.NextPlayerId = nextPlayer;
             return world;
         }
 
@@ -169,8 +170,11 @@ namespace Eleven.Career
             return g;
         }
 
+        /// <summary>An attribute's group: pace, body, ball, pass, shot, air, defend, mind or keep.</summary>
+        internal static string GroupOf(int attribute) => Groups[attribute];
+
         // How a position shifts a group from the footballer's level: its profile.
-        private static double Profile(Position position, string group) => (position, group) switch
+        internal static double Profile(Position position, string group) => (position, group) switch
         {
             (Position.Goalkeeper, "keep") => 4,
             (Position.Goalkeeper, "air") => 1,
@@ -210,9 +214,9 @@ namespace Eleven.Career
         /// A youth for a club (#194): footballer <paramref name="id"/>, aged <paramref name="age"/>,
         /// drawn like the generator's own at <paramref name="level"/>, his potential above it.
         /// </summary>
-        public static Player Youth(ulong seed, int id, int clubId, Position position, double level, int age) => MakePlayer(seed, id, clubId, position, level);
+        public static Player Youth(ulong seed, int id, int clubId, Position position, double level, int age) => MakePlayer(seed, id, clubId, position, level, age);
 
-        private static Player MakePlayer(ulong seed, int id, int clubId, Position position, double clubLevel)
+        private static Player MakePlayer(ulong seed, int id, int clubId, Position position, double clubLevel, int age = 0)
         {
             // His level: the club's, spread by the sum of three draws (about ±3, most near 0).
             double spread = (Draw(seed, PlayerDraw, id, 0) + Draw(seed, PlayerDraw, id, 1) + Draw(seed, PlayerDraw, id, 2) - 1.5) * 2;
@@ -223,7 +227,7 @@ namespace Eleven.Career
                 ClubId = clubId,
                 FirstName = FirstNames[Pick(seed, NameDraw, 1000 + id, 0, FirstNames.Length)],
                 LastName = SurnameStarts[Pick(seed, NameDraw, 1000 + id, 1, SurnameStarts.Length)] + SurnameEnds[Pick(seed, NameDraw, 1000 + id, 2, SurnameEnds.Length)],
-                Age = 17 + Pick(seed, PlayerDraw, id, 3, position == Position.Goalkeeper ? 20 : 17),
+                Age = age > 0 ? age : 17 + Pick(seed, PlayerDraw, id, 3, position == Position.Goalkeeper ? 20 : 17),
             };
             p.Positions.Add(position);
             Position? second = Neighbour(position);
