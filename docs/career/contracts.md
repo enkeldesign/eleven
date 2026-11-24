@@ -39,7 +39,7 @@ The generator draws each length on the footballer's own counter, the world strea
 
 `Contracts.Turn`, at each season's turn, after its money and the board's verdict, before the off-season and development:
 1. **A relegated club's relegation clause:** each wage falls `RelegationCut` (1, all the way) of the way to the new division's rate by #198's rule. The rule's 1.6, 1.0 and 0.6 make it a 37–40 % cut.
-2. **Each contract a season down.** Those ending, each club's best first, are:
+2. **Each contract a season down.** Of those ending, the club releases the ones it doesn't want first, so their wages are off the bill (Codex on #204). Then the wanted, its best first, are:
    - **renewed** if the club wants him and the board's budget holds. He's paid #198's rule wage for his level, age and new division, for `RenewYears` by his age;
    - **released** otherwise, into the free agents. He leaves the squad, and a club's picks (#179) go back to the AI's if he was in its XI.
 3. **The budget holds:** a renewal must keep the weekly wage bill within `Finance.WageBudget` at the club's next division's share (Codex on #204), or be for no more than he was paid.
@@ -110,7 +110,7 @@ A format-9 world reads each footballer's contract by the generator's rule at his
 
 ## Tests
 
-`ContractTests` (career), 10:
+`ContractTests` (career), 11:
 - the generator's lengths by age, a renewal's by age, and a youth's first;
 - a contract run down, and one ending renewed or released, its move kept;
 - whom a club wants: its prospects, those above their replacement, its veterans only at its level;
@@ -120,7 +120,8 @@ A format-9 world reads each footballer's contract by the generator's rule at his
 - format 10, and format 9 read by the rules;
 - a promoted club's renewals held to its new division's budget (Codex on #204);
 - a club short of two places signing for the second when the first has nobody (Codex on #204);
-- a world from before the ledgers' days marking a booked ledger's unknown, and budgeting it as a whole season (Codex on #204).
+- a world from before the ledgers' days marking a booked ledger's unknown, and budgeting it as a whole season (Codex on #204);
+- a club releasing its unwanted before it budgets its renewals (Codex on #204).
 
 `ContractSeasonTests` (harness), 4:
 - a career's turn releasing a poor footballer out of contract, every squad whole, and the hub's and review's lines;
