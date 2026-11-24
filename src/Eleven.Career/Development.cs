@@ -308,6 +308,13 @@ namespace Eleven.Career
         // The position a club's squad lacks most against the template: the first whose count is short.
         internal static Position Lacking(World world, Club c)
         {
+            List<Position> shortOf = Short(world, c);
+            return shortOf.Count > 0 ? shortOf[0] : Position.CentralMidfield;
+        }
+
+        /// <summary>The places a club's squad is short of against the template, each once, the template's order: the most lacking first (#201).</summary>
+        internal static List<Position> Short(World world, Club c)
+        {
             var have = new Dictionary<Position, int>();
             foreach (Player p in world.Players)
             {
@@ -317,12 +324,13 @@ namespace Eleven.Career
 
             var want = new Dictionary<Position, int>();
             foreach (Position p in WorldGenerator.SquadTemplate) want[p] = want.TryGetValue(p, out int n) ? n + 1 : 1;
+            var shortOf = new List<Position>();
             foreach (Position p in WorldGenerator.SquadTemplate)
             {
-                if ((have.TryGetValue(p, out int h) ? h : 0) < want[p]) return p;
+                if ((have.TryGetValue(p, out int h) ? h : 0) < want[p] && !shortOf.Contains(p)) shortOf.Add(p);
             }
 
-            return Position.CentralMidfield;
+            return shortOf;
         }
     }
 }

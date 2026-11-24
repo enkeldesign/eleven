@@ -169,16 +169,19 @@ namespace Eleven.Career
         /// <summary>
         /// The board's weekly wage budget: its share of last season's revenue over the weeks it was
         /// earned in, or of a season's expected over the season's weeks in the first. A first
-        /// season's ledger has no off-season before it, so its weeks are fewer (#201).
+        /// season's ledger has no off-season before it, so its weeks are fewer (#201). At the
+        /// season's turn, a promoted or relegated club's share is its next <paramref name="division"/>'s
+        /// (Codex on #204); 0 is its own.
         /// </summary>
-        public static long WageBudget(World world, Club club, FinanceRules? rules = null, CompetitionRules? competition = null, SquadRules? squad = null)
+        public static long WageBudget(World world, Club club, FinanceRules? rules = null, CompetitionRules? competition = null, SquadRules? squad = null, int division = 0)
         {
             rules ??= FinanceRules.Reference;
+            int shareOf = division > 0 ? division : club.Division;
             int days = SeasonDays(competition ?? CompetitionRules.Reference, squad ?? SquadRules.Reference);
             bool earned = club.LastSeason.Revenue > 0;
             double revenue = earned ? club.LastSeason.Revenue : Expected(club, rules, days);
             int weeksOf = earned && club.LastSeason.Days > 0 ? club.LastSeason.Days : days;
-            return (long)Math.Round(Division(rules.WageShare, club.Division) * revenue / (weeksOf / 7.0));
+            return (long)Math.Round(Division(rules.WageShare, shareOf) * revenue / (weeksOf / 7.0));
         }
 
         /// <summary>The days a season pays wages and broadcasting for: its calendar's, from its first matchday past its last, and the off-season's.</summary>

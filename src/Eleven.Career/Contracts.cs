@@ -137,7 +137,7 @@ namespace Eleven.Career
                     }
                 }
 
-                long budget = Finance.WageBudget(world, c), bill = Finance.WageBill(world, c);
+                long budget = Finance.WageBudget(world, c, division: d), bill = Finance.WageBill(world, c);
                 var ending = new List<Player>();
                 foreach (Player p in world.Players)
                 {
@@ -181,17 +181,22 @@ namespace Eleven.Career
             foreach (Club c in order)
             {
                 int d = Next(c);
-                long budget = Finance.WageBudget(world, c), bill = Finance.WageBill(world, c);
+                long budget = Finance.WageBudget(world, c, division: d), bill = Finance.WageBill(world, c);
                 while (world.Players.FindAll(p => p.ClubId == c.Id).Count < WorldGenerator.SquadSize)
                 {
-                    Position need = Development.Lacking(world, c);
+                    // The places it lacks, the most lacking first: the next if one has nobody (Codex on #204).
                     Player? best = null;
-                    foreach (Player f in world.Players)
+                    foreach (Position need in Development.Short(world, c))
                     {
-                        if (f.ClubId != 0 || f.Positions.Count == 0 || f.Positions[0] != need) continue;
-                        if (releasedBy.TryGetValue(f.Id, out int from) && from == c.Id) continue;
-                        if (bill + Finance.Wage(f, d) > budget || !Wanted(world, c, f, d, rules, development)) continue;
-                        if (best == null || Development.Level(f) > Development.Level(best) || (Development.Level(f) == Development.Level(best) && f.Id < best.Id)) best = f;
+                        foreach (Player f in world.Players)
+                        {
+                            if (f.ClubId != 0 || f.Positions.Count == 0 || f.Positions[0] != need) continue;
+                            if (releasedBy.TryGetValue(f.Id, out int from) && from == c.Id) continue;
+                            if (bill + Finance.Wage(f, d) > budget || !Wanted(world, c, f, d, rules, development)) continue;
+                            if (best == null || Development.Level(f) > Development.Level(best) || (Development.Level(f) == Development.Level(best) && f.Id < best.Id)) best = f;
+                        }
+
+                        if (best != null) break;
                     }
 
                     if (best == null) break;
