@@ -46,7 +46,7 @@ The currency is fictional, in whole thousands, "k", with no exchange rate. Its s
 
 `Finance.WageBudget`, the board's weekly wage budget: `WageShare` (0.65) of last season's revenue.
 - **The first season:** a season's expected revenue, its broadcasting, eleven home matches, a mid-table merit and two cup rounds.
-- **Its weeks are the season's:** the days it pays for over 7 (`Finance.SeasonDays`, about 32 weeks), not a year's 52. The calendar and the off-season pay fewer days than a year.
+- **Its weeks are the season's:** the days it pays for over 7 (`Finance.SeasonDays`: 217 days, 31 weeks), not a year's 52. The calendar and the off-season pay fewer days than a year.
 - **Shown, not enforced:** a club over its budget can't take on wages in M6.12. Here it's only shown.
 
 ## The hub
